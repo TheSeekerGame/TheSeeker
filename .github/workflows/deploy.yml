@@ -39,5 +39,5 @@ jobs:
         with:
           deploy_key: ${{ secrets.BOOK_DEPLOY_KEY }}
           external_repository: TheSeekerGame/theseekergame.github.io
-          publish_dir: ./book
+          publish_dir: ./doc/book
           destination_dir: ./doc
