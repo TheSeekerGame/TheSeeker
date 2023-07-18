@@ -1,0 +1,14 @@
+# fn_params_layout = "Vertical"
+merge_derives = false
+imports_granularity = "Module"
+use_field_init_shorthand = true
+
+# unstable?
+unstable_features = true
+struct_lit_single_line = false
+group_imports = "StdExternalCrate"
+normalize_comments = true
+reorder_impl_items = true
+overflow_delimited_expr = true
+match_block_trailing_comma = true
+fn_single_line = true
