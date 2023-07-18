@@ -1,0 +1,6 @@
+[book]
+authors = ["Ida Iyes", "c12", "TheSeeker Contributors"]
+language = "en"
+multilingual = false
+src = "src"
+title = "TheSeeker Documentation"
