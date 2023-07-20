@@ -44,7 +44,7 @@ jobs:
       - name: Deploy rustdoc to Github pages
         uses: peaceiris/actions-gh-pages@v3
         with:
-          deploy_key: ${{ secrets.BOOK_DEPLOY_KEY }}
+          deploy_key: ${{ secrets.RUSTDOC_DEPLOY_KEY }}
           external_repository: TheSeekerGame/theseekergame.github.io
           publish_dir: ./target/doc
           destination_dir: ./api
