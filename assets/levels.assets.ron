@@ -1,0 +1,13 @@
+/// This file should contain all the LDTK levels, and any additional
+/// level-specific additional assets that should be loaded by the game.
+///
+/// In the future, we might split different levels into their own files,
+/// but for now, put everything here.
+///
+/// If an asset is not level-specific (it should be loaded by the game
+/// at all times), then it doesn't belong in this file.
+({
+    "level.01": File (
+        path: "levels/01.ldtk"
+    ),
+})

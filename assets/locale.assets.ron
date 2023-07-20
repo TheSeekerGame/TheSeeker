@@ -1,0 +1,7 @@
+({
+    "locale.bundles": Files (
+        paths: [
+            "locale/en-US/en-US.ftl.ron",
+        ],
+    ),
+})

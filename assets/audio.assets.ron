@@ -1,0 +1,69 @@
+// This file is for all audio assets. All of them must be here. UI, game, everything.
+// Prefix gameplay audio with "audio.game."
+// Prefix UI       audio with "audio.ui."
+({
+    "audio.game.Footstep": Files (
+        paths: [
+            "audio/Footstep1.flac",
+            "audio/Footstep2.flac",
+            "audio/Footstep3.flac",
+            "audio/Footstep4.flac",
+            "audio/Footstep5.flac",
+            "audio/Footstep6.flac",
+            "audio/Footstep7.flac",
+            "audio/Footstep8.flac",
+            "audio/Footstep9.flac",
+            "audio/Footstep10.flac",
+            "audio/Footstep11.flac",
+            "audio/Footstep12.flac",
+            "audio/Footstep13.flac",
+        ],
+    ),
+    "audio.game.JumpUp": Files (
+        paths: [
+            "audio/JumpUp.flac",
+            "audio/JumpUp2.flac",
+            "audio/JumpUp3.flac",
+        ],
+    ),
+    "audio.game.FallDown": Files (
+        paths: [
+            "audio/FallDown.flac",
+        ],
+    ),
+    "audio.game.ImpactBass": Files (
+        paths: [
+            "audio/ImpactBass1.flac",
+            "audio/ImpactBass2.flac",
+        ],
+    ),
+    "audio.game.HammerImpact": Files (
+        paths: [
+            "audio/HammerImpact1.flac",
+            "audio/HammerImpact2.flac",
+            "audio/HammerImpact3.flac",
+            "audio/HammerImpact4.flac",
+            "audio/HammerImpact5.flac",
+        ],
+    ),
+    "audio.game.HammerImpactIce": Files (
+        paths: [
+            "audio/HammerImpactIce1.flac",
+            "audio/HammerImpactIce2.flac",
+            "audio/HammerImpactIce3.flac",
+            "audio/HammerImpactIce4.flac",
+            "audio/HammerImpactIce4New.flac",
+            "audio/HammerImpactIce5.flac",
+            "audio/HammerImpactIce6.flac",
+            "audio/HammerImpactIce7.flac",
+        ],
+    ),
+    "audio.game.HammerWhoosh": Files (
+        paths: [
+            "audio/HammerWhoosh1.flac",
+            "audio/HammerWhoosh2.flac",
+            "audio/HammerWhoosh3.flac",
+            "audio/HammerWhoosh4.flac",
+        ],
+    ),
+})

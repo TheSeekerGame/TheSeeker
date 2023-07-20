@@ -1,0 +1,4 @@
+// This file is for any general non-level-specific graphics-related assets
+// (sprites, animations, etc). Game graphics only, not UI.
+({
+})
