@@ -14,9 +14,6 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Install Dependencies
-        run: sudo apt-get update && sudo apt-get install --no-install-recommends pkg-config libx11-dev libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
-
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: stable
@@ -37,14 +34,3 @@ jobs:
           external_repository: TheSeekerGame/theseekergame.github.io
           publish_dir: ./doc/book
           destination_dir: ./doc
-
-      - name: Build rustdoc
-        run: cargo doc
-
-      - name: Deploy rustdoc to Github pages
-        uses: peaceiris/actions-gh-pages@v3
-        with:
-          deploy_key: ${{ secrets.RUSTDOC_DEPLOY_KEY }}
-          external_repository: TheSeekerGame/theseekergame.github.io
-          publish_dir: ./target/doc
-          destination_dir: ./api
