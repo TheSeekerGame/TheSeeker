@@ -14,30 +14,37 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      # - name: Install Dependencies
-      #   run: sudo apt-get update && sudo apt-get install --no-install-recommends pkg-config libx11-dev libasound2-dev libudev-dev
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends pkg-config libx11-dev libasound2-dev libudev-dev
 
-      # - uses: actions-rs/toolchain@v1
-      #   with:
-      #     toolchain: stable
-      #     override: true
-
-      # - name: Check code
-      #   run: ./check.sh
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
 
       - name: Setup mdBook
         uses: peaceiris/actions-mdbook@v1
         with:
           mdbook-version: "latest"
 
-      - run: cd doc && mdbook build
+      - name: Build mdbook
+        run: cd doc && mdbook build
 
-      # - run: cp ./robots.txt ./book/
-
-      - name: Deploy to Github pages
+      - name: Deploy mdbook to Github pages
         uses: peaceiris/actions-gh-pages@v3
         with:
           deploy_key: ${{ secrets.BOOK_DEPLOY_KEY }}
           external_repository: TheSeekerGame/theseekergame.github.io
           publish_dir: ./doc/book
           destination_dir: ./doc
+
+      - name: Build rustdoc
+        run: cargo doc
+
+      - name: Deploy rustdoc to Github pages
+        uses: peaceiris/actions-gh-pages@v3
+        with:
+          deploy_key: ${{ secrets.BOOK_DEPLOY_KEY }}
+          external_repository: TheSeekerGame/theseekergame.github.io
+          publish_dir: ./target/doc
+          destination_dir: ./api
