@@ -1,0 +1,105 @@
+[package]
+name = "theseeker"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[features]
+dev = ["bevy/filesystem_watcher"]
+
+# Random little libraries
+[dependencies]
+anyhow = "1.0.71"
+derive_more = "0.99.17"
+directories = "5.0.1"
+enum-iterator = "1.4.1"
+enum-map = "2.6.0"
+fluent_content = "0.0.5"
+glam = "0.23.0"
+rand = "0.8.5"
+thiserror = "1.0.43"
+toml = "0.7.6"
+unic-langid = "0.9.1"
+
+[dependencies.serde]
+version = "1.0.167"
+features = [
+    "derive",
+]
+
+[dependencies.bevy]
+version = "0.10.1"
+default-features = false
+features = [
+    "android_shared_stdcxx",
+    "animation",
+    "bevy_animation",
+    "bevy_asset",
+    "bevy_core_pipeline",
+    "bevy_gilrs",
+    "bevy_render",
+    "bevy_scene",
+    "bevy_sprite",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_winit",
+    "hdr",
+    "png",
+    "ktx2",
+    "zstd",
+    "tonemapping_luts",
+    "x11",
+    "wayland",
+    # FIXME: TEMPORARY
+    "bevy_audio",
+    "flac",
+]
+
+[dependencies.bevy_asset_loader]
+version = "0.16.1"
+features = [
+    "2d",
+    "progress_tracking",
+    "standard_dynamic_assets",
+]
+
+[dependencies.bevy_common_assets]
+version = "0.6.0"
+features = [
+    "toml",
+    "ron",
+]
+
+[dependencies.bevy_ecs_ldtk]
+version = "0.7.0"
+
+[dependencies.bevy_ecs_tilemap]
+version = "0.10.0"
+
+[dependencies.bevy_fluent]
+version = "0.6.1"
+
+[dependencies.bevy_tweening]
+version = "0.7.0"
+
+[dependencies.iyes_bevy_extras]
+git = "https://github.com/IyesGames/iyes_bevy_extras"
+features = ["2d"]
+
+[dependencies.iyes_cli]
+git = "https://github.com/IyesGames/iyes_cli"
+
+[dependencies.iyes_progress]
+version = "0.8.1"
+features = ["assets"]
+
+[dependencies.iyes_ui]
+git = "https://github.com/IyesGames/iyes_ui"
+features = ["iyes_cli"]
+
+[dependencies.leafwing-input-manager]
+version = "0.9.3"
+
+[patch.crates-io]
+bevy_asset_loader = { git = "https://github.com/TheSeekerGame/bevy_asset_loader", branch = "theseeker" }
