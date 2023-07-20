@@ -21,10 +21,12 @@ mod prelude {
 use crate::prelude::*;
 
 mod assets;
+mod cli;
 mod locale;
 mod screens {
     pub mod loading;
 }
+mod ui;
 
 /// State type: Which "screen" is the app in?
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default, States)]
@@ -115,6 +117,11 @@ fn main() {
     });
     app.add_plugin(crate::assets::AssetsPlugin);
     app.add_plugin(crate::locale::LocalePlugin);
+    app.add_plugin(crate::cli::CliPlugin);
+    app.add_plugin(crate::ui::UiPlugin);
+
+    // FIXME: temporary
+    app.add_system(debug_setup_camera.in_schedule(OnEnter(AppState::MainMenu)));
 
     app.run();
 }
@@ -130,4 +137,12 @@ fn debug_progress(counter: Res<ProgressCounter>) {
         progress_full.done,
         progress_full.total,
     );
+}
+
+/// Temporary function to use during development
+///
+/// If there is no proper code to set up a camera in a given app state (or whatever)
+/// yet, use this to spawn a default 2d camera.
+fn debug_setup_camera(mut commands: Commands) {
+    commands.spawn(Camera2dBundle::default());
 }
