@@ -1,5 +1,3 @@
-#![allow(dead_code)]
-
 use core::fmt;
 use std::num::ParseIntError;
 use std::str::FromStr;
@@ -13,6 +11,7 @@ pub struct GameTimePlugin;
 impl Plugin for GameTimePlugin {
     fn build(&self, app: &mut App) {
         app.init_schedule(GameTickUpdate);
+        app.init_resource::<GameTime>();
         app.add_system(update_gametime);
         app.add_system(run_gametickupdate_schedule.after(update_gametime));
         app.configure_set(

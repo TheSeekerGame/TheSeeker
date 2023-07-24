@@ -5,6 +5,14 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[lib]
+name = "theseeker_engine"
+path = "engine/src/lib.rs"
+
+[[bin]]
+name = "theseeker_game"
+path = "game/src/main.rs"
+
 [features]
 dev = ["bevy/filesystem_watcher"]
 
