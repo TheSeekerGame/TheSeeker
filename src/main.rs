@@ -16,6 +16,7 @@ mod prelude {
     pub use thiserror::Error;
 
     pub use crate::appstate::{AppState, StateDespawnMarker};
+    pub use crate::time::{at_tick_multiples, GameTickSet, GameTickUpdate, GameTime};
 }
 
 use crate::prelude::*;
@@ -27,6 +28,7 @@ mod locale;
 mod screens {
     pub mod loading;
 }
+mod time;
 mod ui;
 
 fn main() {
@@ -63,6 +65,8 @@ fn main() {
 
     // configure our app states
     app.add_plugin(crate::appstate::AppStatesPlugin);
+    // and custom fixed timestep thingy
+    app.add_plugin(crate::time::GameTimePlugin);
 
     // external plugins
     app.add_plugin(LdtkPlugin);
