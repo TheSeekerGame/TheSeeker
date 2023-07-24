@@ -15,11 +15,12 @@ mod prelude {
     pub use serde::{Deserialize, Serialize};
     pub use thiserror::Error;
 
-    pub use crate::AppState;
+    pub use crate::appstate::{AppState, StateDespawnMarker};
 }
 
 use crate::prelude::*;
 
+mod appstate;
 mod assets;
 mod cli;
 mod locale;
@@ -27,26 +28,6 @@ mod screens {
     pub mod loading;
 }
 mod ui;
-
-/// State type: Which "screen" is the app in?
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default, States)]
-#[derive(enum_iterator::Sequence)]
-pub enum AppState {
-    /// Initial loading screen at startup
-    #[default]
-    AssetsLoading,
-    /// Main Menu
-    MainMenu,
-    /// Gameplay
-    InGame,
-}
-
-/// Marker for entities that should be despawned on `AppState` transition.
-///
-/// Use this on entities spawned when entering specific states, that need to
-/// be cleaned up when exiting.
-#[derive(Component)]
-pub struct StateDespawnMarker;
 
 fn main() {
     let mut app = App::new();
@@ -80,19 +61,8 @@ fn main() {
     });
     app.add_plugins(bevy_plugins);
 
-    // our states
-    app.add_state::<AppState>();
-    // TODO: replace with OnTransition (bevy 0.11)
-    app.add_system(
-        despawn_all_recursive::<With<StateDespawnMarker>>
-            .in_schedule(OnExit(AppState::AssetsLoading)),
-    );
-    app.add_system(
-        despawn_all_recursive::<With<StateDespawnMarker>>.in_schedule(OnExit(AppState::MainMenu)),
-    );
-    app.add_system(
-        despawn_all_recursive::<With<StateDespawnMarker>>.in_schedule(OnExit(AppState::InGame)),
-    );
+    // configure our app states
+    app.add_plugin(crate::appstate::AppStatesPlugin);
 
     // external plugins
     app.add_plugin(LdtkPlugin);
@@ -144,5 +114,8 @@ fn debug_progress(counter: Res<ProgressCounter>) {
 /// If there is no proper code to set up a camera in a given app state (or whatever)
 /// yet, use this to spawn a default 2d camera.
 fn debug_setup_camera(mut commands: Commands) {
-    commands.spawn(Camera2dBundle::default());
+    commands.spawn((
+        Camera2dBundle::default(),
+        StateDespawnMarker,
+    ));
 }
