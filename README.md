@@ -8,10 +8,12 @@ Read it over at https://theseeker.github.io/doc/ !
 
 The source files are in `doc` in this repo, made using `mdbook`.
 
-For docs related to the Rust source code, see: https://theseeker.github.io/api/ !
+For docs related to the Rust source code, see: https://theseeker.github.io/api/theseeker/ !
 
 ## License
 
 Game code is under MIT/Apache-2.
 
-Assets are proprietary.
+Assets are proprietary, unless noted otherwise.
+
+Fonts are licensed under the SIL Open Font License.
