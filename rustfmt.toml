@@ -6,7 +6,6 @@ fn_call_width = 40
 
 # unstable?
 unstable_features = true
-struct_lit_single_line = false
 group_imports = "StdExternalCrate"
 normalize_comments = true
 reorder_impl_items = true
