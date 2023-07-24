@@ -1,23 +1,9 @@
 /// Custom prelude, for stuff we'd like to access all over the codebase
 /// Use in every file. :)
 mod prelude {
-    pub use anyhow::{anyhow, bail, ensure, Context, Error as AnyError, Result as AnyResult};
-    pub use bevy::prelude::*;
-    pub use bevy::utils::{Duration, HashMap, HashSet, Instant};
-    pub use bevy_ecs_ldtk::prelude::*;
-    pub use bevy_ecs_tilemap::prelude::*;
-    pub use iyes_bevy_extras::prelude::*;
-    pub use iyes_cli::prelude::*;
-    pub use iyes_progress::prelude::*;
-    pub use iyes_ui::prelude::*;
-    pub use rand::prelude::*;
-    pub use serde::de::DeserializeOwned;
-    pub use serde::{Deserialize, Serialize};
-    pub use serde_with::{serde_as, DeserializeFromStr, SerializeDisplay};
-    pub use thiserror::Error;
+    pub use theseeker_engine::prelude::*;
 
     pub use crate::appstate::{AppState, StateDespawnMarker};
-    pub use crate::time::{at_tick_multiples, FrameQuant, GameTickSet, GameTickUpdate, GameTime};
 }
 
 use crate::prelude::*;
@@ -29,7 +15,6 @@ mod locale;
 mod screens {
     pub mod loading;
 }
-mod time;
 mod ui;
 
 fn main() {
@@ -67,7 +52,7 @@ fn main() {
     // configure our app states
     app.add_plugin(crate::appstate::AppStatesPlugin);
     // and custom fixed timestep thingy
-    app.add_plugin(crate::time::GameTimePlugin);
+    app.add_plugin(theseeker_engine::time::GameTimePlugin);
 
     // external plugins
     app.add_plugin(LdtkPlugin);

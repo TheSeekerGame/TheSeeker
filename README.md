@@ -2,6 +2,13 @@
 
 This is a metroidvania game developed in [Bevy](https://github.com/bevyengine/bevy).
 
+## Repo Structure
+
+- `doc`: `mdbook` sources for the documentation (see below)
+- `assets`: game data/assets
+- `game`: the source code of the game binary
+- `engine`: any custom "library"/"framework" source code that we make for the game
+
 ## Documentation
 
 Read it over at https://theseeker.github.io/doc/ !
