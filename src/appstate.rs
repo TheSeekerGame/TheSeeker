@@ -48,7 +48,11 @@ fn cli_appstate(In(args): In<Vec<String>>, mut next: ResMut<NextState<AppState>>
 
     let type_name = AppState::MainMenu.type_name();
 
-    let dyn_state = DynamicEnum::new(type_name, &args[0], DynamicVariant::Unit);
+    let dyn_state = DynamicEnum::new(
+        type_name,
+        &args[0],
+        DynamicVariant::Unit,
+    );
     if let Some(state) = FromReflect::from_reflect(&dyn_state) {
         next.set(state);
     } else {

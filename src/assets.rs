@@ -8,7 +8,9 @@ pub struct AssetsPlugin;
 
 impl Plugin for AssetsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_loading_state(LoadingState::new(AppState::AssetsLoading));
+        app.add_loading_state(LoadingState::new(
+            AppState::AssetsLoading,
+        ));
 
         // All game assets are to be defined in dynamic collections files
         // See those files for details on each one, there be comments. :)
