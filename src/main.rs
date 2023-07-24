@@ -82,9 +82,11 @@ fn main() {
     );
 
     // our stuff
-    app.add_plugin(crate::screens::loading::LoadscreenPlugin {
-        state: AppState::AssetsLoading,
-    });
+    app.add_plugin(
+        crate::screens::loading::LoadscreenPlugin {
+            state: AppState::AssetsLoading,
+        },
+    );
     app.add_plugin(crate::assets::AssetsPlugin);
     app.add_plugin(crate::locale::LocalePlugin);
     app.add_plugin(crate::cli::CliPlugin);

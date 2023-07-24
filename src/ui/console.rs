@@ -1,4 +1,5 @@
-use crate::{prelude::*, assets::UiAssets};
+use crate::assets::UiAssets;
+use crate::prelude::*;
 
 pub struct UiConsolePlugin;
 
@@ -25,25 +26,27 @@ fn toggle_console(
     if kbd.just_pressed(KeyCode::Grave) {
         if query_existing.is_empty() {
             // spawn console
-            let console = commands.spawn((
-                UiConsole,
-                NodeBundle {
-                    style: Style {
-                        position_type: PositionType::Absolute,
-                        position: UiRect {
-                            bottom: Val::Percent(5.0),
-                            left: Val::Percent(5.0),
-                            top: Val::Auto,
-                            right: Val::Auto,
+            let console = commands
+                .spawn((
+                    UiConsole,
+                    NodeBundle {
+                        style: Style {
+                            position_type: PositionType::Absolute,
+                            position: UiRect {
+                                bottom: Val::Percent(5.0),
+                                left: Val::Percent(5.0),
+                                top: Val::Auto,
+                                right: Val::Auto,
+                            },
+                            padding: UiRect::all(Val::Px(8.0)),
+                            align_items: AlignItems::Center,
+                            ..Default::default()
                         },
-                        padding: UiRect::all(Val::Px(8.0)),
-                        align_items: AlignItems::Center,
+                        background_color: BackgroundColor(Color::BEIGE),
                         ..Default::default()
                     },
-                    background_color: BackgroundColor(Color::BEIGE),
-                    ..Default::default()
-                },
-            )).id();
+                ))
+                .id();
             let prompt_style = if let Some(ui_assets) = &ui_assets {
                 TextStyle {
                     font: ui_assets.font_bold.clone(),
@@ -62,16 +65,18 @@ fn toggle_console(
             } else {
                 TextStyle::default()
             };
-            let prompt = commands.spawn((
-                UiConsolePrompt(console),
-                TextBundle {
-                    text: Text::from_sections([
-                        TextSection::new("~ ", prompt_style),
-                        TextSection::new("", input_style),
-                    ]),
-                    ..Default::default()
-                },
-            )).id();
+            let prompt = commands
+                .spawn((
+                    UiConsolePrompt(console),
+                    TextBundle {
+                        text: Text::from_sections([
+                            TextSection::new("~ ", prompt_style),
+                            TextSection::new("", input_style),
+                        ]),
+                        ..Default::default()
+                    },
+                ))
+                .id();
             commands.entity(console).push_children(&[prompt]);
             debug!("Console spawned.");
         } else {
@@ -122,4 +127,3 @@ fn console_text_input(
         }
     }
 }
-
