@@ -1,5 +1,9 @@
 #![allow(dead_code)]
 
+use core::fmt;
+use std::num::ParseIntError;
+use std::str::FromStr;
+
 use bevy::ecs::schedule::ScheduleLabel;
 
 use crate::prelude::*;
@@ -134,7 +138,90 @@ pub fn run_gametickupdate_schedule(world: &mut World) {
     }
 }
 
+/// Special value to indicate that something should happen "every N ticks"
+///
+/// This can be parsed from a string
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(SerializeDisplay, DeserializeFromStr)]
+pub struct FrameQuant {
+    /// Do the thing every Nth tick ...
+    pub n: u32,
+    /// ... offsetted by this many ticks
+    /// (use this to do things "on the off-beat", in musical terms)
+    pub offset: u32,
+}
+
+impl fmt::Display for FrameQuant {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        if self.offset != 0 {
+            write!(f, "{}+{}", self.n, self.offset)
+        } else {
+            write!(f, "{}", self.n)
+        }
+    }
+}
+
+impl FromStr for FrameQuant {
+    type Err = ParseIntError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut r = FrameQuant { n: 0, offset: 0 };
+
+        // look for a "+" sign
+        // if there is none, then we expect an integer to use for `n`
+        // if there is one, we expect integers on either side to use for `n`+`offset`
+        let mut parts_iter = s.split('+');
+
+        if let Some(part0) = parts_iter.next() {
+            r.n = part0.trim().parse()?;
+        } else {
+            r.n = s.trim().parse()?;
+        }
+
+        if let Some(part1) = parts_iter.next() {
+            r.offset = part1.trim().parse()?;
+        }
+
+        Ok(r)
+    }
+}
+
 /// Run condition to run something "every N ticks"
-pub fn at_tick_multiples(n: u64, offset: u64) -> impl FnMut(Res<GameTime>) -> bool {
-    move |gametime: Res<GameTime>| (gametime.tick() + offset) % n == 0
+pub fn at_tick_multiples(quant: FrameQuant) -> impl FnMut(Res<GameTime>) -> bool {
+    move |gametime: Res<GameTime>| (gametime.tick() + quant.offset as u64) % quant.n as u64 == 0
+}
+
+#[cfg(test)]
+mod test {
+    use super::FrameQuant;
+    #[test]
+    fn display_framequant() {
+        let a = FrameQuant { n: 0, offset: 0 };
+        assert_eq!(a.to_string(), "0");
+        let b = FrameQuant { n: 3, offset: 0 };
+        assert_eq!(b.to_string(), "3");
+        let c = FrameQuant { n: 0, offset: 4 };
+        assert_eq!(c.to_string(), "0+4");
+        let d = FrameQuant { n: 8, offset: 2 };
+        assert_eq!(d.to_string(), "8+2");
+    }
+    #[test]
+    fn parse_framequant() {
+        let a = "13".parse::<FrameQuant>();
+        assert_eq!(a, Ok(FrameQuant { n: 13, offset: 0 }));
+        let b = "  2\n".parse::<FrameQuant>();
+        assert_eq!(b, Ok(FrameQuant { n: 2, offset: 0 }));
+        let c = "3+1".parse::<FrameQuant>();
+        assert_eq!(c, Ok(FrameQuant { n: 3, offset: 1 }));
+        let d = " 6 + 2  ".parse::<FrameQuant>();
+        assert_eq!(d, Ok(FrameQuant { n: 6, offset: 2 }));
+        let e = "garbage".parse::<FrameQuant>();
+        assert!(e.is_err());
+        let f = " 4+garbage".parse::<FrameQuant>();
+        assert!(f.is_err());
+        let g = "garbage + 4".parse::<FrameQuant>();
+        assert!(g.is_err());
+        let h = "gar + bage".parse::<FrameQuant>();
+        assert!(h.is_err());
+    }
 }

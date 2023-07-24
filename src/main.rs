@@ -13,10 +13,11 @@ mod prelude {
     pub use rand::prelude::*;
     pub use serde::de::DeserializeOwned;
     pub use serde::{Deserialize, Serialize};
+    pub use serde_with::{serde_as, DeserializeFromStr, SerializeDisplay};
     pub use thiserror::Error;
 
     pub use crate::appstate::{AppState, StateDespawnMarker};
-    pub use crate::time::{at_tick_multiples, GameTickSet, GameTickUpdate, GameTime};
+    pub use crate::time::{at_tick_multiples, FrameQuant, GameTickSet, GameTickUpdate, GameTime};
 }
 
 use crate::prelude::*;
