@@ -9,6 +9,7 @@ pub struct LocalePlugin;
 
 impl Plugin for LocalePlugin {
     fn build(&self, app: &mut App) {
+        app.register_clicommand_args("locale", cli_locale);
         app.add_systems(
             (detect_locales, init_l10n)
                 .chain()
@@ -29,22 +30,38 @@ pub struct L10nResolveSet;
 pub struct L10nKey(pub String);
 
 #[derive(Resource)]
-pub struct Locales(Vec<LanguageIdentifier>);
+pub struct Locales(HashSet<LanguageIdentifier>);
+
+fn cli_locale(In(args): In<Vec<String>>, mut locale: ResMut<Locale>, locales: Res<Locales>) {
+    if args.len() != 1 {
+        error!("\"locale <locale>\"");
+    }
+    match args[0].parse::<LanguageIdentifier>() {
+        Ok(langid) => {
+            if locales.0.contains(&langid) {
+                locale.requested = langid;
+            } else {
+                error!("Unsupported locale: {:?}", args[0]);
+            }
+        },
+        Err(e) => {
+            error!("Invalid locale {:?}: {}", args[0], e);
+        },
+    }
+}
 
 fn detect_locales(world: &mut World) {
     let locales = {
         let assets = world.resource::<LocaleAssets>();
         let bundles = world.resource::<Assets<BundleAsset>>();
-        let mut locales: Vec<_> = assets
+        assets
             .bundles
             .iter()
             .map(|handle| {
                 let bundle = bundles.get(handle).unwrap();
                 bundle.locales[0].clone()
             })
-            .collect();
-        locales.sort_unstable();
-        locales
+            .collect()
     };
     world.insert_resource(
         // FIXME: do actual locale selection
