@@ -3,6 +3,8 @@ use bevy_common_assets::ron::RonAssetPlugin;
 
 use crate::prelude::*;
 
+pub mod animation;
+
 pub struct AssetsPlugin<S: States> {
     pub loading_state: S,
 }
@@ -12,6 +14,10 @@ impl<S: States> Plugin for AssetsPlugin<S> {
         app.add_loading_state(LoadingState::new(
             self.loading_state.clone(),
         ));
+        // add custom asset types
+        app.add_plugin(RonAssetPlugin::<
+            self::animation::SpriteAnimation,
+        >::new(&["anim.ron"]));
 
         // asset preloading
         app.init_resource::<PreloadedAssets>();
