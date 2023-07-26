@@ -2,6 +2,7 @@ pub mod prelude {
     pub use anyhow::{anyhow, bail, ensure, Context, Error as AnyError, Result as AnyResult};
     pub use bevy::prelude::*;
     pub use bevy::utils::{Duration, HashMap, HashSet, Instant};
+    pub use bevy_asset_loader::prelude::*;
     pub use bevy_ecs_ldtk::prelude::*;
     pub use bevy_ecs_tilemap::prelude::*;
     pub use iyes_bevy_extras::prelude::*;
@@ -14,7 +15,9 @@ pub mod prelude {
     pub use serde_with::{serde_as, DeserializeFromStr, SerializeDisplay};
     pub use thiserror::Error;
 
+    pub use crate::assets::PreloadedAssets;
     pub use crate::time::{at_tick_multiples, GameTickSet, GameTickUpdate, GameTime, TickQuant};
 }
 
+pub mod assets;
 pub mod time;
