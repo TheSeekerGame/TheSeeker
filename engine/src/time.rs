@@ -142,7 +142,7 @@ pub fn run_gametickupdate_schedule(world: &mut World) {
 /// This can be parsed from a string
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[derive(SerializeDisplay, DeserializeFromStr)]
-pub struct FrameQuant {
+pub struct TickQuant {
     /// Do the thing every Nth tick ...
     pub n: u32,
     /// ... offsetted by this many ticks
@@ -150,7 +150,25 @@ pub struct FrameQuant {
     pub offset: u32,
 }
 
-impl fmt::Display for FrameQuant {
+impl TickQuant {
+    /// Quantize a tick value
+    ///
+    /// Takes the raw tick value and returns the last value according
+    /// to the quantization parameters.
+    pub fn apply(self, tick: u64) -> u64 {
+        let tick = tick + self.offset as u64;
+        let rem = tick % self.n as u64;
+        tick - rem
+    }
+
+    /// Get a value in these units
+    pub fn convert(self, tick: u64) -> u64 {
+        let tick = tick + self.offset as u64;
+        tick / self.n as u64
+    }
+}
+
+impl fmt::Display for TickQuant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.offset != 0 {
             write!(f, "{}+{}", self.n, self.offset)
@@ -160,11 +178,11 @@ impl fmt::Display for FrameQuant {
     }
 }
 
-impl FromStr for FrameQuant {
+impl FromStr for TickQuant {
     type Err = ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut r = FrameQuant { n: 0, offset: 0 };
+        let mut r = TickQuant { n: 0, offset: 0 };
 
         // look for a "+" sign
         // if there is none, then we expect an integer to use for `n`
@@ -186,41 +204,41 @@ impl FromStr for FrameQuant {
 }
 
 /// Run condition to run something "every N ticks"
-pub fn at_tick_multiples(quant: FrameQuant) -> impl FnMut(Res<GameTime>) -> bool {
+pub fn at_tick_multiples(quant: TickQuant) -> impl FnMut(Res<GameTime>) -> bool {
     move |gametime: Res<GameTime>| (gametime.tick() + quant.offset as u64) % quant.n as u64 == 0
 }
 
 #[cfg(test)]
 mod test {
-    use super::FrameQuant;
+    use super::TickQuant;
     #[test]
     fn display_framequant() {
-        let a = FrameQuant { n: 0, offset: 0 };
+        let a = TickQuant { n: 0, offset: 0 };
         assert_eq!(a.to_string(), "0");
-        let b = FrameQuant { n: 3, offset: 0 };
+        let b = TickQuant { n: 3, offset: 0 };
         assert_eq!(b.to_string(), "3");
-        let c = FrameQuant { n: 0, offset: 4 };
+        let c = TickQuant { n: 0, offset: 4 };
         assert_eq!(c.to_string(), "0+4");
-        let d = FrameQuant { n: 8, offset: 2 };
+        let d = TickQuant { n: 8, offset: 2 };
         assert_eq!(d.to_string(), "8+2");
     }
     #[test]
     fn parse_framequant() {
-        let a = "13".parse::<FrameQuant>();
-        assert_eq!(a, Ok(FrameQuant { n: 13, offset: 0 }));
-        let b = "  2\n".parse::<FrameQuant>();
-        assert_eq!(b, Ok(FrameQuant { n: 2, offset: 0 }));
-        let c = "3+1".parse::<FrameQuant>();
-        assert_eq!(c, Ok(FrameQuant { n: 3, offset: 1 }));
-        let d = " 6 + 2  ".parse::<FrameQuant>();
-        assert_eq!(d, Ok(FrameQuant { n: 6, offset: 2 }));
-        let e = "garbage".parse::<FrameQuant>();
+        let a = "13".parse::<TickQuant>();
+        assert_eq!(a, Ok(TickQuant { n: 13, offset: 0 }));
+        let b = "  2\n".parse::<TickQuant>();
+        assert_eq!(b, Ok(TickQuant { n: 2, offset: 0 }));
+        let c = "3+1".parse::<TickQuant>();
+        assert_eq!(c, Ok(TickQuant { n: 3, offset: 1 }));
+        let d = " 6 + 2  ".parse::<TickQuant>();
+        assert_eq!(d, Ok(TickQuant { n: 6, offset: 2 }));
+        let e = "garbage".parse::<TickQuant>();
         assert!(e.is_err());
-        let f = " 4+garbage".parse::<FrameQuant>();
+        let f = " 4+garbage".parse::<TickQuant>();
         assert!(f.is_err());
-        let g = "garbage + 4".parse::<FrameQuant>();
+        let g = "garbage + 4".parse::<TickQuant>();
         assert!(g.is_err());
-        let h = "gar + bage".parse::<FrameQuant>();
+        let h = "gar + bage".parse::<TickQuant>();
         assert!(h.is_err());
     }
 }

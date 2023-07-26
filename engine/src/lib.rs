@@ -14,7 +14,7 @@ pub mod prelude {
     pub use serde_with::{serde_as, DeserializeFromStr, SerializeDisplay};
     pub use thiserror::Error;
 
-    pub use crate::time::{at_tick_multiples, FrameQuant, GameTickSet, GameTickUpdate, GameTime};
+    pub use crate::time::{at_tick_multiples, GameTickSet, GameTickUpdate, GameTime, TickQuant};
 }
 
 pub mod time;
