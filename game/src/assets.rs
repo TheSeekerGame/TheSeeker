@@ -7,7 +7,7 @@ pub struct AssetsPlugin;
 impl Plugin for AssetsPlugin {
     fn build(&self, app: &mut App) {
         // add custom asset infra
-        app.add_plugin(theseeker_engine::assets::AssetsPlugin {
+        app.add_plugins(theseeker_engine::assets::AssetsPlugin {
             loading_state: AppState::AssetsLoading,
         });
 

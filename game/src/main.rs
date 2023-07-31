@@ -50,40 +50,46 @@ fn main() {
     app.add_plugins(bevy_plugins);
 
     // configure our app states
-    app.add_plugin(crate::appstate::AppStatesPlugin);
+    app.add_plugins(crate::appstate::AppStatesPlugin);
+
     // and custom fixed timestep thingy
-    app.add_plugin(theseeker_engine::time::GameTimePlugin);
+    app.add_plugins(theseeker_engine::time::GameTimePlugin);
 
     // external plugins
-    app.add_plugin(LdtkPlugin);
-    app.add_plugin(bevy_tweening::TweeningPlugin);
-    app.add_plugin(bevy_fluent::FluentPlugin);
-    app.add_plugin(iyes_bevy_extras::d2::WorldCursorPlugin);
-    app.add_plugin(
+    app.add_plugins((
+        LdtkPlugin,
+        bevy_tweening::TweeningPlugin,
+        bevy_fluent::FluentPlugin,
+        iyes_bevy_extras::d2::WorldCursorPlugin,
         ProgressPlugin::new(AppState::AssetsLoading)
             .track_assets()
             .continue_to(AppState::MainMenu),
-    );
+    ));
+
+    // our stuff
+    app.add_plugins((
+        crate::screens::loading::LoadscreenPlugin {
+            state: AppState::AssetsLoading,
+        },
+        crate::assets::AssetsPlugin,
+        crate::locale::LocalePlugin,
+        crate::cli::CliPlugin,
+        crate::ui::UiPlugin,
+    ));
+
     #[cfg(feature = "dev")]
-    app.add_system(
+    app.add_systems(
+        Update,
         debug_progress
             .run_if(resource_exists::<ProgressCounter>())
             .in_base_set(iyes_progress::ProgressSystemSet::CheckProgress),
     );
 
-    // our stuff
-    app.add_plugin(
-        crate::screens::loading::LoadscreenPlugin {
-            state: AppState::AssetsLoading,
-        },
-    );
-    app.add_plugin(crate::assets::AssetsPlugin);
-    app.add_plugin(crate::locale::LocalePlugin);
-    app.add_plugin(crate::cli::CliPlugin);
-    app.add_plugin(crate::ui::UiPlugin);
-
     // FIXME: temporary
-    app.add_system(debug_setup_camera.in_schedule(OnEnter(AppState::MainMenu)));
+    app.add_systems(
+        OnEnter(AppState::MainMenu),
+        debug_setup_camera,
+    );
 
     app.run();
 }

@@ -8,10 +8,10 @@ impl Plugin for AppStatesPlugin {
     fn build(&self, app: &mut App) {
         // our states
         app.add_state::<AppState>();
-        // TODO: replace with OnTransition (bevy 0.11)
         for state in enum_iterator::all::<AppState>() {
-            app.add_system(
-                despawn_all_recursive::<With<StateDespawnMarker>>.in_schedule(OnExit(state)),
+            app.add_systems(
+                OnExit(state),
+                despawn_all_recursive::<With<StateDespawnMarker>>,
             );
         }
         app.register_clicommand_args("AppState", cli_appstate);
@@ -20,7 +20,7 @@ impl Plugin for AppStatesPlugin {
 
 /// State type: Which "screen" is the app in?
 #[derive(Debug, PartialEq, Eq, Clone, Copy, Hash, Default, States)]
-#[derive(Reflect, FromReflect)]
+#[derive(Reflect)]
 #[derive(enum_iterator::Sequence)]
 pub enum AppState {
     /// Initial loading screen at startup
@@ -46,13 +46,7 @@ fn cli_appstate(In(args): In<Vec<String>>, mut next: ResMut<NextState<AppState>>
         return;
     }
 
-    let type_name = AppState::MainMenu.type_name();
-
-    let dyn_state = DynamicEnum::new(
-        type_name,
-        &args[0],
-        DynamicVariant::Unit,
-    );
+    let dyn_state = DynamicEnum::new(&args[0], DynamicVariant::Unit);
     if let Some(state) = FromReflect::from_reflect(&dyn_state) {
         next.set(state);
     } else {
