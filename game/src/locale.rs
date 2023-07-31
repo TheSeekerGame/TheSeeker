@@ -11,11 +11,11 @@ impl Plugin for LocalePlugin {
     fn build(&self, app: &mut App) {
         app.register_clicommand_args("locale", cli_locale);
         app.add_systems(
-            (detect_locales, init_l10n)
-                .chain()
-                .in_schedule(OnExit(AppState::AssetsLoading)),
+            OnExit(AppState::AssetsLoading),
+            (detect_locales, init_l10n).chain(),
         );
-        app.add_system(
+        app.add_systems(
+            Update,
             resolve_l10n
                 .in_set(L10nResolveSet)
                 .run_if(not(in_state(AppState::AssetsLoading))),

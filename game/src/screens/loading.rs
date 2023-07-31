@@ -8,24 +8,23 @@ pub struct LoadscreenPlugin<S: States> {
 
 impl<S: States> Plugin for LoadscreenPlugin<S> {
     fn build(&self, app: &mut App) {
-        app.add_system(setup_loadscreen.in_schedule(OnEnter(self.state.clone())));
-        app.add_system(
-            despawn_all_recursive::<With<LoadscreenCleanup>>
-                .in_schedule(OnExit(self.state.clone())),
+        app.add_systems(
+            OnEnter(self.state.clone()),
+            setup_loadscreen,
         );
-        app.add_system(update_loading_pct.run_if(in_state(self.state.clone())));
+        app.add_systems(
+            Update,
+            update_loading_pct.run_if(in_state(self.state.clone())),
+        );
     }
 }
-
-#[derive(Component)]
-struct LoadscreenCleanup;
 
 #[derive(Component)]
 struct LoadingProgressIndicator;
 
 fn setup_loadscreen(mut commands: Commands) {
     commands.spawn((
-        LoadscreenCleanup,
+        StateDespawnMarker,
         Camera2dBundle {
             camera_2d: Camera2d {
                 clear_color: ClearColorConfig::Custom(Color::BLACK),
@@ -36,18 +35,17 @@ fn setup_loadscreen(mut commands: Commands) {
 
     let container = commands
         .spawn((
-            LoadscreenCleanup,
+            StateDespawnMarker,
             NodeBundle {
                 background_color: BackgroundColor(Color::GRAY),
                 style: Style {
-                    size: Size::new(Val::Auto, Val::Auto),
+                    width: Val::Auto,
+                    height: Val::Auto,
                     position_type: PositionType::Absolute,
-                    position: UiRect {
-                        bottom: Val::Percent(48.0),
-                        top: Val::Percent(48.0),
-                        left: Val::Percent(20.0),
-                        right: Val::Percent(20.0),
-                    },
+                    bottom: Val::Percent(48.0),
+                    top: Val::Percent(48.0),
+                    left: Val::Percent(20.0),
+                    right: Val::Percent(20.0),
                     padding: UiRect::all(Val::Px(2.0)),
                     flex_direction: FlexDirection::Column,
                     justify_content: JustifyContent::Center,
@@ -64,7 +62,8 @@ fn setup_loadscreen(mut commands: Commands) {
             NodeBundle {
                 background_color: BackgroundColor(Color::WHITE),
                 style: Style {
-                    size: Size::new(Val::Percent(0.0), Val::Percent(100.0)),
+                    width: Val::Percent(0.0),
+                    height: Val::Percent(100.0),
                     ..Default::default()
                 },
                 ..Default::default()
@@ -81,6 +80,6 @@ fn update_loading_pct(
 ) {
     let progress: f32 = progress.progress().into();
     for mut style in q.iter_mut() {
-        style.size.width = Val::Percent(progress * 100.0);
+        style.width = Val::Percent(progress * 100.0);
     }
 }

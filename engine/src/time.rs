@@ -12,14 +12,23 @@ impl Plugin for GameTimePlugin {
     fn build(&self, app: &mut App) {
         app.init_schedule(GameTickUpdate);
         app.init_resource::<GameTime>();
-        app.add_system(update_gametime);
-        app.add_system(run_gametickupdate_schedule.after(update_gametime));
+        app.add_systems(
+            Update,
+            (
+                update_gametime,
+                run_gametickupdate_schedule.after(update_gametime),
+            ),
+        );
         app.configure_set(
+            Update,
             GameTickSet::Pre
                 .before(run_gametickupdate_schedule)
                 .after(update_gametime),
         );
-        app.configure_set(GameTickSet::Post.after(run_gametickupdate_schedule));
+        app.configure_set(
+            Update,
+            GameTickSet::Post.after(run_gametickupdate_schedule),
+        );
     }
 }
 

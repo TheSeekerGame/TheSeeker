@@ -5,8 +5,10 @@ pub struct UiConsolePlugin;
 
 impl Plugin for UiConsolePlugin {
     fn build(&self, app: &mut App) {
-        app.add_system(toggle_console);
-        app.add_system(console_text_input);
+        app.add_systems(
+            Update,
+            (toggle_console, console_text_input),
+        );
     }
 }
 
@@ -32,12 +34,10 @@ fn toggle_console(
                     NodeBundle {
                         style: Style {
                             position_type: PositionType::Absolute,
-                            position: UiRect {
-                                bottom: Val::Percent(5.0),
-                                left: Val::Percent(5.0),
-                                top: Val::Auto,
-                                right: Val::Auto,
-                            },
+                            bottom: Val::Percent(5.0),
+                            left: Val::Percent(5.0),
+                            top: Val::Auto,
+                            right: Val::Auto,
                             padding: UiRect::all(Val::Px(8.0)),
                             align_items: AlignItems::Center,
                             ..Default::default()

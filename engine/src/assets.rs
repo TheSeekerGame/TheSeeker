@@ -1,5 +1,4 @@
 use bevy::asset::Asset;
-use bevy_common_assets::ron::RonAssetPlugin;
 
 use crate::prelude::*;
 
@@ -15,7 +14,8 @@ impl<S: States> Plugin for AssetsPlugin<S> {
 
         // asset preloading
         app.init_resource::<PreloadedAssets>();
-        app.add_system(
+        app.add_systems(
+            Update,
             watch_preload_dynamic_collections
                 .track_progress()
                 .run_if(in_state(self.loading_state.clone()))
@@ -23,8 +23,9 @@ impl<S: States> Plugin for AssetsPlugin<S> {
                 // even though we might be adding more handles for tracking
                 .after(AssetsTrackProgress),
         );
-        app.add_system(
-            finalize_preloaded_dynamic_assets.in_schedule(OnExit(self.loading_state.clone())),
+        app.add_systems(
+            OnExit(self.loading_state.clone()),
+            finalize_preloaded_dynamic_assets,
         );
     }
 }
