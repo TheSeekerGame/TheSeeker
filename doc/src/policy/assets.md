@@ -45,7 +45,7 @@ and run the following commands to process the files:
 
 ```sh
 optipng -i 0 -strip all -zc1-9 -zm1-9 -zs0-3 -f0-5 <file.png>
-zopflipng -m --lossy_transparent --filters=01234mep <file.png> <file.png>
+zopflipng -y -m --lossy_transparent --filters=01234mep <file.png> <file.png>
 ```
 
 If you have `fd`, you can easily run these commands on all PNG files, using all your
@@ -53,7 +53,7 @@ CPU cores for processing:
 
 ```sh
 cd folder;
-fd -e png -x optipng -i 0 -strip all -zc1-9 -zm1-9 -zs0-3 -f0-5 {} \; -x zopflipng -m --lossy_transparent {} {}
+fd -e png -x optipng -i 0 -strip all -zc1-9 -zm1-9 -zs0-3 -f0-5 {} \; -x zopflipng -y -m --lossy_transparent {} {}
 ```
 
 ### Special GPU textures
