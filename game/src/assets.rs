@@ -48,34 +48,12 @@ impl Plugin for AssetsPlugin {
 pub struct UiAssets {
     #[asset(key = "ui.font.regular")]
     pub font_regular: Handle<Font>,
-    #[asset(key = "ui.font.italic")]
-    pub font_italic: Handle<Font>,
     #[asset(key = "ui.font.bold")]
     pub font_bold: Handle<Font>,
-    #[asset(key = "ui.font.bolditalic")]
-    pub font_bolditalic: Handle<Font>,
     #[asset(key = "ui.font.light")]
     pub font_light: Handle<Font>,
-    #[asset(key = "ui.font.lightitalic")]
-    pub font_lightitalic: Handle<Font>,
 }
 
-impl UiAssets {
-    pub fn get_font(&self, light: bool, bold: bool, italic: bool) -> Handle<Font> {
-        match (light, bold, italic) {
-            (false, false, false) => &self.font_regular,
-            (false, false, true) => &self.font_italic,
-            (false, true, false) => &self.font_bold,
-            (false, true, true) => &self.font_bolditalic,
-            (true, false, false) => &self.font_light,
-            (true, false, true) => &self.font_lightitalic,
-            // TODO: should these be something else?
-            (true, true, false) => &self.font_regular,
-            (true, true, true) => &self.font_italic,
-        }
-        .clone()
-    }
-}
 
 #[derive(AssetCollection, Resource)]
 pub struct LocaleAssets {

@@ -1,21 +1,12 @@
 /// This file is for everything related to UI, except audio / sound effects.
 ({
     "ui.font.regular": File (
-        path: "font/ChakraPetch-Regular.ttf"
-    ),
-    "ui.font.italic": File (
-        path: "font/ChakraPetch-Italic.ttf"
+        path: "font/Tektur-Medium.ttf"
     ),
     "ui.font.bold": File (
-        path: "font/ChakraPetch-Bold.ttf"
-    ),
-    "ui.font.bolditalic": File (
-        path: "font/ChakraPetch-BoldItalic.ttf"
+        path: "font/Tektur-Bold.ttf"
     ),
     "ui.font.light": File (
-        path: "font/ChakraPetch-Light.ttf"
-    ),
-    "ui.font.lightitalic": File (
-        path: "font/ChakraPetch-LightItalic.ttf"
+        path: "font/Tektur-Regular.ttf"
     ),
 })
