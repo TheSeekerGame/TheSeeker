@@ -1,0 +1,6 @@
+(
+    locale: "ru-RU",
+    resources: [
+        "menu.ftl"
+    ]
+)
