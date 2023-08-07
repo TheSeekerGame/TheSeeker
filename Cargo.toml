@@ -57,6 +57,7 @@ features = [
     "bevy_winit",
     "hdr",
     "png",
+    "jpeg",
     "ktx2",
     "zstd",
     "tonemapping_luts",

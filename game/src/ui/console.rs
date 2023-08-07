@@ -58,7 +58,7 @@ fn toggle_console(
             };
             let input_style = if let Some(ui_assets) = &ui_assets {
                 TextStyle {
-                    font: ui_assets.font_bold.clone(),
+                    font: ui_assets.font_regular.clone(),
                     font_size: 16.0,
                     color: Color::BLACK,
                 }

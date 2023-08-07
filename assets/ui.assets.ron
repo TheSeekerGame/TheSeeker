@@ -9,4 +9,10 @@
     "ui.font.light": File (
         path: "font/Tektur-Regular.ttf"
     ),
+    "ui.mainmenu.background": File (
+        path: "ui/mainmenu/background.jpg"
+    ),
+    "ui.mainmenu.logo": File (
+        path: "ui/mainmenu/logo.png"
+    ),
 })
