@@ -6,8 +6,6 @@ mod prelude {
     pub use crate::appstate::{AppState, StateDespawnMarker};
 }
 
-use bevy::asset::ChangeWatcher;
-
 use crate::prelude::*;
 
 mod appstate;
@@ -36,7 +34,7 @@ fn main() {
     let bevy_plugins = bevy_plugins.set(ImagePlugin::default_nearest());
     #[cfg(feature = "dev")]
     let bevy_plugins = bevy_plugins.set(bevy::asset::AssetPlugin {
-        watch_for_changes: ChangeWatcher::with_delay(Duration::from_millis(250)),
+        watch_for_changes: bevy::asset::ChangeWatcher::with_delay(Duration::from_millis(250)),
         ..default()
     });
     #[cfg(feature = "dev")]
@@ -84,7 +82,7 @@ fn main() {
         Last,
         debug_progress
             .run_if(resource_exists::<ProgressCounter>())
-            .after(iyes_progress::TrackedProgressSet)
+            .after(iyes_progress::TrackedProgressSet),
     );
 
     // FIXME: temporary
