@@ -1,0 +1,35 @@
+//! Level Management
+//!
+//! This is where we manage everything related to the in-game playable space/area.
+//! A "level" is one "room" in the game, connected to others.
+//!
+//! The player should be able to walk between them,
+//! and we dynamically switch (load/unload) levels as needed.
+
+use crate::prelude::*;
+
+pub struct LevelManagerPlugin;
+
+impl Plugin for LevelManagerPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(LevelSelection::Index(0));
+        app.add_systems(OnEnter(AppState::InGame), game_level_init);
+    }
+}
+
+/// System to perform initial setup when entering the gameplay state, load the starting level.
+fn game_level_init(
+    mut commands: Commands,
+    preloaded: Res<PreloadedAssets>,
+) {
+    // TODO: per-level asset management instead of preloaded assets
+    // TODO: when we have save files, use that to choose the level to init at
+    commands.spawn((
+        StateDespawnMarker,
+        LdtkWorldBundle {
+            ldtk_handle: preloaded.get_single_asset("level.01").expect("Expected asset key 'level.01'"),
+            ..Default::default()
+        },
+    ));
+}
+

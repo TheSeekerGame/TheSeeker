@@ -10,7 +10,9 @@ use crate::prelude::*;
 
 mod appstate;
 mod assets;
+mod camera;
 mod cli;
+mod level;
 mod locale;
 mod screens {
     pub mod loading;
@@ -75,6 +77,8 @@ fn main() {
         crate::locale::LocalePlugin,
         crate::cli::CliPlugin,
         crate::ui::UiPlugin,
+        crate::camera::CameraPlugin,
+        crate::level::LevelManagerPlugin,
     ));
 
     #[cfg(feature = "dev")]
@@ -83,12 +87,6 @@ fn main() {
         debug_progress
             .run_if(resource_exists::<ProgressCounter>())
             .after(iyes_progress::TrackedProgressSet),
-    );
-
-    // FIXME: temporary
-    app.add_systems(
-        OnEnter(AppState::MainMenu),
-        debug_setup_camera,
     );
 
     app.run();
@@ -111,6 +109,7 @@ fn debug_progress(counter: Res<ProgressCounter>) {
 ///
 /// If there is no proper code to set up a camera in a given app state (or whatever)
 /// yet, use this to spawn a default 2d camera.
+#[allow(dead_code)]
 fn debug_setup_camera(mut commands: Commands) {
     commands.spawn((
         Camera2dBundle::default(),
