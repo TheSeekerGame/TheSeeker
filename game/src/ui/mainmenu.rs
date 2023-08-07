@@ -18,6 +18,11 @@ fn spawn_mainmenu(
     uiassets: Res<UiAssets>,
     menuassets: Res<MainMenuAssets>,
 ) {
+    commands.spawn((
+        Camera2dBundle::default(),
+        StateDespawnMarker,
+    ));
+
     let e_background_root = commands
         .spawn((
             StateDespawnMarker,
