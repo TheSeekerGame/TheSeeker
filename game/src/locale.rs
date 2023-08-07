@@ -35,6 +35,7 @@ pub struct Locales(HashSet<LanguageIdentifier>);
 fn cli_locale(In(args): In<Vec<String>>, mut locale: ResMut<Locale>, locales: Res<Locales>) {
     if args.len() != 1 {
         error!("\"locale <locale>\"");
+        return;
     }
     match args[0].parse::<LanguageIdentifier>() {
         Ok(langid) => {
