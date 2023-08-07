@@ -1,3 +1,3 @@
-button-play = Play Game
-button-settings = Settings
-button-exit = Exit Game
+mainmenu-entry-play = Play Game!
+mainmenu-entry-settings = Settings
+mainmenu-entry-exit = Exit Game
