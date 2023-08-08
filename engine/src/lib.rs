@@ -19,5 +19,6 @@ pub mod prelude {
     pub use crate::time::{at_tick_multiples, GameTickSet, GameTickUpdate, GameTime, TickQuant};
 }
 
+pub mod animation;
 pub mod assets;
 pub mod time;
