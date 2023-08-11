@@ -1,10 +1,17 @@
 //! Level Management
 //!
-//! This is where we manage everything related to the in-game playable space/area.
+//! This is where we manage everything related to managing the map /
+//! the in-game playable space/area.
 //! A "level" is one "room" in the game, connected to others.
 //!
 //! The player should be able to walk between them,
 //! and we dynamically switch (load/unload) levels as needed.
+//!
+//! This module is the framework for level transitions, loading/unloading,
+//! general map setup, and other such managerial stuff.
+//!
+//! Any of the stuff that actually *happens* within the map when you
+//! play the game, doesn't belong here. Put that stuff under [`crate::game`].
 
 use crate::prelude::*;
 

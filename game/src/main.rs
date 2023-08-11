@@ -12,12 +12,16 @@ mod appstate;
 mod assets;
 mod camera;
 mod cli;
+mod game;
 mod level;
 mod locale;
 mod screens {
     pub mod loading;
 }
 mod ui;
+
+#[cfg(feature = "dev")]
+mod dev;
 
 fn main() {
     let mut app = App::new();
@@ -57,6 +61,9 @@ fn main() {
     // and custom fixed timestep thingy
     app.add_plugins(theseeker_engine::time::GameTimePlugin);
 
+    app.insert_resource(PhysicsTimestep::FixedOnce(1.0 / 96.0));
+    app.insert_resource(Gravity::default());
+
     // external plugins
     app.add_plugins((
         LdtkPlugin,
@@ -66,6 +73,7 @@ fn main() {
         ProgressPlugin::new(AppState::AssetsLoading)
             .track_assets()
             .continue_to(AppState::MainMenu),
+        PhysicsPlugins::new(theseeker_engine::time::GameTickUpdate),
     ));
 
     // our stuff
@@ -79,40 +87,11 @@ fn main() {
         crate::ui::UiPlugin,
         crate::camera::CameraPlugin,
         crate::level::LevelManagerPlugin,
+        crate::game::GameplayPlugin,
     ));
 
     #[cfg(feature = "dev")]
-    app.add_systems(
-        Last,
-        debug_progress
-            .run_if(resource_exists::<ProgressCounter>())
-            .after(iyes_progress::TrackedProgressSet),
-    );
+    app.add_plugins(crate::dev::DevPlugin);
 
     app.run();
-}
-
-#[allow(dead_code)]
-fn debug_progress(counter: Res<ProgressCounter>) {
-    let progress = counter.progress();
-    let progress_full = counter.progress_complete();
-    trace!(
-        "Progress: {}/{}; Full Progress: {}/{}",
-        progress.done,
-        progress.total,
-        progress_full.done,
-        progress_full.total,
-    );
-}
-
-/// Temporary function to use during development
-///
-/// If there is no proper code to set up a camera in a given app state (or whatever)
-/// yet, use this to spawn a default 2d camera.
-#[allow(dead_code)]
-fn debug_setup_camera(mut commands: Commands) {
-    commands.spawn((
-        Camera2dBundle::default(),
-        StateDespawnMarker,
-    ));
 }
