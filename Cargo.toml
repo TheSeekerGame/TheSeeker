@@ -14,7 +14,10 @@ name = "theseeker_game"
 path = "game/src/main.rs"
 
 [features]
-dev = ["bevy/filesystem_watcher"]
+dev = [
+    "bevy/filesystem_watcher",
+    "bevy_xpbd_2d/debug-plugin",
+]
 
 # Random little libraries
 [dependencies]
@@ -69,7 +72,10 @@ features = [
 ]
 
 [dependencies.bevy_asset_loader]
-version = "0.17"
+# version = "0.17"
+# FIXME: temporary until there is a new release with our dynamic asset api PRs
+git = "https://github.com/NiklasEi/bevy_asset_loader"
+rev = "d048c88348a393b28c51dcc650917ff772741a4a"
 features = [
     "2d",
     "progress_tracking",
@@ -113,5 +119,13 @@ features = ["iyes_cli"]
 [dependencies.leafwing-input-manager]
 version = "0.10"
 
-[patch.crates-io]
-bevy_asset_loader = { git = "https://github.com/NiklasEi/bevy_asset_loader", rev = "d048c88348a393b28c51dcc650917ff772741a4a" }
+[dependencies.bevy_xpbd_2d]
+version = "0.2.0"
+default-features = false
+features = [
+    "2d",
+    "collider-from-mesh",
+    "f64",
+    "simd",
+]
+
