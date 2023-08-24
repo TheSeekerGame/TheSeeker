@@ -1,0 +1,24 @@
+[[script]]
+run_at_tick = 10
+action = "RunCli"
+cli = [
+    "camera_at 50 50",
+]
+[[script]]
+run_every_n_ticks = "200+50"
+action = "RunCli"
+cli = [
+    "camera_at 0 50",
+]
+[[script]]
+run_every_n_ticks = "200+100"
+action = "RunCli"
+cli = [
+    "camera_at 100 50",
+]
+[[script]]
+run_at_time = "10"
+action = "RunCli"
+cli = [
+    "exit",
+]
