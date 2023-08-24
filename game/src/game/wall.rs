@@ -109,14 +109,17 @@ pub fn spawn_wall_collision(
 
                     // + 1 to the width so the algorithm "terminates" plates that touch the right edge
                     for x in 0..width + 1 {
-                        match (plate_start, level_walls.contains(&GridCoords { x, y })) {
+                        match (
+                            plate_start,
+                            level_walls.contains(&GridCoords { x, y }),
+                        ) {
                             (Some(s), false) => {
                                 row_plates.push(Plate {
                                     left: s,
                                     right: x - 1,
                                 });
                                 plate_start = None;
-                            }
+                            },
                             (None, true) => plate_start = Some(x),
                             _ => (),
                         }
