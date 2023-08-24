@@ -1,8 +1,11 @@
 use std::marker::PhantomData;
 
 use bevy::asset::Asset;
+use bevy_common_assets::toml::TomlAssetPlugin;
 
 use crate::prelude::*;
+
+pub mod script;
 
 pub struct AssetsPlugin<S: States> {
     pub loading_state: S,
@@ -14,6 +17,10 @@ impl<S: States> Plugin for AssetsPlugin<S> {
             self.loading_state.clone(),
         ));
 
+        // add custom asset types
+        app.add_plugins((
+            TomlAssetPlugin::<self::script::Script>::new(&["script.toml"]),
+        ));
         // dynamic key resolvers for whatever we need
         // we want to be able to do things per-game-tick, so put this in `GameTickUpdate`
         app.add_systems(
