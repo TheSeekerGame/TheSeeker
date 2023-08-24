@@ -1,4 +1,5 @@
 use bevy::core_pipeline::clear_color::ClearColorConfig;
+use iyes_progress::TrackedProgressSet;
 
 use crate::prelude::*;
 
@@ -13,8 +14,10 @@ impl<S: States> Plugin for LoadscreenPlugin<S> {
             setup_loadscreen,
         );
         app.add_systems(
-            Update,
-            update_loading_pct.run_if(in_state(self.state.clone())),
+            Last,
+            update_loading_pct
+                .after(TrackedProgressSet)
+                .run_if(in_state(self.state.clone())),
         );
     }
 }
