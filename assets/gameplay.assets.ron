@@ -1,4 +1,7 @@
 // This file is for any general non-level-specific gameplay-related assets
 // that are not part of the graphics/visuals or audio (such as item properties, etc.)
 ({
+    "script.test": File (
+        path: "test.script.toml",
+    ),
 })
