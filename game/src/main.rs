@@ -45,12 +45,13 @@ fn main() {
     });
     #[cfg(feature = "dev")]
     let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
-        filter: "info,wgpu_core=warn,wgpu_hal=warn,iyes_progress=trace,theseeker=trace".into(),
+        filter: "info,wgpu_core=warn,wgpu_hal=warn,iyes_progress=trace,theseeker_game=trace,theseeker_engine=trace".into(),
         level: bevy::log::Level::TRACE,
     });
     #[cfg(not(feature = "dev"))]
     let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
-        filter: "info,wgpu_core=warn,wgpu_hal=warn,theseeker=info".into(),
+        filter: "info,wgpu_core=warn,wgpu_hal=warn,theseeker_game=info,theseeker_engine=info"
+            .into(),
         level: bevy::log::Level::INFO,
     });
     app.add_plugins(bevy_plugins);
@@ -58,8 +59,8 @@ fn main() {
     // configure our app states
     app.add_plugins(crate::appstate::AppStatesPlugin);
 
-    // and custom fixed timestep thingy
-    app.add_plugins(theseeker_engine::time::GameTimePlugin);
+    // and custom "engine"
+    app.add_plugins(theseeker_engine::EnginePlugins);
 
     app.insert_resource(PhysicsTimestep::FixedOnce(1.0 / 96.0));
     app.insert_resource(Gravity::default());

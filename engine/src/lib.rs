@@ -22,5 +22,20 @@ pub mod prelude {
     };
 }
 
+use bevy::app::PluginGroupBuilder;
+
+use crate::prelude::*;
+
 pub mod assets;
+pub mod script;
 pub mod time;
+
+pub struct EnginePlugins;
+
+impl PluginGroup for EnginePlugins {
+    fn build(self) -> PluginGroupBuilder {
+        PluginGroupBuilder::start::<Self>()
+            .add(crate::time::GameTimePlugin)
+            .add(crate::script::ScriptPlugin)
+    }
+}

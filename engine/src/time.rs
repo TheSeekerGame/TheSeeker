@@ -306,6 +306,11 @@ impl TickQuant {
         let tick = tick + self.offset as u64;
         tick / self.n as u64
     }
+
+    /// Check if a tick number matches
+    pub fn check(self, tick: u64) -> bool {
+        (tick + self.offset as u64) % self.n as u64 == 0
+    }
 }
 
 impl fmt::Display for TickQuant {
