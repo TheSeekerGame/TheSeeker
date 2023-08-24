@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use bevy::asset::Asset;
 
 use crate::prelude::*;
@@ -11,6 +13,24 @@ impl<S: States> Plugin for AssetsPlugin<S> {
         app.add_loading_state(LoadingState::new(
             self.loading_state.clone(),
         ));
+
+        // dynamic key resolvers for whatever we need
+        // we want to be able to do things per-game-tick, so put this in `GameTickUpdate`
+        app.add_systems(
+            GameTickUpdate,
+            (
+                (
+                    resolve_asset_keys::<self::script::Script>,
+                    resolve_asset_keys::<self::animation::SpriteAnimation>,
+                )
+                    .in_set(AssetsSet::ResolveKeys),
+                apply_deferred.in_set(AssetsSet::ResolveKeysFlush),
+            ),
+        );
+        app.configure_set(
+            GameTickUpdate,
+            AssetsSet::ResolveKeysFlush.after(AssetsSet::ResolveKeys),
+        );
 
         // asset preloading
         app.init_resource::<PreloadedAssets>();
@@ -27,6 +47,48 @@ impl<S: States> Plugin for AssetsPlugin<S> {
             OnExit(self.loading_state.clone()),
             finalize_preloaded_dynamic_assets,
         );
+    }
+}
+
+/// Use this for system ordering relative to assets
+/// (within the `GameTickUpdate` schedule)
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AssetsSet {
+    /// This is when `AssetKey` gets resolved to `Handle`
+    ResolveKeys,
+    ResolveKeysFlush,
+}
+
+/// Component for when we want to use a dynamic asset key string to refer to an asset
+/// on an entity, instead of a handle.
+#[derive(Component, Clone, Debug, PartialEq, Eq)]
+pub struct AssetKey<T: Asset> {
+    pub key: String,
+    pub _pd: PhantomData<T>,
+}
+
+impl<T: Asset> AssetKey<T> {
+    pub fn new(key: &str) -> Self {
+        Self {
+            key: key.to_owned(),
+            _pd: PhantomData,
+        }
+    }
+}
+
+/// System that detects `AssetKey` components on entities and inserts `Handle`.
+///
+/// This happens in `GameTickUpdate`, so it is possible to spawn and resolve
+/// things every game tick.
+pub fn resolve_asset_keys<T: Asset>(
+    mut commands: Commands,
+    preloaded: Res<PreloadedAssets>,
+    q_key: Query<(Entity, &AssetKey<T>), Without<Handle<T>>>,
+) {
+    for (e, key) in &q_key {
+        if let Some(handle) = preloaded.get_single_asset::<T>(&key.key) {
+            commands.entity(e).insert(handle);
+        }
     }
 }
 

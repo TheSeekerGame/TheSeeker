@@ -16,7 +16,7 @@ pub mod prelude {
     pub use serde_with::{serde_as, DeserializeFromStr, SerializeDisplay};
     pub use thiserror::Error;
 
-    pub use crate::assets::PreloadedAssets;
+    pub use crate::assets::{AssetKey, AssetsSet, PreloadedAssets};
     pub use crate::time::{
         at_tick_multiples, GameTickMidFlush, GameTickSet, GameTickUpdate, GameTime, TickQuant,
     };
