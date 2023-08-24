@@ -38,10 +38,7 @@ fn debug_setup_camera(mut commands: Commands) {
     ));
 }
 
-fn cli_phystester_at(
-    In(args): In<Vec<String>>,
-    mut commands: Commands,
-) {
+fn cli_phystester_at(In(args): In<Vec<String>>, mut commands: Commands) {
     if args.len() != 2 {
         error!("\"phystester_at <x> <y>\"");
         return;
@@ -63,4 +60,3 @@ fn cli_phystester_at(
         ));
     }
 }
-
