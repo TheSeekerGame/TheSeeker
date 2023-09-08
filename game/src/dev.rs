@@ -5,6 +5,7 @@ pub struct DevPlugin;
 impl Plugin for DevPlugin {
     fn build(&self, app: &mut App) {
         app.register_clicommand_args("phystester_at", cli_phystester_at);
+        app.register_clicommand_args("spawn_script", cli_spawn_script);
         app.add_systems(
             Last,
             debug_progress
@@ -59,4 +60,15 @@ fn cli_phystester_at(In(args): In<Vec<String>>, mut commands: Commands) {
             },
         ));
     }
+}
+
+fn cli_spawn_script(In(args): In<Vec<String>>, world: &mut World) {
+    use theseeker_engine::assets::script::Script;
+
+    if args.len() != 1 {
+        error!("\"spawn_script <script_asset_key>\"");
+        return;
+    }
+
+    world.spawn((AssetKey::<Script>::new(&args[0]),));
 }

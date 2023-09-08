@@ -2,7 +2,6 @@ use bevy::ecs::system::lifetimeless::*;
 
 use super::*;
 use crate::assets::script::*;
-use crate::prelude::*;
 use crate::script::label::EntityLabels;
 
 pub struct CommonScriptPlugin;
@@ -15,16 +14,72 @@ impl Plugin for CommonScriptPlugin {
 
 #[derive(Default)]
 pub struct CommonScriptTracker {
+    start_tick: u64,
     next_tick_id: usize,
     tick: Vec<(u64, ActionId)>,
     tickquant: Vec<(TickQuant, ActionId)>,
+    start_time: Duration,
     next_time_id: usize,
     time: Vec<(Duration, ActionId)>,
 }
 
+impl CommonScriptTracker {
+    pub fn new_with_offset(start_tick: u64, start_time: Duration) -> Self {
+        Self {
+            start_tick,
+            start_time,
+            ..Default::default()
+        }
+    }
+}
+
 impl ScriptTracker for CommonScriptTracker {
-    type Param = (SRes<Time>, SRes<GameTime>);
+    type InitParam = (
+        SRes<Time>,
+        SRes<GameTime>,
+        Option<SRes<LevelLoadTime>>,
+        SQuery<&'static TimeBase>,
+        SQuery<&'static ScriptTickQuant>,
+    );
     type RunIf = CommonScriptRunIf;
+    type Settings = CommonScriptSettings;
+    type UpdateParam = (SRes<Time>, SRes<GameTime>);
+
+    fn init<'w>(
+        &mut self,
+        entity: Entity,
+        settings: &Self::Settings,
+        (time, gametime, leveltime, query_tb, query_quant): &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
+    ) {
+        let time_base = query_tb.get(entity).unwrap_or(&settings.time_base);
+        let tick_quant = query_quant
+            .get(entity)
+            .ok()
+            .or_else(|| settings.tick_quant.as_ref());
+        match time_base {
+            TimeBase::Relative => {
+                self.start_tick = gametime.tick();
+                self.start_time = time.elapsed();
+            },
+            TimeBase::Level => {
+                if let Some(leveltime) = leveltime {
+                    self.start_tick = leveltime.tick;
+                    self.start_time = leveltime.time;
+                } else {
+                    error!("Script with time base 'Level' wants to run, but level start time is unknown! (are we in-game?)");
+                    self.start_tick = 0;
+                    self.start_time = Duration::new(0, 0);
+                }
+            },
+            TimeBase::Startup => {
+                self.start_tick = 0;
+                self.start_time = Duration::new(0, 0);
+            },
+        }
+        if let Some(ScriptTickQuant(quant)) = tick_quant {
+            self.start_tick = quant.apply(self.start_tick);
+        }
+    }
 
     fn track_action(&mut self, run_if: &Self::RunIf, action_id: ActionId) {
         match run_if {
@@ -54,13 +109,13 @@ impl ScriptTracker for CommonScriptTracker {
     fn update<'w>(
         &mut self,
         _entity: Entity,
-        (time, game_time): &mut <Self::Param as SystemParam>::Item<'w, '_>,
+        (time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult {
         // check any time actions
         while self.next_time_id < self.time.len() {
             let next = &self.time[self.next_time_id];
-            if time.elapsed() > next.0 {
+            if time.elapsed() - self.start_time > next.0 {
                 queue.push(next.1);
                 self.next_time_id += 1;
             } else {
@@ -70,7 +125,7 @@ impl ScriptTracker for CommonScriptTracker {
         // check any tick actions
         while self.next_tick_id < self.tick.len() {
             let next = &self.tick[self.next_tick_id];
-            if game_time.tick() > next.0 {
+            if game_time.tick() - self.start_tick > next.0 {
                 queue.push(next.1);
                 self.next_tick_id += 1;
             } else {
@@ -137,11 +192,26 @@ pub struct ExtendedScriptTracker<T: ScriptTracker> {
 }
 
 impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
-    type Param = (
-        T::Param,
-        <<CommonScriptRunIf as ScriptRunIf>::Tracker as ScriptTracker>::Param,
+    type InitParam = (
+        T::InitParam,
+        <<CommonScriptRunIf as ScriptRunIf>::Tracker as ScriptTracker>::InitParam,
     );
     type RunIf = ExtendedScriptRunIf<T::RunIf>;
+    type Settings = ExtendedScriptSettings<T::Settings>;
+    type UpdateParam = (
+        T::UpdateParam,
+        <<CommonScriptRunIf as ScriptRunIf>::Tracker as ScriptTracker>::UpdateParam,
+    );
+
+    fn init<'w>(
+        &mut self,
+        entity: Entity,
+        settings: &Self::Settings,
+        param: &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
+    ) {
+        self.extended.init(entity, &settings.extended, &mut param.0);
+        self.common.init(entity, &settings.common, &mut param.1);
+    }
 
     fn track_action(&mut self, run_if: &Self::RunIf, action_id: ActionId) {
         match run_if {
@@ -162,7 +232,7 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
     fn update<'w>(
         &mut self,
         entity: Entity,
-        param: &mut <Self::Param as SystemParam>::Item<'w, '_>,
+        param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult {
         let r_extended = self.extended.update(entity, &mut param.0, queue);
@@ -204,10 +274,20 @@ impl<T: ScriptAction> ScriptAction for ExtendedScriptAction<T> {
 impl ScriptAsset for Script {
     type Action = CommonScriptAction;
     type RunIf = CommonScriptRunIf;
+    type Settings = CommonScriptSettings;
     type Tracker = CommonScriptTracker;
 
-    fn init(&self) -> ScriptRuntime<Self> {
-        let mut builder = ScriptRuntimeBuilder::new();
+    fn into_settings(&self) -> Self::Settings {
+        self.settings.clone().unwrap_or_default()
+    }
+
+    fn init<'w>(
+        &self,
+        entity: Entity,
+        settings: &Self::Settings,
+        param: &mut <<Self::Tracker as ScriptTracker>::InitParam as SystemParam>::Item<'w, '_>,
+    ) -> ScriptRuntime<Self> {
+        let mut builder = ScriptRuntimeBuilder::new(entity, settings, param);
         for action in self.script.iter() {
             builder = builder.add_action(&action.run_if, &action.action);
         }
