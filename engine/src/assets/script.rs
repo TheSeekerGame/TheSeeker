@@ -13,7 +13,36 @@ use crate::time::TimeSpec;
 pub struct Script {
     /// List of actions to perform during playback
     pub script: Vec<CommonScript>,
+    pub settings: Option<CommonScriptSettings>,
 }
+
+#[derive(Debug, Default, Clone)]
+#[derive(Serialize, Deserialize)]
+pub struct CommonScriptSettings {
+    #[serde(default)]
+    pub time_base: TimeBase,
+    pub tick_quant: Option<ScriptTickQuant>,
+}
+
+/// From what point does a script count time (when is time/tick 0)?
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Component, Serialize, Deserialize)]
+pub enum TimeBase {
+    /// Script time counts from the moment of script init.
+    /// This is the default and most common behavior for typical scripts/animations.
+    #[default]
+    Relative,
+    /// Script time counts from when the level was loaded.
+    Level,
+    /// Script time counts from app startup.
+    Startup,
+}
+
+/// When initting a script, quantize time (from TimeBase).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Component, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ScriptTickQuant(pub TickQuant);
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
@@ -75,6 +104,15 @@ pub struct ExtendedScript<ExtRunIf, ExtAction> {
     pub run_if: ExtendedScriptRunIf<ExtRunIf>,
     #[serde(flatten)]
     pub action: ExtendedScriptAction<ExtAction>,
+}
+
+#[derive(Debug, Clone, Default)]
+#[derive(Serialize, Deserialize)]
+pub struct ExtendedScriptSettings<T> {
+    #[serde(flatten)]
+    pub extended: T,
+    #[serde(flatten)]
+    pub common: CommonScriptSettings,
 }
 
 #[derive(Debug, Clone)]

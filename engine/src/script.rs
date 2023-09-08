@@ -45,6 +45,15 @@ pub enum ScriptSet {
     RunFlush,
 }
 
+/// Resource to track when the current game level was entered/loaded
+#[derive(Resource)]
+pub struct LevelLoadTime {
+    /// The time since app startup, when the level was spawned
+    pub time: Duration,
+    /// The GameTime Tick
+    pub tick: u64,
+}
+
 pub trait ScriptAppExt {
     fn add_script_runtime<T: ScriptAsset>(&mut self) -> &mut Self;
 }
@@ -66,22 +75,38 @@ type ActionId = usize;
 
 pub trait ScriptAsset: Asset + Sized + Send + Sync + 'static {
     type Action: ScriptAction;
+    type Settings;
     type RunIf: ScriptRunIf<Tracker = Self::Tracker>;
-    type Tracker: ScriptTracker<RunIf = Self::RunIf>;
+    type Tracker: ScriptTracker<RunIf = Self::RunIf, Settings = Self::Settings>;
 
-    fn init(&self) -> ScriptRuntime<Self>;
+    fn init<'w>(
+        &self,
+        entity: Entity,
+        settings: &Self::Settings,
+        param: &mut <<Self::Tracker as ScriptTracker>::InitParam as SystemParam>::Item<'w, '_>,
+    ) -> ScriptRuntime<Self>;
+
+    fn into_settings(&self) -> Self::Settings;
 }
 
 pub trait ScriptTracker: Default + Send + Sync + 'static {
     type RunIf: ScriptRunIf;
-    type Param: SystemParam + 'static;
+    type Settings;
+    type InitParam: SystemParam + 'static;
+    type UpdateParam: SystemParam + 'static;
 
+    fn init<'w>(
+        &mut self,
+        entity: Entity,
+        settings: &Self::Settings,
+        param: &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
+    );
     fn track_action(&mut self, run_if: &Self::RunIf, action_id: ActionId);
     fn finalize(&mut self);
     fn update<'w>(
         &mut self,
         entity: Entity,
-        param: &mut <Self::Param as SystemParam>::Item<'w, '_>,
+        param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult;
 }
@@ -116,11 +141,17 @@ pub struct ScriptRuntime<T: ScriptAsset> {
 }
 
 impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
-    pub fn new() -> Self {
-        Self {
+    pub fn new<'w>(
+        entity: Entity,
+        settings: &<T::Tracker as ScriptTracker>::Settings,
+        param: &mut <<T::Tracker as ScriptTracker>::InitParam as SystemParam>::Item<'w, '_>,
+    ) -> Self {
+        let mut tracker = T::Tracker::default();
+        tracker.init(entity, settings, param);
+        ScriptRuntimeBuilder {
             runtime: ScriptRuntime {
-                actions: Default::default(),
-                tracker: Default::default(),
+                actions: vec![],
+                tracker,
             },
         }
     }
@@ -141,14 +172,13 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
 fn script_driver_system<T: ScriptAsset>(
     mut commands: Commands,
     mut q_script: Query<(Entity, &mut ScriptRuntime<T>)>,
-    tracker_param: StaticSystemParam<<T::Tracker as ScriptTracker>::Param>,
+    tracker_param: StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
     action_param: StaticSystemParam<<T::Action as ScriptAction>::Param>,
     mut action_queue: Local<Vec<ActionId>>,
 ) {
     let mut tracker_param = tracker_param.into_inner();
     let mut action_param = action_param.into_inner();
     for (e, mut script_rt) in &mut q_script {
-        dbg!("blah");
         let r = script_rt
             .tracker
             .update(e, &mut tracker_param, &mut action_queue);
@@ -172,10 +202,15 @@ fn script_init_system<T: ScriptAsset>(
     mut commands: Commands,
     ass_script: Res<Assets<T>>,
     q_script_handle: Query<(Entity, &Handle<T>), Without<ScriptRuntime<T>>>,
+    tracker_init_param: StaticSystemParam<<T::Tracker as ScriptTracker>::InitParam>,
 ) {
+    let mut tracker_init_param = tracker_init_param.into_inner();
     for (e, handle) in &q_script_handle {
         if let Some(script) = ass_script.get(&handle) {
-            commands.entity(e).insert(script.init());
+            let settings = script.into_settings();
+            commands
+                .entity(e)
+                .insert(script.init(e, &settings, &mut tracker_init_param));
             debug!("Initialized new script.");
         }
     }
