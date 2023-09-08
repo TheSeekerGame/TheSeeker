@@ -5,6 +5,7 @@ use bevy_common_assets::toml::TomlAssetPlugin;
 
 use crate::prelude::*;
 
+pub mod animation;
 pub mod script;
 
 pub struct AssetsPlugin<S: States> {
@@ -20,6 +21,7 @@ impl<S: States> Plugin for AssetsPlugin<S> {
         // add custom asset types
         app.add_plugins((
             TomlAssetPlugin::<self::script::Script>::new(&["script.toml"]),
+            TomlAssetPlugin::<self::animation::SpriteAnimation>::new(&["anim.toml"]),
         ));
         // dynamic key resolvers for whatever we need
         // we want to be able to do things per-game-tick, so put this in `GameTickUpdate`

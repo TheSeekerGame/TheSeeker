@@ -26,6 +26,7 @@ use bevy::app::PluginGroupBuilder;
 
 use crate::prelude::*;
 
+pub mod animation;
 pub mod assets;
 pub mod script;
 pub mod time;
@@ -37,5 +38,6 @@ impl PluginGroup for EnginePlugins {
         PluginGroupBuilder::start::<Self>()
             .add(crate::time::GameTimePlugin)
             .add(crate::script::ScriptPlugin)
+            .add(crate::animation::SpriteAnimationPlugin)
     }
 }

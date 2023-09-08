@@ -81,6 +81,11 @@ impl ScriptTracker for CommonScriptTracker {
         }
     }
 
+    fn transfer_progress(&mut self, other: &Self) {
+        self.start_tick = other.start_tick;
+        self.start_time = other.start_time;
+    }
+
     fn track_action(&mut self, run_if: &Self::RunIf, action_id: ActionId) {
         match run_if {
             CommonScriptRunIf::Tick(tick) => {
@@ -109,6 +114,7 @@ impl ScriptTracker for CommonScriptTracker {
     fn update<'w>(
         &mut self,
         _entity: Entity,
+        _settings: &Self::Settings,
         (time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult {
@@ -218,6 +224,11 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         self.common.init(entity, &settings.common, &mut param.1);
     }
 
+    fn transfer_progress(&mut self, other: &Self) {
+        self.extended.transfer_progress(&other.extended);
+        self.common.transfer_progress(&other.common);
+    }
+
     fn track_action(&mut self, run_if: &Self::RunIf, action_id: ActionId) {
         match run_if {
             ExtendedScriptRunIf::Extended(run_if) => {
@@ -237,11 +248,22 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
     fn update<'w>(
         &mut self,
         entity: Entity,
+        settings: &Self::Settings,
         param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult {
-        let r_extended = self.extended.update(entity, &mut param.0, queue);
-        let r_common = self.common.update(entity, &mut param.1, queue);
+        let r_extended = self.extended.update(
+            entity,
+            &settings.extended,
+            &mut param.0,
+            queue,
+        );
+        let r_common = self.common.update(
+            entity,
+            &settings.common,
+            &mut param.1,
+            queue,
+        );
         match (r_extended, r_common) {
             (ScriptUpdateResult::Terminated, _) | (_, ScriptUpdateResult::Terminated) => {
                 ScriptUpdateResult::Terminated
@@ -288,6 +310,7 @@ impl<T: ScriptAction> ScriptAction for ExtendedScriptAction<T> {
 
 impl ScriptAsset for Script {
     type Action = CommonScriptAction;
+    type BuildParam = ();
     type RunIf = CommonScriptRunIf;
     type Settings = CommonScriptSettings;
     type Tracker = CommonScriptTracker;
@@ -296,16 +319,15 @@ impl ScriptAsset for Script {
         self.settings.clone().unwrap_or_default()
     }
 
-    fn init<'w>(
+    fn build<'w>(
         &self,
-        entity: Entity,
-        settings: &Self::Settings,
-        param: &mut <<Self::Tracker as ScriptTracker>::InitParam as SystemParam>::Item<'w, '_>,
-    ) -> ScriptRuntime<Self> {
-        let mut builder = ScriptRuntimeBuilder::new(entity, settings, param);
+        mut builder: ScriptRuntimeBuilder<Self>,
+        _entity: Entity,
+        _param: &mut <Self::BuildParam as SystemParam>::Item<'w, '_>,
+    ) -> ScriptRuntimeBuilder<Self> {
         for action in self.script.iter() {
             builder = builder.add_action(&action.run_if, &action.action);
         }
-        builder.build()
+        builder
     }
 }
