@@ -71,12 +71,12 @@ impl ScriptAppExt for App {
     }
 }
 
-type ActionId = usize;
+pub type ActionId = usize;
 
 pub trait ScriptAsset: Asset + Sized + Send + Sync + 'static {
-    type Action: ScriptAction;
     type Settings;
     type RunIf: ScriptRunIf<Tracker = Self::Tracker>;
+    type Action: ScriptAction<Tracker = Self::Tracker>;
     type Tracker: ScriptTracker<RunIf = Self::RunIf, Settings = Self::Settings>;
 
     fn init<'w>(
@@ -116,18 +116,37 @@ pub trait ScriptRunIf: Clone + Send + Sync + 'static {
 }
 
 pub trait ScriptAction: Clone + Send + Sync + 'static {
+    type Tracker: ScriptTracker;
     type Param: SystemParam + 'static;
-    fn run<'w>(&self, entity: Entity, param: &mut <Self::Param as SystemParam>::Item<'w, '_>);
+    fn run<'w>(
+        &self,
+        entity: Entity,
+        tracker: &mut Self::Tracker,
+        param: &mut <Self::Param as SystemParam>::Item<'w, '_>,
+    ) -> ScriptUpdateResult;
 }
 
 /// Returned by `ScriptTracker::update` to indicate the status of a script
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ScriptUpdateResult {
     /// Nothing unusual
     NormalRun,
+    /// There may be more actions to run; do another update
+    Loop,
     /// The script is done, no actions remain that can be run ever in the future
     Finished,
     /// The script wants to be forcefully finished, regardless of remaining actions
     Terminated,
+}
+
+impl ScriptUpdateResult {
+    pub fn is_loop(self) -> bool {
+        self == ScriptUpdateResult::Loop
+    }
+
+    pub fn is_end(self) -> bool {
+        self == ScriptUpdateResult::Finished || self == ScriptUpdateResult::Terminated
+    }
 }
 
 pub struct ScriptRuntimeBuilder<T: ScriptAsset> {
@@ -172,28 +191,44 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
 fn script_driver_system<T: ScriptAsset>(
     mut commands: Commands,
     mut q_script: Query<(Entity, &mut ScriptRuntime<T>)>,
-    tracker_param: StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
-    action_param: StaticSystemParam<<T::Action as ScriptAction>::Param>,
+    mut params: ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
+        StaticSystemParam<<T::Action as ScriptAction>::Param>,
+    )>,
     mut action_queue: Local<Vec<ActionId>>,
 ) {
-    let mut tracker_param = tracker_param.into_inner();
-    let mut action_param = action_param.into_inner();
+    // let mut tracker_param = tracker_param.into_inner();
+    // let mut action_param = action_param.into_inner();
     for (e, mut script_rt) in &mut q_script {
-        let r = script_rt
-            .tracker
-            .update(e, &mut tracker_param, &mut action_queue);
-        trace!(
-            "Script actions to run: {}",
-            action_queue.len()
-        );
-        for action_id in action_queue.drain(..) {
-            script_rt.actions[action_id].run(e, &mut action_param);
+        let mut is_loop = true;
+        let mut is_end = false;
+        while is_loop {
+            is_loop = false;
+            {
+                let mut tracker_param = params.p0().into_inner();
+                let r = script_rt
+                    .tracker
+                    .update(e, &mut tracker_param, &mut action_queue);
+                is_loop |= r.is_loop();
+                is_end |= r.is_end();
+            }
+            // trace!(
+            //     "Script actions to run: {}",
+            //     action_queue.len(),
+            // );
+            for action_id in action_queue.drain(..) {
+                let mut action_param = params.p1().into_inner();
+                let r = script_rt.actions[action_id].clone().run(
+                    e,
+                    &mut script_rt.tracker,
+                    &mut action_param,
+                );
+                is_loop |= r.is_loop();
+                is_end |= r.is_end();
+            }
         }
-        match r {
-            ScriptUpdateResult::NormalRun => {},
-            ScriptUpdateResult::Finished | ScriptUpdateResult::Terminated => {
-                commands.entity(e).despawn_recursive();
-            },
+        if is_end {
+            commands.entity(e).despawn_recursive();
         }
     }
 }
@@ -201,7 +236,7 @@ fn script_driver_system<T: ScriptAsset>(
 fn script_init_system<T: ScriptAsset>(
     mut commands: Commands,
     ass_script: Res<Assets<T>>,
-    q_script_handle: Query<(Entity, &Handle<T>), Without<ScriptRuntime<T>>>,
+    q_script_handle: Query<(Entity, &Handle<T>), Changed<Handle<T>>>,
     tracker_init_param: StaticSystemParam<<T::Tracker as ScriptTracker>::InitParam>,
 ) {
     let mut tracker_init_param = tracker_init_param.into_inner();

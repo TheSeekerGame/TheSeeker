@@ -155,17 +155,20 @@ impl ScriptRunIf for CommonScriptRunIf {
 
 impl ScriptAction for CommonScriptAction {
     type Param = (SRes<EntityLabels>, SCommands);
+    type Tracker = CommonScriptTracker;
 
     fn run<'w>(
         &self,
         entity: Entity,
+        _tracker: &mut Self::Tracker,
         (ref elabels, ref mut commands): &mut <Self::Param as SystemParam>::Item<'w, '_>,
-    ) {
+    ) -> ScriptUpdateResult {
         match self {
             CommonScriptAction::RunCli { cli } => {
                 for cli in cli.iter() {
                     commands.run_clicommand(cli);
                 }
+                ScriptUpdateResult::NormalRun
             },
             CommonScriptAction::DespawnEntity { label } => {
                 if let Some(label) = label {
@@ -174,13 +177,15 @@ impl ScriptAction for CommonScriptAction {
                     }
                 } else {
                     commands.entity(entity).despawn_recursive();
+                    return ScriptUpdateResult::Terminated;
                 }
+                ScriptUpdateResult::NormalRun
             },
             CommonScriptAction::SpawnScene {
                 scene_asset_key,
                 as_child,
                 parent_label,
-            } => {},
+            } => ScriptUpdateResult::NormalRun,
         }
     }
 }
@@ -258,15 +263,25 @@ impl<T: ScriptAction> ScriptAction for ExtendedScriptAction<T> {
         T::Param,
         <CommonScriptAction as ScriptAction>::Param,
     );
+    type Tracker = ExtendedScriptTracker<T::Tracker>;
 
     fn run<'w>(
         &self,
         entity: Entity,
+        tracker: &mut Self::Tracker,
         (param_ext, param_common): &mut <Self::Param as SystemParam>::Item<'w, '_>,
-    ) {
+    ) -> ScriptUpdateResult {
         match self {
-            ExtendedScriptAction::Extended(action) => action.run(entity, param_ext),
-            ExtendedScriptAction::Common(action) => action.run(entity, param_common),
+            ExtendedScriptAction::Extended(action) => {
+                action.run(entity, &mut tracker.extended, param_ext)
+            },
+            ExtendedScriptAction::Common(action) => {
+                action.run(
+                    entity,
+                    &mut tracker.common,
+                    param_common,
+                )
+            },
         }
     }
 }
