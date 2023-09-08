@@ -74,24 +74,25 @@ impl ScriptAppExt for App {
 pub type ActionId = usize;
 
 pub trait ScriptAsset: Asset + Sized + Send + Sync + 'static {
-    type Settings;
+    type Settings: Sized + Send + Sync + 'static;
     type RunIf: ScriptRunIf<Tracker = Self::Tracker>;
     type Action: ScriptAction<Tracker = Self::Tracker>;
     type Tracker: ScriptTracker<RunIf = Self::RunIf, Settings = Self::Settings>;
+    type BuildParam: SystemParam + 'static;
 
-    fn init<'w>(
+    fn build<'w>(
         &self,
+        builder: ScriptRuntimeBuilder<Self>,
         entity: Entity,
-        settings: &Self::Settings,
-        param: &mut <<Self::Tracker as ScriptTracker>::InitParam as SystemParam>::Item<'w, '_>,
-    ) -> ScriptRuntime<Self>;
+        param: &mut <Self::BuildParam as SystemParam>::Item<'w, '_>,
+    ) -> ScriptRuntimeBuilder<Self>;
 
     fn into_settings(&self) -> Self::Settings;
 }
 
 pub trait ScriptTracker: Default + Send + Sync + 'static {
     type RunIf: ScriptRunIf;
-    type Settings;
+    type Settings: Sized + Send + Sync + 'static;
     type InitParam: SystemParam + 'static;
     type UpdateParam: SystemParam + 'static;
 
@@ -101,11 +102,13 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         settings: &Self::Settings,
         param: &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
     );
+    fn transfer_progress(&mut self, other: &Self);
     fn track_action(&mut self, run_if: &Self::RunIf, action_id: ActionId);
     fn finalize(&mut self);
     fn update<'w>(
         &mut self,
         entity: Entity,
+        settings: &Self::Settings,
         param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult;
@@ -155,6 +158,7 @@ pub struct ScriptRuntimeBuilder<T: ScriptAsset> {
 
 #[derive(Component)]
 pub struct ScriptRuntime<T: ScriptAsset> {
+    settings: <T::Tracker as ScriptTracker>::Settings,
     actions: Vec<T::Action>,
     tracker: T::Tracker,
 }
@@ -162,13 +166,14 @@ pub struct ScriptRuntime<T: ScriptAsset> {
 impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
     pub fn new<'w>(
         entity: Entity,
-        settings: &<T::Tracker as ScriptTracker>::Settings,
+        settings: <T::Tracker as ScriptTracker>::Settings,
         param: &mut <<T::Tracker as ScriptTracker>::InitParam as SystemParam>::Item<'w, '_>,
     ) -> Self {
         let mut tracker = T::Tracker::default();
-        tracker.init(entity, settings, param);
+        tracker.init(entity, &settings, param);
         ScriptRuntimeBuilder {
             runtime: ScriptRuntime {
+                settings,
                 actions: vec![],
                 tracker,
             },
@@ -197,18 +202,23 @@ fn script_driver_system<T: ScriptAsset>(
     )>,
     mut action_queue: Local<Vec<ActionId>>,
 ) {
-    // let mut tracker_param = tracker_param.into_inner();
-    // let mut action_param = action_param.into_inner();
-    for (e, mut script_rt) in &mut q_script {
+    for (e, script_rt) in &mut q_script {
+        let script_rt = script_rt.into_inner();
+
         let mut is_loop = true;
         let mut is_end = false;
         while is_loop {
             is_loop = false;
             {
                 let mut tracker_param = params.p0().into_inner();
-                let r = script_rt
-                    .tracker
-                    .update(e, &mut tracker_param, &mut action_queue);
+                let settings = &script_rt.settings;
+                let tracker = &mut script_rt.tracker;
+                let r = tracker.update(
+                    e,
+                    settings,
+                    &mut tracker_param,
+                    &mut action_queue,
+                );
                 is_loop |= r.is_loop();
                 is_end |= r.is_end();
             }
@@ -237,15 +247,23 @@ fn script_init_system<T: ScriptAsset>(
     mut commands: Commands,
     ass_script: Res<Assets<T>>,
     q_script_handle: Query<(Entity, &Handle<T>), Changed<Handle<T>>>,
-    tracker_init_param: StaticSystemParam<<T::Tracker as ScriptTracker>::InitParam>,
+    mut params: ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::InitParam>,
+        StaticSystemParam<T::BuildParam>,
+    )>,
 ) {
-    let mut tracker_init_param = tracker_init_param.into_inner();
     for (e, handle) in &q_script_handle {
         if let Some(script) = ass_script.get(&handle) {
             let settings = script.into_settings();
-            commands
-                .entity(e)
-                .insert(script.init(e, &settings, &mut tracker_init_param));
+            let builder = {
+                let mut tracker_init_param = params.p0().into_inner();
+                ScriptRuntimeBuilder::new(e, settings, &mut tracker_init_param)
+            };
+            let builder = {
+                let mut build_param = params.p1().into_inner();
+                script.build(builder, e, &mut build_param)
+            };
+            commands.entity(e).insert(builder.build());
             debug!("Initialized new script.");
         }
     }

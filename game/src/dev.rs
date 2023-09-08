@@ -6,6 +6,7 @@ impl Plugin for DevPlugin {
     fn build(&self, app: &mut App) {
         app.register_clicommand_args("phystester_at", cli_phystester_at);
         app.register_clicommand_args("spawn_script", cli_spawn_script);
+        app.register_clicommand_args("spawn_anim", cli_spawn_anim);
         app.add_systems(
             Last,
             debug_progress
@@ -71,4 +72,29 @@ fn cli_spawn_script(In(args): In<Vec<String>>, world: &mut World) {
     }
 
     world.spawn((AssetKey::<Script>::new(&args[0]),));
+}
+
+fn cli_spawn_anim(In(args): In<Vec<String>>, world: &mut World) {
+    use theseeker_engine::assets::animation::SpriteAnimation;
+
+    if args.len() != 1 && args.len() != 3 {
+        error!("\"spawn_anim <anim_asset_key> [<x> <y>]\"");
+        return;
+    }
+
+    let (mut x, mut y) = (0.0, 0.0);
+    if args.len() == 3 {
+        if let (Ok(xx), Ok(yy)) = (args[1].parse(), args[2].parse()) {
+            x = xx;
+            y = yy;
+        }
+    }
+
+    world.spawn((
+        SpriteSheetBundle {
+            transform: Transform::from_xyz(x, y, 101.0),
+            ..default()
+        },
+        AssetKey::<SpriteAnimation>::new(&args[0]),
+    ));
 }
