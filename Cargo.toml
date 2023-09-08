@@ -58,7 +58,6 @@ features = [
     "bevy_text",
     "bevy_ui",
     "bevy_winit",
-    "hdr",
     "png",
     "jpeg",
     "ktx2",
