@@ -6,4 +6,8 @@
   - [Monetization](./game-design/monetization.md)
 - [Development Policies](./policy.md)
   - [Assets Organization](./policy/assets.md)
+  - [CLI Commands](./policy/cli.md)
 - [Technical Documentation](./tech.md)
+  - [Dev Console](./tech/cli.md)
+    - [Cli Commands Reference](./tech/cli-ref.md)
+    - [How to create new CLI Commands](./tech/cli-howto.md)
