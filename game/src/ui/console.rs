@@ -5,6 +5,7 @@ pub struct UiConsolePlugin;
 
 impl Plugin for UiConsolePlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<ConsoleCommandHistory>();
         app.add_systems(
             Update,
             (toggle_console, console_text_input),
@@ -16,6 +17,11 @@ impl Plugin for UiConsolePlugin {
 struct UiConsole;
 #[derive(Component)]
 struct UiConsolePrompt(Entity);
+#[derive(Component)]
+struct UiConsolePromptHistoryEntry(Option<usize>);
+
+#[derive(Resource, Default)]
+struct ConsoleCommandHistory(Vec<String>);
 
 fn toggle_console(
     mut commands: Commands,
@@ -68,6 +74,7 @@ fn toggle_console(
             let prompt = commands
                 .spawn((
                     UiConsolePrompt(console),
+                    UiConsolePromptHistoryEntry(None),
                     TextBundle {
                         text: Text::from_sections([
                             TextSection::new("~ ", prompt_style),
@@ -94,17 +101,19 @@ fn console_text_input(
     mut commands: Commands,
     mut evr_char: EventReader<ReceivedCharacter>,
     kbd: Res<Input<KeyCode>>,
-    mut query: Query<(&mut Text, &UiConsolePrompt)>,
+    mut query: Query<(&mut Text, &mut UiConsolePromptHistoryEntry, &UiConsolePrompt)>,
+    mut history: ResMut<ConsoleCommandHistory>,
 ) {
     if kbd.just_pressed(KeyCode::Escape) {
-        for (_, prompt) in &query {
+        for (_, _, prompt) in &query {
             commands.entity(prompt.0).despawn_recursive();
         }
         evr_char.clear();
         return;
     }
     if kbd.just_pressed(KeyCode::Return) {
-        for (text, prompt) in &query {
+        for (text, _, prompt) in &query {
+            history.0.push(text.sections[1].value.clone());
             commands.run_clicommand(&text.sections[1].value);
             commands.entity(prompt.0).despawn_recursive();
         }
@@ -112,18 +121,48 @@ fn console_text_input(
         return;
     }
     if kbd.just_pressed(KeyCode::Back) {
-        for (mut text, prompt) in &mut query {
+        for (mut text, mut hisentry, prompt) in &mut query {
             if text.sections[1].value.is_empty() {
                 commands.entity(prompt.0).despawn_recursive();
             }
             text.sections[1].value.pop();
+            hisentry.0 = None;
+        }
+        evr_char.clear();
+        return;
+    }
+    if kbd.just_pressed(KeyCode::Up) {
+        for (mut text, mut hisentry, _) in &mut query {
+            if let Some(i) = hisentry.0.as_mut() {
+                if *i > 0 {
+                    *i -= 1;
+                }
+                text.sections[1].value = history.0[*i].clone();
+            } else {
+                let i = history.0.len() - 1;
+                hisentry.0 = Some(i);
+                text.sections[1].value = history.0[i].clone();
+            }
+        }
+        evr_char.clear();
+        return;
+    }
+    if kbd.just_pressed(KeyCode::Down) {
+        for (mut text, mut hisentry, _) in &mut query {
+            if let Some(i) = hisentry.0.as_mut() {
+                if *i < history.0.len() - 1 {
+                    *i += 1;
+                }
+                text.sections[1].value = history.0[*i].clone();
+            }
         }
         evr_char.clear();
         return;
     }
     for ev in evr_char.iter() {
-        for (mut text, _) in &mut query {
+        for (mut text, mut hisentry, _) in &mut query {
             text.sections[1].value.push(ev.char);
+            hisentry.0 = None;
         }
     }
 }
