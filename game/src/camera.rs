@@ -7,7 +7,11 @@ pub struct CameraPlugin;
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
         app.register_clicommand_args("camera_at", cli_camera_at);
-        app.register_clicommand_args("camera_limits", cli_camera_limits);
+        app.register_clicommand_noargs(
+            "camera_limits",
+            cli_camera_limits_noargs,
+        );
+        app.register_clicommand_args("camera_limits", cli_camera_limits_args);
         app.add_systems(
             OnEnter(AppState::InGame),
             setup_main_camera,
@@ -71,7 +75,18 @@ fn cli_camera_at(In(args): In<Vec<String>>, mut q_cam: Query<&mut Transform, Wit
     }
 }
 
-fn cli_camera_limits(
+fn cli_camera_limits_noargs(q_cam: Query<&GameViewLimits, With<MainCamera>>) {
+    if let Ok(limits) = q_cam.get_single() {
+        info!(
+            "Game Camera limits: {} {} {} {}",
+            limits.0.min.x, limits.0.min.y, limits.0.max.x, limits.0.max.y
+        );
+    } else {
+        error!("Game Camera not found!");
+    }
+}
+
+fn cli_camera_limits_args(
     In(args): In<Vec<String>>,
     mut q_cam: Query<&mut GameViewLimits, With<MainCamera>>,
 ) {

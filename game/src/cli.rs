@@ -26,7 +26,9 @@ fn cli_hello_args(In(args): In<Vec<String>>) {
 }
 
 fn cli_help(clicommands: Res<iyes_cli::CliCommands>) {
-    let mut aggregate: HashMap<&str, (bool, bool)> = HashMap::with_capacity(clicommands.commands_noargs.capacity() + clicommands.commands_args.capacity());
+    let mut aggregate: HashMap<&str, (bool, bool)> = HashMap::with_capacity(
+        clicommands.commands_noargs.capacity() + clicommands.commands_args.capacity(),
+    );
 
     for noargscmd in clicommands.commands_noargs.keys() {
         if let Some(existing) = aggregate.get_mut(noargscmd.as_str()) {
@@ -52,16 +54,8 @@ fn cli_help(clicommands: Res<iyes_cli::CliCommands>) {
         info!(
             "{}{}{}",
             name,
-            if is_noargs {
-                " (noargs)"
-            } else {
-                ""
-            },
-            if is_args {
-                " (args)"
-            } else {
-                ""
-            }
+            if is_noargs { " (noargs)" } else { "" },
+            if is_args { " (args)" } else { "" }
         );
     }
 }
