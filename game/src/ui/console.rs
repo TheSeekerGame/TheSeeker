@@ -101,7 +101,11 @@ fn console_text_input(
     mut commands: Commands,
     mut evr_char: EventReader<ReceivedCharacter>,
     kbd: Res<Input<KeyCode>>,
-    mut query: Query<(&mut Text, &mut UiConsolePromptHistoryEntry, &UiConsolePrompt)>,
+    mut query: Query<(
+        &mut Text,
+        &mut UiConsolePromptHistoryEntry,
+        &UiConsolePrompt,
+    )>,
     mut history: ResMut<ConsoleCommandHistory>,
 ) {
     if kbd.just_pressed(KeyCode::Escape) {
