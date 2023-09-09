@@ -4,7 +4,7 @@ pub struct DevPlugin;
 
 impl Plugin for DevPlugin {
     fn build(&self, app: &mut App) {
-        app.register_clicommand_args("phystester_at", cli_phystester_at);
+        app.register_clicommand_args("spawn_phystester", cli_spawn_phystester);
         app.register_clicommand_args("spawn_script", cli_spawn_script);
         app.register_clicommand_args("spawn_anim", cli_spawn_anim);
         app.add_systems(
@@ -40,9 +40,9 @@ fn debug_setup_camera(mut commands: Commands) {
     ));
 }
 
-fn cli_phystester_at(In(args): In<Vec<String>>, mut commands: Commands) {
+fn cli_spawn_phystester(In(args): In<Vec<String>>, mut commands: Commands) {
     if args.len() != 2 {
-        error!("\"phystester_at <x> <y>\"");
+        error!("\"spawn_phystester <x> <y>\"");
         return;
     }
     if let (Ok(x), Ok(y)) = (args[0].parse(), args[1].parse()) {
