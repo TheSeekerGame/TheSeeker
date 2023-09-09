@@ -6,11 +6,23 @@ impl Plugin for CliPlugin {
     fn build(&self, app: &mut App) {
         app.register_clicommand_noargs("exit", cli_exit);
         app.register_clicommand_noargs("help", cli_help);
+        app.register_clicommand_args("hello", cli_hello_args);
+        app.register_clicommand_noargs("hello", cli_hello_noargs);
     }
 }
 
 fn cli_exit(mut evw_exit: EventWriter<bevy::app::AppExit>) {
     evw_exit.send(bevy::app::AppExit);
+}
+
+fn cli_hello_noargs() {
+    info!("Hello!");
+}
+
+fn cli_hello_args(In(args): In<Vec<String>>) {
+    for arg in args {
+        info!("Hello, {}!", arg);
+    }
 }
 
 fn cli_help(clicommands: Res<iyes_cli::CliCommands>) {
