@@ -85,7 +85,7 @@ pub enum CommonScriptAction {
     /// Spawn a Bevy Scene asset
     SpawnScene {
         /// The dynamic asset key of the scene asset to spawn
-        scene_asset_key: String,
+        asset_key: String,
         /// If true, spawn it as a child under another entity.
         /// If false, spawn it independently (standalone).
         #[serde(default)]
@@ -93,6 +93,10 @@ pub enum CommonScriptAction {
         /// If `as_child` is true, optionally specify another entity (by label)
         /// to use as the parent. If unspecified, use the current entity.
         parent_label: Option<String>,
+    },
+    /// Spawn a new entity to run a script
+    SpawnScript {
+        asset_key: String,
     },
 }
 

@@ -12,6 +12,11 @@ impl Plugin for CommonScriptPlugin {
     }
 }
 
+#[derive(Bundle)]
+pub struct ScriptBundle {
+    pub key: AssetKey<Script>,
+}
+
 #[derive(Default)]
 pub struct CommonScriptTracker {
     start_tick: u64,
@@ -188,10 +193,16 @@ impl ScriptAction for CommonScriptAction {
                 ScriptUpdateResult::NormalRun
             },
             CommonScriptAction::SpawnScene {
-                scene_asset_key,
+                asset_key,
                 as_child,
                 parent_label,
             } => ScriptUpdateResult::NormalRun,
+            CommonScriptAction::SpawnScript { asset_key } => {
+                commands.spawn(ScriptBundle {
+                    key: asset_key.into(),
+                });
+                ScriptUpdateResult::NormalRun
+            }
         }
     }
 }

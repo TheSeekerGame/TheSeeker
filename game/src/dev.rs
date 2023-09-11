@@ -64,14 +64,16 @@ fn cli_spawn_phystester(In(args): In<Vec<String>>, mut commands: Commands) {
 }
 
 fn cli_spawn_script(In(args): In<Vec<String>>, world: &mut World) {
-    use theseeker_engine::assets::script::Script;
+    use theseeker_engine::script::common::ScriptBundle;
 
     if args.len() != 1 {
         error!("\"spawn_script <script_asset_key>\"");
         return;
     }
 
-    world.spawn((AssetKey::<Script>::new(&args[0]),));
+    world.spawn(ScriptBundle {
+        key: args[0].as_str().into(),
+    });
 }
 
 fn cli_spawn_anim(In(args): In<Vec<String>>, world: &mut World) {
