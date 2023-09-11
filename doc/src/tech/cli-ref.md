@@ -9,9 +9,10 @@ using the [`RunCli`](./script-ref.md#RunCli) script action.
 
 These commands are available in all builds of the game.
 
----
-
-### `AppState`
+<details>
+  <summary>
+  <code>AppState</code>
+  </summary>
 
 Args:
 
@@ -28,9 +29,12 @@ AppState MainMenu
 
 Immediately triggers a global AppState transition.
 
----
+</details>
 
-### `camera_at`
+<details>
+  <summary>
+  <code>camera_at</code>
+  </summary>
 
 Args:
 
@@ -47,9 +51,12 @@ camera_at 200 300
 Makes the camera jump to the given coordinates. Useful if you want to look at
 a specific location on the map.
 
----
+</details>
 
-### `camera_limits`
+<details>
+  <summary>
+  <code>camera_limits</code>
+  </summary>
 
 Used to manage camera limits (the viewable area). During normal gameplay, the
 camera control algorithm should make sure nothing outside of these coordinates
@@ -77,9 +84,12 @@ camera_limits 100 200 300 400
 
 Sets the camera limits.
 
----
+</details>
 
-### `exit`
+<details>
+  <summary>
+  <code>exit</code>
+  </summary>
 
 Noargs:
 
@@ -89,9 +99,12 @@ exit
 
 Quits the app.
 
----
+</details>
 
-### `hello`
+<details>
+  <summary>
+  <code>hello</code>
+  </summary>
 
 Silly trivial command for testing and example purposes. May be useful as
 a placeholder during development.
@@ -118,9 +131,12 @@ hello world
 
 Prints "Hello, {arg}!" to log. For example: "Hello, world!"
 
----
+</details>
 
-### `help`
+<details>
+  <summary>
+  <code>help</code>
+  </summary>
 
 Noargs:
 
@@ -130,9 +146,12 @@ help
 
 Prints a list/summary of all available CliCommands to log.
 
----
+</details>
 
-### `locale`
+<details>
+  <summary>
+  <code>locale</code>
+  </summary>
 
 Args:
 
@@ -151,6 +170,8 @@ Instantly changes the game's locale (UI/text language) at runtime.
 
 Useful for testing how things look in different locales.
 
+</details>
+
 ## Dev-only Commands
 
 These commands are only available if the game was compiled with the `dev`
@@ -162,9 +183,10 @@ For example, you can run the game as:
 cargo run --features dev
 ```
 
----
-
-### `spawn_anim`
+<details>
+  <summary>
+  <code>spawn_anim</code>
+  </summary>
 
 Args:
 
@@ -186,9 +208,12 @@ into actual gameplay.
 
 The X/Y coordinates are optional and default to 0,0.
 
----
+</details>
 
-### `spawn_phystester`
+<details>
+  <summary>
+  <code>spawn_phystester</code>
+  </summary>
 
 Args:
 
@@ -206,9 +231,12 @@ Spawns a physics test entity. The entity is displayed as a pink square, but with
 a circular collider. It has a full Dynamic rigid body, so it will fall with
 gravity and bounce off walls and other colliders.
 
----
+</details>
 
-### `spawn_script`
+<details>
+  <summary>
+  <code>spawn_script</code>
+  </summary>
 
 Args:
 
@@ -225,3 +253,5 @@ spawn_script script.cutscene.intro
 Spawns an entity to run the given script.
 
 This can be useful for testing scripts.
+
+</details>
