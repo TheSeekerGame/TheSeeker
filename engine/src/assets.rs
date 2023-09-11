@@ -85,6 +85,18 @@ impl<T: Asset> AssetKey<T> {
     }
 }
 
+impl<T: Asset> From<&str> for AssetKey<T> {
+    fn from(value: &str) -> Self {
+        Self::new(value)
+    }
+}
+
+impl<T: Asset> From<&String> for AssetKey<T> {
+    fn from(value: &String) -> Self {
+        Self::new(value.as_str())
+    }
+}
+
 /// System that detects `AssetKey` components on entities and inserts `Handle`.
 ///
 /// This happens in `GameTickUpdate`, so it is possible to spawn and resolve
