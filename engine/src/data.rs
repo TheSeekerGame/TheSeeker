@@ -4,6 +4,39 @@ use std::str::FromStr;
 
 use crate::prelude::*;
 
+/// Represent a fractional value, parsed from either a fraction or decimal syntax
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+#[derive(SerializeDisplay, DeserializeFromStr)]
+pub struct Frac(pub f32);
+
+impl fmt::Display for Frac {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f32::fmt(&self.0, f)
+    }
+}
+
+impl FromStr for Frac {
+    type Err = ParseFloatError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut split = s.split('/');
+        if let (Some(num), Some(denum)) = (split.next(), split.next()) {
+            let num = num.trim().parse::<f32>()?;
+            let denum = denum.trim().parse::<f32>()?;
+            Ok(Frac(num/denum))
+        } else {
+            let float = s.trim().parse::<f32>()?;
+            Ok(Frac(float))
+        }
+    }
+}
+
+impl From<Frac> for f32 {
+    fn from(value: Frac) -> Self {
+        value.0
+    }
+}
+
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
 #[derive(SerializeDisplay, DeserializeFromStr)]
 pub struct TimeSpec {
