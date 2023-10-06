@@ -28,6 +28,7 @@ use crate::prelude::*;
 
 pub mod animation;
 pub mod assets;
+pub mod data;
 pub mod script;
 pub mod time;
 
