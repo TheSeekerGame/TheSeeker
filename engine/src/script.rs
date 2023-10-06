@@ -76,7 +76,8 @@ pub type ActionId = usize;
 pub trait ScriptAsset: Asset + Sized + Send + Sync + 'static {
     type Settings: Sized + Send + Sync + 'static;
     type RunIf: ScriptRunIf<Tracker = Self::Tracker>;
-    type Action: ScriptAction<Tracker = Self::Tracker>;
+    type Action: ScriptAction<Tracker = Self::Tracker, ActionParams = Self::ActionParams>;
+    type ActionParams: ScriptActionParams;
     type Tracker: ScriptTracker<RunIf = Self::RunIf, Settings = Self::Settings>;
     type BuildParam: SystemParam + 'static;
 
@@ -120,13 +121,21 @@ pub trait ScriptRunIf: Clone + Send + Sync + 'static {
 
 pub trait ScriptAction: Clone + Send + Sync + 'static {
     type Tracker: ScriptTracker;
+    type ActionParams: ScriptActionParams;
     type Param: SystemParam + 'static;
     fn run<'w>(
         &self,
         entity: Entity,
+        actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
         param: &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult;
+}
+
+pub trait ScriptActionParams: Clone + Send + Sync + 'static {
+    fn should_run(&self) -> Result<(), ScriptUpdateResult> {
+        Ok(())
+    }
 }
 
 /// Returned by `ScriptTracker::update` to indicate the status of a script
@@ -159,7 +168,7 @@ pub struct ScriptRuntimeBuilder<T: ScriptAsset> {
 #[derive(Component)]
 pub struct ScriptRuntime<T: ScriptAsset> {
     settings: <T::Tracker as ScriptTracker>::Settings,
-    actions: Vec<T::Action>,
+    actions: Vec<(T::ActionParams, T::Action)>,
     tracker: T::Tracker,
 }
 
@@ -180,9 +189,14 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
         }
     }
 
-    pub fn add_action(mut self, run_if: &T::RunIf, action: &T::Action) -> Self {
+    pub fn add_action(
+        mut self,
+        run_if: &T::RunIf,
+        action: &T::Action,
+        params: &T::ActionParams,
+    ) -> Self {
         let action_id = self.runtime.actions.len();
-        self.runtime.actions.push(action.clone());
+        self.runtime.actions.push((params.clone(), action.clone()));
         self.runtime.tracker.track_action(run_if, action_id);
         self
     }
@@ -227,12 +241,18 @@ fn script_driver_system<T: ScriptAsset>(
             //     action_queue.len(),
             // );
             for action_id in action_queue.drain(..) {
-                let mut action_param = params.p1().into_inner();
-                let r = script_rt.actions[action_id].clone().run(
-                    e,
-                    &mut script_rt.tracker,
-                    &mut action_param,
-                );
+                let action = &script_rt.actions[action_id];
+                let r = if let Err(r) = action.0.should_run() {
+                    r
+                } else {
+                    let mut action_param = params.p1().into_inner();
+                    script_rt.actions[action_id].1.run(
+                        e,
+                        &script_rt.actions[action_id].0,
+                        &mut script_rt.tracker,
+                        &mut action_param,
+                    )
+                };
                 is_loop |= r.is_loop();
                 is_end |= r.is_end();
             }

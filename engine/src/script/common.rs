@@ -164,13 +164,27 @@ impl ScriptRunIf for CommonScriptRunIf {
     type Tracker = CommonScriptTracker;
 }
 
+impl ScriptActionParams for CommonScriptParams {
+    fn should_run(&self) -> Result<(), ScriptUpdateResult> {
+        if let Some(rng_pct) = &self.rng_pct {
+            let mut rng = thread_rng();
+            if !rng.gen_bool((*rng_pct as f64 / 100.0).clamp(0.0, 1.0)) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        Ok(())
+    }
+}
+
 impl ScriptAction for CommonScriptAction {
+    type ActionParams = CommonScriptParams;
     type Param = (SRes<EntityLabels>, SCommands);
     type Tracker = CommonScriptTracker;
 
     fn run<'w>(
         &self,
         entity: Entity,
+        _actionparams: &Self::ActionParams,
         _tracker: &mut Self::Tracker,
         (ref elabels, ref mut commands): &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult {
@@ -202,7 +216,7 @@ impl ScriptAction for CommonScriptAction {
                     key: asset_key.into(),
                 });
                 ScriptUpdateResult::NormalRun
-            }
+            },
         }
     }
 }
@@ -291,7 +305,22 @@ impl<T: ScriptRunIf> ScriptRunIf for ExtendedScriptRunIf<T> {
     type Tracker = ExtendedScriptTracker<T::Tracker>;
 }
 
-impl<T: ScriptAction> ScriptAction for ExtendedScriptAction<T> {
+impl<T: ScriptActionParams> ScriptActionParams for ExtendedScriptParams<T> {
+    fn should_run(&self) -> Result<(), ScriptUpdateResult> {
+        if let Err(r) = self.extended.should_run() {
+            Err(r)
+        } else {
+            self.common.should_run()
+        }
+    }
+}
+
+impl<P, T> ScriptAction for ExtendedScriptAction<T>
+where
+    P: ScriptActionParams,
+    T: ScriptAction<ActionParams = ExtendedScriptParams<P>>,
+{
+    type ActionParams = ExtendedScriptParams<P>;
     type Param = (
         T::Param,
         <CommonScriptAction as ScriptAction>::Param,
@@ -301,16 +330,23 @@ impl<T: ScriptAction> ScriptAction for ExtendedScriptAction<T> {
     fn run<'w>(
         &self,
         entity: Entity,
+        actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
         (param_ext, param_common): &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult {
         match self {
             ExtendedScriptAction::Extended(action) => {
-                action.run(entity, &mut tracker.extended, param_ext)
+                action.run(
+                    entity,
+                    actionparams,
+                    &mut tracker.extended,
+                    param_ext,
+                )
             },
             ExtendedScriptAction::Common(action) => {
                 action.run(
                     entity,
+                    &actionparams.common,
                     &mut tracker.common,
                     param_common,
                 )
@@ -321,6 +357,7 @@ impl<T: ScriptAction> ScriptAction for ExtendedScriptAction<T> {
 
 impl ScriptAsset for Script {
     type Action = CommonScriptAction;
+    type ActionParams = CommonScriptParams;
     type BuildParam = ();
     type RunIf = CommonScriptRunIf;
     type Settings = CommonScriptSettings;
@@ -337,7 +374,11 @@ impl ScriptAsset for Script {
         _param: &mut <Self::BuildParam as SystemParam>::Item<'w, '_>,
     ) -> ScriptRuntimeBuilder<Self> {
         for action in self.script.iter() {
-            builder = builder.add_action(&action.run_if, &action.action);
+            builder = builder.add_action(
+                &action.run_if,
+                &action.action,
+                &action.params,
+            );
         }
         builder
     }

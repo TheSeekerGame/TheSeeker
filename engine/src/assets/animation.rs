@@ -1,8 +1,8 @@
 use bevy::reflect::{TypePath, TypeUuid};
 
 use super::script::*;
-use crate::prelude::*;
 use crate::data::*;
+use crate::prelude::*;
 
 /// Sprite Animation Asset type
 ///
@@ -17,7 +17,13 @@ pub struct SpriteAnimation {
     /// General animation parameters
     pub settings: ExtendedScriptSettings<SpriteAnimationSettings>,
     /// Optional "script": list of actions to perform during playback
-    pub script: Vec<ExtendedScript<SpriteAnimationScriptRunIf, SpriteAnimationScriptAction>>,
+    pub script: Vec<
+        ExtendedScript<
+            SpriteAnimationScriptParams,
+            SpriteAnimationScriptRunIf,
+            SpriteAnimationScriptAction,
+        >,
+    >,
 }
 
 #[derive(Debug, Clone)]
@@ -28,6 +34,10 @@ pub struct SpriteAnimationSettings {
     pub frame_min: u32,
     pub frame_max: u32,
 }
+
+#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
+pub struct SpriteAnimationScriptParams {}
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
@@ -75,30 +85,15 @@ pub enum SpriteAnimationScriptAction {
         z: Option<Frac>,
     },
     /// Transform: set absolute translation
-    TransformTeleport {
-        x: Frac,
-        y: Frac,
-        z: Option<Frac>,
-    },
+    TransformTeleport { x: Frac, y: Frac, z: Option<Frac> },
     /// Transform: rotate by N turns (1 turn = 360 degrees)
-    TransformRotateTurns {
-        turns: Frac,
-    },
+    TransformRotateTurns { turns: Frac },
     /// Transform: rotate by N degrees
-    TransformRotateDegrees {
-        degrees: Frac,
-    },
+    TransformRotateDegrees { degrees: Frac },
     /// Transform: set the rotation to a specific value
-    TransformSetRotationTurns {
-        turns: Frac,
-    },
+    TransformSetRotationTurns { turns: Frac },
     /// Transform: set the rotation to a specific value
-    TransformSetRotationDegrees {
-        degrees: Frac,
-    },
+    TransformSetRotationDegrees { degrees: Frac },
     /// Transform: set scale
-    TransformSetScale {
-        x: Frac,
-        y: Frac,
-    },
+    TransformSetScale { x: Frac, y: Frac },
 }

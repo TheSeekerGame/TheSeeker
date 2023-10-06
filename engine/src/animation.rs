@@ -27,13 +27,22 @@ impl ScriptRunIf for SpriteAnimationScriptRunIf {
     type Tracker = SpriteAnimationTracker;
 }
 
+impl ScriptActionParams for SpriteAnimationScriptParams {}
+
 impl ScriptAction for SpriteAnimationScriptAction {
-    type Param = (SQuery<(&'static mut TextureAtlasSprite, &'static mut Transform)>,);
+    type ActionParams = ExtendedScriptParams<SpriteAnimationScriptParams>;
+    type Param = (
+        SQuery<(
+            &'static mut TextureAtlasSprite,
+            &'static mut Transform,
+        )>,
+    );
     type Tracker = SpriteAnimationTracker;
 
     fn run<'w>(
         &self,
         entity: Entity,
+        _actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
         (q,): &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult {
@@ -79,7 +88,7 @@ impl ScriptAction for SpriteAnimationScriptAction {
                     xf.translation.z += f32::from(*z);
                 }
                 ScriptUpdateResult::NormalRun
-            }
+            },
             SpriteAnimationScriptAction::TransformTeleport { x, y, z } => {
                 xf.translation.x = f32::from(*x);
                 xf.translation.y = f32::from(*y);
@@ -87,28 +96,28 @@ impl ScriptAction for SpriteAnimationScriptAction {
                     xf.translation.z = f32::from(*z);
                 }
                 ScriptUpdateResult::NormalRun
-            }
+            },
             SpriteAnimationScriptAction::TransformSetScale { x, y } => {
                 xf.scale.x = f32::from(*x);
                 xf.scale.y = f32::from(*y);
                 ScriptUpdateResult::NormalRun
-            }
+            },
             SpriteAnimationScriptAction::TransformRotateDegrees { degrees } => {
                 xf.rotate_z(f32::from(*degrees).to_radians());
                 ScriptUpdateResult::NormalRun
-            }
+            },
             SpriteAnimationScriptAction::TransformRotateTurns { turns } => {
                 xf.rotate_z(f32::from(*turns) * 2.0 * std::f32::consts::PI);
                 ScriptUpdateResult::NormalRun
-            }
+            },
             SpriteAnimationScriptAction::TransformSetRotationDegrees { degrees } => {
                 xf.rotation = Quat::from_rotation_z(f32::from(*degrees).to_radians());
                 ScriptUpdateResult::NormalRun
-            }
+            },
             SpriteAnimationScriptAction::TransformSetRotationTurns { turns } => {
                 xf.rotation = Quat::from_rotation_z(f32::from(*turns) * 2.0 * std::f32::consts::PI);
                 ScriptUpdateResult::NormalRun
-            }
+            },
         }
     }
 }
@@ -186,6 +195,7 @@ impl ScriptTracker for SpriteAnimationTracker {
 
 impl ScriptAsset for SpriteAnimation {
     type Action = ExtendedScriptAction<SpriteAnimationScriptAction>;
+    type ActionParams = ExtendedScriptParams<SpriteAnimationScriptParams>;
     type BuildParam = (
         SQuery<&'static mut Handle<TextureAtlas>>,
         SRes<PreloadedAssets>,
@@ -213,7 +223,11 @@ impl ScriptAsset for SpriteAnimation {
         *atlas = new_atlas;
 
         for action in self.script.iter() {
-            builder = builder.add_action(&action.run_if, &action.action);
+            builder = builder.add_action(
+                &action.run_if,
+                &action.action,
+                &action.params,
+            );
         }
         builder
     }

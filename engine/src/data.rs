@@ -17,7 +17,9 @@ pub enum ColorRepr {
     RGBHex(Color),
 }
 
-pub fn deserialize_color_rgbhex<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Color, D::Error> {
+pub fn deserialize_color_rgbhex<'de, D: Deserializer<'de>>(
+    deserializer: D,
+) -> Result<Color, D::Error> {
     let s: String = Deserialize::deserialize(deserializer)?;
     match Color::hex(&s) {
         Ok(color) => Ok(color),
@@ -31,7 +33,10 @@ pub fn deserialize_color_rgbhex<'de, D: Deserializer<'de>>(deserializer: D) -> R
     }
 }
 
-pub fn serialize_color_rgbhex<S: Serializer>(value: &Color, serializer: S) -> Result<S::Ok, S::Error> {
+pub fn serialize_color_rgbhex<S: Serializer>(
+    value: &Color,
+    serializer: S,
+) -> Result<S::Ok, S::Error> {
     let [r, g, b, a] = value.as_rgba_u8();
     let s = if a != 255 {
         format!("#{:02x}{:02x}{:02x}{:02x}", r, g, b, a)
@@ -43,7 +48,13 @@ pub fn serialize_color_rgbhex<S: Serializer>(value: &Color, serializer: S) -> Re
 
 impl From<Color> for ColorRepr {
     fn from(value: Color) -> Self {
-        if let Color::Lcha { lightness, chroma, hue, alpha } = value {
+        if let Color::Lcha {
+            lightness,
+            chroma,
+            hue,
+            alpha,
+        } = value
+        {
             if alpha != 1.0 {
                 ColorRepr::Lcha([lightness, chroma, hue, alpha])
             } else {
@@ -65,7 +76,7 @@ impl From<ColorRepr> for Color {
                     hue: h,
                     alpha: a,
                 }
-            }
+            },
             ColorRepr::Lch([l, c, h]) => {
                 Color::Lcha {
                     lightness: l,
@@ -73,10 +84,8 @@ impl From<ColorRepr> for Color {
                     hue: h,
                     alpha: 1.0,
                 }
-            }
-            ColorRepr::RGBHex(color) => {
-                color
-            }
+            },
+            ColorRepr::RGBHex(color) => color,
         }
     }
 }
@@ -100,7 +109,7 @@ impl FromStr for Frac {
         if let (Some(num), Some(denum)) = (split.next(), split.next()) {
             let num = num.trim().parse::<f32>()?;
             let denum = denum.trim().parse::<f32>()?;
-            Ok(Frac(num/denum))
+            Ok(Frac(num / denum))
         } else {
             let float = s.trim().parse::<f32>()?;
             Ok(Frac(float))
