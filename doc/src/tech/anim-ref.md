@@ -206,16 +206,27 @@ Example:
 [[script]]
 action = "SetSpriteColor"
 color = "#ff00ff"
+
+[[script]]
+action = "SetSpriteColor"
+color = [0.75, 0.5, 120.0]
 ```
 
 Changes the colorization of the sprite. The RGBA values of the pixels will be
 multiplied by the provided value.
 
-The `color` field uses HTML/CSS-like syntax: hexadecimal RGB, with optional A.
+The `color` field can be specified as either:
+ - `[L, C, H]` for LCH color
+ - `[L, C, H, A]` for LCH color + Alpha
+ - `#RRGGBB` for RGB color
+ - `#RRGGBBAA` for RGB + Alpha
 
-Examples:
- - `"#ff0000"`: Red
- - `"#40404080"`: Semi-transparent dark grey
+RGB color is specified in hexadecimal notation, like for Web/CSS.
+
+LCH color is specified as:
+ - Lightness has range 0.0 to 1.5
+ - Chroma has range 0.0 to 1.5
+ - Hue has range 0.0 to 360.0 (degrees)
 
 </details>
 

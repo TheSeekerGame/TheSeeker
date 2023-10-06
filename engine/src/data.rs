@@ -2,7 +2,84 @@ use core::fmt;
 use std::num::{ParseFloatError, ParseIntError};
 use std::str::FromStr;
 
+use serde::{Deserializer, Serializer};
+
 use crate::prelude::*;
+
+#[derive(Debug, Clone, Copy)]
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum ColorRepr {
+    Lch([f32; 3]),
+    Lcha([f32; 4]),
+    #[serde(deserialize_with = "deserialize_color_rgbhex")]
+    #[serde(serialize_with = "serialize_color_rgbhex")]
+    RGBHex(Color),
+}
+
+pub fn deserialize_color_rgbhex<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Color, D::Error> {
+    let s: String = Deserialize::deserialize(deserializer)?;
+    match Color::hex(&s) {
+        Ok(color) => Ok(color),
+        Err(e) => {
+            error!(
+                "Color must be specified as RGBA Hex syntax. {:?} is invalid: {}",
+                s, e
+            );
+            Ok(Color::WHITE)
+        },
+    }
+}
+
+pub fn serialize_color_rgbhex<S: Serializer>(value: &Color, serializer: S) -> Result<S::Ok, S::Error> {
+    let [r, g, b, a] = value.as_rgba_u8();
+    let s = if a != 255 {
+        format!("#{:02x}{:02x}{:02x}{:02x}", r, g, b, a)
+    } else {
+        format!("#{:02x}{:02x}{:02x}", r, g, b)
+    };
+    serializer.serialize_str(s.as_str())
+}
+
+impl From<Color> for ColorRepr {
+    fn from(value: Color) -> Self {
+        if let Color::Lcha { lightness, chroma, hue, alpha } = value {
+            if alpha != 1.0 {
+                ColorRepr::Lcha([lightness, chroma, hue, alpha])
+            } else {
+                ColorRepr::Lch([lightness, chroma, hue])
+            }
+        } else {
+            ColorRepr::RGBHex(value)
+        }
+    }
+}
+
+impl From<ColorRepr> for Color {
+    fn from(value: ColorRepr) -> Self {
+        match value {
+            ColorRepr::Lcha([l, c, h, a]) => {
+                Color::Lcha {
+                    lightness: l,
+                    chroma: c,
+                    hue: h,
+                    alpha: a,
+                }
+            }
+            ColorRepr::Lch([l, c, h]) => {
+                Color::Lcha {
+                    lightness: l,
+                    chroma: c,
+                    hue: h,
+                    alpha: 1.0,
+                }
+            }
+            ColorRepr::RGBHex(color) => {
+                color
+            }
+        }
+    }
+}
 
 /// Represent a fractional value, parsed from either a fraction or decimal syntax
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -34,6 +111,11 @@ impl FromStr for Frac {
 impl From<Frac> for f32 {
     fn from(value: Frac) -> Self {
         value.0
+    }
+}
+impl From<f32> for Frac {
+    fn from(value: f32) -> Self {
+        Frac(value)
     }
 }
 

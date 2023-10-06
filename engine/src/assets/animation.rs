@@ -1,8 +1,8 @@
 use bevy::reflect::{TypePath, TypeUuid};
-use serde::Deserializer;
 
 use super::script::*;
 use crate::prelude::*;
+use crate::data::*;
 
 /// Sprite Animation Asset type
 ///
@@ -59,8 +59,7 @@ pub enum SpriteAnimationScriptAction {
     /// Set sprite colorization
     SetSpriteColor {
         /// The new sprite color
-        #[serde(deserialize_with = "deserialize_color")]
-        color: Color,
+        color: ColorRepr,
     },
     /// Set sprite X/Y flip
     SetSpriteFlip {
@@ -69,18 +68,4 @@ pub enum SpriteAnimationScriptAction {
         /// Set flip on the Y axis
         flip_y: Option<bool>,
     },
-}
-
-fn deserialize_color<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Color, D::Error> {
-    let s: String = Deserialize::deserialize(deserializer)?;
-    match Color::hex(&s) {
-        Ok(color) => Ok(color),
-        Err(e) => {
-            error!(
-                "Color must be specified as RGBA Hex syntax. {:?} is invalid: {}",
-                s, e
-            );
-            Ok(Color::WHITE)
-        },
-    }
 }

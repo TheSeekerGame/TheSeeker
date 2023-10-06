@@ -56,7 +56,7 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetSpriteColor { color } => {
-                sprite.color = *color;
+                sprite.color = (*color).into();
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetSpriteFlip { flip_x, flip_y } => {
