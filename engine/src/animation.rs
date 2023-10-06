@@ -28,7 +28,7 @@ impl ScriptRunIf for SpriteAnimationScriptRunIf {
 }
 
 impl ScriptAction for SpriteAnimationScriptAction {
-    type Param = (SQuery<(&'static mut TextureAtlasSprite,)>,);
+    type Param = (SQuery<(&'static mut TextureAtlasSprite, &'static mut Transform)>,);
     type Tracker = SpriteAnimationTracker;
 
     fn run<'w>(
@@ -37,7 +37,7 @@ impl ScriptAction for SpriteAnimationScriptAction {
         tracker: &mut Self::Tracker,
         (q,): &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult {
-        let (mut sprite,) = q
+        let (mut sprite, mut xf) = q
             .get_mut(entity)
             .expect("Entity is missing sprite animation components!");
 
@@ -68,6 +68,47 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 }
                 ScriptUpdateResult::NormalRun
             },
+            SpriteAnimationScriptAction::TransformMove { x, y, z } => {
+                if let Some(x) = x {
+                    xf.translation.x += f32::from(*x);
+                }
+                if let Some(y) = y {
+                    xf.translation.y += f32::from(*y);
+                }
+                if let Some(z) = z {
+                    xf.translation.z += f32::from(*z);
+                }
+                ScriptUpdateResult::NormalRun
+            }
+            SpriteAnimationScriptAction::TransformTeleport { x, y, z } => {
+                xf.translation.x = f32::from(*x);
+                xf.translation.y = f32::from(*y);
+                if let Some(z) = z {
+                    xf.translation.z = f32::from(*z);
+                }
+                ScriptUpdateResult::NormalRun
+            }
+            SpriteAnimationScriptAction::TransformSetScale { x, y } => {
+                xf.scale.x = f32::from(*x);
+                xf.scale.y = f32::from(*y);
+                ScriptUpdateResult::NormalRun
+            }
+            SpriteAnimationScriptAction::TransformRotateDegrees { degrees } => {
+                xf.rotate_z(f32::from(*degrees).to_radians());
+                ScriptUpdateResult::NormalRun
+            }
+            SpriteAnimationScriptAction::TransformRotateTurns { turns } => {
+                xf.rotate_z(f32::from(*turns) * 2.0 * std::f32::consts::PI);
+                ScriptUpdateResult::NormalRun
+            }
+            SpriteAnimationScriptAction::TransformSetRotationDegrees { degrees } => {
+                xf.rotation = Quat::from_rotation_z(f32::from(*degrees).to_radians());
+                ScriptUpdateResult::NormalRun
+            }
+            SpriteAnimationScriptAction::TransformSetRotationTurns { turns } => {
+                xf.rotation = Quat::from_rotation_z(f32::from(*turns) * 2.0 * std::f32::consts::PI);
+                ScriptUpdateResult::NormalRun
+            }
         }
     }
 }

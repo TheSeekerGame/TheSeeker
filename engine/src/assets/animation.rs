@@ -68,4 +68,37 @@ pub enum SpriteAnimationScriptAction {
         /// Set flip on the Y axis
         flip_y: Option<bool>,
     },
+    /// Transform: relative translation
+    TransformMove {
+        x: Option<Frac>,
+        y: Option<Frac>,
+        z: Option<Frac>,
+    },
+    /// Transform: set absolute translation
+    TransformTeleport {
+        x: Frac,
+        y: Frac,
+        z: Option<Frac>,
+    },
+    /// Transform: rotate by N turns (1 turn = 360 degrees)
+    TransformRotateTurns {
+        turns: Frac,
+    },
+    /// Transform: rotate by N degrees
+    TransformRotateDegrees {
+        degrees: Frac,
+    },
+    /// Transform: set the rotation to a specific value
+    TransformSetRotationTurns {
+        turns: Frac,
+    },
+    /// Transform: set the rotation to a specific value
+    TransformSetRotationDegrees {
+        degrees: Frac,
+    },
+    /// Transform: set scale
+    TransformSetScale {
+        x: Frac,
+        y: Frac,
+    },
 }
