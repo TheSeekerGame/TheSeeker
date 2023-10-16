@@ -65,19 +65,22 @@ fn cli_spawn_phystester(In(args): In<Vec<String>>, mut commands: Commands) {
 
 fn cli_spawn_script(In(args): In<Vec<String>>, world: &mut World) {
     use theseeker_engine::script::common::ScriptBundle;
+    use theseeker_engine::script::ScriptPlayer;
 
     if args.len() != 1 {
         error!("\"spawn_script <script_asset_key>\"");
         return;
     }
-
+    let mut player = ScriptPlayer::new();
+    player.play_key(args[0].as_str());
     world.spawn(ScriptBundle {
-        key: args[0].as_str().into(),
+        player,
     });
 }
 
 fn cli_spawn_anim(In(args): In<Vec<String>>, world: &mut World) {
-    use theseeker_engine::assets::animation::SpriteAnimation;
+    use theseeker_engine::animation::SpriteAnimationBundle;
+    use theseeker_engine::script::ScriptPlayer;
 
     if args.len() != 1 && args.len() != 3 {
         error!("\"spawn_anim <anim_asset_key> [<x> <y>]\"");
@@ -92,11 +95,16 @@ fn cli_spawn_anim(In(args): In<Vec<String>>, world: &mut World) {
         }
     }
 
+    let mut player = ScriptPlayer::new();
+    player.play_key(args[0].as_str());
+
     world.spawn((
         SpriteSheetBundle {
             transform: Transform::from_xyz(x, y, 101.0),
             ..default()
         },
-        AssetKey::<SpriteAnimation>::new(&args[0]),
+        SpriteAnimationBundle {
+            player,
+        },
     ));
 }

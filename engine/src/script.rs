@@ -165,8 +165,7 @@ pub struct ScriptRuntimeBuilder<T: ScriptAsset> {
     runtime: ScriptRuntime<T>,
 }
 
-#[derive(Component)]
-pub struct ScriptRuntime<T: ScriptAsset> {
+struct ScriptRuntime<T: ScriptAsset> {
     settings: <T::Tracker as ScriptTracker>::Settings,
     actions: Vec<(T::ActionParams, T::Action)>,
     tracker: T::Tracker,
@@ -201,23 +200,27 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
         self
     }
 
-    pub fn build(mut self) -> ScriptRuntime<T> {
+    fn build(mut self) -> ScriptRuntime<T> {
         self.runtime.tracker.finalize();
         self.runtime
     }
 }
 
 fn script_driver_system<T: ScriptAsset>(
-    mut commands: Commands,
-    mut q_script: Query<(Entity, &mut ScriptRuntime<T>)>,
+    mut q_script: Query<(Entity, &mut ScriptPlayer<T>)>,
     mut params: ParamSet<(
         StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
         StaticSystemParam<<T::Action as ScriptAction>::Param>,
     )>,
     mut action_queue: Local<Vec<ActionId>>,
 ) {
-    for (e, script_rt) in &mut q_script {
-        let script_rt = script_rt.into_inner();
+    for (e, player) in &mut q_script {
+        let player = player.into_inner();
+        let script_rt = if let ScriptPlayerState::Playing { ref mut runtime } = &mut player.state {
+            runtime
+        } else {
+            continue;
+        };
 
         let mut is_loop = true;
         let mut is_end = false;
@@ -258,21 +261,32 @@ fn script_driver_system<T: ScriptAsset>(
             }
         }
         if is_end {
-            commands.entity(e).despawn_recursive();
+            player.stop();
         }
     }
 }
 
 fn script_init_system<T: ScriptAsset>(
-    mut commands: Commands,
+    preloaded: Res<PreloadedAssets>,
     ass_script: Res<Assets<T>>,
-    q_script_handle: Query<(Entity, &Handle<T>), Changed<Handle<T>>>,
+    mut q_script: Query<(Entity, &mut ScriptPlayer<T>)>,
     mut params: ParamSet<(
         StaticSystemParam<<T::Tracker as ScriptTracker>::InitParam>,
         StaticSystemParam<T::BuildParam>,
     )>,
 ) {
-    for (e, handle) in &q_script_handle {
+    for (e, mut player) in &mut q_script {
+        let handle = match &player.state {
+            ScriptPlayerState::PrePlayHandle { handle } => handle.clone(),
+            ScriptPlayerState::PrePlayKey { key } => {
+                if let Some(handle) = preloaded.get_single_asset(&key) {
+                    handle
+                } else {
+                    continue;
+                }
+            },
+            _ => continue,
+        };
         if let Some(script) = ass_script.get(&handle) {
             let settings = script.into_settings();
             let builder = {
@@ -283,8 +297,49 @@ fn script_init_system<T: ScriptAsset>(
                 let mut build_param = params.p1().into_inner();
                 script.build(builder, e, &mut build_param)
             };
-            commands.entity(e).insert(builder.build());
+            player.state = ScriptPlayerState::Playing {
+                runtime: builder.build(),
+            };
             debug!("Initialized new script.");
         }
+    }
+}
+
+#[derive(Component)]
+pub struct ScriptPlayer<T: ScriptAsset> {
+    state: ScriptPlayerState<T>,
+}
+
+enum ScriptPlayerState<T: ScriptAsset> {
+    Stopped,
+    PrePlayHandle {
+        handle: Handle<T>,
+    },
+    PrePlayKey {
+        key: String,
+    },
+    Playing {
+        runtime: ScriptRuntime<T>,
+    },
+}
+
+impl<T: ScriptAsset> ScriptPlayer<T> {
+    pub fn new() -> Self {
+        Self {
+            state: ScriptPlayerState::Stopped,
+        }
+    }
+    pub fn play_handle(&mut self, script: Handle<T>) {
+        self.state = ScriptPlayerState::PrePlayHandle {
+            handle: script,
+        }
+    }
+    pub fn play_key(&mut self, key: &str) {
+        self.state = ScriptPlayerState::PrePlayKey {
+            key: key.into(),
+        }
+    }
+    pub fn stop(&mut self) {
+        self.state = ScriptPlayerState::Stopped;
     }
 }

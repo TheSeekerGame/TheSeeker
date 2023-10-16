@@ -14,7 +14,7 @@ impl Plugin for CommonScriptPlugin {
 
 #[derive(Bundle)]
 pub struct ScriptBundle {
-    pub key: AssetKey<Script>,
+    pub player: ScriptPlayer<Script>,
 }
 
 #[derive(Default)]
@@ -212,8 +212,10 @@ impl ScriptAction for CommonScriptAction {
                 parent_label,
             } => ScriptUpdateResult::NormalRun,
             CommonScriptAction::SpawnScript { asset_key } => {
+                let mut player = ScriptPlayer::new();
+                player.play_key(asset_key.as_str());
                 commands.spawn(ScriptBundle {
-                    key: asset_key.into(),
+                    player,
                 });
                 ScriptUpdateResult::NormalRun
             },

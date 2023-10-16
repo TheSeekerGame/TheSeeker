@@ -15,6 +15,11 @@ impl Plugin for SpriteAnimationPlugin {
     }
 }
 
+#[derive(Bundle)]
+pub struct SpriteAnimationBundle {
+    pub player: ScriptPlayer<SpriteAnimation>,
+}
+
 #[derive(Default)]
 pub struct SpriteAnimationTracker {
     next_frame: u32,
