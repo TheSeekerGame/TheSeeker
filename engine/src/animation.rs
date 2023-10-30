@@ -32,10 +32,12 @@ impl ScriptRunIf for SpriteAnimationScriptRunIf {
     type Tracker = SpriteAnimationTracker;
 }
 
-impl ScriptActionParams for SpriteAnimationScriptParams {}
+impl ScriptActionParams for SpriteAnimationScriptParams {
+    type Tracker = SpriteAnimationTracker;
+}
 
 impl ScriptAction for SpriteAnimationScriptAction {
-    type ActionParams = ExtendedScriptParams<SpriteAnimationScriptParams>;
+    type ActionParams = SpriteAnimationScriptParams;
     type Param = (
         SQuery<(
             &'static mut TextureAtlasSprite,
@@ -195,6 +197,9 @@ impl ScriptTracker for SpriteAnimationTracker {
         self.ticks_remain -= 1;
 
         ScriptUpdateResult::NormalRun
+    }
+
+    fn set_slot(&mut self, _slot: &str, _state: bool) {
     }
 }
 

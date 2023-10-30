@@ -8,7 +8,50 @@ frame_min = 0
 frame_max = 7
 frame_start = 0
 
+# LOOP
 [[script]]
 run_at_frame = 7
 action = "SetFrameNext"
 frame_index = 0
+
+# Support left/right flipping
+# (adding all possibilities, Rust code will set/unset DirectionLeft/DirectionRight)
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false
+# Reset animation on flipping
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetFrameNow"
+frame_index = 0
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetFrameNow"
+frame_index = 0
+
+# Blink Red on Damage
+[[script]]
+run_every_n_ticks = "8+2"
+require_slots_any = ["Damage"]
+action = "SetSpriteColor"
+color = "#ff0000"
+[[script]]
+run_every_n_ticks = "8+6"
+require_slots_any = ["Damage"]
+action = "SetSpriteColor"
+color = "#ffffff"
+# Ensure correct color after damage stops
+[[script]]
+run_on_slot_disable = "Damage"
+action = "SetSpriteColor"
+color = "#ffffff"
+# Start Red on Damage
+[[script]]
+run_on_slot_enable = "Damage"
+action = "SetSpriteColor"
+color = "#ff0000"

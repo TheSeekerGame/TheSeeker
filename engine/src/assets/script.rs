@@ -59,6 +59,14 @@ pub struct CommonScript {
 #[derive(Serialize, Deserialize)]
 pub struct CommonScriptParams {
     pub rng_pct: Option<f32>,
+    #[serde(default)]
+    pub require_slots_all: Vec<String>,
+    #[serde(default)]
+    pub require_slots_any: Vec<String>,
+    #[serde(default)]
+    pub forbid_slots_all: Vec<String>,
+    #[serde(default)]
+    pub forbid_slots_any: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -72,6 +80,10 @@ pub enum CommonScriptRunIf {
     Time(TimeSpec),
     #[serde(rename = "run_at_millis")]
     Millis(u64),
+    #[serde(rename = "run_on_slot_enable")]
+    SlotEnable(String),
+    #[serde(rename = "run_on_slot_disable")]
+    SlotDisable(String),
 }
 
 /// The various actions that can be performed from scripts

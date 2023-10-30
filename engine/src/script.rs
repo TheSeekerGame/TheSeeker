@@ -77,7 +77,7 @@ pub trait ScriptAsset: Asset + Sized + Send + Sync + 'static {
     type Settings: Sized + Send + Sync + 'static;
     type RunIf: ScriptRunIf<Tracker = Self::Tracker>;
     type Action: ScriptAction<Tracker = Self::Tracker, ActionParams = Self::ActionParams>;
-    type ActionParams: ScriptActionParams;
+    type ActionParams: ScriptActionParams<Tracker = Self::Tracker>;
     type Tracker: ScriptTracker<RunIf = Self::RunIf, Settings = Self::Settings>;
     type BuildParam: SystemParam + 'static;
 
@@ -113,6 +113,7 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult;
+    fn set_slot(&mut self, slot: &str, state: bool);
 }
 
 pub trait ScriptRunIf: Clone + Send + Sync + 'static {
@@ -121,7 +122,7 @@ pub trait ScriptRunIf: Clone + Send + Sync + 'static {
 
 pub trait ScriptAction: Clone + Send + Sync + 'static {
     type Tracker: ScriptTracker;
-    type ActionParams: ScriptActionParams;
+    type ActionParams: ScriptActionParams<Tracker = Self::Tracker>;
     type Param: SystemParam + 'static;
     fn run<'w>(
         &self,
@@ -133,7 +134,8 @@ pub trait ScriptAction: Clone + Send + Sync + 'static {
 }
 
 pub trait ScriptActionParams: Clone + Send + Sync + 'static {
-    fn should_run(&self) -> Result<(), ScriptUpdateResult> {
+    type Tracker: ScriptTracker;
+    fn should_run(&self, tracker: &mut Self::Tracker) -> Result<(), ScriptUpdateResult> {
         Ok(())
     }
 }
@@ -245,7 +247,7 @@ fn script_driver_system<T: ScriptAsset>(
             // );
             for action_id in action_queue.drain(..) {
                 let action = &script_rt.actions[action_id];
-                let r = if let Err(r) = action.0.should_run() {
+                let r = if let Err(r) = action.0.should_run(&mut script_rt.tracker) {
                     r
                 } else {
                     let mut action_param = params.p1().into_inner();
@@ -276,11 +278,11 @@ fn script_init_system<T: ScriptAsset>(
     )>,
 ) {
     for (e, mut player) in &mut q_script {
-        let handle = match &player.state {
-            ScriptPlayerState::PrePlayHandle { handle } => handle.clone(),
-            ScriptPlayerState::PrePlayKey { key } => {
+        let (handle, slots) = match &player.state {
+            ScriptPlayerState::PrePlayHandle { handle, slots } => (handle.clone(), slots),
+            ScriptPlayerState::PrePlayKey { key, slots } => {
                 if let Some(handle) = preloaded.get_single_asset(&key) {
-                    handle
+                    (handle, slots)
                 } else {
                     continue;
                 }
@@ -297,8 +299,12 @@ fn script_init_system<T: ScriptAsset>(
                 let mut build_param = params.p1().into_inner();
                 script.build(builder, e, &mut build_param)
             };
+            let mut runtime = builder.build();
+            for slot in slots.iter() {
+                runtime.tracker.set_slot(slot, true);
+            }
             player.state = ScriptPlayerState::Playing {
-                runtime: builder.build(),
+                runtime,
             };
             debug!("Initialized new script.");
         }
@@ -314,13 +320,23 @@ enum ScriptPlayerState<T: ScriptAsset> {
     Stopped,
     PrePlayHandle {
         handle: Handle<T>,
+        slots: HashSet<String>,
     },
     PrePlayKey {
         key: String,
+        slots: HashSet<String>,
     },
     Playing {
         runtime: ScriptRuntime<T>,
     },
+}
+
+impl<T: ScriptAsset> Default for ScriptPlayer<T> {
+    fn default() -> Self {
+        Self {
+            state: ScriptPlayerState::Stopped,
+        }
+    }
 }
 
 impl<T: ScriptAsset> ScriptPlayer<T> {
@@ -329,17 +345,56 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
             state: ScriptPlayerState::Stopped,
         }
     }
+    pub fn is_stopped(&self) -> bool {
+        if let ScriptPlayerState::Stopped = self.state {
+            true
+        } else {
+            false
+        }
+    }
     pub fn play_handle(&mut self, script: Handle<T>) {
         self.state = ScriptPlayerState::PrePlayHandle {
             handle: script,
+            slots: Default::default(),
         }
     }
     pub fn play_key(&mut self, key: &str) {
         self.state = ScriptPlayerState::PrePlayKey {
             key: key.into(),
+            slots: Default::default(),
         }
     }
     pub fn stop(&mut self) {
         self.state = ScriptPlayerState::Stopped;
+    }
+    pub fn set_slot(&mut self, slot: &str, state: bool) {
+        match &mut self.state {
+            ScriptPlayerState::Stopped => {}
+            ScriptPlayerState::Playing { ref mut runtime } => {
+                runtime.tracker.set_slot(slot, state);
+            }
+            ScriptPlayerState::PrePlayHandle { ref mut slots, .. } => {
+                if state {
+                    if !slots.contains(slot) {
+                        slots.insert(slot.to_owned());
+                    }
+                } else {
+                    if slots.contains(slot) {
+                        slots.remove(slot);
+                    }
+                }
+            }
+            ScriptPlayerState::PrePlayKey { ref mut slots, .. } => {
+                if state {
+                    if !slots.contains(slot) {
+                        slots.insert(slot.to_owned());
+                    }
+                } else {
+                    if slots.contains(slot) {
+                        slots.remove(slot);
+                    }
+                }
+            }
+        }
     }
 }
