@@ -7,6 +7,7 @@ impl Plugin for DevPlugin {
         app.register_clicommand_args("spawn_phystester", cli_spawn_phystester);
         app.register_clicommand_args("spawn_script", cli_spawn_script);
         app.register_clicommand_args("spawn_anim", cli_spawn_anim);
+        app.add_systems(OnEnter(AppState::InGame), debug_spawn_player);
         app.add_systems(
             Last,
             debug_progress
@@ -37,6 +38,18 @@ fn debug_setup_camera(mut commands: Commands) {
     commands.spawn((
         Camera2dBundle::default(),
         StateDespawnMarker,
+    ));
+}
+
+#[allow(dead_code)]
+fn debug_spawn_player(mut commands: Commands) {
+    use crate::game::player::PlayerBlueprint;
+
+    commands.spawn((
+        PlayerBlueprint,
+        SpatialBundle {
+            ..default()
+        },
     ));
 }
 

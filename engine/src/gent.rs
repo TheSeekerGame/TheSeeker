@@ -1,0 +1,44 @@
+use crate::prelude::*;
+
+pub struct GentPlugin;
+
+impl Plugin for GentPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            PostUpdate,
+            (transform_gfx_from_gent.after(bevy::transform::TransformSystem::TransformPropagate),),
+        );
+    }
+}
+
+#[derive(Bundle)]
+pub struct GentPhysicsBundle {
+    pub rb: RigidBody,
+    pub collider: Collider,
+}
+
+#[derive(Component)]
+pub struct TransformGfxFromGent {
+    pub pixel_aligned: bool,
+    pub gent: Entity,
+}
+
+fn transform_gfx_from_gent(
+    mut q_target: Query<(
+        &mut GlobalTransform,
+        &TransformGfxFromGent,
+    )>,
+    q_src: Query<&GlobalTransform, Without<TransformGfxFromGent>>,
+) {
+    for (mut xf_target, gfx2gent) in &mut q_target {
+        let Ok(xf_src) = q_src.get(gfx2gent.gent) else {
+            continue;
+        };
+        *xf_target = *xf_src;
+        if gfx2gent.pixel_aligned {
+            let xf = xf_target.compute_transform();
+            xf.translation.round();
+            *xf_target = xf.into();
+        }
+    }
+}

@@ -4,6 +4,7 @@
 
 use crate::prelude::*;
 
+pub mod player;
 mod wall;
 
 pub struct GameplayPlugin;
@@ -17,7 +18,8 @@ impl Plugin for GameplayPlugin {
 
         // Add the plugins for each game mechanic
         app.add_plugins((
+            player::PlayerPlugin,
             wall::WallPlugin,
         ));
-   }
+    }
 }

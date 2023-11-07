@@ -4,9 +4,7 @@ pub struct WallPlugin;
 
 impl Plugin for WallPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, (
-            spawn_wall_collision,
-        ));
+        app.add_systems(Update, (spawn_wall_collision,));
     }
 }
 
