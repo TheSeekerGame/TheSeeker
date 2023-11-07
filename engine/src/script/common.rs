@@ -12,7 +12,7 @@ impl Plugin for CommonScriptPlugin {
     }
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, Default)]
 pub struct ScriptBundle {
     pub player: ScriptPlayer<Script>,
 }
@@ -197,6 +197,24 @@ impl ScriptTracker for CommonScriptTracker {
             }
         }
     }
+
+    fn take_slots(&mut self) -> HashSet<String> {
+        for slot in self.slots_enabled.iter() {
+            if let Some(actions) = self.slot_disable.get(slot) {
+                self.q_extra.extend_from_slice(&actions);
+            }
+        }
+        std::mem::take(&mut self.slots_enabled)
+    }
+
+    fn clear_slots(&mut self) {
+        for slot in self.slots_enabled.iter() {
+            if let Some(actions) = self.slot_disable.get(slot) {
+                self.q_extra.extend_from_slice(&actions);
+            }
+        }
+        self.slots_enabled.clear()
+    }
 }
 
 impl ScriptRunIf for CommonScriptRunIf {
@@ -363,8 +381,19 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
     }
 
     fn set_slot(&mut self, slot: &str, state: bool) {
-        self.extended.set_slot(slot, state);
         self.common.set_slot(slot, state);
+        self.extended.set_slot(slot, state);
+    }
+
+    fn take_slots(&mut self) -> HashSet<String> {
+        let mut r = self.common.take_slots();
+        r.extend(self.extended.take_slots());
+        r
+    }
+
+    fn clear_slots(&mut self) {
+        self.common.clear_slots();
+        self.extended.clear_slots();
     }
 }
 

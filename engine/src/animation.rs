@@ -15,7 +15,7 @@ impl Plugin for SpriteAnimationPlugin {
     }
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, Default)]
 pub struct SpriteAnimationBundle {
     pub player: ScriptPlayer<SpriteAnimation>,
 }

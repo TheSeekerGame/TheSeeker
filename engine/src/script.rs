@@ -113,7 +113,11 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult;
-    fn set_slot(&mut self, slot: &str, state: bool);
+    fn set_slot(&mut self, _slot: &str, _state: bool) {}
+    fn take_slots(&mut self) -> HashSet<String> {
+        Default::default()
+    }
+    fn clear_slots(&mut self) {}
 }
 
 pub trait ScriptRunIf: Clone + Send + Sync + 'static {
@@ -135,7 +139,7 @@ pub trait ScriptAction: Clone + Send + Sync + 'static {
 
 pub trait ScriptActionParams: Clone + Send + Sync + 'static {
     type Tracker: ScriptTracker;
-    fn should_run(&self, tracker: &mut Self::Tracker) -> Result<(), ScriptUpdateResult> {
+    fn should_run(&self, _tracker: &mut Self::Tracker) -> Result<(), ScriptUpdateResult> {
         Ok(())
     }
 }
@@ -353,19 +357,43 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
         }
     }
     pub fn play_handle(&mut self, script: Handle<T>) {
+        let slots = if let ScriptPlayerState::Playing { ref mut runtime } = &mut self.state {
+            runtime.tracker.take_slots()
+        } else {
+            Default::default()
+        };
         self.state = ScriptPlayerState::PrePlayHandle {
             handle: script,
-            slots: Default::default(),
+            slots,
         }
     }
     pub fn play_key(&mut self, key: &str) {
+        let slots = if let ScriptPlayerState::Playing { ref mut runtime } = &mut self.state {
+            runtime.tracker.take_slots()
+        } else {
+            Default::default()
+        };
         self.state = ScriptPlayerState::PrePlayKey {
             key: key.into(),
-            slots: Default::default(),
+            slots,
         }
     }
     pub fn stop(&mut self) {
         self.state = ScriptPlayerState::Stopped;
+    }
+    pub fn clear_slots(&mut self) {
+        match &mut self.state {
+            ScriptPlayerState::Stopped => {}
+            ScriptPlayerState::Playing { ref mut runtime } => {
+                runtime.tracker.clear_slots();
+            }
+            ScriptPlayerState::PrePlayHandle { ref mut slots, .. } => {
+                slots.clear();
+            }
+            ScriptPlayerState::PrePlayKey { ref mut slots, .. } => {
+                slots.clear();
+            }
+        }
     }
     pub fn set_slot(&mut self, slot: &str, state: bool) {
         match &mut self.state {
