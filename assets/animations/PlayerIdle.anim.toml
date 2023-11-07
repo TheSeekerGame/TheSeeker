@@ -1,30 +1,26 @@
-atlas_asset_key = "anim.player.Run.sprite"
+atlas_asset_key = "anim.player.Idle.sprite"
 
 [settings]
 time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
 frame_min = 0
-frame_max = 7
+frame_max = 19
 frame_start = 0
 
-# LOOP
+# LOOP (left)
 [[script]]
-run_at_frame = 7
+run_at_frame = 9
 action = "SetFrameNext"
 frame_index = 0
 
-# Support left/right flipping
+# LOOP (right)
 [[script]]
-run_on_slot_enable = "DirectionLeft"
-action = "SetSpriteFlip"
-flip_x = true
-[[script]]
-run_on_slot_enable = "DirectionRight"
-action = "SetSpriteFlip"
-flip_x = false
+run_at_frame = 19
+action = "SetFrameNext"
+frame_index = 10
 
-# Reset animation on flipping
+# Support left/right
 [[script]]
 run_on_slot_enable = "DirectionLeft"
 action = "SetFrameNow"
@@ -32,7 +28,7 @@ frame_index = 0
 [[script]]
 run_on_slot_enable = "DirectionRight"
 action = "SetFrameNow"
-frame_index = 0
+frame_index = 10
 
 # Blink Red on Damage
 [[script]]
