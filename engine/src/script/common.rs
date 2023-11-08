@@ -30,6 +30,7 @@ pub struct CommonScriptTracker {
     slot_disable: HashMap<String, Vec<ActionId>>,
     slots_enabled: HashSet<String>,
     q_extra: Vec<ActionId>,
+    q_delayed: Vec<(u64, ActionId)>,
 }
 
 impl CommonScriptTracker {
@@ -144,6 +145,15 @@ impl ScriptTracker for CommonScriptTracker {
         // start with any extra queued actions
         queue.append(&mut self.q_extra);
 
+        // any delayed actions
+        // we don't remove them here, only trigger them to run
+        // they will manage themselves in/out of `q_delayed` when they run
+        for (tick, action_id) in self.q_delayed.iter() {
+            if game_time.tick() >= *tick {
+                queue.push(*action_id);
+            }
+        }
+
         // check any time actions
         while self.next_time_id < self.time.len() {
             let next = &self.time[self.next_time_id];
@@ -231,6 +241,15 @@ impl ScriptActionParams for CommonScriptParams {
         action_id: ActionId,
         (time, game_time): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
     ) -> Result<(), ScriptUpdateResult> {
+        if let Some(i_delayed) = tracker.q_delayed.iter()
+            .position(|(tick, aid)| *tick == game_time.tick() && *aid == action_id)
+        {
+            tracker.q_delayed.remove(i_delayed);
+        } else if let Some(delay_ticks) = self.delay_ticks {
+            tracker.q_delayed.push((game_time.tick() + delay_ticks as u64, action_id));
+            return Err(ScriptUpdateResult::NormalRun);
+        }
+
         if !self.forbid_slots_any.is_empty() &&
             self.forbid_slots_any.iter().any(|s| tracker.slots_enabled.contains(s))
         {

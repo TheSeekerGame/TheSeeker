@@ -59,6 +59,7 @@ pub struct CommonScript {
 #[derive(Serialize, Deserialize)]
 pub struct CommonScriptParams {
     pub rng_pct: Option<f32>,
+    pub delay_ticks: Option<u32>,
     #[serde(default)]
     pub require_slots_all: Vec<String>,
     #[serde(default)]
