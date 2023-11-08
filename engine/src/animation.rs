@@ -34,6 +34,7 @@ impl ScriptRunIf for SpriteAnimationScriptRunIf {
 
 impl ScriptActionParams for SpriteAnimationScriptParams {
     type Tracker = SpriteAnimationTracker;
+    type ShouldRunParam = ();
 }
 
 impl ScriptAction for SpriteAnimationScriptAction {

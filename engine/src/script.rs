@@ -139,7 +139,14 @@ pub trait ScriptAction: Clone + Send + Sync + 'static {
 
 pub trait ScriptActionParams: Clone + Send + Sync + 'static {
     type Tracker: ScriptTracker;
-    fn should_run(&self, _tracker: &mut Self::Tracker) -> Result<(), ScriptUpdateResult> {
+    type ShouldRunParam: SystemParam + 'static;
+
+    fn should_run<'w>(
+        &self,
+        _tracker: &mut Self::Tracker,
+        _action_id: ActionId,
+        _param: &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+    ) -> Result<(), ScriptUpdateResult> {
         Ok(())
     }
 }
@@ -217,6 +224,7 @@ fn script_driver_system<T: ScriptAsset>(
     mut params: ParamSet<(
         StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
         StaticSystemParam<<T::Action as ScriptAction>::Param>,
+        StaticSystemParam<<T::ActionParams as ScriptActionParams>::ShouldRunParam>,
     )>,
     mut action_queue: Local<Vec<ActionId>>,
 ) {
@@ -251,9 +259,10 @@ fn script_driver_system<T: ScriptAsset>(
             // );
             for action_id in action_queue.drain(..) {
                 let action = &script_rt.actions[action_id];
-                let r = if let Err(r) = action.0.should_run(&mut script_rt.tracker) {
-                    r
-                } else {
+                let r = {
+                    let mut shouldrun_param = params.p2().into_inner();
+                    action.0.should_run(&mut script_rt.tracker, action_id, &mut shouldrun_param)
+                }.err().unwrap_or_else(|| {
                     let mut action_param = params.p1().into_inner();
                     script_rt.actions[action_id].1.run(
                         e,
@@ -261,7 +270,7 @@ fn script_driver_system<T: ScriptAsset>(
                         &mut script_rt.tracker,
                         &mut action_param,
                     )
-                };
+                });
                 is_loop |= r.is_loop();
                 is_end |= r.is_end();
             }

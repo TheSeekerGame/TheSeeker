@@ -223,7 +223,14 @@ impl ScriptRunIf for CommonScriptRunIf {
 
 impl ScriptActionParams for CommonScriptParams {
     type Tracker = CommonScriptTracker;
-    fn should_run(&self, tracker: &mut Self::Tracker) -> Result<(), ScriptUpdateResult> {
+    type ShouldRunParam = (SRes<Time>, SRes<GameTime>);
+
+    fn should_run<'w>(
+        &self,
+        tracker: &mut Self::Tracker,
+        action_id: ActionId,
+        (time, game_time): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+    ) -> Result<(), ScriptUpdateResult> {
         if !self.forbid_slots_any.is_empty() &&
             self.forbid_slots_any.iter().any(|s| tracker.slots_enabled.contains(s))
         {
@@ -403,11 +410,20 @@ impl<T: ScriptRunIf> ScriptRunIf for ExtendedScriptRunIf<T> {
 
 impl<T: ScriptActionParams> ScriptActionParams for ExtendedScriptParams<T> {
     type Tracker = ExtendedScriptTracker<T::Tracker>;
-    fn should_run(&self, tracker: &mut Self::Tracker) -> Result<(), ScriptUpdateResult> {
-        if let Err(r) = self.extended.should_run(&mut tracker.extended) {
+    type ShouldRunParam = (
+        T::ShouldRunParam,
+        <CommonScriptParams as ScriptActionParams>::ShouldRunParam,
+    );
+    fn should_run<'w>(
+        &self,
+        tracker: &mut Self::Tracker,
+        action_id: ActionId,
+        (param_ext, param_common): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+    ) -> Result<(), ScriptUpdateResult> {
+        if let Err(r) = self.extended.should_run(&mut tracker.extended, action_id, param_ext) {
             Err(r)
         } else {
-            self.common.should_run(&mut tracker.common)
+            self.common.should_run(&mut tracker.common, action_id, param_common)
         }
     }
 }
