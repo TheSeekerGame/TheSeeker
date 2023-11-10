@@ -76,7 +76,8 @@ pub type ActionId = usize;
 pub trait ScriptAsset: Asset + Sized + Send + Sync + 'static {
     type Settings: Sized + Send + Sync + 'static;
     type RunIf: ScriptRunIf<Tracker = Self::Tracker>;
-    type Action: ScriptAction<Tracker = Self::Tracker>;
+    type Action: ScriptAction<Tracker = Self::Tracker, ActionParams = Self::ActionParams>;
+    type ActionParams: ScriptActionParams<Tracker = Self::Tracker>;
     type Tracker: ScriptTracker<RunIf = Self::RunIf, Settings = Self::Settings>;
     type BuildParam: SystemParam + 'static;
 
@@ -112,6 +113,11 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult;
+    fn set_slot(&mut self, _slot: &str, _state: bool) {}
+    fn take_slots(&mut self) -> HashSet<String> {
+        Default::default()
+    }
+    fn clear_slots(&mut self) {}
 }
 
 pub trait ScriptRunIf: Clone + Send + Sync + 'static {
@@ -120,13 +126,29 @@ pub trait ScriptRunIf: Clone + Send + Sync + 'static {
 
 pub trait ScriptAction: Clone + Send + Sync + 'static {
     type Tracker: ScriptTracker;
+    type ActionParams: ScriptActionParams<Tracker = Self::Tracker>;
     type Param: SystemParam + 'static;
     fn run<'w>(
         &self,
         entity: Entity,
+        actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
         param: &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult;
+}
+
+pub trait ScriptActionParams: Clone + Send + Sync + 'static {
+    type Tracker: ScriptTracker;
+    type ShouldRunParam: SystemParam + 'static;
+
+    fn should_run<'w>(
+        &self,
+        _tracker: &mut Self::Tracker,
+        _action_id: ActionId,
+        _param: &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+    ) -> Result<(), ScriptUpdateResult> {
+        Ok(())
+    }
 }
 
 /// Returned by `ScriptTracker::update` to indicate the status of a script
@@ -156,10 +178,9 @@ pub struct ScriptRuntimeBuilder<T: ScriptAsset> {
     runtime: ScriptRuntime<T>,
 }
 
-#[derive(Component)]
-pub struct ScriptRuntime<T: ScriptAsset> {
+struct ScriptRuntime<T: ScriptAsset> {
     settings: <T::Tracker as ScriptTracker>::Settings,
-    actions: Vec<T::Action>,
+    actions: Vec<(T::ActionParams, T::Action)>,
     tracker: T::Tracker,
 }
 
@@ -180,30 +201,40 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
         }
     }
 
-    pub fn add_action(mut self, run_if: &T::RunIf, action: &T::Action) -> Self {
+    pub fn add_action(
+        mut self,
+        run_if: &T::RunIf,
+        action: &T::Action,
+        params: &T::ActionParams,
+    ) -> Self {
         let action_id = self.runtime.actions.len();
-        self.runtime.actions.push(action.clone());
+        self.runtime.actions.push((params.clone(), action.clone()));
         self.runtime.tracker.track_action(run_if, action_id);
         self
     }
 
-    pub fn build(mut self) -> ScriptRuntime<T> {
+    fn build(mut self) -> ScriptRuntime<T> {
         self.runtime.tracker.finalize();
         self.runtime
     }
 }
 
 fn script_driver_system<T: ScriptAsset>(
-    mut commands: Commands,
-    mut q_script: Query<(Entity, &mut ScriptRuntime<T>)>,
+    mut q_script: Query<(Entity, &mut ScriptPlayer<T>)>,
     mut params: ParamSet<(
         StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
         StaticSystemParam<<T::Action as ScriptAction>::Param>,
+        StaticSystemParam<<T::ActionParams as ScriptActionParams>::ShouldRunParam>,
     )>,
     mut action_queue: Local<Vec<ActionId>>,
 ) {
-    for (e, script_rt) in &mut q_script {
-        let script_rt = script_rt.into_inner();
+    for (e, player) in &mut q_script {
+        let player = player.into_inner();
+        let script_rt = if let ScriptPlayerState::Playing { ref mut runtime } = &mut player.state {
+            runtime
+        } else {
+            continue;
+        };
 
         let mut is_loop = true;
         let mut is_end = false;
@@ -227,32 +258,50 @@ fn script_driver_system<T: ScriptAsset>(
             //     action_queue.len(),
             // );
             for action_id in action_queue.drain(..) {
-                let mut action_param = params.p1().into_inner();
-                let r = script_rt.actions[action_id].clone().run(
-                    e,
-                    &mut script_rt.tracker,
-                    &mut action_param,
-                );
+                let action = &script_rt.actions[action_id];
+                let r = {
+                    let mut shouldrun_param = params.p2().into_inner();
+                    action.0.should_run(&mut script_rt.tracker, action_id, &mut shouldrun_param)
+                }.err().unwrap_or_else(|| {
+                    let mut action_param = params.p1().into_inner();
+                    script_rt.actions[action_id].1.run(
+                        e,
+                        &script_rt.actions[action_id].0,
+                        &mut script_rt.tracker,
+                        &mut action_param,
+                    )
+                });
                 is_loop |= r.is_loop();
                 is_end |= r.is_end();
             }
         }
         if is_end {
-            commands.entity(e).despawn_recursive();
+            player.stop();
         }
     }
 }
 
 fn script_init_system<T: ScriptAsset>(
-    mut commands: Commands,
+    preloaded: Res<PreloadedAssets>,
     ass_script: Res<Assets<T>>,
-    q_script_handle: Query<(Entity, &Handle<T>), Changed<Handle<T>>>,
+    mut q_script: Query<(Entity, &mut ScriptPlayer<T>)>,
     mut params: ParamSet<(
         StaticSystemParam<<T::Tracker as ScriptTracker>::InitParam>,
         StaticSystemParam<T::BuildParam>,
     )>,
 ) {
-    for (e, handle) in &q_script_handle {
+    for (e, mut player) in &mut q_script {
+        let (handle, slots) = match &player.state {
+            ScriptPlayerState::PrePlayHandle { handle, slots } => (handle.clone(), slots),
+            ScriptPlayerState::PrePlayKey { key, slots } => {
+                if let Some(handle) = preloaded.get_single_asset(&key) {
+                    (handle, slots)
+                } else {
+                    continue;
+                }
+            },
+            _ => continue,
+        };
         if let Some(script) = ass_script.get(&handle) {
             let settings = script.into_settings();
             let builder = {
@@ -263,8 +312,126 @@ fn script_init_system<T: ScriptAsset>(
                 let mut build_param = params.p1().into_inner();
                 script.build(builder, e, &mut build_param)
             };
-            commands.entity(e).insert(builder.build());
+            let mut runtime = builder.build();
+            for slot in slots.iter() {
+                runtime.tracker.set_slot(slot, true);
+            }
+            player.state = ScriptPlayerState::Playing {
+                runtime,
+            };
             debug!("Initialized new script.");
+        }
+    }
+}
+
+#[derive(Component)]
+pub struct ScriptPlayer<T: ScriptAsset> {
+    state: ScriptPlayerState<T>,
+}
+
+enum ScriptPlayerState<T: ScriptAsset> {
+    Stopped,
+    PrePlayHandle {
+        handle: Handle<T>,
+        slots: HashSet<String>,
+    },
+    PrePlayKey {
+        key: String,
+        slots: HashSet<String>,
+    },
+    Playing {
+        runtime: ScriptRuntime<T>,
+    },
+}
+
+impl<T: ScriptAsset> Default for ScriptPlayer<T> {
+    fn default() -> Self {
+        Self {
+            state: ScriptPlayerState::Stopped,
+        }
+    }
+}
+
+impl<T: ScriptAsset> ScriptPlayer<T> {
+    pub fn new() -> Self {
+        Self {
+            state: ScriptPlayerState::Stopped,
+        }
+    }
+    pub fn is_stopped(&self) -> bool {
+        if let ScriptPlayerState::Stopped = self.state {
+            true
+        } else {
+            false
+        }
+    }
+    pub fn play_handle(&mut self, script: Handle<T>) {
+        let slots = if let ScriptPlayerState::Playing { ref mut runtime } = &mut self.state {
+            runtime.tracker.take_slots()
+        } else {
+            Default::default()
+        };
+        self.state = ScriptPlayerState::PrePlayHandle {
+            handle: script,
+            slots,
+        }
+    }
+    pub fn play_key(&mut self, key: &str) {
+        let slots = if let ScriptPlayerState::Playing { ref mut runtime } = &mut self.state {
+            runtime.tracker.take_slots()
+        } else {
+            Default::default()
+        };
+        self.state = ScriptPlayerState::PrePlayKey {
+            key: key.into(),
+            slots,
+        }
+    }
+    pub fn stop(&mut self) {
+        self.state = ScriptPlayerState::Stopped;
+    }
+    pub fn clear_slots(&mut self) {
+        match &mut self.state {
+            ScriptPlayerState::Stopped => {}
+            ScriptPlayerState::Playing { ref mut runtime } => {
+                runtime.tracker.clear_slots();
+            }
+            ScriptPlayerState::PrePlayHandle { ref mut slots, .. } => {
+                slots.clear();
+            }
+            ScriptPlayerState::PrePlayKey { ref mut slots, .. } => {
+                slots.clear();
+            }
+        }
+    }
+    pub fn set_slot(&mut self, slot: &str, state: bool) {
+        match &mut self.state {
+            ScriptPlayerState::Stopped => {}
+            ScriptPlayerState::Playing { ref mut runtime } => {
+                runtime.tracker.set_slot(slot, state);
+            }
+            ScriptPlayerState::PrePlayHandle { ref mut slots, .. } => {
+                if state {
+                    if !slots.contains(slot) {
+                        slots.insert(slot.to_owned());
+                    }
+                } else {
+                    if slots.contains(slot) {
+                        slots.remove(slot);
+                    }
+                }
+            }
+            ScriptPlayerState::PrePlayKey { ref mut slots, .. } => {
+                if state {
+                    if !slots.contains(slot) {
+                        slots.insert(slot.to_owned());
+                    }
+                } else {
+                    if slots.contains(slot) {
+                        slots.remove(slot);
+                    }
+                }
+            }
         }
     }
 }

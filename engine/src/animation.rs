@@ -15,6 +15,11 @@ impl Plugin for SpriteAnimationPlugin {
     }
 }
 
+#[derive(Bundle, Default)]
+pub struct SpriteAnimationBundle {
+    pub player: ScriptPlayer<SpriteAnimation>,
+}
+
 #[derive(Default)]
 pub struct SpriteAnimationTracker {
     next_frame: u32,
@@ -27,17 +32,29 @@ impl ScriptRunIf for SpriteAnimationScriptRunIf {
     type Tracker = SpriteAnimationTracker;
 }
 
+impl ScriptActionParams for SpriteAnimationScriptParams {
+    type Tracker = SpriteAnimationTracker;
+    type ShouldRunParam = ();
+}
+
 impl ScriptAction for SpriteAnimationScriptAction {
-    type Param = (SQuery<(&'static mut TextureAtlasSprite,)>,);
+    type ActionParams = SpriteAnimationScriptParams;
+    type Param = (
+        SQuery<(
+            &'static mut TextureAtlasSprite,
+            &'static mut Transform,
+        )>,
+    );
     type Tracker = SpriteAnimationTracker;
 
     fn run<'w>(
         &self,
         entity: Entity,
+        _actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
         (q,): &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult {
-        let (mut sprite,) = q
+        let (mut sprite, mut xf) = q
             .get_mut(entity)
             .expect("Entity is missing sprite animation components!");
 
@@ -56,7 +73,7 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetSpriteColor { color } => {
-                sprite.color = *color;
+                sprite.color = (*color).into();
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetSpriteFlip { flip_x, flip_y } => {
@@ -66,6 +83,47 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 if let Some(flip_y) = flip_y {
                     sprite.flip_y = *flip_y;
                 }
+                ScriptUpdateResult::NormalRun
+            },
+            SpriteAnimationScriptAction::TransformMove { x, y, z } => {
+                if let Some(x) = x {
+                    xf.translation.x += f32::from(*x);
+                }
+                if let Some(y) = y {
+                    xf.translation.y += f32::from(*y);
+                }
+                if let Some(z) = z {
+                    xf.translation.z += f32::from(*z);
+                }
+                ScriptUpdateResult::NormalRun
+            },
+            SpriteAnimationScriptAction::TransformTeleport { x, y, z } => {
+                xf.translation.x = f32::from(*x);
+                xf.translation.y = f32::from(*y);
+                if let Some(z) = z {
+                    xf.translation.z = f32::from(*z);
+                }
+                ScriptUpdateResult::NormalRun
+            },
+            SpriteAnimationScriptAction::TransformSetScale { x, y } => {
+                xf.scale.x = f32::from(*x);
+                xf.scale.y = f32::from(*y);
+                ScriptUpdateResult::NormalRun
+            },
+            SpriteAnimationScriptAction::TransformRotateDegrees { degrees } => {
+                xf.rotate_z(f32::from(*degrees).to_radians());
+                ScriptUpdateResult::NormalRun
+            },
+            SpriteAnimationScriptAction::TransformRotateTurns { turns } => {
+                xf.rotate_z(f32::from(*turns) * 2.0 * std::f32::consts::PI);
+                ScriptUpdateResult::NormalRun
+            },
+            SpriteAnimationScriptAction::TransformSetRotationDegrees { degrees } => {
+                xf.rotation = Quat::from_rotation_z(f32::from(*degrees).to_radians());
+                ScriptUpdateResult::NormalRun
+            },
+            SpriteAnimationScriptAction::TransformSetRotationTurns { turns } => {
+                xf.rotation = Quat::from_rotation_z(f32::from(*turns) * 2.0 * std::f32::consts::PI);
                 ScriptUpdateResult::NormalRun
             },
         }
@@ -141,10 +199,14 @@ impl ScriptTracker for SpriteAnimationTracker {
 
         ScriptUpdateResult::NormalRun
     }
+
+    fn set_slot(&mut self, _slot: &str, _state: bool) {
+    }
 }
 
 impl ScriptAsset for SpriteAnimation {
     type Action = ExtendedScriptAction<SpriteAnimationScriptAction>;
+    type ActionParams = ExtendedScriptParams<SpriteAnimationScriptParams>;
     type BuildParam = (
         SQuery<&'static mut Handle<TextureAtlas>>,
         SRes<PreloadedAssets>,
@@ -172,7 +234,11 @@ impl ScriptAsset for SpriteAnimation {
         *atlas = new_atlas;
 
         for action in self.script.iter() {
-            builder = builder.add_action(&action.run_if, &action.action);
+            builder = builder.add_action(
+                &action.run_if,
+                &action.action,
+                &action.params,
+            );
         }
         builder
     }

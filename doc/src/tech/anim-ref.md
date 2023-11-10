@@ -206,16 +206,27 @@ Example:
 [[script]]
 action = "SetSpriteColor"
 color = "#ff00ff"
+
+[[script]]
+action = "SetSpriteColor"
+color = [0.75, 0.5, 120.0]
 ```
 
 Changes the colorization of the sprite. The RGBA values of the pixels will be
 multiplied by the provided value.
 
-The `color` field uses HTML/CSS-like syntax: hexadecimal RGB, with optional A.
+The `color` field can be specified as either:
+ - `[L, C, H]` for LCH color
+ - `[L, C, H, A]` for LCH color + Alpha
+ - `#RRGGBB` for RGB color
+ - `#RRGGBBAA` for RGB + Alpha
 
-Examples:
- - `"#ff0000"`: Red
- - `"#40404080"`: Semi-transparent dark grey
+RGB color is specified in hexadecimal notation, like for Web/CSS.
+
+LCH color is specified as:
+ - Lightness has range 0.0 to 1.5
+ - Chroma has range 0.0 to 1.5
+ - Hue has range 0.0 to 360.0 (degrees)
 
 </details>
 
@@ -260,5 +271,163 @@ Changes the rate of animation playback.
 
 Useful if you want to use a different rate (from what you specified globally in
 the [settings](#settings)) for some portion of the animation.
+
+</details>
+
+<details>
+  <summary>
+  <code>TransformMove</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+action = "TransformMove"
+x = "2.0"
+y = "1.0"
+z = "0.0"
+```
+
+Relative move. Cause the sprite entity's Transform to be translated by the given values.
+
+Each of the `x`, `y`, `z` fields are optional. Omit those you want to leave untouched.
+
+The values must be in quotes and can be specified as either:
+ - decimal syntax, like: `"1.25"`
+ - fraction syntax, like: `"5/4"`
+
+</details>
+
+<details>
+  <summary>
+  <code>TransformTeleport</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+action = "TransformTeleport"
+x = "2.0"
+y = "1.0"
+z = "5.0"
+```
+
+Teleport the entity to the given position. Set the sprite entity's Transform's translation to the given values.
+
+The `z` field is optional. `x` and `y` are required.
+
+The values must be in quotes and can be specified as either:
+ - decimal syntax, like: `"1.25"`
+ - fraction syntax, like: `"5/4"`
+
+</details>
+
+<details>
+  <summary>
+  <code>TransformSetScale</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+action = "TransformSetScale"
+x = "2.0"
+y = "1.0"
+```
+
+Set the scale that the sprite should be displayed as.
+
+Both `x` and `y` are required.
+
+The values must be in quotes and can be specified as either:
+ - decimal syntax, like: `"1.25"`
+ - fraction syntax, like: `"5/4"`
+
+</details>
+
+<details>
+  <summary>
+  <code>TransformRotateTurns</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+action = "TransformRotateTurns"
+turns = "-1/4"
+```
+
+Rotate the sprite by N turns. 1 turn = 360 degrees.
+
+The values must be in quotes and can be specified as either:
+ - decimal syntax, like: `"1.25"`
+ - fraction syntax, like: `"5/4"`
+
+</details>
+
+<details>
+  <summary>
+  <code>TransformRotateDegrees</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+action = "TransformRotateDegrees"
+degrees = "-15.0"
+```
+
+Rotate the sprite by N degrees.
+
+The values must be in quotes and can be specified as either:
+ - decimal syntax, like: `"1.25"`
+ - fraction syntax, like: `"5/4"`
+
+</details>
+
+<details>
+  <summary>
+  <code>TransformSetRotationTurns</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+action = "TransformSetRotationTurns"
+turns = "-1/4"
+```
+
+Set the sprite's rotation to a specific value (in turns). 1 turn = 360 degrees.
+
+The values must be in quotes and can be specified as either:
+ - decimal syntax, like: `"1.25"`
+ - fraction syntax, like: `"5/4"`
+
+</details>
+
+<details>
+  <summary>
+  <code>TransformSetRotationDegrees</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+action = "TransformSetRotationDegrees"
+degrees = "-15.0"
+```
+
+Set the sprite's rotation to a specific value (in degrees).
+
+The values must be in quotes and can be specified as either:
+ - decimal syntax, like: `"1.25"`
+ - fraction syntax, like: `"5/4"`
 
 </details>

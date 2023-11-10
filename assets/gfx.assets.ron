@@ -43,18 +43,11 @@
         rows: 1,
         columns: 1,
     ),
-    "anim.player.IdleLeft.sprite": TextureAtlas (
-        path: "sprites/PlayerIdleLeft.png",
+    "anim.player.Idle.sprite": TextureAtlas (
+        path: "sprites/PlayerIdle.png",
         tile_size_x: 96.,
         tile_size_y: 96.,
-        rows: 1,
-        columns: 10,
-    ),
-    "anim.player.IdleRight.sprite": TextureAtlas (
-        path: "sprites/PlayerIdleRight.png",
-        tile_size_x: 96.,
-        tile_size_y: 96.,
-        rows: 1,
+        rows: 2,
         columns: 10,
     ),
     "anim.player.Run.sprite": TextureAtlas (

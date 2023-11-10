@@ -1,7 +1,7 @@
 use bevy::reflect::{TypePath, TypeUuid};
 
+use crate::data::*;
 use crate::prelude::*;
-use crate::time::TimeSpec;
 
 /// Scripted Sequence Asset type
 ///
@@ -48,9 +48,26 @@ pub struct ScriptTickQuant(pub TickQuant);
 #[derive(Serialize, Deserialize)]
 pub struct CommonScript {
     #[serde(flatten)]
+    pub params: CommonScriptParams,
+    #[serde(flatten)]
     pub run_if: CommonScriptRunIf,
     #[serde(flatten)]
     pub action: CommonScriptAction,
+}
+
+#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
+pub struct CommonScriptParams {
+    pub rng_pct: Option<f32>,
+    pub delay_ticks: Option<u32>,
+    #[serde(default)]
+    pub require_slots_all: Vec<String>,
+    #[serde(default)]
+    pub require_slots_any: Vec<String>,
+    #[serde(default)]
+    pub forbid_slots_all: Vec<String>,
+    #[serde(default)]
+    pub forbid_slots_any: Vec<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -64,6 +81,10 @@ pub enum CommonScriptRunIf {
     Time(TimeSpec),
     #[serde(rename = "run_at_millis")]
     Millis(u64),
+    #[serde(rename = "run_on_slot_enable")]
+    SlotEnable(String),
+    #[serde(rename = "run_on_slot_disable")]
+    SlotDisable(String),
 }
 
 /// The various actions that can be performed from scripts
@@ -95,15 +116,15 @@ pub enum CommonScriptAction {
         parent_label: Option<String>,
     },
     /// Spawn a new entity to run a script
-    SpawnScript {
-        asset_key: String,
-    },
+    SpawnScript { asset_key: String },
 }
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
-#[serde(from = "ExtendedScriptWorkaround<ExtRunIf, ExtAction>")]
-pub struct ExtendedScript<ExtRunIf, ExtAction> {
+#[serde(from = "ExtendedScriptWorkaround<ExtParams, ExtRunIf, ExtAction>")]
+pub struct ExtendedScript<ExtParams, ExtRunIf, ExtAction> {
+    #[serde(flatten)]
+    pub params: ExtendedScriptParams<ExtParams>,
     #[serde(flatten)]
     pub run_if: ExtendedScriptRunIf<ExtRunIf>,
     #[serde(flatten)]
@@ -117,6 +138,15 @@ pub struct ExtendedScriptSettings<T> {
     pub extended: T,
     #[serde(flatten)]
     pub common: CommonScriptSettings,
+}
+
+#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
+pub struct ExtendedScriptParams<T> {
+    #[serde(flatten)]
+    pub extended: T,
+    #[serde(flatten)]
+    pub common: CommonScriptParams,
 }
 
 #[derive(Debug, Clone)]
@@ -146,41 +176,54 @@ pub struct Flattened<A, B> {
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
+pub struct ExtendedScriptWorkaround<ExtParams, ExtRunIf, ExtAction> {
+    #[serde(flatten)]
+    pub params: ExtendedScriptParams<ExtParams>,
+    #[serde(flatten)]
+    pub inner: ExtendedScriptWorkaroundInner<ExtRunIf, ExtAction>,
+}
+
+#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
 #[serde(untagged)]
-pub enum ExtendedScriptWorkaround<ExtRunIf, ExtAction> {
+pub enum ExtendedScriptWorkaroundInner<ExtRunIf, ExtAction> {
     EE(Flattened<ExtRunIf, ExtAction>),
     EC(Flattened<ExtRunIf, CommonScriptAction>),
     CE(Flattened<CommonScriptRunIf, ExtAction>),
     CC(Flattened<CommonScriptRunIf, CommonScriptAction>),
 }
 
-impl<ExtRunIf, ExtAction> From<ExtendedScriptWorkaround<ExtRunIf, ExtAction>>
-    for ExtendedScript<ExtRunIf, ExtAction>
+impl<ExtParams, ExtRunIf, ExtAction> From<ExtendedScriptWorkaround<ExtParams, ExtRunIf, ExtAction>>
+    for ExtendedScript<ExtParams, ExtRunIf, ExtAction>
 {
     fn from(
-        wa: ExtendedScriptWorkaround<ExtRunIf, ExtAction>,
-    ) -> ExtendedScript<ExtRunIf, ExtAction> {
-        match wa {
-            ExtendedScriptWorkaround::EE(x) => {
+        wa: ExtendedScriptWorkaround<ExtParams, ExtRunIf, ExtAction>,
+    ) -> ExtendedScript<ExtParams, ExtRunIf, ExtAction> {
+        match wa.inner {
+            ExtendedScriptWorkaroundInner::EE(x) => {
                 ExtendedScript {
+                    params: wa.params,
                     run_if: ExtendedScriptRunIf::Extended(x.a),
                     action: ExtendedScriptAction::Extended(x.b),
                 }
             },
-            ExtendedScriptWorkaround::EC(x) => {
+            ExtendedScriptWorkaroundInner::EC(x) => {
                 ExtendedScript {
+                    params: wa.params,
                     run_if: ExtendedScriptRunIf::Extended(x.a),
                     action: ExtendedScriptAction::Common(x.b),
                 }
             },
-            ExtendedScriptWorkaround::CE(x) => {
+            ExtendedScriptWorkaroundInner::CE(x) => {
                 ExtendedScript {
+                    params: wa.params,
                     run_if: ExtendedScriptRunIf::Common(x.a),
                     action: ExtendedScriptAction::Extended(x.b),
                 }
             },
-            ExtendedScriptWorkaround::CC(x) => {
+            ExtendedScriptWorkaroundInner::CC(x) => {
                 ExtendedScript {
+                    params: wa.params,
                     run_if: ExtendedScriptRunIf::Common(x.a),
                     action: ExtendedScriptAction::Common(x.b),
                 }

@@ -2,11 +2,11 @@
 // that are not part of the graphics/visuals or audio (such as item properties, etc.)
 // This also includes animation scripts.
 ({
+    "anim.player.Idle": File (
+        path: "animations/PlayerIdle.anim.toml",
+    ),
     "anim.player.Run": File (
         path: "animations/PlayerRun.anim.toml",
-    ),
-    "anim.player.RunWithDamage": File (
-        path: "animations/PlayerRunWithDamage.anim.toml",
     ),
     "script.test": File (
         path: "test.script.toml",

@@ -17,8 +17,9 @@ pub mod prelude {
     pub use thiserror::Error;
 
     pub use crate::assets::{AssetKey, AssetsSet, PreloadedAssets};
+    pub use crate::data::TickQuant;
     pub use crate::time::{
-        at_tick_multiples, GameTickMidFlush, GameTickSet, GameTickUpdate, GameTime, TickQuant,
+        at_tick_multiples, GameTickMidFlush, GameTickSet, GameTickUpdate, GameTime,
     };
 }
 
@@ -28,6 +29,8 @@ use crate::prelude::*;
 
 pub mod animation;
 pub mod assets;
+pub mod data;
+pub mod gent;
 pub mod script;
 pub mod time;
 

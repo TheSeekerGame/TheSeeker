@@ -183,6 +183,36 @@ Examples:
 
 </details>
 
+## Common Parameters
+
+These are additional parameters that can be specified regardless of the action:
+
+<details>
+  <summary>
+  <code>rng_pct</code>
+  </summary>
+
+Example:
+
+```toml
+# At 5 minutes, there is a 15% chance of something happening
+[[script]]
+run_at_time = "5:00"
+rng_pct = 15
+action = "..."
+
+# Every 360 ticks, there is a 50% chance of something happening
+[[script]]
+run_every_n_ticks = "360"
+rng_pct = 50
+```
+
+Adds an element of randomness. Set the probability of whether the action should be run.
+
+The value should be a number between `0.0` and `100.0`, indicating a percentage.
+
+</details>
+
 ## Available Actions
 
 The action kind is a mandatory part of every `[[script]]` section. There must be

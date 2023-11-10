@@ -1,7 +1,7 @@
 use bevy::reflect::{TypePath, TypeUuid};
-use serde::Deserializer;
 
 use super::script::*;
+use crate::data::*;
 use crate::prelude::*;
 
 /// Sprite Animation Asset type
@@ -17,7 +17,13 @@ pub struct SpriteAnimation {
     /// General animation parameters
     pub settings: ExtendedScriptSettings<SpriteAnimationSettings>,
     /// Optional "script": list of actions to perform during playback
-    pub script: Vec<ExtendedScript<SpriteAnimationScriptRunIf, SpriteAnimationScriptAction>>,
+    pub script: Vec<
+        ExtendedScript<
+            SpriteAnimationScriptParams,
+            SpriteAnimationScriptRunIf,
+            SpriteAnimationScriptAction,
+        >,
+    >,
 }
 
 #[derive(Debug, Clone)]
@@ -28,6 +34,10 @@ pub struct SpriteAnimationSettings {
     pub frame_min: u32,
     pub frame_max: u32,
 }
+
+#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
+pub struct SpriteAnimationScriptParams {}
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
@@ -59,8 +69,7 @@ pub enum SpriteAnimationScriptAction {
     /// Set sprite colorization
     SetSpriteColor {
         /// The new sprite color
-        #[serde(deserialize_with = "deserialize_color")]
-        color: Color,
+        color: ColorRepr,
     },
     /// Set sprite X/Y flip
     SetSpriteFlip {
@@ -69,18 +78,22 @@ pub enum SpriteAnimationScriptAction {
         /// Set flip on the Y axis
         flip_y: Option<bool>,
     },
-}
-
-fn deserialize_color<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Color, D::Error> {
-    let s: String = Deserialize::deserialize(deserializer)?;
-    match Color::hex(&s) {
-        Ok(color) => Ok(color),
-        Err(e) => {
-            error!(
-                "Color must be specified as RGBA Hex syntax. {:?} is invalid: {}",
-                s, e
-            );
-            Ok(Color::WHITE)
-        },
-    }
+    /// Transform: relative translation
+    TransformMove {
+        x: Option<Frac>,
+        y: Option<Frac>,
+        z: Option<Frac>,
+    },
+    /// Transform: set absolute translation
+    TransformTeleport { x: Frac, y: Frac, z: Option<Frac> },
+    /// Transform: rotate by N turns (1 turn = 360 degrees)
+    TransformRotateTurns { turns: Frac },
+    /// Transform: rotate by N degrees
+    TransformRotateDegrees { degrees: Frac },
+    /// Transform: set the rotation to a specific value
+    TransformSetRotationTurns { turns: Frac },
+    /// Transform: set the rotation to a specific value
+    TransformSetRotationDegrees { degrees: Frac },
+    /// Transform: set scale
+    TransformSetScale { x: Frac, y: Frac },
 }

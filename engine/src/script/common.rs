@@ -12,9 +12,9 @@ impl Plugin for CommonScriptPlugin {
     }
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, Default)]
 pub struct ScriptBundle {
-    pub key: AssetKey<Script>,
+    pub player: ScriptPlayer<Script>,
 }
 
 #[derive(Default)]
@@ -26,6 +26,11 @@ pub struct CommonScriptTracker {
     start_time: Duration,
     next_time_id: usize,
     time: Vec<(Duration, ActionId)>,
+    slot_enable: HashMap<String, Vec<ActionId>>,
+    slot_disable: HashMap<String, Vec<ActionId>>,
+    slots_enabled: HashSet<String>,
+    q_extra: Vec<ActionId>,
+    q_delayed: Vec<(u64, ActionId)>,
 }
 
 impl CommonScriptTracker {
@@ -108,6 +113,20 @@ impl ScriptTracker for CommonScriptTracker {
             CommonScriptRunIf::Time(timespec) => {
                 self.time.push((Duration::from(*timespec), action_id));
             },
+            CommonScriptRunIf::SlotEnable(slot) => {
+                if let Some(entry) = self.slot_enable.get_mut(slot.as_str()) {
+                    entry.push(action_id);
+                } else {
+                    self.slot_enable.insert(slot.clone(), vec![action_id]);
+                }
+            }
+            CommonScriptRunIf::SlotDisable(slot) => {
+                if let Some(entry) = self.slot_disable.get_mut(slot.as_str()) {
+                    entry.push(action_id);
+                } else {
+                    self.slot_disable.insert(slot.clone(), vec![action_id]);
+                }
+            }
         }
     }
 
@@ -123,6 +142,18 @@ impl ScriptTracker for CommonScriptTracker {
         (time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult {
+        // start with any extra queued actions
+        queue.append(&mut self.q_extra);
+
+        // any delayed actions
+        // we don't remove them here, only trigger them to run
+        // they will manage themselves in/out of `q_delayed` when they run
+        for (tick, action_id) in self.q_delayed.iter() {
+            if game_time.tick() >= *tick {
+                queue.push(*action_id);
+            }
+        }
+
         // check any time actions
         while self.next_time_id < self.time.len() {
             let next = &self.time[self.next_time_id];
@@ -158,19 +189,106 @@ impl ScriptTracker for CommonScriptTracker {
             ScriptUpdateResult::NormalRun
         }
     }
+
+    fn set_slot(&mut self, slot: &str, state: bool) {
+        if state {
+            if !self.slots_enabled.contains(slot) {
+                self.slots_enabled.insert(slot.to_owned());
+                if let Some(actions) = self.slot_enable.get(slot) {
+                    self.q_extra.extend_from_slice(&actions);
+                }
+            }
+        } else {
+            if self.slots_enabled.contains(slot) {
+                self.slots_enabled.remove(slot);
+                if let Some(actions) = self.slot_disable.get(slot) {
+                    self.q_extra.extend_from_slice(&actions);
+                }
+            }
+        }
+    }
+
+    fn take_slots(&mut self) -> HashSet<String> {
+        for slot in self.slots_enabled.iter() {
+            if let Some(actions) = self.slot_disable.get(slot) {
+                self.q_extra.extend_from_slice(&actions);
+            }
+        }
+        std::mem::take(&mut self.slots_enabled)
+    }
+
+    fn clear_slots(&mut self) {
+        for slot in self.slots_enabled.iter() {
+            if let Some(actions) = self.slot_disable.get(slot) {
+                self.q_extra.extend_from_slice(&actions);
+            }
+        }
+        self.slots_enabled.clear()
+    }
 }
 
 impl ScriptRunIf for CommonScriptRunIf {
     type Tracker = CommonScriptTracker;
 }
 
+impl ScriptActionParams for CommonScriptParams {
+    type Tracker = CommonScriptTracker;
+    type ShouldRunParam = (SRes<Time>, SRes<GameTime>);
+
+    fn should_run<'w>(
+        &self,
+        tracker: &mut Self::Tracker,
+        action_id: ActionId,
+        (time, game_time): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+    ) -> Result<(), ScriptUpdateResult> {
+        if let Some(i_delayed) = tracker.q_delayed.iter()
+            .position(|(tick, aid)| *tick == game_time.tick() && *aid == action_id)
+        {
+            tracker.q_delayed.remove(i_delayed);
+        } else if let Some(delay_ticks) = self.delay_ticks {
+            tracker.q_delayed.push((game_time.tick() + delay_ticks as u64, action_id));
+            return Err(ScriptUpdateResult::NormalRun);
+        }
+
+        if !self.forbid_slots_any.is_empty() &&
+            self.forbid_slots_any.iter().any(|s| tracker.slots_enabled.contains(s))
+        {
+            return Err(ScriptUpdateResult::NormalRun);
+        }
+        if !self.forbid_slots_all.is_empty() &&
+            self.forbid_slots_all.iter().all(|s| tracker.slots_enabled.contains(s))
+        {
+            return Err(ScriptUpdateResult::NormalRun);
+        }
+        if !self.require_slots_all.is_empty() &&
+           !self.require_slots_all.iter().all(|s| tracker.slots_enabled.contains(s))
+        {
+            return Err(ScriptUpdateResult::NormalRun);
+        }
+        if !self.require_slots_any.is_empty() &&
+           !self.require_slots_any.iter().any(|s| tracker.slots_enabled.contains(s))
+        {
+            return Err(ScriptUpdateResult::NormalRun);
+        }
+        if let Some(rng_pct) = &self.rng_pct {
+            let mut rng = thread_rng();
+            if !rng.gen_bool((*rng_pct as f64 / 100.0).clamp(0.0, 1.0)) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        Ok(())
+    }
+}
+
 impl ScriptAction for CommonScriptAction {
+    type ActionParams = CommonScriptParams;
     type Param = (SRes<EntityLabels>, SCommands);
     type Tracker = CommonScriptTracker;
 
     fn run<'w>(
         &self,
         entity: Entity,
+        _actionparams: &Self::ActionParams,
         _tracker: &mut Self::Tracker,
         (ref elabels, ref mut commands): &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult {
@@ -198,11 +316,13 @@ impl ScriptAction for CommonScriptAction {
                 parent_label,
             } => ScriptUpdateResult::NormalRun,
             CommonScriptAction::SpawnScript { asset_key } => {
+                let mut player = ScriptPlayer::new();
+                player.play_key(asset_key.as_str());
                 commands.spawn(ScriptBundle {
-                    key: asset_key.into(),
+                    player,
                 });
                 ScriptUpdateResult::NormalRun
-            }
+            },
         }
     }
 }
@@ -285,13 +405,53 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
             _ => ScriptUpdateResult::NormalRun,
         }
     }
+
+    fn set_slot(&mut self, slot: &str, state: bool) {
+        self.common.set_slot(slot, state);
+        self.extended.set_slot(slot, state);
+    }
+
+    fn take_slots(&mut self) -> HashSet<String> {
+        let mut r = self.common.take_slots();
+        r.extend(self.extended.take_slots());
+        r
+    }
+
+    fn clear_slots(&mut self) {
+        self.common.clear_slots();
+        self.extended.clear_slots();
+    }
 }
 
 impl<T: ScriptRunIf> ScriptRunIf for ExtendedScriptRunIf<T> {
     type Tracker = ExtendedScriptTracker<T::Tracker>;
 }
 
-impl<T: ScriptAction> ScriptAction for ExtendedScriptAction<T> {
+impl<T: ScriptActionParams> ScriptActionParams for ExtendedScriptParams<T> {
+    type Tracker = ExtendedScriptTracker<T::Tracker>;
+    type ShouldRunParam = (
+        T::ShouldRunParam,
+        <CommonScriptParams as ScriptActionParams>::ShouldRunParam,
+    );
+    fn should_run<'w>(
+        &self,
+        tracker: &mut Self::Tracker,
+        action_id: ActionId,
+        (param_ext, param_common): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+    ) -> Result<(), ScriptUpdateResult> {
+        if let Err(r) = self.extended.should_run(&mut tracker.extended, action_id, param_ext) {
+            Err(r)
+        } else {
+            self.common.should_run(&mut tracker.common, action_id, param_common)
+        }
+    }
+}
+
+impl<T> ScriptAction for ExtendedScriptAction<T>
+where
+    T: ScriptAction,
+{
+    type ActionParams = ExtendedScriptParams<T::ActionParams>;
     type Param = (
         T::Param,
         <CommonScriptAction as ScriptAction>::Param,
@@ -301,16 +461,23 @@ impl<T: ScriptAction> ScriptAction for ExtendedScriptAction<T> {
     fn run<'w>(
         &self,
         entity: Entity,
+        actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
         (param_ext, param_common): &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult {
         match self {
             ExtendedScriptAction::Extended(action) => {
-                action.run(entity, &mut tracker.extended, param_ext)
+                action.run(
+                    entity,
+                    &actionparams.extended,
+                    &mut tracker.extended,
+                    param_ext,
+                )
             },
             ExtendedScriptAction::Common(action) => {
                 action.run(
                     entity,
+                    &actionparams.common,
                     &mut tracker.common,
                     param_common,
                 )
@@ -321,6 +488,7 @@ impl<T: ScriptAction> ScriptAction for ExtendedScriptAction<T> {
 
 impl ScriptAsset for Script {
     type Action = CommonScriptAction;
+    type ActionParams = CommonScriptParams;
     type BuildParam = ();
     type RunIf = CommonScriptRunIf;
     type Settings = CommonScriptSettings;
@@ -337,7 +505,11 @@ impl ScriptAsset for Script {
         _param: &mut <Self::BuildParam as SystemParam>::Item<'w, '_>,
     ) -> ScriptRuntimeBuilder<Self> {
         for action in self.script.iter() {
-            builder = builder.add_action(&action.run_if, &action.action);
+            builder = builder.add_action(
+                &action.run_if,
+                &action.action,
+                &action.params,
+            );
         }
         builder
     }
