@@ -90,6 +90,81 @@ fn player_control(
             player.play_key("anim.player.Idle");
             player.set_slot("DirectionRight", false);
         }
+        if input.just_pressed(KeyCode::Up) {
+            player.play_key("anim.player.IdleLookUp");
+        }
+        if input.just_pressed(KeyCode::Down) {
+            player.play_key("anim.player.IdleLookDown");
+        }
+        if input.just_pressed(KeyCode::W) {
+            player.play_key("anim.player.SwordWhirling");
+        }
+        if input.just_pressed(KeyCode::Q) {
+            player.play_key("anim.player.SwordAirDown");
+        }
+        if input.just_pressed(KeyCode::E) {
+            player.play_key("anim.player.SwordAirFrontA");
+        }
+        if input.just_pressed(KeyCode::R) {
+            player.play_key("anim.player.SwordAirFrontB");
+        }
+        if input.just_pressed(KeyCode::T) {
+            player.play_key("anim.player.SwordFrontA");
+        }
+        if input.just_pressed(KeyCode::Y) {
+            player.play_key("anim.player.SwordFrontB");
+        }
+        if input.just_pressed(KeyCode::U) {
+            player.play_key("anim.player.SwordFrontC");
+        }
+        if input.just_pressed(KeyCode::I) {
+            player.play_key("anim.player.SwordRunA");
+        }
+        if input.just_pressed(KeyCode::O) {
+            player.play_key("anim.player.SwordRunB");
+        }
+        if input.just_pressed(KeyCode::P) {
+            player.play_key("anim.player.SwordUp");
+        }
+        if input.just_pressed(KeyCode::A) {
+            player.play_key("anim.player.Jump");
+        }
+        if input.just_pressed(KeyCode::S) {
+            player.play_key("anim.player.JumpForward");
+        }
+        if input.just_pressed(KeyCode::D) {
+            player.play_key("anim.player.Fly");
+        }
+        if input.just_pressed(KeyCode::F) {
+            player.play_key("anim.player.FlyForward");
+        }
+        if input.just_pressed(KeyCode::G) {
+            player.play_key("anim.player.Fall");
+        }
+        if input.just_pressed(KeyCode::H) {
+            player.play_key("anim.player.FallForward");
+        }
+        if input.just_pressed(KeyCode::J) {
+            player.play_key("anim.player.FlyFallTransition");
+        }
+        if input.just_pressed(KeyCode::K) {
+            player.play_key("anim.player.FlyFallForwardTransition");
+        }
+        if input.just_pressed(KeyCode::L) {
+            player.play_key("anim.player.Land");
+        }
+        if input.just_pressed(KeyCode::Z) {
+            player.play_key("anim.player.LandForward");
+        }
+        if input.just_pressed(KeyCode::X) {
+            player.play_key("anim.player.Dash");
+        }
+        if input.just_pressed(KeyCode::C) {
+            player.play_key("anim.player.Roll");
+        }
+        if input.just_pressed(KeyCode::V) {
+            player.play_key("anim.player.WallSlide");
+        }
         if input.just_pressed(KeyCode::Space) {
             player.set_slot("Damage", true);
         }

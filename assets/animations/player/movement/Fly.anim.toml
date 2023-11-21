@@ -1,0 +1,35 @@
+atlas_asset_key = "anim.player.Fly.sprite"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 0
+frame_max = 3
+frame_start = 0
+
+# LOOP
+[[script]]
+run_at_frame = 3
+action = "SetFrameNext"
+frame_index = 0
+
+# Support left/right flipping
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false
+
+# Reset animation on flipping
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetFrameNow"
+frame_index = 0
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetFrameNow"
+frame_index = 0

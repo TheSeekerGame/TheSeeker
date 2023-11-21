@@ -1,0 +1,49 @@
+atlas_asset_key = "anim.player.SwordWhirling.sprite"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 0
+frame_max = 5
+frame_start = 0
+
+# LOOP
+[[script]]
+run_at_frame = 4
+action = "SetFrameNext"
+frame_index = 1
+
+# Support left/right flipping
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false
+
+# Blink Red on Damage
+[[script]]
+run_every_n_ticks = "8+2"
+require_slots_any = ["Damage"]
+action = "SetSpriteColor"
+color = "#ff0000"
+[[script]]
+run_every_n_ticks = "8+6"
+require_slots_any = ["Damage"]
+action = "SetSpriteColor"
+color = "#ffffff"
+
+# Ensure correct color after damage stops
+[[script]]
+run_on_slot_disable = "Damage"
+action = "SetSpriteColor"
+color = "#ffffff"
+
+# On Damage, immediately change color to ensure no delay
+[[script]]
+run_on_slot_enable = "Damage"
+action = "SetSpriteColor"
+color = "#ff0000"

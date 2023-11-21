@@ -31,13 +31,13 @@ impl Plugin for LevelManagerPlugin {
 fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
     // TODO: per-level asset management instead of preloaded assets
     // TODO: when we have save files, use that to choose the level to init at
-    // commands.spawn((
-    //     StateDespawnMarker,
-    //     LdtkWorldBundle {
-    //         ldtk_handle: preloaded
-    //             .get_single_asset("level.01")
-    //             .expect("Expected asset key 'level.01'"),
-    //         ..Default::default()
-    //     },
-    // ));
+     commands.spawn((
+         StateDespawnMarker,
+         LdtkWorldBundle {
+             ldtk_handle: preloaded
+                 .get_single_asset("level.01")
+                 .expect("Expected asset key 'level.01'"),
+             ..Default::default()
+         },
+     ));
 }
