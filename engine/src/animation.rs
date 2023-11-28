@@ -208,7 +208,7 @@ impl ScriptAsset for SpriteAnimation {
     type Action = ExtendedScriptAction<SpriteAnimationScriptAction>;
     type ActionParams = ExtendedScriptParams<SpriteAnimationScriptParams>;
     type BuildParam = (
-        SQuery<&'static mut Handle<TextureAtlas>>,
+        SQuery<(&'static mut Handle<TextureAtlas>, &'static mut TextureAtlasSprite)>,
         SRes<PreloadedAssets>,
     );
     type RunIf = ExtendedScriptRunIf<SpriteAnimationScriptRunIf>;
@@ -225,13 +225,18 @@ impl ScriptAsset for SpriteAnimation {
         entity: Entity,
         (q_atlas, preloaded): &mut <Self::BuildParam as SystemParam>::Item<'w, '_>,
     ) -> ScriptRuntimeBuilder<Self> {
-        let mut atlas = q_atlas
+        let (mut atlas, mut sprite) = q_atlas
             .get_mut(entity)
-            .expect("Animation entity must have Texture Atlas component");
+            .expect("Animation entity must have Texture Atlas components");
         let new_atlas = preloaded
             .get_single_asset(&self.atlas_asset_key)
             .expect("Invalid texture atlas asset key for animation");
         *atlas = new_atlas;
+
+        sprite.index = self.settings.extended.frame_start
+            .min(self.settings.extended.frame_max)
+            .max(self.settings.extended.frame_min)
+            as usize;
 
         for action in self.script.iter() {
             builder = builder.add_action(
