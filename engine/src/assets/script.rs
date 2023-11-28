@@ -85,6 +85,15 @@ pub enum CommonScriptRunIf {
     SlotEnable(String),
     #[serde(rename = "run_on_slot_disable")]
     SlotDisable(String),
+    #[serde(rename = "run_on_playback_control")]
+    PlaybackControl(PlaybackControl),
+}
+
+#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
+pub enum PlaybackControl {
+    Start,
+    Stop,
 }
 
 /// The various actions that can be performed from scripts

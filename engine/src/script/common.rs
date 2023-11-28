@@ -31,6 +31,8 @@ pub struct CommonScriptTracker {
     slots_enabled: HashSet<String>,
     q_extra: Vec<ActionId>,
     q_delayed: Vec<(u64, ActionId)>,
+    q_start: Vec<ActionId>,
+    q_stop: Vec<ActionId>,
 }
 
 impl CommonScriptTracker {
@@ -127,6 +129,12 @@ impl ScriptTracker for CommonScriptTracker {
                     self.slot_disable.insert(slot.clone(), vec![action_id]);
                 }
             }
+            CommonScriptRunIf::PlaybackControl(PlaybackControl::Start) => {
+                self.q_start.push(action_id);
+            }
+            CommonScriptRunIf::PlaybackControl(PlaybackControl::Stop) => {
+                self.q_stop.push(action_id);
+            }
         }
     }
 
@@ -188,6 +196,26 @@ impl ScriptTracker for CommonScriptTracker {
         } else {
             ScriptUpdateResult::NormalRun
         }
+    }
+
+    fn do_start<'w>(
+        &mut self,
+        _entity: Entity,
+        _settings: &Self::Settings,
+        _param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        queue: &mut Vec<ActionId>,
+    ) {
+        queue.append(&mut self.q_start);
+    }
+
+    fn do_stop<'w>(
+        &mut self,
+        _entity: Entity,
+        _settings: &Self::Settings,
+        _param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        queue: &mut Vec<ActionId>,
+    ) {
+        queue.append(&mut self.q_stop);
     }
 
     fn set_slot(&mut self, slot: &str, state: bool) {
@@ -404,6 +432,28 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
             },
             _ => ScriptUpdateResult::NormalRun,
         }
+    }
+
+    fn do_start<'w>(
+        &mut self,
+        entity: Entity,
+        settings: &Self::Settings,
+        param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        queue: &mut Vec<ActionId>,
+    ) {
+        self.extended.do_start(entity, &settings.extended, &mut param.0, queue);
+        self.common.do_start(entity, &settings.common, &mut param.1, queue);
+    }
+
+    fn do_stop<'w>(
+        &mut self,
+        entity: Entity,
+        settings: &Self::Settings,
+        param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        queue: &mut Vec<ActionId>,
+    ) {
+        self.extended.do_stop(entity, &settings.extended, &mut param.0, queue);
+        self.common.do_stop(entity, &settings.common, &mut param.1, queue);
     }
 
     fn set_slot(&mut self, slot: &str, state: bool) {
