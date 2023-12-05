@@ -74,19 +74,112 @@ cli = [ "dothing blah blah" ]
 
 Every `[[script]]` section *must* contain:
 
- - a *run condition* to determine *when* to perform the action
+ - a *trigger condition* to determine *when* to perform the action
  - an `action` field to specify the kind of action to perform
  - any additional parameters as required by the action, depending on the action kind
 
-## Available Run Conditions
+## Slots
 
-The run condition is a mandatory part of every `[[script]]` section. It
+Slots are like global flags / boolean variables that can be used to control
+a script at runtime. A slot has a name, which can be any string. The
+value can be changed to `true` or `false` from Rust code. You can have script
+actions that are only to be perfomed if specific slots are enabled/disabled.
+
+In Rust:
+
+```rust
+my_script_runtime.set_slot("MySlot", true);
+```
+
+In the script file:
+
+```toml
+# do something as soon as "MySlot" becomes true
+[[script]]
+run_on_slot_enable = "MySlot"
+action = "..."
+
+# do something every 8 ticks,
+# if "MySlot" and "MySlot2" are both true,
+# and neither of "MyOtherSlot" or "SlotSlot" are true.
+[[script]]
+run_every_n_ticks = "8"
+require_slots_all = ["MySlot", "MySlot2"]
+forbid_slots_any = ["MyOtherSlot", "SlotSlot"]
+action = "..."
+```
+
+## Available Trigger Conditions
+
+The trigger condition is a mandatory part of every `[[script]]` section. It
 determines when to run the action.
 
-Multiple run conditions are currently not supported/allowed. There must be
-exactly one.
+Multiple trigger conditions are currently not supported/allowed. There must be
+exactly one per `[[script]]` section. If you want to perform the same action
+at different times, just create multiple sections with the respective triggers.
 
-The available run conditions are:
+The available trigger conditions are:
+
+<details>
+  <summary>
+  <code>run_on_playback_control</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+run_on_playback_control = "Stop"
+action = "..."
+```
+
+Run the action at a special point in the script's playback lifecycle.
+This is useful for performing initialization when the script starts and
+cleanup when the script stops.
+
+The available values are:
+ - `"Start"`: whenever the current script asset is played (switched to)
+ - `"Stop"`: whenever the current script stops playing (incl. when switching to another script)
+
+</details>
+
+<details>
+  <summary>
+  <code>run_on_slot_enable</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+run_on_slot_enable = "MySlot"
+action = "..."
+```
+
+Run the action whenever a specific *slot* is set to `true`.
+
+This allows Rust code, etc., to control the script.
+
+</details>
+
+<details>
+  <summary>
+  <code>run_on_slot_disable</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+run_on_slot_disable = "MySlot"
+action = "..."
+```
+
+Run the action whenever a specific *slot* is set to `false`.
+
+This allows Rust code, etc., to control the script.
+
+</details>
 
 <details>
   <summary>
@@ -183,9 +276,12 @@ Examples:
 
 </details>
 
-## Common Parameters
+## Common Parameters (Modifiers)
 
-These are additional parameters that can be specified regardless of the action:
+These are additional parameters that can be specified regardless of the action.
+
+Whenever the trigger condition is met, these parameters will be evaluated. They
+can be used to modify how the action should run or if it should run at all.
 
 <details>
   <summary>
@@ -213,11 +309,115 @@ The value should be a number between `0.0` and `100.0`, indicating a percentage.
 
 </details>
 
+<details>
+  <summary>
+  <code>delay_ticks</code>
+  </summary>
+
+Example:
+
+```toml
+# do something 5 ticks after "MySlot" becomes true
+[[script]]
+run_on_slot_enable = "MySlot"
+delay_ticks = 5
+action = "..."
+```
+
+Delays the action to happen a certain number of tick later, after the trigger
+condition is hit.
+
+</details>
+
+<details>
+  <summary>
+  <code>require_slots_all</code>
+  </summary>
+
+Example:
+
+```toml
+# do something at the 5-minute-mark, but only if
+# the "ExtraDifficulty" and "FirstVisit" slots are set
+[[script]]
+run_at_time = "5:00"
+require_slots_all = ["ExtraDifficulty", "FirstVisit"]
+action = "..."
+```
+
+Checks the values of the specified slots and only performs the action if
+all of them are `true`.
+
+</details>
+
+<details>
+  <summary>
+  <code>require_slots_any</code>
+  </summary>
+
+Example:
+
+```toml
+# do something at the 5-minute-mark, but only if
+# either "FullHealth" or "HealingAvailable" slots are set
+[[script]]
+run_at_time = "5:00"
+require_slots_any = ["FullHealth", "HealingAvailable"]
+action = "..."
+```
+
+Checks the values of the specified slots and only performs the action if
+at least one them is `true`.
+
+</details>
+
+<details>
+  <summary>
+  <code>forbid_slots_all</code>
+  </summary>
+
+Example:
+
+```toml
+# do something at the 5-minute-mark, but only if
+# "FullHealth" and "HealingAvailable" slots are both false
+[[script]]
+run_at_time = "5:00"
+forbid_slots_all = ["FullHealth", "HealingAvailable"]
+action = "..."
+```
+
+Checks the values of the specified slots and only performs the action if
+all of them are `false`.
+
+</details>
+
+<details>
+  <summary>
+  <code>forbid_slots_any</code>
+  </summary>
+
+Example:
+
+```toml
+# do something at the 5-minute-mark, but only if
+# neither of "BossDefeated" or "FirstVisit" slots are set
+[[script]]
+run_at_time = "5:00"
+forbid_slots_any = ["BossDefeated", "FirstVisit"]
+action = "..."
+```
+
+Checks the values of the specified slots and does not perform the action if
+any of them is `true`.
+
+</details>
+
 ## Available Actions
 
 The action kind is a mandatory part of every `[[script]]` section. There must be
 exactly one `action` field per section. If you want to perform more than one
-action, create multiple sections (possibly with the same run condition).
+action, create multiple sections (possibly with the same trigger condition).
 
 Most actions accept/require additional parameters. Simply add those to the
 `[[script]]` section, depending on the kind of action.
