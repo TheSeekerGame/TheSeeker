@@ -14,7 +14,7 @@ impl Plugin for GameplayPlugin {
         // All LDTK stuff should be defined here,
         // so it is all in one place and easy to change!
         // Don't scatter it across the sub-modules/plugins!
-        app.register_ldtk_int_cell::<wall::WallBundle>(1);
+        app.register_ldtk_int_cell::<wall::WallBundle>(17);
 
         // Add the plugins for each game mechanic
         app.add_plugins((

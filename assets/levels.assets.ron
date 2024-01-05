@@ -8,6 +8,6 @@
 /// at all times), then it doesn't belong in this file.
 ({
     "level.01": File (
-        path: "levels/01.ldtk"
+        path: "levels/level.01.ldtk"
     ),
 })
