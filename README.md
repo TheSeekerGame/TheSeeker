@@ -11,11 +11,11 @@ This is a metroidvania game developed in [Bevy](https://github.com/bevyengine/be
 
 ## Documentation
 
-Read it over at https://theseeker.github.io/doc/ !
+Read it over at https://theseekergame.github.io/doc/ !
 
 The source files are in `doc` in this repo, made using `mdbook`.
 
-For docs related to the Rust source code, see: https://theseeker.github.io/api/theseeker_game/ !
+For docs related to the Rust source code, see: https://theseekergame.github.io/api/theseeker_game/ !
 
 ## License
 
