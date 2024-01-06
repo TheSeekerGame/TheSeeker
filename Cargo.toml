@@ -5,6 +5,22 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# dev: Enable max optimizations for dependencies, but not for our code
+[profile.dev.package."*"]
+opt-level = 3
+# dev: no LTO, lots of codegen units for parallelism during compilation
+[profile.dev]
+opt-level = 1
+debug = false
+lto = false
+codegen-units = 8
+# release: Enable LTO and limit codegen units for better codegen
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1
+debug = false
+
 [lib]
 name = "theseeker_engine"
 path = "engine/src/lib.rs"
