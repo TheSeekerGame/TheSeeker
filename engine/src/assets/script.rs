@@ -6,7 +6,7 @@ use crate::prelude::*;
 /// Scripted Sequence Asset type
 ///
 /// Would typically be loaded from TOML files.
-#[derive(Debug, Clone)]
+#[derive(Asset, Debug, Clone)]
 #[derive(Serialize, Deserialize)]
 #[derive(TypeUuid, TypePath)]
 #[uuid = "8D1B7F2F-3798-4438-9EB8-A5EEC3EA77A9"]

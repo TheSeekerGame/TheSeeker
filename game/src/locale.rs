@@ -1,8 +1,8 @@
+use bevy::asset::{LoadedFolder, LoadState};
 use bevy_fluent::prelude::*;
 use fluent_content::Content;
 use unic_langid::LanguageIdentifier;
 
-use crate::assets::LocaleAssets;
 use crate::prelude::*;
 
 pub struct LocalePlugin;
@@ -10,9 +10,13 @@ pub struct LocalePlugin;
 impl Plugin for LocalePlugin {
     fn build(&self, app: &mut App) {
         app.register_clicommand_args("locale", cli_locale);
-        app.add_systems(
-            OnExit(AppState::AssetsLoading),
-            (detect_locales, init_l10n).chain(),
+        app.insert_resource(
+            Locale::new("en-US".parse().unwrap()).with_default("en-US".parse().unwrap()),
+        );
+        app.add_systems(Update,
+            init_l10n
+                .track_progress()
+                .run_if(in_state(AppState::AssetsLoading))
         );
         app.add_systems(
             Update,
@@ -51,37 +55,43 @@ fn cli_locale(In(args): In<Vec<String>>, mut locale: ResMut<Locale>, locales: Re
     }
 }
 
-fn detect_locales(world: &mut World) {
-    let locales = {
-        let assets = world.resource::<LocaleAssets>();
-        let bundles = world.resource::<Assets<BundleAsset>>();
-        assets
-            .bundles
-            .iter()
-            .map(|handle| {
-                let bundle = bundles.get(handle).unwrap();
-                bundle.locales[0].clone()
-            })
-            .collect()
-    };
-    world.insert_resource(
-        // FIXME: do actual locale selection
-        Locale::new("en-US".parse().unwrap()).with_default("en-US".parse().unwrap()),
-    );
-    world.insert_resource(Locales(locales));
-}
+#[derive(Resource)]
+pub struct LocalesFolder(Handle<LoadedFolder>);
 
-fn init_l10n(mut commands: Commands, l10n_builder: LocalizationBuilder, assets: Res<LocaleAssets>) {
-    let l10n = l10n_builder.build(assets.bundles.iter());
-    commands.insert_resource(l10n);
+fn init_l10n(
+    mut commands: Commands,
+    l10n_builder: LocalizationBuilder,
+    l10n_bundles: Res<Assets<BundleAsset>>,
+    folder: Option<Res<LocalesFolder>>,
+    mut done: Local<bool>,
+    ass: Res<AssetServer>,
+) -> Progress {
+    match (*done, folder) {
+        (false, None) => {
+            commands.insert_resource(LocalesFolder(ass.load_folder("locale")));
+        }
+        (false, Some(folder)) => {
+            if let Some(LoadState::Loaded) = ass.get_load_state(&folder.0) {
+                let locales = Locales(l10n_bundles.iter()
+                    .map(|(_, bundle)| bundle.locales[0].clone())
+                    .collect());
+                let l10n = l10n_builder.build(&folder.0);
+                commands.insert_resource(locales);
+                commands.insert_resource(l10n);
+                *done = true;
+            }
+        }
+        (true, _) => {}
+    }
+    (*done).into()
 }
 
 fn resolve_l10n(
     locale: Res<Locale>,
     l10n_builder: LocalizationBuilder,
-    assets: Res<LocaleAssets>,
     mut ass_ev: EventReader<AssetEvent<BundleAsset>>,
     mut l10n: ResMut<Localization>,
+    l10n_folder: Res<LocalesFolder>,
     mut query: ParamSet<(
         Query<(&mut Text, &L10nKey), Changed<L10nKey>>,
         Query<(&mut Text, &L10nKey)>,
@@ -95,7 +105,7 @@ fn resolve_l10n(
     }
 
     if regenerate {
-        *l10n = l10n_builder.build(assets.bundles.iter());
+        *l10n = l10n_builder.build(&l10n_folder.0);
     }
 
     // closure for updating UI text
@@ -103,7 +113,7 @@ fn resolve_l10n(
         if let Some(string) = l10n.content(&key.0) {
             text.sections[0].value = string;
         } else {
-            text.sections[0].value = String::new();
+            text.sections[0].value = key.0.clone();
         }
     };
 

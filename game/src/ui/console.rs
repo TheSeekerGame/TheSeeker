@@ -163,7 +163,7 @@ fn console_text_input(
         evr_char.clear();
         return;
     }
-    for ev in evr_char.iter() {
+    for ev in evr_char.read() {
         for (mut text, mut hisentry, _) in &mut query {
             text.sections[1].value.push(ev.char);
             hisentry.0 = None;

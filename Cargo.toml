@@ -5,6 +5,28 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[patch.crates-io]
+bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+bevy_ecs = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+bevy_asset = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+bevy_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+
+[lib]
+name = "theseeker_engine"
+path = "engine/src/lib.rs"
+
+[[bin]]
+name = "theseeker_game"
+path = "game/src/main.rs"
+
+[features]
+dev = [
+    "bevy/file_watcher",
+    "bevy_xpbd_2d/debug-plugin",
+]
+
 # dev: Enable max optimizations for dependencies, but not for our code
 [profile.dev.package."*"]
 opt-level = 3
@@ -21,43 +43,29 @@ lto = true
 codegen-units = 1
 debug = false
 
-[lib]
-name = "theseeker_engine"
-path = "engine/src/lib.rs"
-
-[[bin]]
-name = "theseeker_game"
-path = "game/src/main.rs"
-
-[features]
-dev = [
-    "bevy/filesystem_watcher",
-    "bevy_xpbd_2d/debug-plugin",
-]
-
 # Random little libraries
 [dependencies]
-anyhow = "1.0.71"
+anyhow = "1.0.79"
 derive_more = "0.99.17"
 directories = "5.0.1"
 enum-iterator = "1.4.1"
-enum-map = "2.6.0"
+enum-map = "2.7.3"
 fluent_content = "0.0.5"
-glam = "0.23.0"
+glam = "0.25.0"
 rand = "0.8.5"
-serde_with = "3.1.0"
-thiserror = "1.0.43"
-toml = "0.7.6"
-unic-langid = "0.9.1"
+serde_with = "3.4.0"
+thiserror = "1.0.56"
+toml = "0.8.8"
+unic-langid = "0.9.4"
 
 [dependencies.serde]
-version = "1.0.167"
+version = "1.0.194"
 features = [
     "derive",
 ]
 
 [dependencies.bevy]
-version = "0.11"
+version = "0.12"
 default-features = false
 features = [
     "multi-threaded",
@@ -87,10 +95,7 @@ features = [
 ]
 
 [dependencies.bevy_asset_loader]
-# version = "0.17"
-# FIXME: temporary until there is a new release with our dynamic asset api PRs
-git = "https://github.com/NiklasEi/bevy_asset_loader"
-rev = "d048c88348a393b28c51dcc650917ff772741a4a"
+version = "0.19"
 features = [
     "2d",
     "progress_tracking",
@@ -98,23 +103,27 @@ features = [
 ]
 
 [dependencies.bevy_common_assets]
-version = "0.7"
+version = "0.8"
 features = [
     "toml",
     "ron",
 ]
 
 [dependencies.bevy_ecs_ldtk]
-version = "0.8"
+# version = "0.8"
+git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
+rev = "68af1c11cb95b1ed85f9f5008e7308f41e8015f1"
 
 [dependencies.bevy_ecs_tilemap]
-version = "0.11"
+# version = "0.11"
+git = "https://github.com/StarArawn/bevy_ecs_tilemap"
+rev = "b08a5d997867d5e5a760e296dc38e435c6b268cc"
 
 [dependencies.bevy_fluent]
-version = "0.7"
+version = "0.8"
 
 [dependencies.bevy_tweening]
-version = "0.8"
+version = "0.9"
 
 [dependencies.iyes_bevy_extras]
 git = "https://github.com/IyesGames/iyes_bevy_extras"
@@ -124,7 +133,7 @@ features = ["2d"]
 git = "https://github.com/IyesGames/iyes_cli"
 
 [dependencies.iyes_progress]
-version = "0.9"
+version = "0.10"
 features = ["assets"]
 
 [dependencies.iyes_ui]
@@ -132,15 +141,15 @@ git = "https://github.com/IyesGames/iyes_ui"
 features = ["iyes_cli"]
 
 [dependencies.leafwing-input-manager]
-version = "0.10"
+version = "0.11"
 
 [dependencies.bevy_xpbd_2d]
-version = "0.2.0"
+version = "0.3.2"
 default-features = false
 features = [
     "2d",
-    "collider-from-mesh",
     "f64",
-    "simd",
+    # "parallel",
+    # "simd",
 ]
 

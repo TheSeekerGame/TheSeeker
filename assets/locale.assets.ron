@@ -1,9 +1,0 @@
-({
-    "locale.bundles": Files (
-        paths: [
-            "locale/en-US/en-US.ftl.ron",
-            "locale/bg-BG/bg-BG.ftl.ron",
-            "locale/ru-RU/ru-RU.ftl.ron",
-        ],
-    ),
-})

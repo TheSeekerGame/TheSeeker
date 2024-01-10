@@ -119,7 +119,7 @@ pub fn resolve_asset_keys<T: Asset>(
 /// and kept loaded at all times, even when unused.
 #[derive(Resource, Default)]
 pub struct PreloadedAssets {
-    handles: HashSet<HandleUntyped>,
+    handles: HashSet<UntypedHandle>,
     map: HashMap<String, Option<DynamicAssetType>>,
 }
 
@@ -141,7 +141,7 @@ impl PreloadedAssets {
         None
     }
 
-    pub fn get_multi_asset<T: Asset>(&self, key: &str) -> Option<&[HandleUntyped]> {
+    pub fn get_multi_asset<T: Asset>(&self, key: &str) -> Option<&[UntypedHandle]> {
         if let Some(d) = self.get_asset(key) {
             if let DynamicAssetType::Collection(handles) = d {
                 return Some(handles.as_slice());

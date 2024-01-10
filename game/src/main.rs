@@ -39,11 +39,6 @@ fn main() {
     });
     let bevy_plugins = bevy_plugins.set(ImagePlugin::default_nearest());
     #[cfg(feature = "dev")]
-    let bevy_plugins = bevy_plugins.set(bevy::asset::AssetPlugin {
-        watch_for_changes: bevy::asset::ChangeWatcher::with_delay(Duration::from_millis(250)),
-        ..default()
-    });
-    #[cfg(feature = "dev")]
     let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
         filter: "info,wgpu_core=warn,wgpu_hal=warn,iyes_progress=trace,theseeker_game=trace,theseeker_engine=trace".into(),
         level: bevy::log::Level::TRACE,
@@ -62,8 +57,9 @@ fn main() {
     // and custom "engine"
     app.add_plugins(theseeker_engine::EnginePlugins);
 
-    app.insert_resource(PhysicsTimestep::FixedOnce(1.0 / 96.0));
+    app.insert_resource(Time::new_with(Physics::fixed_hz(96.0)));
     app.insert_resource(Gravity::default());
+    app.insert_resource(SubstepCount(1));
 
     // external plugins
     app.add_plugins((

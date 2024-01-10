@@ -7,7 +7,7 @@ use crate::prelude::*;
 /// Sprite Animation Asset type
 ///
 /// Would typically be loaded from TOML files.
-#[derive(Debug, Clone)]
+#[derive(Asset, Debug, Clone)]
 #[derive(Serialize, Deserialize)]
 #[derive(TypeUuid, TypePath)]
 #[uuid = "6D201246-BDB4-4803-A52A-76D95E3B6C77"]

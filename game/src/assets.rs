@@ -33,14 +33,9 @@ impl Plugin for AssetsPlugin {
             AppState::AssetsLoading,
             "ui.assets.ron",
         );
-        app.add_dynamic_collection_to_loading_state::<_, StandardDynamicAssetCollection>(
-            AppState::AssetsLoading,
-            "locale.assets.ron",
-        );
 
         // Some assets can be defined statically in Resource structs for ease of access
         app.add_collection_to_loading_state::<_, UiAssets>(AppState::AssetsLoading);
-        app.add_collection_to_loading_state::<_, LocaleAssets>(AppState::AssetsLoading);
         app.add_collection_to_loading_state::<_, MainMenuAssets>(AppState::AssetsLoading);
     }
 }
@@ -61,10 +56,4 @@ pub struct MainMenuAssets {
     pub background: Handle<Image>,
     #[asset(key = "ui.mainmenu.logo")]
     pub logo: Handle<Image>,
-}
-
-#[derive(AssetCollection, Resource)]
-pub struct LocaleAssets {
-    #[asset(key = "locale.bundles", collection(typed))]
-    pub bundles: Vec<Handle<bevy_fluent::BundleAsset>>,
 }
