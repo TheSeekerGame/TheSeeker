@@ -7,7 +7,7 @@ impl Plugin for DevPlugin {
         app.register_clicommand_args("spawn_phystester", cli_spawn_phystester);
         app.register_clicommand_args("spawn_script", cli_spawn_script);
         app.register_clicommand_args("spawn_anim", cli_spawn_anim);
-        app.add_systems(OnEnter(AppState::InGame), debug_spawn_player);
+        // app.add_systems(OnEnter(AppState::InGame), debug_spawn_player);
         app.add_systems(
             Last,
             debug_progress
@@ -47,9 +47,7 @@ fn debug_spawn_player(mut commands: Commands) {
 
     commands.spawn((
         PlayerBlueprint,
-        SpatialBundle {
-            ..default()
-        },
+        SpatialBundle { ..default() },
     ));
 }
 
@@ -86,9 +84,7 @@ fn cli_spawn_script(In(args): In<Vec<String>>, world: &mut World) {
     }
     let mut player = ScriptPlayer::new();
     player.play_key(args[0].as_str());
-    world.spawn(ScriptBundle {
-        player,
-    });
+    world.spawn(ScriptBundle { player });
 }
 
 fn cli_spawn_anim(In(args): In<Vec<String>>, world: &mut World) {
@@ -116,8 +112,6 @@ fn cli_spawn_anim(In(args): In<Vec<String>>, world: &mut World) {
             transform: Transform::from_xyz(x, y, 101.0),
             ..default()
         },
-        SpriteAnimationBundle {
-            player,
-        },
+        SpriteAnimationBundle { player },
     ));
 }

@@ -1,4 +1,12 @@
-use theseeker_engine::{gent::{GentPhysicsBundle, TransformGfxFromGent}, animation::SpriteAnimationBundle, script::ScriptPlayer, assets::animation::SpriteAnimation};
+use bevy::reflect::TypePath;
+use bevy_xpbd_2d::collision;
+use leafwing_input_manager::{action_state, orientation::Direction, prelude::*};
+use theseeker_engine::{
+    animation::SpriteAnimationBundle,
+    assets::animation::SpriteAnimation,
+    gent::{GentPhysicsBundle, TransformGfxFromGent},
+    script::ScriptPlayer,
+};
 
 use crate::prelude::*;
 
@@ -7,11 +15,20 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         // FIXME: ordering
-        app.add_systems(Update, (setup_player, player_control));
+        app.add_systems(
+            Update,
+            (
+                setup_player,
+                player_control,
+                player_move,
+                player_gravity,
+            ),
+        )
+        .add_plugins(InputManagerPlugin::<PlayerAction>::default());
     }
 }
 
-#[derive(Bundle)]
+#[derive(Bundle, LdtkEntity)]
 pub struct PlayerBlueprintBundle {
     marker: PlayerBlueprint,
 }
@@ -29,7 +46,7 @@ pub struct PlayerGfxBundle {
     sprite: SpriteSheetBundle,
     animation: SpriteAnimationBundle,
 }
-
+//where is this added/spawned, currently debug spawned only
 #[derive(Component, Default)]
 pub struct PlayerBlueprint;
 
@@ -39,16 +56,47 @@ pub struct PlayerGent;
 #[derive(Component, Default)]
 pub struct PlayerGfx;
 
+#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, TypePath)]
+pub enum PlayerAction {
+    MoveLeft,
+    MoveRight,
+    Jump,
+}
+
+impl PlayerAction {
+    const DIRECTIONS: [Self; 2] = [PlayerAction::MoveLeft, PlayerAction::MoveRight];
+
+    fn direction(self) -> Option<Direction> {
+        match self {
+            PlayerAction::MoveLeft => Some(Direction::WEST),
+            PlayerAction::MoveRight => Some(Direction::EAST),
+            _ => None,
+        }
+    }
+}
+
 fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut commands: Commands) {
     for (xf_gent, e_gent) in q.iter() {
         let e_gfx = commands.spawn(()).id();
-        commands.entity(e_gent).insert((PlayerGentBundle {
-            marker: PlayerGent,
-            phys: GentPhysicsBundle {
-                rb: RigidBody::Kinematic,
-                collider: Collider::capsule(12.0, 8.0),
+        commands.entity(e_gent).insert((
+            PlayerGentBundle {
+                marker: PlayerGent,
+                phys: GentPhysicsBundle {
+                    rb: RigidBody::Kinematic,
+                    // rb: RigidBody::Dynamic,
+                    //TODO: Fix scale between LDTK and xpbd
+                    collider: Collider::capsule(4.0, 4.0),
+                },
             },
-        },));
+            InputManagerBundle::<PlayerAction> {
+                action_state: ActionState::default(),
+                input_map: InputMap::new([
+                    (KeyCode::A, PlayerAction::MoveLeft),
+                    (KeyCode::D, PlayerAction::MoveRight),
+                    (KeyCode::Space, PlayerAction::Jump),
+                ]),
+            },
+        ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx,
             gent2gfx: TransformGfxFromGent {
@@ -61,8 +109,64 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
             },
             animation: Default::default(),
         },));
+        println!("player spawned")
     }
 }
+
+//TODO: refactor, controller plugin, physics plugin?
+
+fn player_move(
+    time: Res<Time>,
+    mut q_gent: Query<
+        (
+            &mut LinearVelocity,
+            &ActionState<PlayerAction>,
+        ),
+        With<PlayerGent>,
+    >,
+) {
+    for (mut velocity, action_state) in q_gent.iter_mut() {
+        let mut direction_vector = Vec2::ZERO;
+        for input_direction in PlayerAction::DIRECTIONS {
+            if action_state.pressed(input_direction) {
+                if let Some(direction) = input_direction.direction() {
+                    direction_vector += Vec2::from(direction);
+                }
+            }
+        }
+        //TODO: normalize?
+        velocity.x += direction_vector.x as f64 * time.delta_seconds_f64();
+    }
+}
+
+// TODO:
+fn player_gravity(time: Res<Time>, mut q_gent: Query<&mut LinearVelocity, With<PlayerGent>>) {
+    for mut velocity in q_gent.iter_mut() {
+        velocity.y -= 10. * time.delta_seconds_f64();
+    }
+}
+
+//TODO
+fn player_collisions(
+    mut collisions: EventReader<Collision>,
+    q_gent: Query<
+        (
+            Entity,
+            &RigidBody,
+            &mut Position,
+            &mut LinearVelocity,
+        ),
+        With<PlayerGent>,
+    >,
+) {
+    for Collision(contact) in collisions.iter() {}
+}
+
+// TODO: Player Spawn? does it go in Level?
+
+// TODO: Player State
+// TODO: Player Movement
+// TODO: Player Input
 
 // TODO: this is temporary
 fn player_control(
