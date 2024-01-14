@@ -14,6 +14,7 @@ impl Plugin for DevPlugin {
                 .run_if(resource_exists::<ProgressCounter>())
                 .after(iyes_progress::TrackedProgressSet),
         );
+        app.add_plugins(PhysicsDebugPlugin::default());
     }
 }
 

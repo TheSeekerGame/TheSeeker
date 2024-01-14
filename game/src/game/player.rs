@@ -1,5 +1,3 @@
-use bevy::reflect::TypePath;
-use bevy_xpbd_2d::collision;
 use leafwing_input_manager::{action_state, orientation::Direction, prelude::*};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
@@ -28,7 +26,7 @@ impl Plugin for PlayerPlugin {
     }
 }
 
-#[derive(Bundle, LdtkEntity)]
+#[derive(Bundle, LdtkEntity, Default)]
 pub struct PlayerBlueprintBundle {
     marker: PlayerBlueprint,
 }
@@ -56,7 +54,7 @@ pub struct PlayerGent;
 #[derive(Component, Default)]
 pub struct PlayerGfx;
 
-#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, TypePath)]
+#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 pub enum PlayerAction {
     MoveLeft,
     MoveRight,

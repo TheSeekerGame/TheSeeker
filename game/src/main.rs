@@ -70,7 +70,8 @@ fn main() {
         ProgressPlugin::new(AppState::AssetsLoading)
             .track_assets()
             .continue_to(AppState::MainMenu),
-        PhysicsPlugins::new(theseeker_engine::time::GameTickUpdate),
+        // PhysicsPlugins::new(theseeker_engine::time::GameTickUpdate),
+        PhysicsPlugins::default(),
     ));
 
     // our stuff
