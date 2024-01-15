@@ -1,4 +1,4 @@
-use leafwing_input_manager::{action_state, orientation::Direction, prelude::*};
+use leafwing_input_manager::{orientation::Direction, prelude::*};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
     assets::animation::SpriteAnimation,
@@ -82,8 +82,7 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                 phys: GentPhysicsBundle {
                     rb: RigidBody::Kinematic,
                     // rb: RigidBody::Dynamic,
-                    //TODO: Fix scale between LDTK and xpbd
-                    collider: Collider::capsule(4.0, 4.0),
+                    collider: Collider::cuboid(10.0, 12.0),
                 },
             },
             InputManagerBundle::<PlayerAction> {
