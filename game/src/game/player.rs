@@ -1,5 +1,5 @@
 use bevy::{ecs::component::SparseStorage, math::bool};
-use leafwing_input_manager::{action_state, orientation::Direction, prelude::*};
+use leafwing_input_manager::{orientation::Direction, prelude::*};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
     assets::animation::SpriteAnimation,
@@ -195,35 +195,35 @@ fn transition<T: PlayerState, N: PlayerState>(
 }
 
 //======================================================================
-pub trait PlayerState: Component<Storage = SparseStorage> + Reflect + Copy + Clone {}
+pub trait PlayerState: Component<Storage = SparseStorage> + Copy + Clone {}
 //could make derive macro to derive it?
 
-#[derive(Reflect, Component, Default, Copy, Clone)]
+#[derive(Component, Default, Copy, Clone)]
 #[component(storage = "SparseSet")]
 pub struct Idle;
 impl PlayerState for Idle {}
 
-#[derive(Reflect, Component, Default, Copy, Clone)]
+#[derive(Component, Default, Copy, Clone)]
 #[component(storage = "SparseSet")]
 pub struct Running;
 impl PlayerState for Running {}
 
-#[derive(Reflect, Component, Default, Copy, Clone)]
+#[derive(Component, Default, Copy, Clone)]
 #[component(storage = "SparseSet")]
 pub struct Falling;
 impl PlayerState for Falling {}
 
-// #[derive(Reflect, Component, Default, Copy, Clone)]
+// #[derive(Component, Default, Copy, Clone)]
 // #[component(storage = "SparseSet")]
 // pub struct Jumping;
 // impl PlayerState for Jumping {}
 
-#[derive(Reflect, Component, Default, Copy, Clone)]
+#[derive(Component, Default, Copy, Clone)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
 impl PlayerState for Grounded {}
 
-#[derive(Reflect, Component, Default, Copy, Clone)]
+#[derive(Component, Default, Copy, Clone)]
 #[component(storage = "SparseSet")]
 pub struct Attacking;
 impl PlayerState for Attacking {}
