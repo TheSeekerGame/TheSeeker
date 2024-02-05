@@ -54,8 +54,10 @@ pub struct PlayerGfxBundle {
 #[derive(Component, Default)]
 pub struct PlayerBlueprint;
 
-#[derive(Component, Default)]
-pub struct PlayerGent;
+#[derive(Component)]
+pub struct PlayerGent {
+    e_gfx: Entity,
+}
 
 #[derive(Component, Default)]
 pub struct PlayerGfx;
@@ -84,7 +86,7 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
             PlayerGentBundle {
-                marker: PlayerGent,
+                marker: PlayerGent { e_gfx },
                 phys: GentPhysicsBundle {
                     rb: RigidBody::Kinematic,
                     collider: Collider::cuboid(10.0, 12.0),
@@ -233,14 +235,12 @@ impl PlayerState for Attacking {}
 //TODO: refactor, controller plugin, physics plugin, state plugin
 
 fn player_idle(
-    mut query: Query<
-        (
-            Entity,
-            &ActionState<PlayerAction>,
-            &Idle,
-        ),
-        (With<PlayerGent>),
-    >,
+    mut query: Query<(
+        Entity,
+        &PlayerGent,
+        &ActionState<PlayerAction>,
+        Ref<Idle>,
+    )>,
     mut q_gfx_player: Query<(&mut ScriptPlayer<SpriteAnimation>), With<PlayerGfx>>,
     mut commands: Commands,
 ) {
@@ -249,8 +249,19 @@ fn player_idle(
             player.play_key("anim.player.Idle");
         }
     }
-    for (g_ent, action_state, idle) in query.iter() {
-        if action_state.just_pressed(PlayerAction::MoveLeft) {
+    for (g_ent, g_marker, action_state, idle) in query.iter() {
+        if let Ok(mut player) = q_gfx_player.get_mut(g_marker.e_gfx) {
+            if player.is_stopped() {
+                player.play_key("anim.player.Idle");
+            }
+            if idle.is_added() {
+                player.play_key("anim.player.Idle");
+            }
+        }
+
+        if action_state.just_pressed(PlayerAction::MoveLeft)
+            | action_state.just_pressed(PlayerAction::MoveRight)
+        {
             commands.entity(g_ent).insert(idle.new_transition(Running));
         }
     }
@@ -260,6 +271,7 @@ fn player_move(
     time: Res<Time>,
     mut q_gent: Query<
         (
+            Entity,
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
             Ref<Running>,
@@ -267,13 +279,10 @@ fn player_move(
         (With<PlayerGent>),
     >,
     mut q_gfx_player: Query<(&mut ScriptPlayer<SpriteAnimation>), With<PlayerGfx>>,
+    mut commands: Commands,
 ) {
-    for (mut velocity, action_state, running) in q_gent.iter_mut() {
-        if running.is_added() {
-            let mut player = q_gfx_player.single_mut();
-            player.play_key("anim.player.Run");
-            player.set_slot("DirectionLeft", true);
-        }
+    for (g_ent, mut velocity, action_state, running) in q_gent.iter_mut() {
+        let mut player = q_gfx_player.single_mut();
         let mut direction_vector = Vec2::ZERO;
         for input_direction in PlayerAction::DIRECTIONS {
             if action_state.pressed(input_direction) {
@@ -282,8 +291,26 @@ fn player_move(
                 }
             }
         }
+
         //TODO: normalize?
-        velocity.x += direction_vector.x as f64 * time.delta_seconds_f64();
+        velocity.x = 0.0;
+        velocity.x += direction_vector.x as f64 * time.delta_seconds_f64() * 5000.0;
+
+        if running.is_added() {
+            player.play_key("anim.player.Run");
+        }
+        if direction_vector.x > 0.0 {
+            player.set_slot("DirectionRight", true);
+            player.set_slot("DirectionLeft", false);
+        } else if direction_vector.x < 0.0 {
+            player.set_slot("DirectionRight", false);
+            player.set_slot("DirectionLeft", true);
+        } else if direction_vector.x == 0.0 {
+            commands.entity(g_ent).insert(running.new_transition(Idle));
+            velocity.x = 0.0;
+        }
+
+        // if action_state.pressed(PlayerAction::MoveLeft) | action_state.pressed(PlayerAction::MoveRight)
     }
 }
 
