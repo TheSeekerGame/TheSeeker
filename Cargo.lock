@@ -1170,8 +1170,9 @@ dependencies = [
 
 [[package]]
 name = "bevy_xpbd_2d"
-version = "0.3.2"
-source = "git+https://github.com/TheSeekerGame/bevy_xpbd?branch=TheSeeker#46f3189351970c6822af7c095efcbf918bf1480c"
+version = "0.3.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2b47df54e811351d51d322543012db78674d2b433f0cefdd9697156cb05afbfe"
 dependencies = [
  "bevy",
  "bevy_xpbd_derive",
@@ -1187,7 +1188,8 @@ dependencies = [
 [[package]]
 name = "bevy_xpbd_derive"
 version = "0.1.0"
-source = "git+https://github.com/TheSeekerGame/bevy_xpbd?branch=TheSeeker#46f3189351970c6822af7c095efcbf918bf1480c"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3e1ef1d5e328abe1b76df974245f78e17fd17867583883d5e77444c6a8223a64"
 dependencies = [
  "quote",
  "syn 2.0.48",
@@ -4960,3 +4962,8 @@ dependencies = [
  "quote",
  "syn 2.0.48",
 ]
+
+[[patch.unused]]
+name = "bevy_xpbd_2d"
+version = "0.3.2"
+source = "git+https://github.com/TheSeekerGame/bevy_xpbd?branch=TheSeeker#46f3189351970c6822af7c095efcbf918bf1480c"
