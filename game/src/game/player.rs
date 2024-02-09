@@ -1,7 +1,6 @@
-use bevy::{ecs::component::SparseStorage, math::bool, reflect::List};
-use bevy_xpbd_2d::parry::utils::Array1;
+use bevy::ecs::component::SparseStorage;
 use leafwing_input_manager::{
-    action_state, common_conditions::action_pressed, orientation::Direction, prelude::*,
+    orientation::Direction, prelude::*,
 };
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
@@ -230,7 +229,6 @@ fn transition<T: PlayerState, N: PlayerState>(
 
 //======================================================================
 pub trait PlayerState: Component<Storage = SparseStorage> + Clone {}
-//could make derive macro to derive it?
 
 #[derive(Component, Default, Copy, Clone)]
 #[component(storage = "SparseSet")]
