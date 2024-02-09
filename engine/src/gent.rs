@@ -21,6 +21,7 @@ pub struct GentPhysicsBundle {
 #[derive(Component)]
 pub struct TransformGfxFromGent {
     pub pixel_aligned: bool,
+    //TODO: remove gent here and refactor transfor_gfx_from_gent to use player gfx?
     pub gent: Entity,
 }
 

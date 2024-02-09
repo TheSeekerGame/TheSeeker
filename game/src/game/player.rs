@@ -1,7 +1,5 @@
 use bevy::ecs::component::SparseStorage;
-use leafwing_input_manager::{
-    orientation::Direction, prelude::*,
-};
+use leafwing_input_manager::{orientation::Direction, prelude::*};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
     assets::animation::SpriteAnimation,
@@ -22,16 +20,18 @@ impl Plugin for PlayerPlugin {
             (
                 setup_player,
                 // player_control,
-                player_idle,
-                player_run,
-                player_jump,
+                player_idle.run_if(any_with_component::<Idle>()),
+                player_run.run_if(any_with_component::<Running>()),
+                player_jump.run_if(any_with_component::<Jumping>()),
                 // player_aircontrol,
                 // player_gravity,
                 player_move,
                 player_collisions,
-                player_grounded,
-                player_falling,
-            ),
+                player_grounded.run_if(any_with_component::<Grounded>()),
+                player_falling.run_if(any_with_component::<Falling>()),
+            )
+                .in_set(PlayerStateSet::Behavior)
+                .run_if(in_state(AppState::InGame)),
         )
         .add_plugins((
             InputManagerPlugin::<PlayerAction>::default(),
@@ -68,8 +68,10 @@ pub struct PlayerGent {
     e_gfx: Entity,
 }
 
-#[derive(Component, Default)]
-pub struct PlayerGfx;
+#[derive(Component)]
+pub struct PlayerGfx {
+    e_gent: Entity,
+}
 
 #[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 pub enum PlayerAction {
@@ -116,11 +118,10 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                     (KeyCode::Space, PlayerAction::Jump),
                 ]),
             },
-            // Idle,
             Falling,
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
-            marker: PlayerGfx,
+            marker: PlayerGfx { e_gent },
             gent2gfx: TransformGfxFromGent {
                 pixel_aligned: false,
                 gent: e_gent,
@@ -135,6 +136,13 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
     }
 }
 
+#[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
+pub enum PlayerStateSet {
+    Behavior,
+    Transition,
+    Animation,
+}
+
 struct PlayerStatePlugin;
 
 impl Plugin for PlayerStatePlugin {
@@ -142,21 +150,32 @@ impl Plugin for PlayerStatePlugin {
         app.add_systems(
             Update,
             (
-                // test_trans_int,
-                // transition::<Idle, Grounded>,
-                transition::<Falling, Grounded>,
-                transition::<Grounded, Falling>,
-                // transition::<Falling, Jumping>,
-                transition::<Falling, Running>,
-                transition::<Grounded, Jumping>,
-                transition::<Jumping, Falling>,
-                transition::<Idle, Running>,
-                transition::<Running, Idle>,
-                apply_deferred,
-            ),
+                transition::<Falling, Grounded>.run_if(any_with_component::<
+                    PlayerStateTransition<Falling, Grounded>,
+                >()),
+                transition::<Grounded, Falling>.run_if(any_with_component::<
+                    PlayerStateTransition<Grounded, Falling>,
+                >()),
+                transition::<Falling, Running>.run_if(any_with_component::<
+                    PlayerStateTransition<Falling, Running>,
+                >()),
+                transition::<Grounded, Jumping>.run_if(any_with_component::<
+                    PlayerStateTransition<Grounded, Jumping>,
+                >()),
+                transition::<Jumping, Falling>.run_if(any_with_component::<
+                    PlayerStateTransition<Jumping, Falling>,
+                >()),
+                transition::<Idle, Running>.run_if(any_with_component::<
+                    PlayerStateTransition<Idle, Running>,
+                >()),
+                transition::<Running, Idle>.run_if(any_with_component::<
+                    PlayerStateTransition<Running, Idle>,
+                >()),
+            )
+                .in_set(PlayerStateSet::Transition)
+                .after(PlayerStateSet::Behavior)
+                .run_if(in_state(AppState::InGame)),
         );
-        // add state systems
-        // add state transition systems
     }
 }
 
@@ -171,7 +190,10 @@ impl Plugin for PlayerAnimationPlugin {
                 player_falling_animation,
                 player_jumping_animation,
                 player_running_animation,
-            ),
+            )
+                .in_set(PlayerStateSet::Animation)
+                .after(PlayerStateSet::Transition)
+                .run_if(in_state(AppState::InGame)),
         );
     }
 }
@@ -274,29 +296,6 @@ impl PlayerState for Attacking {}
 //=======================================================================
 //
 //TODO: refactor, controller plugin, physics plugin, state plugin
-
-//maybe get rid of idle state?? could jsut play the animation when conditions are met. its a
-//composite of grounded + nothing else...
-fn player_add_idle(
-    query: Query<
-        (Entity, &ActionState<PlayerAction>),
-        (
-            With<PlayerGent>,
-            Without<Idle>,
-            Without<Running>,
-            Without<Jumping>,
-            Without<Falling>,
-            Without<Attacking>,
-        ),
-    >,
-    mut commands: Commands,
-) {
-    for (entity, action_state) in query.iter() {
-        if action_state.get_pressed().len() == 0 {
-            commands.entity(entity).insert(Idle);
-        }
-    }
-}
 
 //can only be idle when grounded and no input...
 fn player_idle(
@@ -437,53 +436,8 @@ fn player_jump(
         if jumping.is_added() {
             velocity.y += 3000. * time.delta_seconds_f64();
         }
-        //TODO air control
     }
 }
-
-// fn player_aircontrol(
-//     time: Res<Time>,
-//     mut query: Query<
-//         (
-//             &ActionState<PlayerAction>,
-//             &mut LinearVelocity,
-//         ),
-//         (
-//             Or<(With<Falling>, With<Jumping>)>,
-//             With<PlayerGent>,
-//         ),
-//     >,
-// ) {
-//     for (action_state, mut velocity) in query.iter_mut() {
-//         let mut direction_vector = Vec2::ZERO;
-//         for input_direction in PlayerAction::DIRECTIONS {
-//             if action_state.pressed(input_direction) {
-//                 if let Some(direction) = input_direction.direction() {
-//                     direction_vector += Vec2::from(direction);
-//                 }
-//             }
-//         }
-//         velocity.x = direction_vector.x as f64 * time.delta_seconds_f64() * 3000.0;
-//     }
-// }
-
-// TODO:
-// fn player_gravity(
-//     time: Res<Time>,
-//     mut q_gent: Query<
-//         &mut LinearVelocity,
-//         (
-//             With<PlayerGent>,
-//             Without<Grounded>,
-//             Without<Jumping>,
-//         ),
-//     >,
-// ) {
-//     for mut velocity in q_gent.iter_mut() {
-//         velocity.y -= 100. * time.delta_seconds_f64();
-//         // println!("gravity applied")
-//     }
-// }
 
 //TODO
 //add shapecasting forward/in movement direction to check for collisions
