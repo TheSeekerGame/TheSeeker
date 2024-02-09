@@ -57,9 +57,8 @@ fn main() {
     // and custom "engine"
     app.add_plugins(theseeker_engine::EnginePlugins);
 
-    app.insert_resource(Time::new_with(Physics::fixed_hz(96.0)));
+    app.insert_resource(Time::new_with(Physics::fixed_once_hz(96.0)));
     app.insert_resource(Gravity::default());
-    app.insert_resource(SubstepCount(1));
 
     // external plugins
     app.add_plugins((
