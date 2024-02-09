@@ -23,10 +23,7 @@ name = "theseeker_game"
 path = "game/src/main.rs"
 
 [features]
-dev = [
-    "bevy/file_watcher",
-    # "bevy_xpbd_2d/debug-plugin",
-]
+dev = ["bevy/file_watcher", "bevy_xpbd_2d/debug-plugin"]
 
 # dev: Enable max optimizations for dependencies, but not for our code
 [profile.dev.package."*"]
@@ -61,9 +58,7 @@ unic-langid = "0.9.4"
 
 [dependencies.serde]
 version = "1.0.196"
-features = [
-    "derive",
-]
+features = ["derive"]
 
 [dependencies.bevy]
 version = "0.12"
@@ -101,10 +96,7 @@ features = ["2d", "progress_tracking", "standard_dynamic_assets"]
 
 [dependencies.bevy_common_assets]
 version = "0.9"
-features = [
-    "toml",
-    "ron",
-]
+features = ["toml", "ron"]
 
 [dependencies.bevy_ecs_ldtk]
 # version = "0.8"
