@@ -49,18 +49,18 @@ debug = false
 anyhow = "1.0.79"
 derive_more = "0.99.17"
 directories = "5.0.1"
-enum-iterator = "1.4.1"
+enum-iterator = "1.5.0"
 enum-map = "2.7.3"
 fluent_content = "0.0.5"
 glam = "0.25.0"
 rand = "0.8.5"
-serde_with = "3.4.0"
+serde_with = "3.6.1"
 thiserror = "1.0.56"
-toml = "0.8.8"
+toml = "0.8.10"
 unic-langid = "0.9.4"
 
 [dependencies.serde]
-version = "1.0.194"
+version = "1.0.196"
 features = [
     "derive",
 ]
@@ -104,7 +104,7 @@ features = [
 ]
 
 [dependencies.bevy_common_assets]
-version = "0.8"
+version = "0.9"
 features = [
     "toml",
     "ron",
