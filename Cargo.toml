@@ -12,6 +12,7 @@ bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker"
 bevy_asset = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
 bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
 bevy_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+bevy_xpbd_2d = { git = "https://github.com/TheSeekerGame/bevy_xpbd", branch = "TheSeeker" }
 
 [lib]
 name = "theseeker_engine"
@@ -22,7 +23,10 @@ name = "theseeker_game"
 path = "game/src/main.rs"
 
 [features]
-dev = ["bevy/file_watcher", "bevy_xpbd_2d/debug-plugin"]
+dev = [
+    "bevy/file_watcher",
+    # "bevy_xpbd_2d/debug-plugin",
+]
 
 # dev: Enable max optimizations for dependencies, but not for our code
 [profile.dev.package."*"]
@@ -45,19 +49,21 @@ debug = false
 anyhow = "1.0.79"
 derive_more = "0.99.17"
 directories = "5.0.1"
-enum-iterator = "1.4.1"
+enum-iterator = "1.5.0"
 enum-map = "2.7.3"
 fluent_content = "0.0.5"
 glam = "0.25.0"
 rand = "0.8.5"
-serde_with = "3.4.0"
+serde_with = "3.6.1"
 thiserror = "1.0.56"
-toml = "0.8.8"
+toml = "0.8.10"
 unic-langid = "0.9.4"
 
 [dependencies.serde]
-version = "1.0.194"
-features = ["derive"]
+version = "1.0.196"
+features = [
+    "derive",
+]
 
 [dependencies.bevy]
 version = "0.12"
@@ -94,8 +100,11 @@ version = "0.19"
 features = ["2d", "progress_tracking", "standard_dynamic_assets"]
 
 [dependencies.bevy_common_assets]
-version = "0.8"
-features = ["toml", "ron"]
+version = "0.9"
+features = [
+    "toml",
+    "ron",
+]
 
 [dependencies.bevy_ecs_ldtk]
 # version = "0.8"

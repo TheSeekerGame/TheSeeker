@@ -75,6 +75,11 @@ impl ScriptAppExt for App {
     }
 }
 
+pub struct ScriptMetadata {
+    pub key: Option<String>,
+    pub key_previous: Option<String>,
+}
+
 pub type ActionId = usize;
 
 pub trait ScriptAsset: Asset + Sized + Send + Sync + 'static {
@@ -105,6 +110,7 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         &mut self,
         entity: Entity,
         settings: &Self::Settings,
+        metadata: &ScriptMetadata,
         param: &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
     );
     fn transfer_progress(&mut self, other: &Self);
@@ -197,6 +203,7 @@ pub struct ScriptRuntimeBuilder<T: ScriptAsset> {
 }
 
 struct ScriptRuntime<T: ScriptAsset> {
+    key: Option<String>,
     settings: <T::Tracker as ScriptTracker>::Settings,
     actions: Vec<(T::ActionParams, T::Action)>,
     tracker: T::Tracker,
@@ -206,12 +213,14 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
     pub fn new<'w>(
         entity: Entity,
         settings: <T::Tracker as ScriptTracker>::Settings,
+        metadata: &ScriptMetadata,
         param: &mut <<T::Tracker as ScriptTracker>::InitParam as SystemParam>::Item<'w, '_>,
     ) -> Self {
         let mut tracker = T::Tracker::default();
-        tracker.init(entity, &settings, param);
+        tracker.init(entity, &settings, metadata, param);
         ScriptRuntimeBuilder {
             runtime: ScriptRuntime {
+                key: metadata.key.clone(),
                 settings,
                 actions: vec![],
                 tracker,
@@ -277,10 +286,6 @@ fn script_changeover_system<T: ScriptAsset>(
                 continue;
             }
         };
-        // trace!(
-        //     "Script actions to run: {}",
-        //     action_queue.len(),
-        // );
         for action_id in action_queue.0.drain(..) {
             let action = &script_rt.actions[action_id];
             {
@@ -424,11 +429,20 @@ fn script_init_system<T: ScriptAsset>(
     )>,
 ) {
     for (e, mut player) in &mut q_script {
+        let mut metadata = ScriptMetadata {
+            key: None,
+            key_previous: match &player.state {
+                | ScriptPlayerState::ChangingHandle { old_runtime, .. }
+                | ScriptPlayerState::ChangingKey { old_runtime, ..  } => old_runtime.key.clone(),
+                _ => None,
+            },
+        };
         let handle = match &player.state {
             ScriptPlayerState::PrePlayHandle { handle, .. } => {
                 handle.clone()
             }
             ScriptPlayerState::PrePlayKey { key, .. } => {
+                metadata.key = Some(key.clone());
                 if let Some(handle) = preloaded.get_single_asset(&key) {
                     handle
                 } else {
@@ -441,7 +455,7 @@ fn script_init_system<T: ScriptAsset>(
             let settings = script.into_settings();
             let builder = {
                 let mut tracker_init_param = params.p0().into_inner();
-                ScriptRuntimeBuilder::new(e, settings, &mut tracker_init_param)
+                ScriptRuntimeBuilder::new(e, settings, &metadata, &mut tracker_init_param)
             };
             let builder = {
                 let mut build_param = params.p1().into_inner();

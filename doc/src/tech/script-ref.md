@@ -331,6 +331,30 @@ condition is hit.
 
 <details>
   <summary>
+  <code>if_previous_script_key</code>
+  </summary>
+
+Example:
+
+```toml
+# do something special on startup but only if
+# transitioning from "player.behavior.special"
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "player.behavior.special"
+action = "..."
+```
+
+Only performs the action if a specific other script was running before this one.
+
+This parameter allows you to implement special transitions, by making the current
+script behave differently (perform different actions) depending on what
+script preceded it.
+
+</details>
+
+<details>
+  <summary>
   <code>require_slots_all</code>
   </summary>
 
