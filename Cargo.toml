@@ -105,7 +105,10 @@ features = [
 
 [dependencies.bevy_common_assets]
 version = "0.9"
-features = ["toml", "ron"]
+features = [
+    "toml",
+    "ron",
+]
 
 [dependencies.bevy_ecs_ldtk]
 # version = "0.8"
