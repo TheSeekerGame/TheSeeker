@@ -140,6 +140,7 @@ impl ScriptTracker for SpriteAnimationTracker {
         &mut self,
         _entity: Entity,
         settings: &Self::Settings,
+        metadata: &ScriptMetadata,
         _param: &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
     ) {
         self.ticks_per_frame = settings.ticks_per_frame;

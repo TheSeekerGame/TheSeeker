@@ -33,6 +33,7 @@ pub struct CommonScriptTracker {
     q_delayed: Vec<(u64, ActionId)>,
     q_start: Vec<ActionId>,
     q_stop: Vec<ActionId>,
+    old_key: Option<String>,
 }
 
 impl CommonScriptTracker {
@@ -61,6 +62,7 @@ impl ScriptTracker for CommonScriptTracker {
         &mut self,
         entity: Entity,
         settings: &Self::Settings,
+        metadata: &ScriptMetadata,
         (time, gametime, leveltime, query_tb, query_quant): &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
     ) {
         let time_base = query_tb.get(entity).unwrap_or(&settings.time_base);
@@ -91,6 +93,7 @@ impl ScriptTracker for CommonScriptTracker {
         if let Some(ScriptTickQuant(quant)) = tick_quant {
             self.start_tick = quant.apply(self.start_tick);
         }
+        self.old_key = metadata.key_previous.clone();
     }
 
     fn transfer_progress(&mut self, other: &Self) {
@@ -277,7 +280,11 @@ impl ScriptActionParams for CommonScriptParams {
             tracker.q_delayed.push((game_time.tick() + delay_ticks as u64, action_id));
             return Err(ScriptUpdateResult::NormalRun);
         }
-
+        match (&self.if_previous_script_key, &tracker.old_key) {
+            (None, _) => {}
+            (Some(req), Some(old)) if req == old => {},
+            _ => return Err(ScriptUpdateResult::NormalRun),
+        }
         if !self.forbid_slots_any.is_empty() &&
             self.forbid_slots_any.iter().any(|s| tracker.slots_enabled.contains(s))
         {
@@ -377,10 +384,11 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         &mut self,
         entity: Entity,
         settings: &Self::Settings,
+        metadata: &ScriptMetadata,
         param: &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
     ) {
-        self.extended.init(entity, &settings.extended, &mut param.0);
-        self.common.init(entity, &settings.common, &mut param.1);
+        self.extended.init(entity, &settings.extended, metadata, &mut param.0);
+        self.common.init(entity, &settings.common, metadata, &mut param.1);
     }
 
     fn transfer_progress(&mut self, other: &Self) {
