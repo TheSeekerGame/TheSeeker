@@ -1,5 +1,7 @@
 use bevy::ecs::component::SparseStorage;
-use leafwing_input_manager::{orientation::Direction, prelude::*};
+use leafwing_input_manager::{
+    axislike::VirtualAxis, common_conditions::action_pressed, orientation::Direction, prelude::*,
+};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
     assets::animation::SpriteAnimation,
@@ -19,12 +21,9 @@ impl Plugin for PlayerPlugin {
             Update,
             (
                 setup_player,
-                // player_control,
                 player_idle.run_if(any_with_component::<Idle>()),
                 player_run.run_if(any_with_component::<Running>()),
                 player_jump.run_if(any_with_component::<Jumping>()),
-                // player_aircontrol,
-                // player_gravity,
                 player_move,
                 player_collisions,
                 player_grounded.run_if(any_with_component::<Grounded>()),
@@ -75,22 +74,8 @@ pub struct PlayerGfx {
 
 #[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 pub enum PlayerAction {
-    MoveLeft,
-    MoveRight,
+    Move,
     Jump,
-}
-
-//would be nice to have a function to check direction vector
-impl PlayerAction {
-    const DIRECTIONS: [Self; 2] = [PlayerAction::MoveLeft, PlayerAction::MoveRight];
-
-    fn direction(self) -> Option<Direction> {
-        match self {
-            PlayerAction::MoveLeft => Some(Direction::WEST),
-            PlayerAction::MoveRight => Some(Direction::EAST),
-            _ => None,
-        }
-    }
 }
 
 fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut commands: Commands) {
@@ -110,13 +95,17 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                     ),
                 },
             },
+            //have to use builder here *i think* because of different types between keycode and
+            //axis
             InputManagerBundle::<PlayerAction> {
                 action_state: ActionState::default(),
-                input_map: InputMap::new([
-                    (KeyCode::A, PlayerAction::MoveLeft),
-                    (KeyCode::D, PlayerAction::MoveRight),
-                    (KeyCode::Space, PlayerAction::Jump),
-                ]),
+                input_map: InputMap::default()
+                    .insert(KeyCode::Space, PlayerAction::Jump)
+                    .insert(
+                        VirtualAxis::from_keys(KeyCode::A, KeyCode::D),
+                        PlayerAction::Move,
+                    )
+                    .build(),
             },
             Falling,
         ));
@@ -313,15 +302,12 @@ fn player_idle(
     for (g_ent, _g_marker, action_state, idle) in query.iter() {
         println!("is idle");
         // check for direction input
-        let mut direction_vector = Vec2::ZERO;
-        for input_direction in PlayerAction::DIRECTIONS {
-            if action_state.pressed(input_direction) {
-                if let Some(direction) = input_direction.direction() {
-                    direction_vector += Vec2::from(direction);
-                }
-            }
+        let mut direction: f32 = 0.0;
+        if action_state.pressed(PlayerAction::Move) {
+            direction = action_state.value(PlayerAction::Move);
+            println!("moving??")
         }
-        if direction_vector.x != 0.0 {
+        if direction != 0.0 {
             commands.entity(g_ent).insert(idle.new_transition(Running));
             // } else if direction_vector.x == 0.0 {
             //     commands.entity(g_ent).insert(Idle);
@@ -344,24 +330,22 @@ fn player_move(
     mut q_gfx_player: Query<(&mut ScriptPlayer<SpriteAnimation>), With<PlayerGfx>>,
 ) {
     for (g_ent, mut velocity, action_state) in q_gent.iter_mut() {
+        //switch to getting by entity from gent
         let mut player = q_gfx_player.single_mut();
-        let mut direction_vector = Vec2::ZERO;
-        for input_direction in PlayerAction::DIRECTIONS {
-            if action_state.pressed(input_direction) {
-                if let Some(direction) = input_direction.direction() {
-                    direction_vector += Vec2::from(direction);
-                }
-            }
+        let mut direction: f32 = 0.0;
+        if action_state.pressed(PlayerAction::Move) {
+            //use .clamped_value()?
+            direction = action_state.value(PlayerAction::Move);
         }
 
         velocity.x = 0.0;
-        velocity.x += direction_vector.x as f64 * time.delta_seconds_f64() * 5000.0;
+        velocity.x += direction as f64 * time.delta_seconds_f64() * 5000.0;
 
         //this doesnt work for the jump animation, need to look into further
-        if direction_vector.x > 0.0 {
+        if direction > 0.0 {
             player.set_slot("DirectionRight", true);
             player.set_slot("DirectionLeft", false);
-        } else if direction_vector.x < 0.0 {
+        } else if direction < 0.0 {
             player.set_slot("DirectionRight", false);
             player.set_slot("DirectionLeft", true);
         }
@@ -383,23 +367,20 @@ fn player_run(
 ) {
     for (g_ent, mut velocity, action_state, running) in q_gent.iter_mut() {
         println!("{:?} is running", g_ent);
-        let mut direction_vector = Vec2::ZERO;
-        for input_direction in PlayerAction::DIRECTIONS {
-            if action_state.pressed(input_direction) {
-                if let Some(direction) = input_direction.direction() {
-                    direction_vector += Vec2::from(direction);
-                }
-            }
+        let mut direction: f32 = 0.0;
+        if action_state.pressed(PlayerAction::Move) {
+            direction = action_state.value(PlayerAction::Move);
         }
 
         //should it account for decel and only transition to idle when player stops completely?
-        if direction_vector.x == 0.0 {
+        if direction == 0.0 {
             commands.entity(g_ent).insert(running.new_transition(Idle));
             velocity.x = 0.0;
         }
     }
 }
 
+//TODO: Coyote time, impulse/gravity damping at top, double jump
 fn player_jump(
     time: Res<Time>,
     mut query: Query<
@@ -554,7 +535,7 @@ fn player_falling(
                 println!("{:?} should be grounded", entity);
                 //stop falling
                 velocity.y = 0.0;
-                if action_state.pressed(PlayerAction::MoveLeft) {
+                if action_state.pressed(PlayerAction::Move) {
                     commands
                         .entity(entity)
                         .insert(falling.new_transition(Running));

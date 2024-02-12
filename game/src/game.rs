@@ -18,7 +18,6 @@ impl Plugin for GameplayPlugin {
         // Don't scatter it across the sub-modules/plugins!
         app.register_ldtk_int_cell::<wall::WallBundle>(17);
         app.register_ldtk_entity::<PlayerBlueprintBundle>("Player");
-        // app.insert_resource(Gravity::default());
 
         // Add the plugins for each game mechanic
         app.add_plugins((player::PlayerPlugin, wall::WallPlugin));

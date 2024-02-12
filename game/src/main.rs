@@ -60,7 +60,6 @@ fn main() {
     app.insert_resource(Time::new_with(Physics::fixed_once_hz(
         96.0,
     )));
-    // app.insert_resource(Gravity::default());
 
     // external plugins
     app.add_plugins((
