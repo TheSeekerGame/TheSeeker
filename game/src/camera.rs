@@ -65,7 +65,7 @@ fn setup_main_camera(mut commands: Commands) {
         // TODO: manage this from somewhere
         limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
 
-    }, BloomSettings::NATURAL ));
+    }/*, BloomSettings::NATURAL */));
 }
 
 fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, With<MainCamera>>,
