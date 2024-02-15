@@ -30,6 +30,16 @@ run_on_slot_enable = "DirectionRight"
 action = "SetFrameNow"
 frame_index = 10
 
+# needed for expected flip behavior
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false
+
 # Blink Red on Damage
 [[script]]
 run_every_n_ticks = "8+2"
