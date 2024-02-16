@@ -33,7 +33,6 @@ pub mod data;
 pub mod gent;
 pub mod script;
 pub mod time;
-pub mod graphics;
 
 pub struct EnginePlugins;
 
@@ -44,6 +43,5 @@ impl PluginGroup for EnginePlugins {
             .add(crate::script::ScriptPlugin)
             .add(crate::animation::SpriteAnimationPlugin)
             .add(crate::gent::GentPlugin)
-            .add(crate::graphics::GraphicsFxPlugin)
     }
 }
