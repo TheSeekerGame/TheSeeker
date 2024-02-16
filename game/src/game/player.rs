@@ -74,7 +74,7 @@ pub struct PlayerGfxBundle {
     sprite: SpriteSheetBundle,
     animation: SpriteAnimationBundle,
 }
-//where is this added/spawned, currently debug spawned only
+
 #[derive(Component, Default)]
 pub struct PlayerBlueprint;
 
@@ -94,7 +94,6 @@ pub enum PlayerAction {
     Jump,
 }
 
-//need to pause physics in GameState::Paused
 fn pause(
     mut next_state: ResMut<NextState<GameState>>,
     input: Res<Input<KeyCode>>,
@@ -102,6 +101,7 @@ fn pause(
 ) {
     if input.just_pressed(KeyCode::P) {
         next_state.set(GameState::Paused);
+        //pause physics
         time.pause();
     }
 }
@@ -243,13 +243,13 @@ impl Plugin for PlayerStatePlugin {
                     transition::<Falling, Grounded>.run_if(any_with_component::<
                         PlayerStateTransition<Falling, Grounded>,
                     >()),
-                    transition::<Grounded, Falling>.run_if(any_with_component::<
-                        PlayerStateTransition<Grounded, Falling>,
-                    >()),
                     transition::<Falling, Running>.run_if(any_with_component::<
                         PlayerStateTransition<Falling, Running>,
                     >()),
-                    transition::<Grounded, Jumping>.run_if(any_with_component::<
+                    transition_grounded::<Falling>.run_if(any_with_component::<
+                        PlayerStateTransition<Grounded, Falling>,
+                    >()),
+                    transition_grounded::<Jumping>.run_if(any_with_component::<
                         PlayerStateTransition<Grounded, Jumping>,
                     >()),
                     transition::<Jumping, Falling>.run_if(any_with_component::<
@@ -297,7 +297,6 @@ impl Plugin for PlayerAnimationPlugin {
 #[derive(Component)]
 pub struct PlayerStateTransition<C: PlayerState, N: PlayerState> {
     current: C,
-    //if we dont need it can add phantomdata
     next: N,
 }
 
@@ -324,12 +323,12 @@ where
 {
     type C = T;
 
-    fn new_transition(&self, next: N) -> PlayerStateTransition<Self::C, N> {
-        PlayerStateTransition::<Self::C, N>::new(self.clone(), next)
-    }
+    // fn new_transition(&self, next: N) -> PlayerStateTransition<Self::C, N> {
+    //     PlayerStateTransition::<Self::C, N>::new(self.clone(), next)
+    // }
 }
 
-//this should take a condition... and do something
+//can/should i build conditions into transition?
 fn transition<T: PlayerState, N: PlayerState>(
     query: Query<(Entity, &PlayerStateTransition<T, N>)>,
     mut commands: Commands,
@@ -343,6 +342,21 @@ fn transition<T: PlayerState, N: PlayerState>(
     }
 }
 
+fn transition_grounded<N: PlayerState>(
+    query: Query<(Entity, &PlayerStateTransition<Grounded, N>)>,
+    mut commands: Commands,
+) {
+    
+    for (entity, transition) in query.iter() {
+        commands
+            .entity(entity)
+            .insert(transition.next.clone())
+            .remove::<Grounded>()
+            .remove::<Idle>()
+            .remove::<PlayerStateTransition<Grounded, N>>();
+    }
+
+}
 //======================================================================
 pub trait PlayerState: Component<Storage = SparseStorage> + Clone {}
 
@@ -412,14 +426,11 @@ fn player_idle(
         }
         if direction != 0.0 {
             commands.entity(g_ent).insert(idle.new_transition(Running));
-            // } else if direction_vector.x == 0.0 {
-            //     commands.entity(g_ent).insert(Idle);
         }
     }
 }
 
 //seprate run and fall/jump movement? y/n?
-//split into run and generic player_move
 fn player_move(
     time: Res<Time>,
     mut q_gent: Query<
@@ -429,12 +440,10 @@ fn player_move(
             &ActionState<PlayerAction>,
             &PlayerGent,
         ),
-        // (With<PlayerGent>),
     >,
     mut q_gfx_player: Query<(&mut ScriptPlayer<SpriteAnimation>), With<PlayerGfx>>,
 ) {
     for (entity, mut velocity, action_state, gent) in q_gent.iter_mut() {
-        //switch to getting by entity from gent
         let mut direction: f32 = 0.0;
         if action_state.pressed(PlayerAction::Move) {
             //use .clamped_value()?
@@ -446,18 +455,11 @@ fn player_move(
         velocity.x += direction as f64 * time.delta_seconds_f64() * 5000.0;
         // velocity.x = velocity.x.clamp(-400., 400.);
 
-        //this doesnt work for the jump animation, need to look into further
-        //i think this also doesnt work as i expected, its possible to have a direction but not
-        //show the flip
-        //should be in its own animation facing system?...
-        //could move the set_slot false to just released
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {
-                // println!("direction switched to right");
                 player.set_slot("DirectionRight", true);
                 player.set_slot("DirectionLeft", false);
             } else if direction < 0.0 {
-                // println!("direction switched to left");
                 player.set_slot("DirectionRight", false);
                 player.set_slot("DirectionLeft", true);
             }
@@ -508,7 +510,10 @@ fn player_jump(
     mut commands: Commands,
 ) {
     for (entity, action_state, mut velocity, mut jumping) in query.iter_mut() {
-        //just_released misses if pressed and released fast enough
+        // commands.entity(entity).remove::<Idle>();
+        //can enter state and first frame jump not pressed if you tap
+        //this causes higher jump for some reason
+       print!("{:?}", action_state.get_pressed()) ;
         if jumping.airtime.tick(time.delta()).finished()
             || action_state.released(PlayerAction::Jump)
         {
@@ -519,11 +524,6 @@ fn player_jump(
         }
 
         velocity.y += 100. * time.delta_seconds_f64();
-        // if action_state.just_pressed(PlayerAction::Jump) {
-        //     //we actually want to apply a jump implulse instead of this?
-        //     //and when held? do what..
-        //     velocity.y += 1000. * time.delta_seconds_f64();
-        // }
         if jumping.is_added() {
             velocity.y += 3000. * time.delta_seconds_f64();
         }
@@ -544,7 +544,7 @@ fn player_collisions(
         ),
         With<PlayerGent>,
     >,
-    mut commands: Commands,
+    // mut commands: Commands,
 ) {
     for contacts in collisions.iter() {
         if !contacts.during_current_substep {
@@ -563,8 +563,6 @@ fn player_collisions(
                 continue;
             };
 
-        //skipping check for kinematic
-
         for manifold in contacts.manifolds.iter() {
             let normal = if is_first {
                 -manifold.global_normal1(rotation)
@@ -574,17 +572,8 @@ fn player_collisions(
 
             for contact in manifold.contacts.iter().filter(|c| c.penetration > 0.0) {
                 position.0 += normal * contact.penetration;
-                // let falling = Falling;
-                // commands
-                //     .entity(g_ent)
-                //     .insert(falling.new_transition(Grounded));
-                // commands.entity(g_ent).insert(TransEvent::<Grounded>::new());
                 *linear_velocity = LinearVelocity::ZERO
             }
-
-            //skip max_slope_angle
-            //
-            //add grounded check to remove jitter
         }
     }
 }
@@ -593,7 +582,6 @@ fn player_grounded(
     mut query: Query<
         (
             Entity,
-            //probably should be option
             &ShapeHits,
             &Grounded,
             &ActionState<PlayerAction>,
@@ -660,26 +648,6 @@ fn player_falling(
     }
 }
 
-// fn player_idle_animation(
-//     i_query: Query<
-//         &PlayerGent,
-//         Or<(
-//             Added<Idle>,
-//             // (Added<Grounded>, With<Idle>),
-//         )>,
-//     >,
-//     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-// ) {
-//     for (gent) in i_query.iter() {
-//         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-//             player.play_key("anim.player.Idle")
-//         }
-//     }
-// }
-
-//without idle state...
-//currently problem if idle and grounded added same frame?... no running and grounded added same
-//frame?
 fn player_idle_animation(
     i_query: Query<
         &PlayerGent,
@@ -688,7 +656,6 @@ fn player_idle_animation(
             (
                 With<Grounded>,
                 Added<Idle>,
-                // With<PlayerStateTransition<Running, Idle>>,
             ),
         )>,
     >,
