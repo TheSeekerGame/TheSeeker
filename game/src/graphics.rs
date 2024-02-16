@@ -30,13 +30,13 @@ pub fn spawn_fog(
         MaterialMesh2dBundle {
             mesh: meshes
                 .add(Mesh::from(Quad::new(Vec2::splat(
-                    100.0,
+                    1000.0,
                 ))))
                 .into(),
             transform: Transform::default().with_scale(Vec3::splat(1.0)),
             material: materials.add(FogMaterial {
                 color: Color::BLUE,
-                emitter1: Default::default(),
+                emitter1: Vec4::new(0.0, 2.0, 0.0, 0.0),
                 emitter2: Default::default(),
                 emitter3: Default::default(),
             }),
@@ -58,7 +58,7 @@ pub fn update_fog(
     }
 }
 
-// This is the struct that will be passed to your shader
+/// each emitter field: (x, y, max_fog, max_dist)
 #[derive(Asset, TypePath, AsBindGroup, Debug, Clone)]
 struct FogMaterial {
     #[uniform(0)]
