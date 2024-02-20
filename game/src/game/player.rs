@@ -15,27 +15,17 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
+        //TODO put the gamestate somewhere else
         app.add_state::<GameState>();
         app.add_systems(
             Update,
             (
-                (
-                    setup_player,
-                    player_idle.run_if(any_with_component::<Idle>()),
-                    player_run.run_if(any_with_component::<Running>()),
-                    player_jump.run_if(any_with_component::<Jumping>()),
-                    player_move,
-                    player_collisions,
-                    player_grounded.run_if(any_with_component::<Grounded>()),
-                    player_falling.run_if(any_with_component::<Falling>()),
-                )
-                    .run_if(in_state(GameState::Playing)),
-                apply_deferred,
+                setup_player.run_if(in_state(GameState::Playing)),
                 pause.run_if(in_state(GameState::Playing)),
                 unpause.run_if(in_state(GameState::Paused)),
             )
                 .chain()
-                .in_set(PlayerStateSet::Behavior)
+                .before(PlayerStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         )
         .add_systems(OnEnter(GameState::Paused), debug_player)
@@ -47,10 +37,19 @@ impl Plugin for PlayerPlugin {
         )
         .add_plugins((
             InputManagerPlugin::<PlayerAction>::default(),
-            PlayerStatePlugin,
+            PlayerBehaviorPlugin,
+            PlayerTransitionPlugin,
             PlayerAnimationPlugin,
         ));
     }
+}
+
+//set to order the player behavior, state transitions, and animations relative to eachother
+#[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
+pub enum PlayerStateSet {
+    Behavior,
+    Transition,
+    Animation,
 }
 
 //TODO: move somewhere more appropriate
@@ -216,7 +215,6 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
             },
             PlayerStateBundle::<Falling>::default(),
         ));
-        println!("should have added bundle");
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
             gent2gfx: TransformGfxFromGent {
@@ -232,17 +230,13 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
         println!("player spawned")
     }
 }
+//======================================================================================
+//State transition plugin
+//Add a transition_from::<T: PlayerState>.run_if(any_with_component::<T>()) for each state
 
-#[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
-pub enum PlayerStateSet {
-    Behavior,
-    Transition,
-    Animation,
-}
+struct PlayerTransitionPlugin;
 
-struct PlayerStatePlugin;
-
-impl Plugin for PlayerStatePlugin {
+impl Plugin for PlayerTransitionPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             Update,
@@ -262,25 +256,28 @@ impl Plugin for PlayerStatePlugin {
     }
 }
 
-struct PlayerAnimationPlugin;
-
-impl Plugin for PlayerAnimationPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(
-            Update,
-            (
-                player_idle_animation,
-                player_falling_animation,
-                player_jumping_animation,
-                player_running_animation,
-            )
-                .in_set(PlayerStateSet::Animation)
-                .after(PlayerStateSet::Transition)
-                .run_if(in_state(AppState::InGame)),
-        );
+fn transition_from<T: Component + Send + Sync + 'static>(
+    mut query: Query<(Entity, &mut TransitionsFrom<T>)>,
+    mut commands: Commands,
+) {
+    for (entity, mut trans) in query.iter_mut() {
+        for transition in &trans.transitions {
+            transition(entity, &mut commands);
+        }
+        //could decide to remove state + transitionsfrom here
+        if !&trans.transitions.is_empty() {
+            commands.entity(entity).remove::<T>();
+            trans.transitions.clear();
+        }
     }
 }
-
+//======================================================================
+// States
+// states are components which are added to the entity on transition.
+// an entity can be in multiple states at once, eg Grounded and Running/Idle
+// Impl Playerstate for each state
+// Impl Transitionable<T: PlayerState> for each state that that should be able to be transitioned
+// from by a state
 pub trait Transitionable<T: PlayerState + Default> {
     fn new_transition(next: T) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
         Box::new(|entity, commands| {
@@ -298,40 +295,20 @@ struct TransitionsFrom<T> {
     transitions: Vec<Box<dyn Fn(Entity, &mut Commands) + Send + Sync>>,
 }
 
-fn add_test_trans(mut query: Query<(&mut TransitionsFrom<Falling>)>) {
-    for (mut queue) in query.iter_mut() {
-        queue.transitions.push(Box::new(|entity, commands| {
-            commands
-                .entity(entity)
-                .insert(PlayerStateBundle::<Idle>::default())
-                .remove::<Falling>();
-        }));
-        let transition = Falling::new_transition(Grounded::default());
-        queue.transitions.push(transition);
-    }
-}
-
-fn transition_from<T: Component + Send + Sync + 'static>(
-    mut query: Query<(Entity, &mut TransitionsFrom<T>)>,
-    mut commands: Commands,
-) {
-    for (entity, mut trans) in query.iter_mut() {
-        for transition in &trans.transitions {
-            transition(entity, &mut commands);
-        }
-        //could decide to remove state + transitionsfrom here
-        if !&trans.transitions.is_empty() {
-            commands.entity(entity).remove::<T>();
-            trans.transitions.clear();
-        }
-    }
-}
-//======================================================================
 #[derive(Bundle, Default)]
 pub struct PlayerStateBundle<T: PlayerState + Default> {
     state: T,
     transitions: TransitionsFrom<T>,
 }
+
+// impl<T: PlayerState + Default> PlayerStateBundle<T> {
+//     fn new() -> PlayerStateBundle<T> {
+//         PlayerStateBundle {
+//             state: T::default(),
+//             transitions: TransitionsFrom::<T>::default(),
+//         }
+//     }
+// }
 
 pub trait PlayerState: Component<Storage = SparseStorage> + Clone {}
 
@@ -362,8 +339,9 @@ pub struct Jumping {
     //can this be frames/ticks instead?
     airtime: Timer,
 }
+//TODO: jumping timer is 0 when using PlayerStateBundle<Jumping>::default()
 impl Jumping {
-    fn new() -> Self {
+    fn default() -> Self {
         Jumping {
             airtime: Timer::from_seconds(0.9, TimerMode::Once),
         }
@@ -406,6 +384,27 @@ pub struct Attacking;
 impl PlayerState for Attacking {}
 
 //=======================================================================
+//player behavior systems, do stuff here in states and add transitions to other states by pushing
+//to a TransitionsFrom<T: PlayerState> components queue of transitions.
+
+struct PlayerBehaviorPlugin;
+
+impl Plugin for PlayerBehaviorPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            (
+                player_idle.run_if(any_with_component::<Idle>()),
+                player_run.run_if(any_with_component::<Running>()),
+                player_jump.run_if(any_with_component::<Jumping>()),
+                player_move,
+                player_collisions,
+                player_grounded.run_if(any_with_component::<Grounded>()),
+                player_falling.run_if(any_with_component::<Falling>()),
+            ),
+        );
+    }
+}
 
 fn player_idle(
     mut query: Query<
@@ -519,6 +518,8 @@ fn player_jump(
         if jumping.airtime.tick(time.delta()).finished()
             || action_state.released(PlayerAction::Jump)
         {
+            println!("{:?}", jumping.airtime);
+            println!("we falling???");
             transitions.push(Jumping::new_transition(Falling));
             velocity.y = 200.0 * time.delta_seconds_f64();
         }
@@ -616,7 +617,6 @@ fn player_falling(
     >,
 ) {
     for (entity, mut velocity, action_state, hits, falling, mut transitions) in query.iter_mut() {
-        println!("{:?} is falling", entity);
         velocity.y -= (300. * time.delta_seconds_f64()).clamp(0., 13.);
         for hit in hits.iter() {
             if hit.time_of_impact < 0.001 {
@@ -636,12 +636,33 @@ fn player_falling(
     }
 }
 
+//=========================================================================
+//play animations here, run after transitions
+
+struct PlayerAnimationPlugin;
+
+impl Plugin for PlayerAnimationPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            Update,
+            (
+                player_idle_animation,
+                player_falling_animation,
+                player_jumping_animation,
+                player_running_animation,
+            )
+                .in_set(PlayerStateSet::Animation)
+                .after(PlayerStateSet::Transition)
+                .run_if(in_state(AppState::InGame)),
+        );
+    }
+}
+
 fn player_idle_animation(
     i_query: Query<&PlayerGent, Added<Idle>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for gent in i_query.iter() {
-        println!("should play idle animation");
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             player.play_key("anim.player.Idle")
         }
@@ -654,7 +675,6 @@ fn player_falling_animation(
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for gent in f_query.iter() {
-        println!("should be falling");
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             player.play_key("anim.player.Fall")
         }
@@ -679,116 +699,6 @@ fn player_running_animation(
     for gent in r_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             player.play_key("anim.player.Run")
-        }
-    }
-}
-
-// TODO: this is temporary
-fn player_control(
-    q_gent_player: Query<(), With<PlayerGent>>,
-    mut q_gfx_player: Query<(&mut ScriptPlayer<SpriteAnimation>), With<PlayerGfx>>,
-    input: Res<Input<KeyCode>>,
-) {
-    for mut player in &mut q_gfx_player {
-        if player.is_stopped() {
-            player.play_key("anim.player.Idle");
-        }
-        if input.just_pressed(KeyCode::Left) {
-            player.play_key("anim.player.Run");
-            player.set_slot("DirectionLeft", true);
-        }
-        if input.just_released(KeyCode::Left) {
-            player.play_key("anim.player.Idle");
-            player.set_slot("DirectionLeft", false);
-        }
-        if input.just_pressed(KeyCode::Right) {
-            player.play_key("anim.player.Run");
-            player.set_slot("DirectionRight", true);
-        }
-        if input.just_released(KeyCode::Right) {
-            player.play_key("anim.player.Idle");
-            player.set_slot("DirectionRight", false);
-        }
-        if input.just_pressed(KeyCode::Up) {
-            player.play_key("anim.player.IdleLookUp");
-        }
-        if input.just_pressed(KeyCode::Down) {
-            player.play_key("anim.player.IdleLookDown");
-        }
-        if input.just_pressed(KeyCode::W) {
-            player.play_key("anim.player.SwordWhirling");
-        }
-        if input.just_pressed(KeyCode::Q) {
-            player.play_key("anim.player.SwordAirDown");
-        }
-        if input.just_pressed(KeyCode::E) {
-            player.play_key("anim.player.SwordAirFrontA");
-        }
-        if input.just_pressed(KeyCode::R) {
-            player.play_key("anim.player.SwordAirFrontB");
-        }
-        if input.just_pressed(KeyCode::T) {
-            player.play_key("anim.player.SwordFrontA");
-        }
-        if input.just_pressed(KeyCode::Y) {
-            player.play_key("anim.player.SwordFrontB");
-        }
-        if input.just_pressed(KeyCode::U) {
-            player.play_key("anim.player.SwordFrontC");
-        }
-        if input.just_pressed(KeyCode::I) {
-            player.play_key("anim.player.SwordRunA");
-        }
-        if input.just_pressed(KeyCode::O) {
-            player.play_key("anim.player.SwordRunB");
-        }
-        if input.just_pressed(KeyCode::P) {
-            player.play_key("anim.player.SwordUp");
-        }
-        if input.just_pressed(KeyCode::A) {
-            player.play_key("anim.player.Jump");
-        }
-        if input.just_pressed(KeyCode::S) {
-            player.play_key("anim.player.JumpForward");
-        }
-        if input.just_pressed(KeyCode::D) {
-            player.play_key("anim.player.Fly");
-        }
-        if input.just_pressed(KeyCode::F) {
-            player.play_key("anim.player.FlyForward");
-        }
-        if input.just_pressed(KeyCode::G) {
-            player.play_key("anim.player.Fall");
-        }
-        if input.just_pressed(KeyCode::H) {
-            player.play_key("anim.player.FallForward");
-        }
-        if input.just_pressed(KeyCode::J) {
-            player.play_key("anim.player.FlyFallTransition");
-        }
-        if input.just_pressed(KeyCode::K) {
-            player.play_key("anim.player.FlyFallForwardTransition");
-        }
-        if input.just_pressed(KeyCode::L) {
-            player.play_key("anim.player.Land");
-        }
-        if input.just_pressed(KeyCode::Z) {
-            player.play_key("anim.player.LandForward");
-        }
-        if input.just_pressed(KeyCode::X) {
-            player.play_key("anim.player.Dash");
-        }
-        if input.just_pressed(KeyCode::C) {
-            player.play_key("anim.player.Roll");
-        }
-        if input.just_pressed(KeyCode::V) {
-            player.play_key("anim.player.WallSlide");
-        }
-        if input.just_pressed(KeyCode::Space) {
-            player.set_slot("Damage", true);
-        }
-        if input.just_released(KeyCode::Space) {
-            player.set_slot("Damage", false);
         }
     }
 }
