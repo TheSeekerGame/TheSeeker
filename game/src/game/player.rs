@@ -1,3 +1,5 @@
+use std::marker::PhantomData;
+
 use bevy::ecs::component::SparseStorage;
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use theseeker_engine::{
@@ -212,9 +214,9 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                     )
                     .build(),
             },
-            Falling,
-            TransitionQueue::default(),
+            PlayerStateBundle::<Falling>::default(),
         ));
+        println!("should have added bundle");
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
             gent2gfx: TransformGfxFromGent {
@@ -245,35 +247,12 @@ impl Plugin for PlayerStatePlugin {
         app.add_systems(
             Update,
             (
-                // (
-                //     transition::<Falling, Grounded>.run_if(any_with_component::<
-                //         PlayerStateTransition<Falling, Grounded>,
-                //     >()),
-                //     transition::<Falling, Running>.run_if(any_with_component::<
-                //         PlayerStateTransition<Falling, Running>,
-                //     >()),
-                //     transition_grounded::<Falling>.run_if(any_with_component::<
-                //         PlayerStateTransition<Grounded, Falling>,
-                //     >()),
-                //     transition_grounded::<Jumping>.run_if(any_with_component::<
-                //         PlayerStateTransition<Grounded, Jumping>,
-                //     >()),
-                //     transition::<Jumping, Falling>.run_if(any_with_component::<
-                //         PlayerStateTransition<Jumping, Falling>,
-                //     >()),
-                //     transition::<Idle, Running>.run_if(any_with_component::<
-                //         PlayerStateTransition<Idle, Running>,
-                //     >()),
-                //     transition::<Running, Idle>.run_if(any_with_component::<
-                //         PlayerStateTransition<Running, Idle>,
-                //     >()),
-                //     transition::<Running, Jumping>.run_if(any_with_component::<
-                //         PlayerStateTransition<Running, Jumping>,
-                //     >()),
-                // ),
-                add_test_trans,
+                transition_from::<Idle>.run_if(any_with_component::<Idle>()),
+                transition_from::<Running>.run_if(any_with_component::<Running>()),
+                transition_from::<Grounded>.run_if(any_with_component::<Grounded>()),
+                transition_from::<Jumping>.run_if(any_with_component::<Jumping>()),
+                transition_from::<Falling>.run_if(any_with_component::<Falling>()),
                 apply_deferred,
-                run_trans,
             )
                 .chain()
                 .in_set(PlayerStateSet::Transition)
@@ -302,130 +281,79 @@ impl Plugin for PlayerAnimationPlugin {
     }
 }
 
-#[derive(Component)]
-pub struct PlayerStateTransition<C: PlayerState, N: PlayerState> {
-    current: C,
-    next: N,
-}
-// #[derive(Component)]
-// pub struct PlayerStatesTransition<C: Bundle, N: Bundle> {
-//     current: C,
-//     next: N,
-// }
-
-impl<C: PlayerState, N: PlayerState> PlayerStateTransition<C, N> {
-    fn new(current: C, next: N) -> Self {
-        PlayerStateTransition { current, next }
+pub trait Transitionable<T: PlayerState + Default> {
+    fn new_transition(next: T) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
+        Box::new(|entity, commands| {
+            commands
+                .entity(entity)
+                .insert(PlayerStateBundle::<T>::default());
+        })
     }
 }
 
-pub trait Transitionable<T: PlayerState> {
-    type C: PlayerState + Default;
-
-    fn new_transition(&self, next: T) -> PlayerStateTransition<Self::C, T>
-    where
-        Self: PlayerState,
-    {
-        PlayerStateTransition::<Self::C, T>::new(Self::C::default(), next)
-    }
-    fn transition(&self, next: impl PlayerState, mut commands: Commands, entity: Entity) {
-        commands.entity(entity).insert(next).remove::<Self::C>();
-    }
-}
-
-impl<T: PlayerState, N: PlayerState> Transitionable<N> for T
-where
-    T: PlayerState + Default,
-{
-    type C = T;
-
-    // fn new_transition(&self, next: N) -> PlayerStateTransition<Self::C, N> {
-    //     PlayerStateTransition::<Self::C, N>::new(self.clone(), next)
-    // }
-}
-
-
-//could instead store a bunch of closures in a vec and then run them
-//but then every state behavior system has to mutably access the transition queue
 #[derive(Component, Deref, DerefMut, Default)]
-struct TransitionQueue {
+struct TransitionsFrom<T> {
+    t: PhantomData<T>,
+    #[deref]
     transitions: Vec<Box<dyn Fn(Entity, &mut Commands) + Send + Sync>>,
 }
 
-fn add_test_trans(mut query: Query<(&mut TransitionQueue)>) {
+fn add_test_trans(mut query: Query<(&mut TransitionsFrom<Falling>)>) {
     for (mut queue) in query.iter_mut() {
         queue.transitions.push(Box::new(|entity, commands| {
             commands
                 .entity(entity)
-                .insert(Falling::default())
-                .remove::<Grounded>();
+                .insert(PlayerStateBundle::<Idle>::default())
+                .remove::<Falling>();
         }));
-        queue.transitions.push(Box::new(|entity, commands| {
-            commands
-                .entity(entity)
-                .insert(Running::default())
-                .remove::<Idle>();
-        }));
+        let transition = Falling::new_transition(Grounded::default());
+        queue.transitions.push(transition);
     }
 }
 
-fn run_trans(mut query: Query<(Entity, &mut TransitionQueue)>, mut commands: Commands) {
+fn transition_from<T: Component + Send + Sync + 'static>(
+    mut query: Query<(Entity, &mut TransitionsFrom<T>)>,
+    mut commands: Commands,
+) {
     for (entity, mut trans) in query.iter_mut() {
         for transition in &trans.transitions {
             transition(entity, &mut commands);
         }
-        trans.transitions.clear();
-    }
-
-}
-
-//can/should i build conditions into transition?
-fn transition<T: PlayerState, N: PlayerState>(
-    query: Query<(Entity, &PlayerStateTransition<T, N>)>,
-    mut commands: Commands,
-) {
-    for (entity, transition) in query.iter() {
-        commands
-            .entity(entity)
-            .insert(transition.next.clone())
-            .remove::<T>()
-            .remove::<PlayerStateTransition<T, N>>();
-    }
-}
-
-fn transition_grounded<N: PlayerState>(
-    query: Query<(
-        Entity,
-        &PlayerStateTransition<Grounded, N>,
-    )>,
-    mut commands: Commands,
-) {
-    for (entity, transition) in query.iter() {
-        commands
-            .entity(entity)
-            .insert(transition.next.clone())
-            .remove::<Grounded>()
-            .remove::<Idle>()
-            .remove::<PlayerStateTransition<Grounded, N>>();
+        //could decide to remove state + transitionsfrom here
+        if !&trans.transitions.is_empty() {
+            commands.entity(entity).remove::<T>();
+            trans.transitions.clear();
+        }
     }
 }
 //======================================================================
+#[derive(Bundle, Default)]
+pub struct PlayerStateBundle<T: PlayerState + Default> {
+    state: T,
+    transitions: TransitionsFrom<T>,
+}
+
 pub trait PlayerState: Component<Storage = SparseStorage> + Clone {}
 
 #[derive(Component, Default, Copy, Clone, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Idle;
 impl PlayerState for Idle {}
+impl Transitionable<Running> for Idle {}
 
 #[derive(Component, Default, Copy, Clone, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Running;
 impl PlayerState for Running {}
+impl Transitionable<Idle> for Running {}
 
 #[derive(Component, Default, Copy, Clone, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Falling;
 impl PlayerState for Falling {}
+impl Transitionable<Grounded> for Falling {}
+impl Transitionable<Running> for Falling {}
+impl Transitionable<Idle> for Falling {}
 
 #[derive(Component, Default, Clone, Debug)]
 #[component(storage = "SparseSet")]
@@ -442,11 +370,35 @@ impl Jumping {
     }
 }
 impl PlayerState for Jumping {}
+impl Transitionable<Falling> for Jumping {}
+impl Transitionable<Grounded> for Jumping {}
 
 #[derive(Component, Default, Copy, Clone, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
 impl PlayerState for Grounded {}
+//cant be Idle or Running if not Grounded
+impl Transitionable<Jumping> for Grounded {
+    fn new_transition(next: Jumping) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
+        Box::new(|entity, commands| {
+            commands
+                .entity(entity)
+                .insert(PlayerStateBundle::<Jumping>::default())
+                .remove::<(Idle, Running)>();
+        })
+    }
+}
+//cant be Idle or Running if not Grounded
+impl Transitionable<Falling> for Grounded {
+    fn new_transition(next: Falling) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
+        Box::new(|entity, commands| {
+            commands
+                .entity(entity)
+                .insert(PlayerStateBundle::<Falling>::default())
+                .remove::<(Idle, Running)>();
+        })
+    }
+}
 
 #[derive(Component, Default, Copy, Clone, Debug)]
 #[component(storage = "SparseSet")]
@@ -455,7 +407,6 @@ impl PlayerState for Attacking {}
 
 //=======================================================================
 
-//can only be idle when grounded and no input...
 fn player_idle(
     mut query: Query<
         (
@@ -463,12 +414,13 @@ fn player_idle(
             &PlayerGent,
             &ActionState<PlayerAction>,
             &Idle,
+            &mut TransitionsFrom<Idle>,
         ),
         With<Grounded>,
     >,
-    mut commands: Commands,
+    // mut commands: Commands,
 ) {
-    for (g_ent, _g_marker, action_state, idle) in query.iter() {
+    for (g_ent, _g_marker, action_state, idle, mut transitions) in query.iter_mut() {
         // println!("is idle");
         // check for direction input
         let mut direction: f32 = 0.0;
@@ -477,7 +429,7 @@ fn player_idle(
             // println!("moving??")
         }
         if direction != 0.0 {
-            commands.entity(g_ent).insert(idle.new_transition(Running));
+            transitions.push(Idle::new_transition(Running::default()));
         }
     }
 }
@@ -524,12 +476,13 @@ fn player_run(
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
             &Running,
+            &mut TransitionsFrom<Running>,
         ),
         (With<PlayerGent>, With<Grounded>),
     >,
     mut commands: Commands,
 ) {
-    for (g_ent, mut velocity, action_state, running) in q_gent.iter_mut() {
+    for (g_ent, mut velocity, action_state, running, mut transitions) in q_gent.iter_mut() {
         // println!("{:?} is running", g_ent);
         let mut direction: f32 = 0.0;
         if action_state.pressed(PlayerAction::Move) {
@@ -539,7 +492,7 @@ fn player_run(
         //should it account for decel and only transition to idle when player stops completely?
         //shouldnt be able to transition to idle if we also jump
         if direction == 0.0 && action_state.released(PlayerAction::Jump) {
-            commands.entity(g_ent).insert(running.new_transition(Idle));
+            transitions.push(Running::new_transition(Idle));
             velocity.x = 0.0;
         }
     }
@@ -554,22 +507,19 @@ fn player_jump(
             &ActionState<PlayerAction>,
             &mut LinearVelocity,
             &mut Jumping,
+            &mut TransitionsFrom<Jumping>,
         ),
         (With<PlayerGent>),
     >,
-    mut commands: Commands,
 ) {
-    for (entity, action_state, mut velocity, mut jumping) in query.iter_mut() {
-        // commands.entity(entity).remove::<Idle>();
+    for (entity, action_state, mut velocity, mut jumping, mut transitions) in query.iter_mut() {
         //can enter state and first frame jump not pressed if you tap
         //this causes higher jump for some reason
         print!("{:?}", action_state.get_pressed());
         if jumping.airtime.tick(time.delta()).finished()
             || action_state.released(PlayerAction::Jump)
         {
-            commands
-                .entity(entity)
-                .insert(jumping.new_transition(Falling));
+            transitions.push(Jumping::new_transition(Falling));
             velocity.y = 200.0 * time.delta_seconds_f64();
         }
 
@@ -594,7 +544,6 @@ fn player_collisions(
         ),
         With<PlayerGent>,
     >,
-    // mut commands: Commands,
 ) {
     for contacts in collisions.iter() {
         if !contacts.during_current_substep {
@@ -633,33 +582,21 @@ fn player_grounded(
         (
             Entity,
             &ShapeHits,
-            &Grounded,
             &ActionState<PlayerAction>,
+            &Grounded,
+            &mut TransitionsFrom<Grounded>,
         ),
         (With<PlayerGent>),
     >,
-    mut commands: Commands,
 ) {
-    for (entity, hits, grounded, action_state) in query.iter_mut() {
+    for (entity, hits, action_state, grounded, mut transitions) in query.iter_mut() {
         let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
         if action_state.just_pressed(PlayerAction::Jump) {
-            commands
-                .entity(entity)
-                .insert(grounded.new_transition(Jumping::new()))
-                .insert(PlayerStateTransition {
-                    current: Running,
-                    next: Jumping::new(),
-                });
+            transitions.push(Grounded::new_transition(
+                Jumping::default(),
+            ))
         } else if is_falling {
-            commands
-                .entity(entity)
-                .insert(grounded.new_transition(Falling));
-            //ewwwwwwww
-        } else if action_state.value(PlayerAction::Move) == 0.0 {
-            commands.entity(entity).insert(PlayerStateTransition {
-                current: Running,
-                next: Idle,
-            });
+            transitions.push(Grounded::new_transition(Falling))
         }
     }
 }
@@ -673,27 +610,25 @@ fn player_falling(
             &ActionState<PlayerAction>,
             &ShapeHits,
             &Falling,
+            &mut TransitionsFrom<Falling>,
         ),
         With<PlayerGent>,
     >,
-    mut commands: Commands,
 ) {
-    for (entity, mut velocity, action_state, hits, falling) in query.iter_mut() {
-        // println!("{:?} is falling", entity);
+    for (entity, mut velocity, action_state, hits, falling, mut transitions) in query.iter_mut() {
+        println!("{:?} is falling", entity);
         velocity.y -= (300. * time.delta_seconds_f64()).clamp(0., 13.);
         for hit in hits.iter() {
             if hit.time_of_impact < 0.001 {
-                commands
-                    .entity(entity)
-                    .insert(falling.new_transition(Grounded));
+                transitions.push(Falling::new_transition(Grounded));
                 // println!("{:?} should be grounded", entity);
                 //stop falling
                 velocity.y = 0.0;
                 if action_state.pressed(PlayerAction::Move) {
-                    commands
-                        .entity(entity)
-                        .insert(falling.new_transition(Running));
+                    transitions.push(Falling::new_transition(Running));
                     // println!("{:?} should be running", entity)
+                } else {
+                    transitions.push(Falling::new_transition(Idle));
                 }
             }
         }
@@ -702,13 +637,7 @@ fn player_falling(
 }
 
 fn player_idle_animation(
-    i_query: Query<
-        &PlayerGent,
-        Or<(
-            (Added<Grounded>, With<Idle>),
-            (With<Grounded>, Added<Idle>),
-        )>,
-    >,
+    i_query: Query<&PlayerGent, Added<Idle>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for gent in i_query.iter() {
@@ -725,6 +654,7 @@ fn player_falling_animation(
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for gent in f_query.iter() {
+        println!("should be falling");
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             player.play_key("anim.player.Fall")
         }
@@ -743,13 +673,7 @@ fn player_jumping_animation(
 }
 
 fn player_running_animation(
-    r_query: Query<
-        (&PlayerGent),
-        Or<(
-            Added<Running>,
-            (With<Running>, Added<Grounded>),
-        )>,
-    >,
+    r_query: Query<&PlayerGent, Added<Running>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for gent in r_query.iter() {
