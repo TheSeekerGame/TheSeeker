@@ -56,7 +56,7 @@ pub fn setup_fog(
                 material: materials.add(FogMaterial {
                     depth: depth,
                     alpha: alpha / depths.len() as f32,
-                    color: Color::BLUE,
+                    color: Color::rgba(0.87, 0.86, 1.0, 1.0),
                     emitter1: Vec4::new(0.0, 400.0, 50.0, 0.0),
                     emitter2: Default::default(),
                     emitter3: Default::default(),
