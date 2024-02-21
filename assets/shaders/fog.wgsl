@@ -31,8 +31,8 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     // Assuming a maximum distance that makes sense for your use case, for example, 1000 units
     let max_distance = fog_mat.emitter1.z;
     let scaledpos = (world_pos - offset)*0.05;
-    var noise = perlinNoise3(vec3<f32>(globals.time*0.3 / fog_mat.depth, scaledpos.y, scaledpos.x, ));
-    var noise1 = perlinNoise3(vec3<f32>(globals.time*0.3 / fog_mat.depth, scaledpos.y*0.5, scaledpos.x*0.5, ));
+    var noise = perlinNoise3(vec3<f32>(globals.time*0.3 + 10.0 / fog_mat.depth, scaledpos.y, scaledpos.x, ));
+    var noise1 = perlinNoise3(vec3<f32>(globals.time*0.3 + 10.0 / fog_mat.depth, scaledpos.y*0.5, scaledpos.x*0.5, ));
     noise = (noise*noise - noise1)*0.3 + 0.5;
     let normalized_distance = clamp((distance / max_distance) * noise, 0.0, 1.0) ;
 

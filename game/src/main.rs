@@ -17,9 +17,11 @@ mod cli;
 mod game;
 mod level;
 mod locale;
+
 mod screens {
     pub mod loading;
 }
+
 mod ui;
 
 #[cfg(feature = "dev")]
