@@ -36,7 +36,7 @@ pub fn spawn_fog(
             transform: Transform::default().with_scale(Vec3::splat(1.0)),
             material: materials.add(FogMaterial {
                 color: Color::BLUE,
-                emitter1: Vec4::new(0.0, 2.0, 0.0, 0.0),
+                emitter1: Vec4::new(0.0, 400.0, 0.0, 0.0),
                 emitter2: Default::default(),
                 emitter3: Default::default(),
             }),
@@ -44,6 +44,7 @@ pub fn spawn_fog(
         },
     ));
 }
+
 pub fn update_fog(
     mut commands: Commands,
     mut fog_bundle_query: Query<(&mut Transform), With<FogEmitter>>,
@@ -70,6 +71,7 @@ struct FogMaterial {
     #[uniform(0)]
     emitter3: Vec4,
 }
+
 impl Material2d for FogMaterial {
     fn fragment_shader() -> ShaderRef {
         "shaders/fog.wgsl".into()
