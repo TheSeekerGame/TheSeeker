@@ -1,6 +1,7 @@
 use std::marker::PhantomData;
 
 use bevy::ecs::component::SparseStorage;
+use bevy_xpbd_2d::{SubstepSchedule, SubstepSet};
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
@@ -18,7 +19,7 @@ impl Plugin for PlayerPlugin {
         //TODO put the gamestate somewhere else
         app.add_state::<GameState>();
         app.add_systems(
-            Update,
+            GameTickUpdate,
             (
                 setup_player.run_if(in_state(GameState::Playing)),
                 pause.run_if(in_state(GameState::Playing)),
@@ -30,7 +31,7 @@ impl Plugin for PlayerPlugin {
         )
         .add_systems(OnEnter(GameState::Paused), debug_player)
         .add_systems(
-            Update,
+            GameTickUpdate,
             debug_player_states
                 .run_if(in_state(GameState::Playing))
                 .after(PlayerStateSet::Transition),
@@ -194,8 +195,8 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                     rb: RigidBody::Kinematic,
                     collider: Collider::cuboid(6.0, 10.0),
                     shapecast: ShapeCaster::new(
-                        Collider::cuboid(6.0, 12.0),
-                        Vec2::ZERO.into(),
+                        Collider::cuboid(6.0, 10.0),
+                        Vec2::new(0.0, -2.0),
                         0.0,
                         Vec2::NEG_Y.into(),
                     ),
@@ -227,7 +228,7 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
             },
             animation: Default::default(),
         },));
-        println!("player spawned")
+        // println!("player spawned")
     }
 }
 //======================================================================================
@@ -239,7 +240,7 @@ struct PlayerTransitionPlugin;
 impl Plugin for PlayerTransitionPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            Update,
+            GameTickUpdate,
             (
                 transition_from::<Idle>.run_if(any_with_component::<Idle>()),
                 transition_from::<Running>.run_if(any_with_component::<Running>()),
@@ -332,18 +333,21 @@ impl Transitionable<Grounded> for Falling {}
 impl Transitionable<Running> for Falling {}
 impl Transitionable<Idle> for Falling {}
 
-#[derive(Component, Default, Clone, Debug)]
+#[derive(Component, Clone, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Jumping {
     //TODO:
     //can this be frames/ticks instead?
-    airtime: Timer,
+    // airtime: Timer,
+    current_air_ticks: u32,
+    max_air_ticks: u32,
 }
 //TODO: jumping timer is 0 when using PlayerStateBundle<Jumping>::default()
-impl Jumping {
+impl Default for Jumping {
     fn default() -> Self {
         Jumping {
-            airtime: Timer::from_seconds(0.9, TimerMode::Once),
+            current_air_ticks: 0,
+            max_air_ticks: 60,
         }
     }
 }
@@ -392,16 +396,20 @@ struct PlayerBehaviorPlugin;
 impl Plugin for PlayerBehaviorPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            Update,
+            GameTickUpdate,
             (
                 player_idle.run_if(any_with_component::<Idle>()),
                 player_run.run_if(any_with_component::<Running>()),
                 player_jump.run_if(any_with_component::<Jumping>()),
                 player_move,
-                player_collisions,
+                // player_collisions,
                 player_grounded.run_if(any_with_component::<Grounded>()),
                 player_falling.run_if(any_with_component::<Falling>()),
             ),
+        );
+        app.add_systems(
+            SubstepSchedule,
+            player_collisions.in_set(SubstepSet::SolveUserConstraints),
         );
     }
 }
@@ -423,6 +431,7 @@ fn player_idle(
         // println!("is idle");
         // check for direction input
         let mut direction: f32 = 0.0;
+        // println!("idleing, {:?}", action_state.get_pressed());
         if action_state.pressed(PlayerAction::Move) {
             direction = action_state.value(PlayerAction::Move);
             // println!("moving??")
@@ -453,7 +462,8 @@ fn player_move(
 
         //TODO: accelerate for few frames then apply clamped velocity
         velocity.x = 0.0;
-        velocity.x += direction as f64 * time.delta_seconds_f64() * 5000.0;
+        // velocity.x += direction as f64 * time.delta_seconds_f64() * 5000.0;
+        velocity.x += direction as f32 * 100.;
         // velocity.x = velocity.x.clamp(-400., 400.);
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
@@ -514,20 +524,22 @@ fn player_jump(
     for (entity, action_state, mut velocity, mut jumping, mut transitions) in query.iter_mut() {
         //can enter state and first frame jump not pressed if you tap
         //this causes higher jump for some reason
-        print!("{:?}", action_state.get_pressed());
-        if jumping.airtime.tick(time.delta()).finished()
-            || action_state.released(PlayerAction::Jump)
+        // print!("{:?}", action_state.get_pressed());
+        if jumping.current_air_ticks >= jumping.max_air_ticks
+        || action_state.released(PlayerAction::Jump)
         {
-            println!("{:?}", jumping.airtime);
-            println!("we falling???");
+            // println!("{:?}", jumping.current_air_ticks);
+            // println!("we falling???");
             transitions.push(Jumping::new_transition(Falling));
-            velocity.y = 200.0 * time.delta_seconds_f64();
+            // velocity.y = 200.0 * time.delta_seconds_f64();
         }
+        jumping.current_air_ticks +=1;
 
-        velocity.y += 100. * time.delta_seconds_f64();
+        velocity.y += 60.;
         if jumping.is_added() {
-            velocity.y += 3000. * time.delta_seconds_f64();
+            velocity.y += 100.;
         }
+        velocity.y = velocity.y.clamp(0., 60.);
     }
 }
 
@@ -592,7 +604,11 @@ fn player_grounded(
 ) {
     for (entity, hits, action_state, grounded, mut transitions) in query.iter_mut() {
         let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
+        //just pressed seems to get missed sometimes... but we need it because pressed makes you
+        //jump continuously if held
+        //known issue https://github.com/bevyengine/bevy/issues/6183 
         if action_state.just_pressed(PlayerAction::Jump) {
+        // if action_state.pressed(PlayerAction::Jump) {
             transitions.push(Grounded::new_transition(
                 Jumping::default(),
             ))
@@ -617,7 +633,8 @@ fn player_falling(
     >,
 ) {
     for (entity, mut velocity, action_state, hits, falling, mut transitions) in query.iter_mut() {
-        velocity.y -= (300. * time.delta_seconds_f64()).clamp(0., 13.);
+        velocity.y -= 20.;
+        velocity.y = velocity.y.clamp(-60., 0.);
         for hit in hits.iter() {
             if hit.time_of_impact < 0.001 {
                 transitions.push(Falling::new_transition(Grounded));

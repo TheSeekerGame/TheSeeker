@@ -141,11 +141,11 @@ features = ["iyes_cli"]
 version = "0.11"
 
 [dependencies.bevy_xpbd_2d]
-version = "0.3.3"
+version = "=0.3.2"
 default-features = false
 features = [
     "2d",
-    "f64",
+    "f32",
     # "parallel",
     # "simd",
 ]

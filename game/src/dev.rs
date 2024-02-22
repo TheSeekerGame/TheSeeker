@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 
 pub struct DevPlugin;
 
@@ -14,7 +15,9 @@ impl Plugin for DevPlugin {
                 .run_if(resource_exists::<ProgressCounter>())
                 .after(iyes_progress::TrackedProgressSet),
         );
+        //this is broken on xpbd 3.2, need patch update
         app.add_plugins(PhysicsDebugPlugin::default());
+        app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()));
     }
 }
 
