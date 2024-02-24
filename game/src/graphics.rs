@@ -21,7 +21,7 @@ pub fn spawn_test_fog(
 ) {
     commands.spawn((
         Transform::from_translation(Vec3::new(10.0, 400.0, 0.0)),
-        FogEmitter { dist: 50.0 }
+        FogEmitter { dist: 200.0 }
     ));
 }
 
