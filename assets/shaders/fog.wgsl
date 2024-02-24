@@ -40,15 +40,16 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
 
     // makes fog falloff farther from emitter center
     let distance = distance(world_pos, emitter_pos_final);
+
     let max_distance = fog_mat.emitter1.z;
+    let inv_dist = clamp((max_distance-distance)*0.01, 0.0, 1.0);
 
-    //let inv_dist = max(max_distance-distance, 0.0);
-
-    let max_lfn = clamp(low_f_noise, 0.0, 1.0);
-    let normalized_distance = clamp(max((distance / (max_distance)), 1.9) * noise, 0.0, 1.0);
-
-    let gradient_color = vec4<f32>(fog_mat.color.rgb, clamp(1.0 - normalized_distance, 0.0, 1.0) *fog_mat.alpha); // Fading effect
+    // We use distance in two different ways, 1, to ensure fog ends at emitter range
+    // and 2, to ensure fog has a very smooth escelation past that point.
+    // Todo: can probably be simplified a bit
+    let sparsity = 1.8;
+    let normalized_distance = clamp(max((distance / (max_distance)), sparsity) * noise, 0.0, 1.0);
+    let gradient_color = vec4<f32>(fog_mat.color.rgb, inv_dist*clamp(1.0 - normalized_distance, 0.0, 1.0) *fog_mat.alpha); // Fading effect
 
     return gradient_color;
-    //return vec4(low_f_noise, low_f_noise, low_f_noise, 1.0);
 }
