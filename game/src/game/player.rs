@@ -16,49 +16,37 @@ pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
-        //TODO put the gamestate somewhere else
-        app.add_state::<GameState>();
         app.add_systems(
             GameTickUpdate,
-            (
-                setup_player.run_if(in_state(GameState::Playing)),
-                pause.run_if(in_state(GameState::Playing)),
-                unpause.run_if(in_state(GameState::Paused)),
-            )
+            (setup_player.run_if(in_state(GameState::Playing)),)
                 .chain()
                 .before(PlayerStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         )
         .add_systems(OnEnter(GameState::Paused), debug_player)
-        .add_systems(
-            GameTickUpdate,
-            debug_player_states
-                .run_if(in_state(GameState::Playing))
-                .after(PlayerStateSet::Transition),
-        )
         .add_plugins((
             InputManagerPlugin::<PlayerAction>::default(),
             PlayerBehaviorPlugin,
             PlayerTransitionPlugin,
             PlayerAnimationPlugin,
         ));
+
+        #[cfg(feature = "dev")]
+        app.add_systems(
+            GameTickUpdate,
+            debug_player_states
+                .run_if(in_state(GameState::Playing))
+                .after(PlayerStateSet::Transition),
+        )
     }
 }
 
-//set to order the player behavior, state transitions, and animations relative to eachother
+///set to order the player behavior, state transitions, and animations relative to eachother
 #[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum PlayerStateSet {
     Behavior,
     Transition,
     Animation,
-}
-
-//TODO: move somewhere more appropriate
-#[derive(States, Clone, Eq, PartialEq, Hash, Debug, Default)]
-pub enum GameState {
-    #[default]
-    Playing,
-    Paused,
 }
 
 #[derive(Bundle, LdtkEntity, Default)]
@@ -97,31 +85,6 @@ pub struct PlayerGfx {
 pub enum PlayerAction {
     Move,
     Jump,
-}
-
-//TODO: move somewhere more appropriate
-fn pause(
-    mut next_state: ResMut<NextState<GameState>>,
-    input: Res<Input<KeyCode>>,
-    mut time: ResMut<Time<Physics>>,
-) {
-    if input.just_pressed(KeyCode::P) {
-        next_state.set(GameState::Paused);
-        //pause physics
-        time.pause();
-    }
-}
-
-//TODO: move somewhere more appropriate
-fn unpause(
-    mut next_state: ResMut<NextState<GameState>>,
-    input: Res<Input<KeyCode>>,
-    mut time: ResMut<Time<Physics>>,
-) {
-    if input.just_pressed(KeyCode::P) {
-        next_state.set(GameState::Playing);
-        time.unpause();
-    }
 }
 
 fn debug_player_states(
@@ -231,9 +194,8 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
         // println!("player spawned")
     }
 }
-//======================================================================================
-//State transition plugin
-//Add a transition_from::<T: PlayerState>.run_if(any_with_component::<T>()) for each state
+///State transition plugin
+///Add a transition_from::<T: PlayerState>.run_if(any_with_component::<T>()) for each state
 
 struct PlayerTransitionPlugin;
 
@@ -272,13 +234,7 @@ fn transition_from<T: Component + Send + Sync + 'static>(
         }
     }
 }
-//======================================================================
-// States
-// states are components which are added to the entity on transition.
-// an entity can be in multiple states at once, eg Grounded and Running/Idle
-// Impl Playerstate for each state
-// Impl Transitionable<T: PlayerState> for each state that that should be able to be transitioned
-// from by a state
+
 pub trait Transitionable<T: PlayerState + Default> {
     fn new_transition(next: T) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
         Box::new(|entity, commands| {
@@ -302,15 +258,12 @@ pub struct PlayerStateBundle<T: PlayerState + Default> {
     transitions: TransitionsFrom<T>,
 }
 
-// impl<T: PlayerState + Default> PlayerStateBundle<T> {
-//     fn new() -> PlayerStateBundle<T> {
-//         PlayerStateBundle {
-//             state: T::default(),
-//             transitions: TransitionsFrom::<T>::default(),
-//         }
-//     }
-// }
-
+// States
+// states are components which are added to the entity on transition.
+// an entity can be in multiple states at once, eg Grounded and Running/Idle
+// Impl Playerstate for each state
+// Impl Transitionable<T: PlayerState> for each state that that should be able to be transitioned
+// from by a state
 pub trait PlayerState: Component<Storage = SparseStorage> + Clone {}
 
 #[derive(Component, Default, Copy, Clone, Debug)]
@@ -336,18 +289,15 @@ impl Transitionable<Idle> for Falling {}
 #[derive(Component, Clone, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Jumping {
-    //TODO:
-    //can this be frames/ticks instead?
-    // airtime: Timer,
     current_air_ticks: u32,
     max_air_ticks: u32,
 }
-//TODO: jumping timer is 0 when using PlayerStateBundle<Jumping>::default()
+
 impl Default for Jumping {
     fn default() -> Self {
         Jumping {
             current_air_ticks: 0,
-            max_air_ticks: 60,
+            max_air_ticks: 30,
         }
     }
 }
@@ -387,10 +337,9 @@ impl Transitionable<Falling> for Grounded {
 pub struct Attacking;
 impl PlayerState for Attacking {}
 
-//=======================================================================
-//player behavior systems, do stuff here in states and add transitions to other states by pushing
-//to a TransitionsFrom<T: PlayerState> components queue of transitions.
-
+///player behavior systems.
+///do stuff here in states and add transitions to other states by pushing
+///to a TransitionsFrom<T: PlayerState> components queue of transitions.
 struct PlayerBehaviorPlugin;
 
 impl Plugin for PlayerBehaviorPlugin {
@@ -402,7 +351,6 @@ impl Plugin for PlayerBehaviorPlugin {
                 player_run.run_if(any_with_component::<Running>()),
                 player_jump.run_if(any_with_component::<Jumping>()),
                 player_move,
-                // player_collisions,
                 player_grounded.run_if(any_with_component::<Grounded>()),
                 player_falling.run_if(any_with_component::<Falling>()),
             ),
@@ -425,7 +373,6 @@ fn player_idle(
         ),
         With<Grounded>,
     >,
-    // mut commands: Commands,
 ) {
     for (g_ent, _g_marker, action_state, idle, mut transitions) in query.iter_mut() {
         // println!("is idle");
@@ -442,7 +389,6 @@ fn player_idle(
     }
 }
 
-//seprate run and fall/jump movement? y/n?
 fn player_move(
     time: Res<Time>,
     mut q_gent: Query<(
@@ -462,9 +408,7 @@ fn player_move(
 
         //TODO: accelerate for few frames then apply clamped velocity
         velocity.x = 0.0;
-        // velocity.x += direction as f64 * time.delta_seconds_f64() * 5000.0;
         velocity.x += direction as f32 * 100.;
-        // velocity.x = velocity.x.clamp(-400., 400.);
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {
@@ -492,13 +436,12 @@ fn player_run(
     mut commands: Commands,
 ) {
     for (g_ent, mut velocity, action_state, running, mut transitions) in q_gent.iter_mut() {
-        // println!("{:?} is running", g_ent);
         let mut direction: f32 = 0.0;
         if action_state.pressed(PlayerAction::Move) {
             direction = action_state.value(PlayerAction::Move);
         }
-
         //should it account for decel and only transition to idle when player stops completely?
+
         //shouldnt be able to transition to idle if we also jump
         if direction == 0.0 && action_state.released(PlayerAction::Jump) {
             transitions.push(Running::new_transition(Idle));
@@ -507,39 +450,35 @@ fn player_run(
     }
 }
 
-//TODO: Coyote time, impulse/gravity damping at top, double jump
+//TODO: Coyote time, impulse/gravity damping/float at top, double jump
+//TODO: load jump properties from script/animation (velocity/accel + ticks/frames)
 fn player_jump(
-    time: Res<Time>,
     mut query: Query<
         (
-            Entity,
             &ActionState<PlayerAction>,
             &mut LinearVelocity,
             &mut Jumping,
             &mut TransitionsFrom<Jumping>,
         ),
-        (With<PlayerGent>),
+        With<PlayerGent>,
     >,
 ) {
-    for (entity, action_state, mut velocity, mut jumping, mut transitions) in query.iter_mut() {
+    for (action_state, mut velocity, mut jumping, mut transitions) in query.iter_mut() {
         //can enter state and first frame jump not pressed if you tap
-        //this causes higher jump for some reason
+        //i think this is related to the fixedtimestep input
         // print!("{:?}", action_state.get_pressed());
         if jumping.current_air_ticks >= jumping.max_air_ticks
-        || action_state.released(PlayerAction::Jump)
+            || action_state.released(PlayerAction::Jump)
         {
-            // println!("{:?}", jumping.current_air_ticks);
-            // println!("we falling???");
             transitions.push(Jumping::new_transition(Falling));
-            // velocity.y = 200.0 * time.delta_seconds_f64();
         }
-        jumping.current_air_ticks +=1;
+        jumping.current_air_ticks += 1;
 
-        velocity.y += 60.;
+        velocity.y += 20.;
         if jumping.is_added() {
-            velocity.y += 100.;
+            velocity.y += 60.;
         }
-        velocity.y = velocity.y.clamp(0., 60.);
+        velocity.y = velocity.y.clamp(0., 100.);
     }
 }
 
@@ -606,9 +545,9 @@ fn player_grounded(
         let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
         //just pressed seems to get missed sometimes... but we need it because pressed makes you
         //jump continuously if held
-        //known issue https://github.com/bevyengine/bevy/issues/6183 
+        //known issue https://github.com/bevyengine/bevy/issues/6183
         if action_state.just_pressed(PlayerAction::Jump) {
-        // if action_state.pressed(PlayerAction::Jump) {
+            // if action_state.pressed(PlayerAction::Jump) {
             transitions.push(Grounded::new_transition(
                 Jumping::default(),
             ))
@@ -633,9 +572,8 @@ fn player_falling(
     >,
 ) {
     for (entity, mut velocity, action_state, hits, falling, mut transitions) in query.iter_mut() {
-        velocity.y -= 20.;
-        velocity.y = velocity.y.clamp(-60., 0.);
         for hit in hits.iter() {
+            //if we are ~touching the ground
             if hit.time_of_impact < 0.001 {
                 transitions.push(Falling::new_transition(Grounded));
                 // println!("{:?} should be grounded", entity);
@@ -647,15 +585,16 @@ fn player_falling(
                 } else {
                     transitions.push(Falling::new_transition(Idle));
                 }
+            //fall
+            } else {
+                velocity.y -= 10.;
+                velocity.y = velocity.y.clamp(-100., 0.);
             }
         }
-        // }
     }
 }
 
-//=========================================================================
-//play animations here, run after transitions
-
+///play animations here, run after transitions
 struct PlayerAnimationPlugin;
 
 impl Plugin for PlayerAnimationPlugin {

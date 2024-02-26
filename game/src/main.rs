@@ -4,11 +4,13 @@ mod prelude {
     pub use theseeker_engine::prelude::*;
 
     pub use crate::appstate::{AppState, StateDespawnMarker};
+    pub use crate::gamestate::GameState;
 }
 
 use crate::prelude::*;
 
 mod appstate;
+mod gamestate;
 mod assets;
 mod camera;
 mod cli;
@@ -85,6 +87,7 @@ fn main() {
         crate::camera::CameraPlugin,
         crate::level::LevelManagerPlugin,
         crate::game::GameplayPlugin,
+        crate::gamestate::GameStatePlugin,
     ));
 
     #[cfg(feature = "dev")]

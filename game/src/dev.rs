@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use crate::gamestate::{pause, unpause};
 
 pub struct DevPlugin;
 
@@ -8,16 +9,24 @@ impl Plugin for DevPlugin {
         app.register_clicommand_args("spawn_phystester", cli_spawn_phystester);
         app.register_clicommand_args("spawn_script", cli_spawn_script);
         app.register_clicommand_args("spawn_anim", cli_spawn_anim);
-        // app.add_systems(OnEnter(AppState::InGame), debug_spawn_player);
         app.add_systems(
             Last,
             debug_progress
                 .run_if(resource_exists::<ProgressCounter>())
                 .after(iyes_progress::TrackedProgressSet),
         );
-        //this is broken on xpbd 3.2, need patch update
+        app.add_systems(
+            GameTickUpdate,
+            (
+                pause.run_if(in_state(GameState::Playing)),
+                unpause.run_if(in_state(GameState::Paused)),
+            ),
+        );
         app.add_plugins(PhysicsDebugPlugin::default());
-        app.add_plugins((FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin::default()));
+        app.add_plugins((
+            FrameTimeDiagnosticsPlugin,
+            LogDiagnosticsPlugin::default(),
+        ));
     }
 }
 
