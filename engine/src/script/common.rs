@@ -270,7 +270,7 @@ impl ScriptActionParams for CommonScriptParams {
         &self,
         tracker: &mut Self::Tracker,
         action_id: ActionId,
-        (time, game_time): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+        (_time, game_time): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
     ) -> Result<(), ScriptUpdateResult> {
         if let Some(i_delayed) = tracker.q_delayed.iter()
             .position(|(tick, aid)| *tick == game_time.tick() && *aid == action_id)

@@ -15,13 +15,13 @@ impl Plugin for GameTimePlugin {
                 run_gametickupdate_schedule.after(update_gametime),
             ),
         );
-        app.configure_set(
+        app.configure_sets(
             Update,
             GameTickSet::Pre
                 .before(run_gametickupdate_schedule)
                 .after(update_gametime),
         );
-        app.configure_set(
+        app.configure_sets(
             Update,
             GameTickSet::Post.after(run_gametickupdate_schedule),
         );

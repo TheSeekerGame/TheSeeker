@@ -11,32 +11,17 @@ impl Plugin for AssetsPlugin {
             loading_state: AppState::AssetsLoading,
         });
 
-        // All game assets are to be defined in dynamic collections files
-        // See those files for details on each one, there be comments. :)
-        app.add_dynamic_collection_to_loading_state::<_, StandardDynamicAssetCollection>(
-            AppState::AssetsLoading,
-            "gfx.assets.ron",
+        // bevy_asset_loader
+        app.add_loading_state(
+            LoadingState::new(AppState::AssetsLoading)
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("gfx.assets.ron")
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("audio.assets.ron")
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("levels.assets.ron")
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("gameplay.assets.ron")
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("ui.assets.ron")
+                .load_collection::<UiAssets>()
+                .load_collection::<MainMenuAssets>()
         );
-        app.add_dynamic_collection_to_loading_state::<_, StandardDynamicAssetCollection>(
-            AppState::AssetsLoading,
-            "audio.assets.ron",
-        );
-        app.add_dynamic_collection_to_loading_state::<_, StandardDynamicAssetCollection>(
-            AppState::AssetsLoading,
-            "levels.assets.ron",
-        );
-        app.add_dynamic_collection_to_loading_state::<_, StandardDynamicAssetCollection>(
-            AppState::AssetsLoading,
-            "gameplay.assets.ron",
-        );
-        app.add_dynamic_collection_to_loading_state::<_, StandardDynamicAssetCollection>(
-            AppState::AssetsLoading,
-            "ui.assets.ron",
-        );
-
-        // Some assets can be defined statically in Resource structs for ease of access
-        app.add_collection_to_loading_state::<_, UiAssets>(AppState::AssetsLoading);
-        app.add_collection_to_loading_state::<_, MainMenuAssets>(AppState::AssetsLoading);
     }
 }
 
