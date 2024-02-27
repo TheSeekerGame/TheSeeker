@@ -14,10 +14,6 @@ pub struct AssetsPlugin<S: States> {
 
 impl<S: States> Plugin for AssetsPlugin<S> {
     fn build(&self, app: &mut App) {
-        app.add_loading_state(LoadingState::new(
-            self.loading_state.clone(),
-        ));
-
         // add custom asset types
         app.add_plugins((
             TomlAssetPlugin::<self::script::Script>::new(&["script.toml"]),
@@ -36,7 +32,7 @@ impl<S: States> Plugin for AssetsPlugin<S> {
                 apply_deferred.in_set(AssetsSet::ResolveKeysFlush),
             ),
         );
-        app.configure_set(
+        app.configure_sets(
             GameTickUpdate,
             AssetsSet::ResolveKeysFlush.after(AssetsSet::ResolveKeys),
         );
