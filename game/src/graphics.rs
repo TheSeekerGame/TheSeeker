@@ -30,6 +30,7 @@ pub struct FogLayer;
 
 /// marker component for tracking position of a fog emitter
 /// any transform with this component will emit fog.
+/// Distance is
 #[derive(Component, Default)]
 pub struct FogEmitter {
     dist: f32,
@@ -58,18 +59,14 @@ pub fn setup_fog(
                     alpha: alpha / depths.len() as f32,
                     color: Color::rgba(0.87, 0.86, 1.0, 1.0),
                     emitter1: Vec4::new(0.0, 400.0, 50.0, 0.0),
-                    emitter2: Default::default(),
-                    emitter3: Default::default(),
                 }),
                 ..default()
             },
         ));
     }
-    println!("fog spawned");
 }
 
 pub fn update_fog(
-    mut commands: Commands,
     mut fog_bundle_query: Query<(&mut Transform, &Handle<FogMaterial>, &mut Visibility), With<FogLayer>>,
     mut emitters: Query<(&Transform, &FogEmitter), Without<FogLayer>>,
     mut q_cam: Query<&Transform, (With<MainCamera>, Without<FogLayer>)>,
@@ -79,7 +76,7 @@ pub fn update_fog(
         return;
     };
     // get the nearest emitter; currently only supports one emitter
-    // on screen at a time
+    // on screen at a time;
     let mut mat_data = None;
     let mut sqr_dst = f32::MAX;
     for (transfrm, emitter) in emitters.iter() {
@@ -123,10 +120,6 @@ struct FogMaterial {
     /// x, y, are the coordinates of the emitter;
     /// z is distance
     emitter1: Vec4,
-    #[uniform(0)]
-    emitter2: Vec4,
-    #[uniform(0)]
-    emitter3: Vec4,
 }
 
 impl Material2d for FogMaterial {

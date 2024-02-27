@@ -8,8 +8,6 @@ struct FogMaterial {
     alpha: f32,
     color: vec4<f32>,
     emitter1: vec4<f32>,
-    emitter2: vec4<f32>,
-    emitter3: vec4<f32>,
 }
 
 @group(1) @binding(0) var<uniform> fog_mat: FogMaterial;
@@ -21,7 +19,7 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
 
     // calculates parallax offset
     // works by scaling the effective distance of the emitter from the camera
-    let emitter_pos_init = fog_mat.emitter1.xy + vec2(100.0, 0.0);
+    let emitter_pos_init = fog_mat.emitter1.xy;
     var delta = emitter_pos_init - camera_pos.xy;
     delta *= 1.0/ (fog_mat.depth);
     let emitter_pos_final = camera_pos.xy + delta.xy;
@@ -31,12 +29,16 @@ fn fragment(mesh: VertexOutput) -> @location(0) vec4<f32> {
     let offset = emitter_pos_final - emitter_pos_init;
     let scaledpos = (world_pos - offset)*0.05;
 
-    // low freq noise
-    var low_f_noise = perlinNoise3(vec3<f32>(globals.time*0.1 + 1.0 / fog_mat.depth, scaledpos.y*0.32, scaledpos.x*0.32, ));
+    // low frequency noise
+    var low_f_noise = perlinNoise3(vec3<f32>(scaledpos.x*0.32, scaledpos.y*0.32, globals.time*0.1 + 1.0 / fog_mat.depth));
+
     // Generates cool noise affect by combining squared noise with subtracted, different scaled noise.
-    var noise = perlinNoise3(vec3<f32>(globals.time*0.25 + 10.0 / fog_mat.depth, scaledpos.y, scaledpos.x, ));
-    var noise1 = perlinNoise3(vec3<f32>(globals.time*0.25 + 5.0 / fog_mat.depth, scaledpos.y*0.5, scaledpos.x*0.5, ));
-    noise = (noise*noise - noise1- low_f_noise)*0.3 + 0.5;
+    // Note that we use time as the z coordinate, and offset it by depth; this makes the fog
+    // look 3d; different fogs in different layers will be different slices of the same 3d noise
+    // resulting in a better effect.
+    var noise = perlinNoise3(vec3<f32>(scaledpos.x, scaledpos.y, globals.time*0.25 + 10.0 / fog_mat.depth));
+    var noise1 = perlinNoise3(vec3<f32>(scaledpos.x*0.5, scaledpos.y*0.5, globals.time*0.25 + 5.0 / fog_mat.depth));
+    noise = (noise*noise - noise1 - low_f_noise)*0.3 + 0.5;
 
     // makes fog falloff farther from emitter center
     let distance = distance(world_pos, emitter_pos_final);
