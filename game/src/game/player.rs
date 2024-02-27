@@ -37,7 +37,7 @@ impl Plugin for PlayerPlugin {
             debug_player_states
                 .run_if(in_state(GameState::Playing))
                 .after(PlayerStateSet::Transition),
-        )
+        );
     }
 }
 
