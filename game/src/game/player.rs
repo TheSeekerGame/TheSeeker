@@ -236,7 +236,7 @@ fn transition_from<T: Component + Send + Sync + 'static>(
 }
 
 pub trait Transitionable<T: PlayerState + Default> {
-    fn new_transition(next: T) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
+    fn new_transition(_next: T) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
@@ -311,7 +311,7 @@ pub struct Grounded;
 impl PlayerState for Grounded {}
 //cant be Idle or Running if not Grounded
 impl Transitionable<Jumping> for Grounded {
-    fn new_transition(next: Jumping) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
+    fn new_transition(_next: Jumping) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
@@ -322,7 +322,7 @@ impl Transitionable<Jumping> for Grounded {
 }
 //cant be Idle or Running if not Grounded
 impl Transitionable<Falling> for Grounded {
-    fn new_transition(next: Falling) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
+    fn new_transition(_next: Falling) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
@@ -365,16 +365,17 @@ impl Plugin for PlayerBehaviorPlugin {
 fn player_idle(
     mut query: Query<
         (
-            Entity,
-            &PlayerGent,
             &ActionState<PlayerAction>,
-            &Idle,
             &mut TransitionsFrom<Idle>,
         ),
-        With<Grounded>,
+        (
+            With<Grounded>,
+            With<Idle>,
+            With<PlayerGent>,
+        ),
     >,
 ) {
-    for (g_ent, _g_marker, action_state, idle, mut transitions) in query.iter_mut() {
+    for (action_state, mut transitions) in query.iter_mut() {
         // println!("is idle");
         // check for direction input
         let mut direction: f32 = 0.0;
@@ -390,16 +391,14 @@ fn player_idle(
 }
 
 fn player_move(
-    time: Res<Time>,
     mut q_gent: Query<(
-        Entity,
         &mut LinearVelocity,
         &ActionState<PlayerAction>,
         &PlayerGent,
     )>,
-    mut q_gfx_player: Query<(&mut ScriptPlayer<SpriteAnimation>), With<PlayerGfx>>,
+    mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for (entity, mut velocity, action_state, gent) in q_gent.iter_mut() {
+    for (mut velocity, action_state, gent) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         if action_state.pressed(PlayerAction::Move) {
             //use .clamped_value()?
@@ -425,17 +424,18 @@ fn player_move(
 fn player_run(
     mut q_gent: Query<
         (
-            Entity,
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
-            &Running,
             &mut TransitionsFrom<Running>,
         ),
-        (With<PlayerGent>, With<Grounded>),
+        (
+            With<PlayerGent>,
+            With<Grounded>,
+            With<Running>,
+        ),
     >,
-    mut commands: Commands,
 ) {
-    for (g_ent, mut velocity, action_state, running, mut transitions) in q_gent.iter_mut() {
+    for (mut velocity, action_state, mut transitions) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         if action_state.pressed(PlayerAction::Move) {
             direction = action_state.value(PlayerAction::Move);
@@ -488,13 +488,11 @@ fn player_collisions(
     collisions: Res<Collisions>,
     mut q_gent: Query<
         (
-            Entity,
-            &RigidBody,
             &mut Position,
             &Rotation,
             &mut LinearVelocity,
         ),
-        With<PlayerGent>,
+        (With<PlayerGent>, With<RigidBody>),
     >,
 ) {
     for contacts in collisions.iter() {
@@ -503,7 +501,7 @@ fn player_collisions(
         }
 
         let is_first: bool;
-        let (g_ent, rb, mut position, rotation, mut linear_velocity) =
+        let (mut position, rotation, mut linear_velocity) =
             if let Ok(player) = q_gent.get_mut(contacts.entity1) {
                 is_first = true;
                 player
@@ -532,16 +530,14 @@ fn player_collisions(
 fn player_grounded(
     mut query: Query<
         (
-            Entity,
             &ShapeHits,
             &ActionState<PlayerAction>,
-            &Grounded,
             &mut TransitionsFrom<Grounded>,
         ),
-        (With<PlayerGent>),
+        (With<PlayerGent>, With<Grounded>),
     >,
 ) {
-    for (entity, hits, action_state, grounded, mut transitions) in query.iter_mut() {
+    for (hits, action_state, mut transitions) in query.iter_mut() {
         let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
         //just pressed seems to get missed sometimes... but we need it because pressed makes you
         //jump continuously if held
@@ -558,20 +554,17 @@ fn player_grounded(
 }
 
 fn player_falling(
-    time: Res<Time>,
     mut query: Query<
         (
-            Entity,
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
             &ShapeHits,
-            &Falling,
             &mut TransitionsFrom<Falling>,
         ),
-        With<PlayerGent>,
+        (With<PlayerGent>, With<Falling>),
     >,
 ) {
-    for (entity, mut velocity, action_state, hits, falling, mut transitions) in query.iter_mut() {
+    for (mut velocity, action_state, hits, mut transitions) in query.iter_mut() {
         for hit in hits.iter() {
             //if we are ~touching the ground
             if hit.time_of_impact < 0.001 {
