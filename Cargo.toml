@@ -97,7 +97,11 @@ features = [
 
 [dependencies.bevy_asset_loader]
 version = "0.19"
-features = ["2d", "progress_tracking", "standard_dynamic_assets"]
+features = [
+    "2d", 
+    "progress_tracking", 
+    "standard_dynamic_assets"
+]
 
 [dependencies.bevy_common_assets]
 version = "0.9"
