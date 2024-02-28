@@ -4,13 +4,14 @@ use bevy::prelude::shape::Quad;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 use bevy::sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle};
 use bevy_ecs_ldtk::GridCoords;
+use crate::prelude::AppState::InGame;
 
 pub struct GraphicsFxPlugin;
 
 impl Plugin for GraphicsFxPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(Material2dPlugin::<FogMaterial>::default());
-        app.add_systems(Startup, setup_fog);
+        app.add_systems(OnEnter(InGame), setup_fog);
         app.add_systems(Startup, spawn_test_fog);
         app.add_systems(Update, update_fog);
     }
