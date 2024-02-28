@@ -170,10 +170,10 @@ pub fn spawn_wall_collision(
                 for wall_rect in wall_rects {
                     level.spawn((
                         Collider::cuboid(
-                            (wall_rect.right as f64 - wall_rect.left as f64 + 1.)
-                                * grid_size as f64,
-                            (wall_rect.top as f64 - wall_rect.bottom as f64 + 1.)
-                                * grid_size as f64,
+                            (wall_rect.right as f32 - wall_rect.left as f32 + 1.)
+                                * grid_size as f32,
+                            (wall_rect.top as f32 - wall_rect.bottom as f32 + 1.)
+                                * grid_size as f32,
                         ),
                         RigidBody::Static,
                         Friction::new(1.0),

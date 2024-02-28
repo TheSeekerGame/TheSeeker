@@ -1,6 +1,6 @@
 //! Everything to do with the in-game camera(s)
 
-use crate::prelude::*;
+use crate::{game::player::PlayerGent, prelude::*};
 
 pub struct CameraPlugin;
 
@@ -16,7 +16,13 @@ impl Plugin for CameraPlugin {
             OnEnter(AppState::InGame),
             setup_main_camera,
         );
-        app.add_systems(Update, manage_camera_projection);
+        app.add_systems(
+            Update,
+            (
+                manage_camera_projection,
+                camera_follow_player,
+            ),
+        );
     }
 }
 
@@ -53,13 +59,24 @@ fn setup_main_camera(mut commands: Commands) {
     });
 }
 
-fn manage_camera_projection(
-    // mut q_cam: Query<&mut OrthographicProjection, With<MainCamera>>,
+fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, With<MainCamera>>,
     // mut q_window: Query<&Window, With<PrimaryWindow>>,
 ) {
     // TODO
 }
 
+//TODO
+fn camera_follow_player(
+    mut q_cam: Query<&mut Transform, With<MainCamera>>,
+    q_player: Query<&Transform, (With<PlayerGent>, Without<MainCamera>)>,
+) {
+    if let Ok(mut cam_xform) = q_cam.get_single_mut() {
+        if let Ok(player_xform) = q_player.get_single() {
+            cam_xform.translation.x = player_xform.translation.x;
+            cam_xform.translation.y = player_xform.translation.y;
+        }
+    }
+}
 fn cli_camera_at(In(args): In<Vec<String>>, mut q_cam: Query<&mut Transform, With<MainCamera>>) {
     if args.len() != 2 {
         error!("\"camera_at <x> <y>\"");

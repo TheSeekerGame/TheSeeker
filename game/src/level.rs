@@ -13,17 +13,21 @@
 //! Any of the stuff that actually *happens* within the map when you
 //! play the game, doesn't belong here. Put that stuff under [`crate::game`].
 
+use crate::parallax::Parallax;
 use crate::prelude::*;
 
 pub struct LevelManagerPlugin;
 
 impl Plugin for LevelManagerPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(LevelSelection::Identifier("Level_0".into()));
+        app.insert_resource(LevelSelection::Identifier(
+            "Level_0".into(),
+        ));
         app.add_systems(
             OnEnter(AppState::InGame),
             game_level_init,
         );
+        app.add_systems(Update, attach_parallax);
     }
 }
 
@@ -31,7 +35,7 @@ impl Plugin for LevelManagerPlugin {
 fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
     // TODO: per-level asset management instead of preloaded assets
     // TODO: when we have save files, use that to choose the level to init at
-    commands.spawn((
+    let x = commands.spawn((
         StateDespawnMarker,
         LdtkWorldBundle {
             ldtk_handle: preloaded
@@ -40,4 +44,23 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
             ..Default::default()
         },
     ));
+}
+
+/// attaches parallax components to the different LdtkWorldBundle layers
+fn attach_parallax(
+    mut commands: Commands,
+    query: Query<(Entity, &LayerMetadata), Without<Parallax>>,
+) {
+    for (entity, layer_metadata) in query.iter() {
+        let amount = match &*layer_metadata.identifier {
+            "FarBackground" => { 0.3 }
+            "MiddleBackground" => { 0.2 }
+            "NearBackground" => { 0.1 }
+            _ => {
+                continue;
+            }
+        };
+        println!("inserted parallax on layer: {}", layer_metadata.identifier);
+        commands.entity(entity).insert(Parallax { depth: 1.0 + amount });
+    }
 }

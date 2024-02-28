@@ -4,6 +4,8 @@
 
 use crate::prelude::*;
 
+use self::player::PlayerBlueprintBundle;
+
 pub mod player;
 mod wall;
 
@@ -15,11 +17,9 @@ impl Plugin for GameplayPlugin {
         // so it is all in one place and easy to change!
         // Don't scatter it across the sub-modules/plugins!
         app.register_ldtk_int_cell::<wall::WallBundle>(17);
+        app.register_ldtk_entity::<PlayerBlueprintBundle>("Player");
 
         // Add the plugins for each game mechanic
-        app.add_plugins((
-            player::PlayerPlugin,
-            wall::WallPlugin,
-        ));
+        app.add_plugins((player::PlayerPlugin, wall::WallPlugin));
     }
 }
