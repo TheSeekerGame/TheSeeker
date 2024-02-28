@@ -44,12 +44,12 @@ fn main() {
     });
     let bevy_plugins = bevy_plugins.set(ImagePlugin::default_nearest());
     #[cfg(feature = "dev")]
-    let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
+        let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
         filter: "info,wgpu_core=warn,wgpu_hal=warn,iyes_progress=trace,theseeker_game=trace,theseeker_engine=trace".into(),
         level: bevy::log::Level::TRACE,
     });
     #[cfg(not(feature = "dev"))]
-    let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
+        let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
         filter: "info,wgpu_core=warn,wgpu_hal=warn,theseeker_game=info,theseeker_engine=info"
             .into(),
         level: bevy::log::Level::INFO,
@@ -75,8 +75,7 @@ fn main() {
         ProgressPlugin::new(AppState::AssetsLoading)
             .track_assets()
             .continue_to(AppState::MainMenu),
-        // PhysicsPlugins::new(theseeker_engine::time::GameTickUpdate),
-        PhysicsPlugins::default(),
+        PhysicsPlugins::new(theseeker_engine::time::GameTickUpdate),
     ));
 
     // our stuff
