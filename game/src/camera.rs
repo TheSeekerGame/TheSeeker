@@ -20,9 +20,9 @@ impl Plugin for CameraPlugin {
             Update,
             (
                 manage_camera_projection,
-                camera_follow_player,
             ),
         );
+        app.add_systems(GameTickUpdate, camera_follow_player);
     }
 }
 
