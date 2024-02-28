@@ -1,5 +1,7 @@
 //! Everything to do with the in-game camera(s)
 
+use bevy::core_pipeline::bloom::BloomSettings;
+use bevy::core_pipeline::tonemapping::Tonemapping;
 use crate::{game::player::PlayerGent, prelude::*};
 
 pub struct CameraPlugin;
@@ -41,21 +43,28 @@ pub struct MainCamera;
 pub struct GameViewLimits(Rect);
 
 fn setup_main_camera(mut commands: Commands) {
-    let mut camera = Camera2dBundle::default();
-
+    let mut camera = Camera2dBundle {
+        camera: Camera {
+            hdr: true,
+            ..default()
+        },
+        tonemapping: Tonemapping::AcesFitted,
+        ..default()
+    };
     camera.projection.scale = 1.0 / 6.0;
 
-    commands.spawn(MainCameraBundle {
+    commands.spawn((MainCameraBundle {
         camera,
         marker: MainCamera,
         despawn: StateDespawnMarker,
         // TODO: manage this from somewhere
         limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
-    });
+
+    }, BloomSettings::NATURAL));
 }
 
 fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, With<MainCamera>>,
-    // mut q_window: Query<&Window, With<PrimaryWindow>>,
+                            // mut q_window: Query<&Window, With<PrimaryWindow>>,
 ) {
     // TODO
 }
@@ -72,6 +81,7 @@ fn camera_follow_player(
         }
     }
 }
+
 fn cli_camera_at(In(args): In<Vec<String>>, mut q_cam: Query<&mut Transform, With<MainCamera>>) {
     if args.len() != 2 {
         error!("\"camera_at <x> <y>\"");
