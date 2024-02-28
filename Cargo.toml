@@ -89,7 +89,7 @@ features = [
     "zstd",
     "tonemapping_luts",
     "x11",
-    "wayland",
+    #"wayland",
     # FIXME: TEMPORARY
     "bevy_audio",
     "flac",

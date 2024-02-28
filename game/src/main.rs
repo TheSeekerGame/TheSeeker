@@ -10,20 +10,23 @@ mod prelude {
 use crate::prelude::*;
 
 mod appstate;
-mod gamestate;
 mod assets;
 mod camera;
 mod cli;
 mod game;
+mod gamestate;
 mod level;
 mod locale;
+
 mod screens {
     pub mod loading;
 }
+
 mod ui;
 
 #[cfg(feature = "dev")]
 mod dev;
+pub mod graphics;
 
 fn main() {
     let mut app = App::new();
@@ -88,6 +91,7 @@ fn main() {
         crate::level::LevelManagerPlugin,
         crate::game::GameplayPlugin,
         crate::gamestate::GameStatePlugin,
+        crate::graphics::GraphicsFxPlugin,
     ));
 
     #[cfg(feature = "dev")]
