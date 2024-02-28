@@ -27,6 +27,7 @@ mod ui;
 #[cfg(feature = "dev")]
 mod dev;
 pub mod graphics;
+mod parallax;
 
 fn main() {
     let mut app = App::new();
