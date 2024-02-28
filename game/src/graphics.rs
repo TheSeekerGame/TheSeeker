@@ -17,12 +17,10 @@ impl Plugin for GraphicsFxPlugin {
     }
 }
 
-pub fn spawn_test_fog(
-    mut commands: Commands,
-) {
+pub fn spawn_test_fog(mut commands: Commands) {
     commands.spawn((
         Transform::from_translation(Vec3::new(10.0, 400.0, 0.0)),
-        FogEmitter { dist: 200.0 }
+        FogEmitter { dist: 200.0 },
     ));
 }
 
@@ -56,7 +54,7 @@ pub fn setup_fog(
                     .into(),
                 transform: Transform::default().with_scale(Vec3::splat(1.0)),
                 material: materials.add(FogMaterial {
-                    depth: depth,
+                    depth,
                     alpha: alpha / depths.len() as f32,
                     color: Color::rgba(0.87, 0.86, 1.0, 1.0),
                     emitter1: Vec4::new(0.0, 400.0, 50.0, 0.0),
@@ -67,17 +65,21 @@ pub fn setup_fog(
     }
 }
 
-pub fn cleanup_fog(
-    mut commands: Commands,
-    mut fog_layers: Query<Entity, With<FogLayer>>,
-) {
-    for layer in fog_layers {
+pub fn cleanup_fog(mut commands: Commands, mut fog_layers: Query<Entity, With<FogLayer>>) {
+    for layer in &fog_layers {
         commands.entity(layer).despawn()
     }
 }
 
 pub fn update_fog(
-    mut fog_bundle_query: Query<(&mut Transform, &Handle<FogMaterial>, &mut Visibility), With<FogLayer>>,
+    mut fog_bundle_query: Query<
+        (
+            &mut Transform,
+            &Handle<FogMaterial>,
+            &mut Visibility,
+        ),
+        With<FogLayer>,
+    >,
     mut emitters: Query<(&Transform, &FogEmitter), Without<FogLayer>>,
     mut q_cam: Query<&Transform, (With<MainCamera>, Without<FogLayer>)>,
     mut materials: ResMut<Assets<FogMaterial>>,
@@ -90,7 +92,9 @@ pub fn update_fog(
     let mut mat_data = None;
     let mut sqr_dst = f32::MAX;
     for (transfrm, emitter) in emitters.iter() {
-        let new_dist = transfrm.translation.distance_squared(cam_trnsfrm.translation);
+        let new_dist = transfrm
+            .translation
+            .distance_squared(cam_trnsfrm.translation);
         if new_dist < sqr_dst {
             sqr_dst = new_dist;
             mat_data = Some((transfrm, emitter));
@@ -98,7 +102,11 @@ pub fn update_fog(
     }
     for (mut fog_trnsfrm, handle, mut visibility) in fog_bundle_query.iter_mut() {
         let Some(material) = materials.get_mut(handle) else {
-            error!("{}:{}: fog material missing from assets!", file!(), line!());
+            error!(
+                "{}:{}: fog material missing from assets!",
+                file!(),
+                line!()
+            );
             continue;
         };
         if let Some((emitter_trnsfrm, emitter)) = mat_data {
