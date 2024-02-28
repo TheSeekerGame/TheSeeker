@@ -10,4 +10,7 @@
     "level.01": File (
         path: "levels/level.01.ldtk"
     ),
+    "level.dev": File (
+        path: "levels/level.dev.ldtk"
+    ),
 })
