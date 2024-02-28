@@ -16,13 +16,8 @@ impl Plugin for CameraPlugin {
             OnEnter(AppState::InGame),
             setup_main_camera,
         );
-        app.add_systems(
-            Update,
-            (
-                manage_camera_projection,
-                camera_follow_player,
-            ),
-        );
+        // app.add_systems(Update, (manage_camera_projection,));
+        app.add_systems(GameTickUpdate, camera_follow_player);
     }
 }
 
