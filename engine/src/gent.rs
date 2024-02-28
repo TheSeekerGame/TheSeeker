@@ -15,11 +15,13 @@ impl Plugin for GentPlugin {
 pub struct GentPhysicsBundle {
     pub rb: RigidBody,
     pub collider: Collider,
+    pub shapecast: ShapeCaster,
 }
 
 #[derive(Component)]
 pub struct TransformGfxFromGent {
     pub pixel_aligned: bool,
+    //TODO: remove gent here and refactor transfor_gfx_from_gent to use player gfx?
     pub gent: Entity,
 }
 

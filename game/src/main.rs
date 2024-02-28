@@ -4,11 +4,13 @@ mod prelude {
     pub use theseeker_engine::prelude::*;
 
     pub use crate::appstate::{AppState, StateDespawnMarker};
+    pub use crate::gamestate::GameState;
 }
 
 use crate::prelude::*;
 
 mod appstate;
+mod gamestate;
 mod assets;
 mod camera;
 mod cli;
@@ -57,8 +59,9 @@ fn main() {
     // and custom "engine"
     app.add_plugins(theseeker_engine::EnginePlugins);
 
-    app.insert_resource(Time::new_with(Physics::fixed_once_hz(96.0)));
-    app.insert_resource(Gravity::default());
+    app.insert_resource(Time::new_with(Physics::fixed_once_hz(
+        96.0,
+    )));
 
     // external plugins
     app.add_plugins((
@@ -84,6 +87,7 @@ fn main() {
         crate::camera::CameraPlugin,
         crate::level::LevelManagerPlugin,
         crate::game::GameplayPlugin,
+        crate::gamestate::GameStatePlugin,
     ));
 
     #[cfg(feature = "dev")]

@@ -1181,7 +1181,7 @@ dependencies = [
  "indexmap 2.2.2",
  "itertools 0.11.0",
  "nalgebra",
- "parry2d-f64",
+ "parry2d",
 ]
 
 [[package]]
@@ -3381,10 +3381,10 @@ dependencies = [
 ]
 
 [[package]]
-name = "parry2d-f64"
+name = "parry2d"
 version = "0.13.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "542444b3ef557470c352ca13ba34a3d5e558b34265339320b8fb560bc82c427e"
+checksum = "94683d8d7e785fe84b02d0a0dbe0fcf359c031c338dd6d144de958573c570c25"
 dependencies = [
  "approx",
  "arrayvec",

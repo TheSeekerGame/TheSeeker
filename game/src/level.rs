@@ -19,7 +19,9 @@ pub struct LevelManagerPlugin;
 
 impl Plugin for LevelManagerPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(LevelSelection::Identifier("Level_0".into()));
+        app.insert_resource(LevelSelection::Identifier(
+            "Level_0".into(),
+        ));
         app.add_systems(
             OnEnter(AppState::InGame),
             game_level_init,

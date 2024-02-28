@@ -8,6 +8,12 @@ frame_min = 0
 frame_max = 1
 frame_start = 0
 
+# LOOP the 2nd frame, so animation keeps playing or flip doesnt work except on frame 0
+[[script]]
+run_at_frame = 1
+action = "SetFrameNext"
+frame_index = 1
+
 # Support left/right flipping
 [[script]]
 run_on_slot_enable = "DirectionLeft"
