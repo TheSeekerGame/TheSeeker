@@ -13,7 +13,7 @@
 //! Any of the stuff that actually *happens* within the map when you
 //! play the game, doesn't belong here. Put that stuff under [`crate::game`].
 
-use crate::parallax::{Parallax, ParallaxOrigin};
+use crate::parallax::{Parallax, ParallaxOffset};
 use crate::prelude::*;
 
 pub struct LevelManagerPlugin;
@@ -76,11 +76,15 @@ fn attach_parallax(
             "inserted parallax on layer: {}",
             layer_metadata.identifier
         );
+        println!("{:?}", layer_metadata);
         commands.entity(entity).insert((
             Parallax {
                 depth: 1.0 + amount,
             },
-            ParallaxOrigin(Vec2::new(88.0, 440.6)),
+            ParallaxOffset(Vec2::new(
+                (layer_metadata.c_wid * layer_metadata.grid_size) as f32 * 0.5,
+                (layer_metadata.c_hei * layer_metadata.grid_size) as f32 * 0.5,
+            )),
         ));
     }
 }

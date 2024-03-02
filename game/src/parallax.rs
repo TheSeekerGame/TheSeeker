@@ -46,17 +46,13 @@ pub struct ParallaxOrigin(pub Vec2);
 /// The center of parallax, is the position compared to the cameras position in order
 /// to determine the parallax offset amount.
 #[derive(Clone, PartialEq, Debug, Default, Component)]
-pub struct ParallaxOffset(Vec2);
+pub struct ParallaxOffset(pub Vec2);
 
 /// Applies parallax transformations
 fn init_parallax(
     mut commands: Commands,
     mut query: Query<
-        (
-            Entity,
-            &Transform,
-            Option<&ParallaxOffset>,
-        ),
+        (Entity, &Transform),
         (
             Without<MainCamera>,
             With<Parallax>,
@@ -64,9 +60,9 @@ fn init_parallax(
         ),
     >,
 ) {
-    for (entity, transform, offset) in query.iter_mut() {
+    for (entity, transform) in query.iter_mut() {
         commands.entity(entity).insert(ParallaxOrigin(
-            transform.translation.xy() + offset.map(|x| x.0).unwrap_or_default(),
+            transform.translation.xy(),
         ));
     }
 }
@@ -77,6 +73,7 @@ fn apply_parallax(
             &mut Transform,
             &Parallax,
             &ParallaxOrigin,
+            Option<&ParallaxOffset>,
         ),
         Without<MainCamera>,
     >,
@@ -86,20 +83,23 @@ fn apply_parallax(
         return;
     };
     let mut a = false;
-    for (mut transform, parallax, origin) in query.iter_mut() {
-        let mut delta = cam_trnsfrm.translation.xy() - origin.0;
+    for (mut transform, parallax, origin, offset) in query.iter_mut() {
+        let offset = offset.map(|x| x.0);
+        let mut delta = cam_trnsfrm.translation.xy() - (origin.0 + offset.unwrap_or_default());
 
         delta = delta / (parallax.depth);
         if !a {
             println!(
-                "origin: {}, local: {}",
+                "origin: {}, local: {} parallax val: {} offset: {}",
                 origin.0,
-                transform.translation.xy()
+                transform.translation.xy(),
+                parallax.depth,
+                offset.unwrap_or_default(),
             );
             println!("cam: {}", cam_trnsfrm.translation.xy());
             a = true;
         }
-        let mut pos_final = cam_trnsfrm.translation.xy() + delta;
+        let mut pos_final = cam_trnsfrm.translation.xy() - delta - offset.unwrap_or_default();
 
         transform.translation.x = pos_final.x;
         transform.translation.y = pos_final.y;
