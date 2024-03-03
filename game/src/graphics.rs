@@ -47,19 +47,13 @@ pub fn setup_fog(
     mut materials: ResMut<Assets<FogMaterial>>,
 ) {
     // Spawn four layers
-    let depths = [1.25f32, 1.15, 1.05, 0.95];
-    let zs = [2.5f32, 3.5, 4.5, 5.5];
-    let rgb = [
-        Color::rgba(1.0, 0.0, 0.0, 1.0),
-        Color::rgba(0.0, 0.0, 1.0, 1.0),
-        Color::rgba(0.0, 1.0, 0.0, 1.0),
-        Color::rgba(1.0, 1.0, 1.0, 1.0),
-    ];
+    let depths = [1.25f32, 1.15, 1.05, 0.95, 0.85];
+    // the last needs to be high to draw on top of everything, layers 5-15 are the various overlays
+    let zs = [2.5f32, 3.5, 4.5, 16.0, 17.0];
 
-    //let alpha = 0.5;
-    let alpha = 2.5;
+    let alpha = 0.85 / depths.len() as f32;
 
-    for ((depth, z), rgb) in depths.into_iter().zip(zs.into_iter()).zip(rgb.into_iter()) {
+    for (depth, z) in depths.into_iter().zip(zs.into_iter()) {
         commands.spawn((
             FogLayer,
             MaterialMesh2dBundle {
@@ -73,8 +67,8 @@ pub fn setup_fog(
                     .with_translation(Vec3::new(0.0, 0.0, z)),
                 material: materials.add(FogMaterial {
                     depth,
-                    alpha: alpha / depths.len() as f32,
-                    color: rgb,
+                    alpha,
+                    color: Color::rgba(0.87, 0.86, 1.0, alpha),
                     emitter1: Vec4::new(0.0, 400.0, 50.0, 0.0),
                 }),
                 ..default()

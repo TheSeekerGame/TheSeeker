@@ -64,10 +64,6 @@ fn attach_parallax(
     query: Query<(Entity, &LayerMetadata, &Transform), Without<Parallax>>,
 ) {
     for (entity, layer_metadata, transform) in query.iter() {
-        println!(
-            "id: {} z: {}",
-            layer_metadata.identifier, transform.translation.z
-        );
         let amount = match &*layer_metadata.identifier {
             "FarBackground" => 0.3,
             "MiddleBackground" => 0.2,
