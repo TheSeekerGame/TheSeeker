@@ -8,6 +8,10 @@ use bevy::transform::TransformSystem::TransformPropagate;
 ///
 /// Note that making parallaxed objects the child of another object will distort the calulation,
 /// since offset is calculated from difference between cameras position and the objects [`ParallaxOrigin`]
+///
+/// Also note that if you want to change the parallaxed objects position, change [`ParallaxOrigin`]
+/// instead of its Transform; since the transform is modified to make the object behave as if it was
+/// 3d and far away.
 pub struct ParallaxPlugin;
 
 impl Plugin for ParallaxPlugin {
@@ -66,7 +70,8 @@ fn init_parallax(
         ));
     }
 }
-/// Applies parallax transformations
+/// Applies parallax transformations to all components with Transform, Parallax and ParallaxOrigin
+/// components
 fn apply_parallax(
     mut query: Query<
         (
@@ -82,24 +87,21 @@ fn apply_parallax(
     let Some(cam_trnsfrm) = q_cam.iter().next() else {
         return;
     };
-    let mut a = false;
+
     for (mut transform, parallax, origin, offset) in query.iter_mut() {
+        // Same as in the wgsl fog parallax, calculates the vector from the center to the camera,
+        // and then scales it based on the depth. (only difference is applying the optional offset)
         let offset = offset.map(|x| x.0);
         let mut delta = cam_trnsfrm.translation.xy() - (origin.0 + offset.unwrap_or_default());
-
         delta = delta / (parallax.depth);
-        if !a {
-            println!(
-                "origin: {}, local: {} parallax val: {} offset: {}",
-                origin.0,
-                transform.translation.xy(),
-                parallax.depth,
-                offset.unwrap_or_default(),
-            );
-            println!("cam: {}", cam_trnsfrm.translation.xy());
-            a = true;
-        }
+
+        // Getting the final position is different then in wgsl fog code, since we set it in world space
+        // instead of camera space, as well as account for the offset here as well.
         let mut pos_final = cam_trnsfrm.translation.xy() - delta - offset.unwrap_or_default();
+
+        // There is another way of doing parallax, without requiring PrallaxOrigin, that just measures
+        // the camera position change, divides it by the depth, and then translates the transform.
+        // This would result in a slow drift due to floating point error accumulation however.
 
         transform.translation.x = pos_final.x;
         transform.translation.y = pos_final.y;

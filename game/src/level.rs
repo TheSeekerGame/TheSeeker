@@ -72,11 +72,7 @@ fn attach_parallax(
                 continue;
             },
         };
-        println!(
-            "inserted parallax on layer: {}",
-            layer_metadata.identifier
-        );
-        println!("{:?}", layer_metadata);
+
         commands.entity(entity).insert((
             Parallax {
                 depth: 1.0 + amount,
