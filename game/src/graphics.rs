@@ -18,8 +18,14 @@ impl Plugin for GraphicsFxPlugin {
 }
 
 pub fn spawn_test_fog(mut commands: Commands) {
+    #[cfg(not(feature = "dev"))]
     commands.spawn((
         Transform::from_translation(Vec3::new(10.0, 400.0, 0.0)),
+        FogEmitter { dist: 200.0 },
+    ));
+    #[cfg(feature = "dev")]
+    commands.spawn((
+        Transform::from_translation(Vec3::new(10.0, 100.0, 0.0)),
         FogEmitter { dist: 200.0 },
     ));
 }
@@ -40,10 +46,20 @@ pub fn setup_fog(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<FogMaterial>>,
 ) {
-    // Spawn three layers
-    let depths = [0.7, 0.95, 1.1];
-    let alpha = 0.2;
-    for depth in depths {
+    // Spawn four layers
+    let depths = [1.25f32, 1.15, 1.05, 0.95];
+    let zs = [2.5f32, 3.5, 4.5, 5.5];
+    let rgb = [
+        Color::rgba(1.0, 0.0, 0.0, 1.0),
+        Color::rgba(0.0, 0.0, 1.0, 1.0),
+        Color::rgba(0.0, 1.0, 0.0, 1.0),
+        Color::rgba(1.0, 1.0, 1.0, 1.0),
+    ];
+
+    //let alpha = 0.5;
+    let alpha = 2.5;
+
+    for ((depth, z), rgb) in depths.into_iter().zip(zs.into_iter()).zip(rgb.into_iter()) {
         commands.spawn((
             FogLayer,
             MaterialMesh2dBundle {
@@ -52,11 +68,13 @@ pub fn setup_fog(
                         1000.0,
                     ))))
                     .into(),
-                transform: Transform::default().with_scale(Vec3::splat(1.0)),
+                transform: Transform::default()
+                    .with_scale(Vec3::splat(1.0))
+                    .with_translation(Vec3::new(0.0, 0.0, z)),
                 material: materials.add(FogMaterial {
                     depth,
                     alpha: alpha / depths.len() as f32,
-                    color: Color::rgba(0.87, 0.86, 1.0, 1.0),
+                    color: rgb,
                     emitter1: Vec4::new(0.0, 400.0, 50.0, 0.0),
                 }),
                 ..default()
@@ -113,8 +131,8 @@ pub fn update_fog(
             material.emitter1.x = emitter_trnsfrm.translation.x;
             material.emitter1.y = emitter_trnsfrm.translation.y;
             material.emitter1.z = emitter.dist;
-            fog_trnsfrm.translation = cam_trnsfrm.translation;
-            fog_trnsfrm.translation.z = 100.0;
+            fog_trnsfrm.translation.x = cam_trnsfrm.translation.x;
+            fog_trnsfrm.translation.y = cam_trnsfrm.translation.y;
 
             *visibility = Visibility::Inherited
         } else {
