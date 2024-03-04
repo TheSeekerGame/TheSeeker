@@ -10,6 +10,7 @@ use theseeker_engine::{
     script::ScriptPlayer,
 };
 
+use crate::game::gentstate::*;
 use crate::prelude::*;
 
 pub struct PlayerPlugin;
@@ -18,8 +19,7 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             GameTickUpdate,
-            (setup_player.run_if(in_state(GameState::Playing)),)
-                .chain()
+            (setup_player.run_if(in_state(GameState::Playing)))
                 .before(PlayerStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         )
@@ -204,11 +204,13 @@ impl Plugin for PlayerTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                transition_from::<Idle>.run_if(any_with_component::<Idle>()),
-                transition_from::<Running>.run_if(any_with_component::<Running>()),
-                transition_from::<Grounded>.run_if(any_with_component::<Grounded>()),
-                transition_from::<Jumping>.run_if(any_with_component::<Jumping>()),
-                transition_from::<Falling>.run_if(any_with_component::<Falling>()),
+                (
+                    transition_from::<Idle>.run_if(any_with_component::<Idle>()),
+                    transition_from::<Running>.run_if(any_with_component::<Running>()),
+                    transition_from::<Grounded>.run_if(any_with_component::<Grounded>()),
+                    transition_from::<Jumping>.run_if(any_with_component::<Jumping>()),
+                    transition_from::<Falling>.run_if(any_with_component::<Falling>()),
+                ),
                 apply_deferred,
             )
                 .chain()
@@ -311,7 +313,9 @@ pub struct Grounded;
 impl PlayerState for Grounded {}
 //cant be Idle or Running if not Grounded
 impl Transitionable<Jumping> for Grounded {
-    fn new_transition(_next: Jumping) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
+    fn new_transition(
+        _next: Jumping,
+    ) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
@@ -322,7 +326,9 @@ impl Transitionable<Jumping> for Grounded {
 }
 //cant be Idle or Running if not Grounded
 impl Transitionable<Falling> for Grounded {
-    fn new_transition(_next: Falling) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
+    fn new_transition(
+        _next: Falling,
+    ) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
@@ -347,12 +353,15 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                player_idle.run_if(any_with_component::<Idle>()),
-                player_run.run_if(any_with_component::<Running>()),
-                player_jump.run_if(any_with_component::<Jumping>()),
+                player_idle.run_if(any_with_components::<Idle, PlayerGent>()),
+                player_run.run_if(any_with_components::<Running, PlayerGent>()),
+                player_jump.run_if(any_with_components::<Jumping, PlayerGent>()),
                 player_move,
-                player_grounded.run_if(any_with_component::<Grounded>()),
-                player_falling.run_if(any_with_component::<Falling>()),
+                player_grounded.run_if(any_with_components::<
+                    Grounded,
+                    PlayerGent,
+                >()),
+                player_falling.run_if(any_with_components::<Falling, PlayerGent>()),
             ),
         );
         app.add_systems(
@@ -360,6 +369,12 @@ impl Plugin for PlayerBehaviorPlugin {
             player_collisions.in_set(SubstepSet::SolveUserConstraints),
         );
     }
+}
+
+//TODO: put somewhere else + add to prelude
+pub fn any_with_components<T: Component, N: Component>(
+) -> impl FnMut(Query<(), (With<T>, With<N>)>) -> bool + Clone {
+    move |query: Query<(), (With<T>, With<N>)>| !query.is_empty()
 }
 
 fn player_idle(
@@ -593,7 +608,7 @@ struct PlayerAnimationPlugin;
 impl Plugin for PlayerAnimationPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            Update,
+            GameTickUpdate,
             (
                 player_idle_animation,
                 player_falling_animation,
