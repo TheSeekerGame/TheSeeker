@@ -205,4 +205,11 @@
         rows: 1,
         columns: 6,
     ),
+    "anim.spider.Idle.sprite": TextureAtlas (
+        path: "sprites/spider/Idle.png",
+        tile_size_x: 90.,
+        tile_size_y: 90.,
+        rows: 1,
+        columns: 17,
+    ),
 })

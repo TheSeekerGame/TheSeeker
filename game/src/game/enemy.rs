@@ -18,10 +18,14 @@ impl Plugin for EnemyPlugin {
                 .before(EnemyStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         );
+        app.add_systems(
+            GameTickUpdate,
+            test_spawn.run_if(in_state(AppState::InGame)),
+        );
         app.add_plugins((
             // EnemyBehaviorPlugin,
             // EnemyTransitionPlugin,
-            // EnemyAnimationPlugin,
+            EnemyAnimationPlugin,
         ));
     }
 }
@@ -66,24 +70,44 @@ pub struct EnemyGfx {
     e_gent: Entity,
 }
 
+fn test_spawn(
+    q: Query<&Transform, With<super::player::PlayerGent>>,
+    mut commands: Commands,
+    input: Res<Input<KeyCode>>,
+) {
+    if input.just_pressed(KeyCode::I) {
+        for transform in q.iter() {
+            commands
+                .spawn(EnemyBlueprint)
+                .insert(TransformBundle::from_transform(
+                    // transform.with_translation(Vec3::new(0., 10., 0.)),
+                    *transform,
+                ));
+        }
+    }
+}
+
 fn setup_enemy(q: Query<(&Transform, Entity), Added<EnemyBlueprint>>, mut commands: Commands) {
     for (xf_gent, e_gent) in q.iter() {
+        println!("{:?} enemy", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
-            EnemyGentBundle {
-                marker: EnemyGent { e_gfx },
-                phys: GentPhysicsBundle {
-                    rb: RigidBody::Kinematic,
-                    collider: Collider::cuboid(6.0, 10.0),
-                    shapecast: ShapeCaster::new(
-                        Collider::cuboid(6.0, 10.0),
-                        Vec2::new(0.0, -2.0),
-                        0.0,
-                        Vec2::NEG_Y.into(),
-                    ),
-                },
-            },
-            GentStateBundle::<Falling>::default(),
+            // EnemyGentBundle {
+            //     marker: EnemyGent { e_gfx },
+            //     phys: GentPhysicsBundle {
+            //         rb: RigidBody::Kinematic,
+            //         collider: Collider::cuboid(6.0, 10.0),
+            //         shapecast: ShapeCaster::new(
+            //             Collider::cuboid(6.0, 10.0),
+            //             Vec2::new(0.0, -2.0),
+            //             0.0,
+            //             Vec2::NEG_Y.into(),
+            //         ),
+            //     },
+            // },
+            EnemyGent { e_gfx },
+            // GentStateBundle::<Idle>::default(),
+            Idle,
         ));
         commands.entity(e_gfx).insert((EnemyGfxBundle {
             marker: EnemyGfx { e_gent },
@@ -97,7 +121,7 @@ fn setup_enemy(q: Query<(&Transform, Entity), Added<EnemyBlueprint>>, mut comman
             },
             animation: Default::default(),
         },));
-        // println!("enemy spawned")
+        println!("enemy spawned")
     }
 }
 
@@ -137,7 +161,7 @@ impl Plugin for EnemyAnimationPlugin {
                 // player_running_animation,
             )
                 .in_set(EnemyStateSet::Animation)
-                .after(EnemyStateSet::Transition)
+                // .after(EnemyStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         );
     }
@@ -149,7 +173,8 @@ fn enemy_idle_animation(
 ) {
     for gent in i_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key("anim.enemy.Idle")
+            player.play_key("anim.enemy.Idle");
+            println!("should be animating");
         }
     }
 }

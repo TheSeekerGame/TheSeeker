@@ -150,6 +150,7 @@ fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
 
 fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut commands: Commands) {
     for (xf_gent, e_gent) in q.iter() {
+        println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
             PlayerGentBundle {
