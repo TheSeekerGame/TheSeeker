@@ -61,9 +61,9 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
 /// attaches parallax components to the different LdtkWorldBundle layers
 fn attach_parallax(
     mut commands: Commands,
-    query: Query<(Entity, &LayerMetadata), Without<Parallax>>,
+    query: Query<(Entity, &LayerMetadata, &Transform), Without<Parallax>>,
 ) {
-    for (entity, layer_metadata) in query.iter() {
+    for (entity, layer_metadata, transform) in query.iter() {
         let amount = match &*layer_metadata.identifier {
             "FarBackground" => 0.3,
             "MiddleBackground" => 0.2,
