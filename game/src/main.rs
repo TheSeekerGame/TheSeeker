@@ -27,6 +27,7 @@ mod ui;
 #[cfg(feature = "dev")]
 mod dev;
 pub mod graphics;
+mod parallax;
 
 fn main() {
     let mut app = App::new();
@@ -89,6 +90,7 @@ fn main() {
         crate::ui::UiPlugin,
         crate::camera::CameraPlugin,
         crate::level::LevelManagerPlugin,
+        crate::parallax::ParallaxPlugin,
         crate::game::GameplayPlugin,
         crate::gamestate::GameStatePlugin,
         crate::graphics::GraphicsFxPlugin,
