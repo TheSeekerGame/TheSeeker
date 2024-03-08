@@ -5,9 +5,9 @@ use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 use bevy::sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle};
 use bevy_ecs_ldtk::GridCoords;
 
-pub struct GraphicsFxPlugin;
+pub struct FogPlugin;
 
-impl Plugin for GraphicsFxPlugin {
+impl Plugin for FogPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(Material2dPlugin::<FogMaterial>::default());
         app.add_systems(OnEnter(AppState::InGame), setup_fog);
