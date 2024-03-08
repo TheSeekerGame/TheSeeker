@@ -22,7 +22,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // Sample each color channel with an arbitrary shift
     return vec4<f32>(
         in.uv.x,
-        in.uv.y,
+        mix(in.uv.y, bg_color.g, settings.intensity),
         bg_color.b,
         1.0
     );

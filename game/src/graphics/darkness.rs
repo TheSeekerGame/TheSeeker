@@ -184,7 +184,7 @@ impl ViewNode for DarknessPostProcessNode {
         // The only way to have the correct source/destination for the bind_group
         // is to make sure you get it during the node execution.
         let bind_group = render_context.render_device().create_bind_group(
-            "post_process_bind_group",
+            "darkness_post_process_bind_group",
             &post_process_pipeline.layout,
             // It's important for this to match the BindGroupLayout defined in the PostProcessPipeline
             &BindGroupEntries::sequential((
@@ -199,7 +199,7 @@ impl ViewNode for DarknessPostProcessNode {
 
         // Begin the render pass
         let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
-            label: Some("post_process_pass"),
+            label: Some("darkness_post_process_pass"),
             color_attachments: &[Some(RenderPassColorAttachment {
                 // We need to specify the post process destination view here
                 // to make sure we write to the appropriate texture.
@@ -234,7 +234,7 @@ impl FromWorld for DarknessPostProcessPipeline {
 
         // We need to define the bind group layout used for our pipeline
         let layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("post_process_bind_group_layout"),
+            label: Some("darkness_post_process_bind_group_layout"),
             entries: &[
                 // The screen texture
                 BindGroupLayoutEntry {
@@ -274,13 +274,13 @@ impl FromWorld for DarknessPostProcessPipeline {
         // Get the shader handle
         let shader = world
             .resource::<AssetServer>()
-            .load("shaders/darkenss_post_processing.wgsl");
+            .load("shaders/darkness_post_processing.wgsl");
 
         let pipeline_id = world
             .resource_mut::<PipelineCache>()
             // This will add the pipeline to the cache and queue it's creation
             .queue_render_pipeline(RenderPipelineDescriptor {
-                label: Some("post_process_pipeline".into()),
+                label: Some("darkness_post_process_pipeline".into()),
                 layout: vec![layout.clone()],
                 // This will setup a fullscreen triangle for the vertex state
                 vertex: fullscreen_shader_vertex_state(),
@@ -291,7 +291,9 @@ impl FromWorld for DarknessPostProcessPipeline {
                     // It can be anything as long as it matches here and in the shader.
                     entry_point: "fragment".into(),
                     targets: vec![Some(ColorTargetState {
-                        format: TextureFormat::bevy_default(),
+                        // Since the post process is running after tone mapping/bloom, the input texture
+                        // format is Rgba16Float instead of Rgba8UnormSrgb (TextureFormat::bevy_default())
+                        format: TextureFormat::Rgba16Float,
                         blend: None,
                         write_mask: ColorWrites::ALL,
                     })],
