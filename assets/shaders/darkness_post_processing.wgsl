@@ -1,11 +1,6 @@
 // Since post processing is a fullscreen effect, we use the fullscreen vertex shader provided by bevy.
 // This will import a vertex shader that renders a single fullscreen triangle.
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
-/*#import bevy_sprite::{
-    mesh2d_view_bindings::view,
-    mesh2d_view_bindings::globals,
-}*/
-
 @group(0) @binding(0) var screen_texture: texture_2d<f32>;
 @group(0) @binding(1) var texture_sampler: sampler;
 struct PostProcessSettings {
@@ -18,15 +13,13 @@ struct PostProcessSettings {
 #endif
 }
 @group(0) @binding(2) var<uniform> settings: PostProcessSettings;
-
+    
 fn sqr_magnitude(v: vec2<f32>) -> f32 {
     return v.x * v.x + v.y * v.y;
 }
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-
-    // Chromatic aberration strength
     // original screen color fragment:
     let bg_color = textureSample(screen_texture, texture_sampler, in.uv);
     let width = textureDimensions(screen_texture, 0);
@@ -35,9 +28,16 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let pos = in.position.xy;
 
     // use inverse square law for light intensity (ie: player must be carrying a light source)
-    let intensity = 5000.0/sqr_magnitude(pos-(settings.character_position.xy + widthf32*0.5));
+    let x = sqr_magnitude(pos-(settings.character_position.xy + widthf32*0.5)) * (1.0/500.0);
 
+    // Adds a falloff curve if "lantern" bright point is undesired and so is a sharp cutoff
+    //let sigmoid = 1.0/(1.0 + exp(-2.0*(x - 1.4)));
+    //let lantern = clamp(((1.0/x)*sigmoid + (1.0-sigmoid)), 0.0, 5.0);
+
+    let lantern = clamp(1.0/x, 0.0, 5.0);
+
+    let base_light = settings.intensity;
 
     // Sample each color channel with an arbitrary shift
-    return vec4(bg_color.rgb*(clamp(intensity - 0.02, 0.0, 1.0)), 1.0);
+    return vec4(bg_color.rgb * mix(lantern, 1.0, base_light), 1.0);
 }
