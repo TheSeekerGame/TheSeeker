@@ -93,6 +93,8 @@ features = [
     # FIXME: TEMPORARY
     "bevy_audio",
     "flac",
+    # todo: remove before pr!
+    "file_watcher",
 ]
 
 [dependencies.bevy_asset_loader]

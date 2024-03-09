@@ -63,7 +63,11 @@ fn setup_main_camera(mut commands: Commands) {
             limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
         },
         BloomSettings::NATURAL,
-        DarknessSettings { intensity: 0.0 },
+        DarknessSettings {
+            intensity: 0.0,
+            character_position: Default::default(),
+            dimensions: Default::default(),
+        },
     ));
 }
 

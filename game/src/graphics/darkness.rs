@@ -319,6 +319,8 @@ impl FromWorld for DarknessPostProcessPipeline {
 /// Darkness Post Process Settings
 pub struct DarknessSettings {
     pub intensity: f32,
+    pub character_position: Vec2,
+    pub dimensions: Vec2,
     // WebGL2 structs must be 16 byte aligned.
     #[cfg(feature = "webgl2")]
     _webgl2_padding: Vec3,
@@ -332,8 +334,6 @@ fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>
         intensity = intensity.sin();
         // Remap it to 0..1 because the intensity can't be negative
         intensity = intensity * 0.5 + 0.5;
-        // Scale it to a more reasonable level
-        intensity *= 0.015;
 
         // Set the intensity.
         // This will then be extracted to the render world and uploaded to the gpu automatically by the [`UniformComponentPlugin`]
