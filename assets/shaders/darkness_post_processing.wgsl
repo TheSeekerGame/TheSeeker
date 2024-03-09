@@ -7,6 +7,8 @@ struct PostProcessSettings {
     bg_light_level: f32,
     lantern_position: vec2<f32>,
     lantern: f32,
+    lantern_color: vec3<f32>,
+    bg_light_color: vec3<f32>,
 #ifdef SIXTEEN_BYTE_ALIGNMENT
     // WebGL2 structs must be 16 byte aligned.
     _webgl2_padding: vec2<f32>
@@ -37,7 +39,9 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     let lantern = clamp(1.0/x, 0.0, 6.0);
 
-    let final_brightness = mix(lantern*settings.lantern, 1.0, settings.bg_light_level);
+    let color = mix(lantern*settings.lantern*settings.lantern_color, settings.bg_light_color, 1.0 - clamp(lantern, 0.0, 1.0));
+
+    let final_brightness = mix(color, vec3(1.0), settings.bg_light_level);
 
     return vec4(bg_color.rgb * final_brightness, 1.0);
 }

@@ -100,9 +100,9 @@ impl Plugin for DarknessPlugin {
                 // Currently runs after ToneMapping, which runs after bloom, but unsure if this should
                 // run before...; todo: test different orders see whats better.
                 &[
-                    core_2d::graph::node::TONEMAPPING,
+                    core_2d::graph::node::MAIN_PASS,
                     DarknessPostProcessNode::NAME,
-                    core_2d::graph::node::END_MAIN_PASS_POST_PROCESSING,
+                    core_2d::graph::node::BLOOM,
                 ],
             );
     }
@@ -126,9 +126,11 @@ pub struct DarknessSettings {
     pub lantern_position: Vec2,
     /// Output of the light source
     pub lantern: f32,
+    pub lantern_color: Vec3,
+    pub bg_light_color: Vec3,
     // WebGL2 structs must be 16 byte aligned.
     #[cfg(feature = "webgl2")]
-    _webgl2_padding: Vec3,
+    _webgl2_padding: Vec2,
 }
 
 // Change the intensity over time to show that the effect is controlled from the main world
