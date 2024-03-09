@@ -39,7 +39,8 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
 
     let lantern = clamp(1.0/x, 0.0, 6.0);
 
-    let color = mix(lantern*settings.lantern*settings.lantern_color, settings.bg_light_color, 1.0 - clamp(lantern, 0.0, 1.0));
+    let color = lantern*settings.lantern * settings.lantern_color;// * settings.bg_light_color;
+    //let color = mix(lantern*settings.lantern*settings.lantern_color, settings.bg_light_color, 1.0 - clamp(lantern, 0.0, 1.0));
 
     let final_brightness = mix(color, vec3(1.0), settings.bg_light_level);
 

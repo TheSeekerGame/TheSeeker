@@ -140,7 +140,7 @@ fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>
 
         let mut intensity = (time.elapsed_seconds() * PI / seconds_per_day_cycle).sin();
         // remaps sines normal output to the 0-1 range
-        let intensity = intensity * 0.5 + 0.5;
+        let intensity = 0.0; //intensity * 0.5 + 0.5;
 
         if intensity < 0.3 {
             setting.lantern = setting.lantern.lerp(1.0, time.delta_seconds() * 0.9);
@@ -151,10 +151,7 @@ fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>
         // Set the intensity.
         // This will then be extracted to the render world and uploaded to the gpu automatically by the [`UniformComponentPlugin`]
         setting.bg_light_level = intensity;
-        println!(
-            "light: {} lantern: {}",
-            setting.bg_light_level, setting.lantern
-        );
+        // println!("light: {} lantern: {}", setting.bg_light_level, setting.lantern);
     }
 }
 

@@ -67,8 +67,8 @@ fn setup_main_camera(mut commands: Commands) {
             bg_light_level: 1.0,
             lantern_position: Default::default(),
             lantern: 0.0,
-            lantern_color: Vec3::new(0.85, 0.75, 0.31),
-            bg_light_color: Vec3::new(0.13, 0.13, 0.31),
+            lantern_color: Vec3::new(0.965, 0.882, 0.678),
+            bg_light_color: Vec3::new(0.761, 0.773, 0.8),
         },
     ));
 }
