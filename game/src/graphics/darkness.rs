@@ -19,6 +19,8 @@ use bevy::render::renderer::{RenderContext, RenderDevice};
 use bevy::render::texture::BevyDefault;
 use bevy::render::view::ViewTarget;
 use bevy::render::RenderApp;
+use glam::FloatExt;
+use std::f32::consts::PI;
 
 /// To use this plugin add it to your app, and make sure the [`DarknessSettings`] component is added
 /// to the camera:
@@ -114,6 +116,43 @@ impl Plugin for DarknessPlugin {
         render_app
             // Initialize the pipeline
             .init_resource::<DarknessPostProcessPipeline>();
+    }
+}
+
+#[derive(Component, Default, Clone, Copy, ExtractComponent, ShaderType)]
+/// Darkness Post Process Settings
+pub struct DarknessSettings {
+    pub bg_light_level: f32,
+    pub lantern_position: Vec2,
+    /// Output of the light source
+    pub lantern: f32,
+    // WebGL2 structs must be 16 byte aligned.
+    #[cfg(feature = "webgl2")]
+    _webgl2_padding: Vec3,
+}
+
+// Change the intensity over time to show that the effect is controlled from the main world
+fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>) {
+    for mut setting in &mut settings {
+        let seconds_per_day_cycle = 30.0;
+
+        let mut intensity = (time.elapsed_seconds() * PI / seconds_per_day_cycle).sin();
+        // remaps sines normal output to the 0-1 range
+        let intensity = intensity * 0.5 + 0.5;
+
+        if intensity < 0.3 {
+            setting.lantern = setting.lantern.lerp(1.0, time.delta_seconds() * 0.9);
+        } else if intensity > 0.3 {
+            setting.lantern = setting.lantern.lerp(0.0, time.delta_seconds() * 0.9);
+        }
+
+        // Set the intensity.
+        // This will then be extracted to the render world and uploaded to the gpu automatically by the [`UniformComponentPlugin`]
+        setting.bg_light_level = intensity;
+        println!(
+            "light: {} lantern: {}",
+            setting.bg_light_level, setting.lantern
+        );
     }
 }
 
@@ -311,32 +350,5 @@ impl FromWorld for DarknessPostProcessPipeline {
             sampler,
             pipeline_id,
         }
-    }
-}
-
-// This is the component that will get passed to the shader
-#[derive(Component, Default, Clone, Copy, ExtractComponent, ShaderType)]
-/// Darkness Post Process Settings
-pub struct DarknessSettings {
-    pub intensity: f32,
-    pub character_position: Vec2,
-    pub dimensions: Vec2,
-    // WebGL2 structs must be 16 byte aligned.
-    #[cfg(feature = "webgl2")]
-    _webgl2_padding: Vec3,
-}
-
-// Change the intensity over time to show that the effect is controlled from the main world
-fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>) {
-    for mut setting in &mut settings {
-        let mut intensity = time.elapsed_seconds().sin();
-        // Make it loop periodically
-        intensity = intensity.sin();
-        // Remap it to 0..1 because the intensity can't be negative
-        intensity = intensity * 0.5 + 0.5;
-
-        // Set the intensity.
-        // This will then be extracted to the render world and uploaded to the gpu automatically by the [`UniformComponentPlugin`]
-        setting.intensity = intensity;
     }
 }

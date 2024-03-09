@@ -64,9 +64,9 @@ fn setup_main_camera(mut commands: Commands) {
         },
         BloomSettings::NATURAL,
         DarknessSettings {
-            intensity: 0.0,
-            character_position: Default::default(),
-            dimensions: Default::default(),
+            bg_light_level: 1.0,
+            lantern_position: Default::default(),
+            lantern: 0.0,
         },
     ));
 }
