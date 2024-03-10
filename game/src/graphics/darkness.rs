@@ -142,6 +142,8 @@ fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>
         // remaps sines normal output to the 0-1 range
         let intensity = intensity * 0.5 + 0.5;
 
+        // uses the lerp trick to easily add smooth transition; maybe use different
+        // curve/tweening in the future.
         if intensity < 0.3 {
             setting.lantern = setting.lantern.lerp(1.0, time.delta_seconds() * 0.9);
         } else if intensity > 0.3 {
