@@ -145,7 +145,7 @@ pub struct DarknessSettings {
     _webgl2_padding: Vec2,
 }
 
-// Change the intensity over time to show that the effect is controlled from the main world
+/// Changes the intensity over time to show that the effect is controlled from the main world
 fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>) {
     for mut setting in &mut settings {
         let seconds_per_day_cycle = 30.0;
@@ -165,12 +165,15 @@ fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>
         // Set the intensity.
         // This will then be extracted to the render world and uploaded to the gpu automatically by the [`UniformComponentPlugin`]
         setting.bg_light_level = intensity;
-        // println!("light: {} lantern: {}", setting.bg_light_level, setting.lantern);
     }
 }
 
 /// Applies a dark color tint to parallaxed backrounds, to account for the fact that
 /// they are "farther away" and should be dimmer under lantern light
+///
+/// Currently only applies to [`bevy_ecs_tilemap::tiles::TileColor`]'s
+/// Might need modifications if we draw other things in the backround and
+/// want it to work with darkness properly.
 fn darkness_parallax(
     settings: Query<&DarknessSettings>,
     parallaxed_bgs: Query<(Entity, &Parallax)>,
