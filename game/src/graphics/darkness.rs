@@ -152,7 +152,7 @@ fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>
 
         let mut intensity = (time.elapsed_seconds() * PI / seconds_per_day_cycle).sin();
         // remaps sines normal output to the 0-1 range
-        let intensity = 0.0; //intensity * 0.5 + 0.5;
+        let intensity = intensity * 0.5 + 0.5;
 
         // uses the lerp trick to easily add smooth transition; maybe use different
         // curve/tweening in the future.
@@ -169,6 +169,8 @@ fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>
     }
 }
 
+/// Applies a dark color tint to parallaxed backrounds, to account for the fact that
+/// they are "farther away" and should be dimmer under lantern light
 fn darkness_parallax(
     settings: Query<&DarknessSettings>,
     parallaxed_bgs: Query<(Entity, &Parallax)>,
@@ -178,44 +180,18 @@ fn darkness_parallax(
     let Some(settings) = settings.iter().next() else {
         return;
     };
-    //println!("bg_count: {:?}", parallaxed_bgs);
     for (entity, paralax) in parallaxed_bgs.iter() {
-        let light_multiplier = 1.0 / (paralax.depth * 20.0).powi(2);
+        let light_multiplier = 1.0 / (paralax.depth * 1.25).powi(2);
         let final_mult = light_multiplier.lerp(1.0, settings.bg_light_level);
-        let color = Color::rgb(1.0, 1.0, 1.0) * final_mult; // Sets the color to red
-                                                            //let count = change_color_recursive(children, &mut sprites, color);
-        let mut count = 0;
+        let color = Color::rgb(1.0, 1.0, 1.0) * final_mult;
         for descendant in children.iter_descendants(entity) {
             if let Ok(mut sprite) = sprites.get_mut(descendant) {
                 sprite.0 = color;
-                count += 1;
             };
         }
-        println!("changed_count: {:?}", count);
     }
 }
 
-/*fn change_color_recursive(
-    children: &Children,
-    sprites: &mut Query<&mut Sprite>,
-    color: Color,
-) -> u64 {
-    let mut i = 0;
-    for &child in children.iter() {
-        {
-            if let Ok(children) = sprites.get_component::<Children>(child) {
-                i += change_color_recursive(children, sprites, color);
-            }
-        }
-        {
-            if let Ok(mut sprite) = sprites.get_mut(child) {
-                sprite.color = color;
-                i += 1;
-            }
-        }
-    }
-    i
-}*/
 // Below is all boilerplate for setting up the post process.
 
 // The post process node used for the render graph
