@@ -31,18 +31,20 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let lantern_pos = settings.lantern_position.xy + vec2(0.0, 15.0);
 
     // use inverse square law for light intensity (ie: player must be carrying a light source)
-    let x = sqr_magnitude(pos-(lantern_pos + widthf32*0.5)) * (1.0/500.0);
+    // and treat light as if it is 3d, and dist_a away from the 2d screen. (fixes sharp falloff)
 
-    // Adds a falloff curve if "lantern" bright point is undesired and so is a sharp cutoff
-    //let sigmoid = 1.0/(1.0 + exp(-2.0*(x - 1.4)));
-    //let lantern = clamp(((1.0/x)*sigmoid + (1.0-sigmoid)), 0.0, 5.0);
+    // dist of 3d light from 2d plane
+    let dist_a = 40.0;
+    // dist of *2d lantern* from screen fragment
+    let dist_b_sqrd = sqr_magnitude(pos-(lantern_pos + widthf32*0.5));
+    // "3d" dist of screen fragment to 3d light.
+    let dist_c = /*sqrt*/(dist_a * dist_a + dist_b_sqrd);
+    // inverse square law for intensity (sqrt cancels out)
+    let intensity = 1.0/dist_c/*^2*/;
 
-    let lantern = clamp(1.0/x, 0.0, 6.0);
-
-    let color = lantern*settings.lantern * settings.lantern_color;// * settings.bg_light_color;
-    //let color = mix(lantern*settings.lantern*settings.lantern_color, settings.bg_light_color, 1.0 - clamp(lantern, 0.0, 1.0));
-
+    let light =  intensity * 900.0;
+    let color = light*settings.lantern*settings.lantern_color;
     let final_brightness = mix(color, vec3(1.0), settings.bg_light_level);
 
-    return vec4(bg_color.rgb * final_brightness, 1.0);
+    return vec4(bg_color.rgb * final_brightness  , 1.0);
 }

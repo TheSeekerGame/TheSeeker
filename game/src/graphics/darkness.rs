@@ -100,9 +100,9 @@ impl Plugin for DarknessPlugin {
                 // Currently runs after ToneMapping, which runs after bloom, but unsure if this should
                 // run before...; todo: test different orders see whats better.
                 &[
-                    core_2d::graph::node::MAIN_PASS,
+                    core_2d::graph::node::TONEMAPPING,
                     DarknessPostProcessNode::NAME,
-                    core_2d::graph::node::BLOOM,
+                    core_2d::graph::node::END_MAIN_PASS_POST_PROCESSING,
                 ],
             );
     }
@@ -140,7 +140,7 @@ fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>
 
         let mut intensity = (time.elapsed_seconds() * PI / seconds_per_day_cycle).sin();
         // remaps sines normal output to the 0-1 range
-        let intensity = 0.0; //intensity * 0.5 + 0.5;
+        let intensity = intensity * 0.5 + 0.5;
 
         if intensity < 0.3 {
             setting.lantern = setting.lantern.lerp(1.0, time.delta_seconds() * 0.9);
