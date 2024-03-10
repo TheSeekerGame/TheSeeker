@@ -1,3 +1,4 @@
+use crate::parallax::Parallax;
 use bevy::core_pipeline::core_2d;
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 use bevy::ecs::query::QueryItem;
@@ -52,6 +53,10 @@ pub struct DarknessPlugin;
 impl Plugin for DarknessPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Update, darkness_dynamics);
+        app.add_systems(
+            Update,
+            darkness_parallax.after(darkness_dynamics),
+        );
         app.add_plugins((
             // The settings will be a component that lives in the main world but will
             // be extracted to the render world every frame.
@@ -125,10 +130,11 @@ impl Plugin for DarknessPlugin {
 #[derive(Component, Default, Clone, Copy, ExtractComponent, ShaderType)]
 /// Darkness Post Process Settings
 pub struct DarknessSettings {
+    /// 0.0 is pitch black, and 1.0 is normal brightness
     pub bg_light_level: f32,
     /// Position is currently relative to the camera center
     pub lantern_position: Vec2,
-    /// Output of the light source; 0 is off and 1.0 is normal brightness.
+    /// Output of the light source; 0.0 is off and 1.0 is normal brightness.
     pub lantern: f32,
     /// RGB
     pub lantern_color: Vec3,
@@ -146,7 +152,7 @@ fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>
 
         let mut intensity = (time.elapsed_seconds() * PI / seconds_per_day_cycle).sin();
         // remaps sines normal output to the 0-1 range
-        let intensity = intensity * 0.5 + 0.5;
+        let intensity = 0.0; //intensity * 0.5 + 0.5;
 
         // uses the lerp trick to easily add smooth transition; maybe use different
         // curve/tweening in the future.
@@ -162,6 +168,54 @@ fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>
         // println!("light: {} lantern: {}", setting.bg_light_level, setting.lantern);
     }
 }
+
+fn darkness_parallax(
+    settings: Query<&DarknessSettings>,
+    parallaxed_bgs: Query<(Entity, &Parallax)>,
+    children: Query<&Children>,
+    mut sprites: Query<&mut bevy_ecs_tilemap::tiles::TileColor>,
+) {
+    let Some(settings) = settings.iter().next() else {
+        return;
+    };
+    //println!("bg_count: {:?}", parallaxed_bgs);
+    for (entity, paralax) in parallaxed_bgs.iter() {
+        let light_multiplier = 1.0 / (paralax.depth * 20.0).powi(2);
+        let final_mult = light_multiplier.lerp(1.0, settings.bg_light_level);
+        let color = Color::rgb(1.0, 1.0, 1.0) * final_mult; // Sets the color to red
+                                                            //let count = change_color_recursive(children, &mut sprites, color);
+        let mut count = 0;
+        for descendant in children.iter_descendants(entity) {
+            if let Ok(mut sprite) = sprites.get_mut(descendant) {
+                sprite.0 = color;
+                count += 1;
+            };
+        }
+        println!("changed_count: {:?}", count);
+    }
+}
+
+/*fn change_color_recursive(
+    children: &Children,
+    sprites: &mut Query<&mut Sprite>,
+    color: Color,
+) -> u64 {
+    let mut i = 0;
+    for &child in children.iter() {
+        {
+            if let Ok(children) = sprites.get_component::<Children>(child) {
+                i += change_color_recursive(children, sprites, color);
+            }
+        }
+        {
+            if let Ok(mut sprite) = sprites.get_mut(child) {
+                sprite.color = color;
+                i += 1;
+            }
+        }
+    }
+    i
+}*/
 // Below is all boilerplate for setting up the post process.
 
 // The post process node used for the render graph

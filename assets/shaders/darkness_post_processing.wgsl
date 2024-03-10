@@ -33,7 +33,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     // use inverse square law for light intensity (ie: player must be carrying a light source)
     // and treat light as if it is 3d, and dist_a away from the 2d screen. (fixes sharp falloff)
 
-    // dist of 3d light from 2d plane
+    // dist of 3d light from 2d plane; re parallax, is equivalent to 20 units behind camera
     let dist_a = 40.0;
     // dist of *2d lantern* from screen fragment
     let dist_b_sqrd = sqr_magnitude(pos-(lantern_pos + widthf32*0.5));
