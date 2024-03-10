@@ -38,10 +38,13 @@ use std::f32::consts::PI;
 ///     },
 ///     // Add the setting to the camera.
 ///     // This component is also used to determine on which camera to run the post processing effect.
-///     DarknessSettings {
-///         intensity: 0.02,
-///         ..default()
-///     },
+///    DarknessSettings {
+///        bg_light_level: 1.0,
+///        lantern_position: Default::default(),
+///        lantern: 1.0,
+///        lantern_color: Vec3::new(0.965, 0.882, 0.678),
+///        bg_light_color: Vec3::new(0.761, 0.773, 0.8),
+///    },
 /// ));
 /// ```
 pub struct DarknessPlugin;
@@ -97,8 +100,8 @@ impl Plugin for DarknessPlugin {
                 core_2d::graph::NAME,
                 // Specify the node ordering.
                 // This will automatically create all required node edges to enforce the given ordering.
-                // Currently runs after ToneMapping, which runs after bloom, but unsure if this should
-                // run before...; todo: test different orders see whats better.
+                // Currently runs after ToneMapping, which seems to give best appearance... might need to revisit
+                // to handle bloom/ other glowing objects.
                 &[
                     core_2d::graph::node::TONEMAPPING,
                     DarknessPostProcessNode::NAME,
@@ -123,10 +126,13 @@ impl Plugin for DarknessPlugin {
 /// Darkness Post Process Settings
 pub struct DarknessSettings {
     pub bg_light_level: f32,
+    /// Position is currently relative to the camera center
     pub lantern_position: Vec2,
-    /// Output of the light source
+    /// Output of the light source; 0 is off and 1.0 is normal brightness.
     pub lantern: f32,
+    /// RGB
     pub lantern_color: Vec3,
+    /// RGB
     pub bg_light_color: Vec3,
     // WebGL2 structs must be 16 byte aligned.
     #[cfg(feature = "webgl2")]
@@ -156,6 +162,7 @@ fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>
         // println!("light: {} lantern: {}", setting.bg_light_level, setting.lantern);
     }
 }
+// Below is all boilerplate for setting up the post process.
 
 // The post process node used for the render graph
 #[derive(Default)]
