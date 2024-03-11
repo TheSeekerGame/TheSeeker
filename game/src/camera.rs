@@ -1,8 +1,9 @@
 //! Everything to do with the in-game camera(s)
 
+use crate::graphics::darkness::DarknessSettings;
+use crate::{game::player::PlayerGent, prelude::*};
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::tonemapping::Tonemapping;
-use crate::{game::player::PlayerGent, prelude::*};
 
 pub struct CameraPlugin;
 
@@ -53,14 +54,23 @@ fn setup_main_camera(mut commands: Commands) {
     };
     camera.projection.scale = 1.0 / 6.0;
 
-    commands.spawn((MainCameraBundle {
-        camera,
-        marker: MainCamera,
-        despawn: StateDespawnMarker,
-        // TODO: manage this from somewhere
-        limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
-
-    }, BloomSettings::NATURAL));
+    commands.spawn((
+        MainCameraBundle {
+            camera,
+            marker: MainCamera,
+            despawn: StateDespawnMarker,
+            // TODO: manage this from somewhere
+            limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
+        },
+        BloomSettings::NATURAL,
+        DarknessSettings {
+            bg_light_level: 1.0,
+            lantern_position: Default::default(),
+            lantern: 0.0,
+            lantern_color: Vec3::new(0.965, 0.882, 0.678),
+            bg_light_color: Vec3::new(0.761, 0.773, 0.8),
+        },
+    ));
 }
 
 fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, With<MainCamera>>,
