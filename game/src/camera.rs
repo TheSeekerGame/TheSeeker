@@ -22,8 +22,12 @@ impl Plugin for CameraPlugin {
         );
         // app.add_systems(Update, (manage_camera_projection,));
 
-        app.insert_resource(CameraRig(Vec2::default()));
+        app.insert_resource(CameraRig {
+            target: Default::default(),
+            trauma: 0.0,
+        });
         app.add_systems(GameTickUpdate, camera_rig_follow_player);
+        app.add_systems(GameTickUpdate, update_rig_trauma);
         app.add_systems(
             GameTickUpdate,
             update_camera_rig.after(camera_rig_follow_player),
@@ -46,7 +50,18 @@ pub struct MainCamera;
 
 #[derive(Resource)]
 /// Tracks the target location of the camera, as well as internal state for interpolation.
-pub struct CameraRig(pub Vec2);
+pub struct CameraRig {
+    /// The camera is moved towards this position smoothly
+    target: Vec2,
+    /// the "base" position of the camera before screen shake is applied
+    camera: Vec2,
+    /// Applies screen shake based on this amount.
+    ///
+    /// value decreases over time. To use, add some amount based on impact intensity.
+    ///
+    /// 10.0 is a lot; death? 1.0 minor impact
+    trauma: f32,
+}
 
 /// Limits to the viewable gameplay area.
 ///
@@ -107,34 +122,36 @@ fn camera_rig_follow_player(
     let lead_amnt = 40.0;
 
     // Default state is to predict the player goes forward, ie "right"
-    let delta_x = player_xform.translation.x - rig.0.x;
-    println!(
-        "delta_x: {} backwrd: {}",
-        delta_x, *lead_bckwrd
-    );
+    let delta_x = player_xform.translation.x - rig.target.x;
+
     if !*lead_bckwrd {
         if delta_x > -lead_amnt {
-            rig.0.x = player_xform.translation.x + lead_amnt
+            rig.target.x = player_xform.translation.x + lead_amnt
         } else if delta_x < -lead_amnt - max_err {
             *lead_bckwrd = !*lead_bckwrd
         }
     } else {
         if delta_x < lead_amnt {
-            rig.0.x = player_xform.translation.x - lead_amnt
+            rig.target.x = player_xform.translation.x - lead_amnt
         } else if delta_x > lead_amnt + max_err {
             *lead_bckwrd = !*lead_bckwrd
         }
     }
 
-    //rig.0.x = player_xform.translation.x;
-    rig.0.y = player_xform.translation.y;
+    //rig.position.x = player_xform.translation.x;
+    rig.target.y = player_xform.translation.y;
+}
+
+/// Tiny system that just makes sure trauma is always going down linearly
+pub(crate) fn update_rig_trauma(mut rig: ResMut<CameraRig>, time: Res<Time>) {
+    rig.trauma = (rig.trauma - 1.75 * time.delta_seconds()).max(0.0);
 }
 
 /// Camera updates the camera position to smoothly interpolate to the
-/// rig location
+/// rig location. also applies camera shake
 pub(crate) fn update_camera_rig(
     mut q_cam: Query<&mut Transform, With<MainCamera>>,
-    rig: Res<CameraRig>,
+    mut rig: ResMut<CameraRig>,
     time: Res<Time>,
 ) {
     let Ok(mut cam_xform) = q_cam.get_single_mut() else {
@@ -143,12 +160,23 @@ pub(crate) fn update_camera_rig(
 
     let speed = 2.0;
 
-    let new_xy = cam_xform
-        .translation
-        .xy()
-        .lerp(rig.0, time.delta_seconds() * speed);
-    cam_xform.translation.x = new_xy.x;
-    cam_xform.translation.y = new_xy.y;
+    let new_xy = rig.camera.lerp(rig.target, time.delta_seconds() * speed);
+
+    rig.camera = new_xy;
+
+    let shake = rig.trauma.powi(3);
+
+    // screen shake amounts
+    let angle = 5.0 * shake * getrandomminusonetoone();
+    let offsetx_x = 5.0 * shake * getrandomminusonetoone();
+    let offsetx_y = 5.0 * shake * getrandomminusonetoone();
+
+    // todo: test if rotation should be around camera center, or rig target (ie player)
+    //  one of the benefits of the rotational shake is enhanced focus on whatever is center.
+
+    cam_xform.rotation.z = 0.0 + angle;
+    cam_xform.translation.x = rig.camera.x + offsetx_x;
+    cam_xform.translation.y = rig.camera.y + offsetx_y;
 }
 
 fn cli_camera_at(In(args): In<Vec<String>>, mut q_cam: Query<&mut Transform, With<MainCamera>>) {
