@@ -1,8 +1,9 @@
 //! Everything to do with the in-game camera(s)
 
+use crate::{game::player::PlayerGent, prelude::*};
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::tonemapping::Tonemapping;
-use crate::{game::player::PlayerGent, prelude::*};
+use glam::FloatExt;
 
 pub struct CameraPlugin;
 
@@ -19,7 +20,13 @@ impl Plugin for CameraPlugin {
             setup_main_camera,
         );
         // app.add_systems(Update, (manage_camera_projection,));
-        app.add_systems(GameTickUpdate, camera_follow_player);
+
+        app.insert_resource(CameraRig(Vec2::default()));
+        app.add_systems(GameTickUpdate, camera_rig_follow_player);
+        app.add_systems(
+            GameTickUpdate,
+            update_camera_rig.after(camera_rig_follow_player),
+        );
     }
 }
 
@@ -35,6 +42,10 @@ struct MainCameraBundle {
 /// Marker component for the main gameplay camera
 #[derive(Component)]
 pub struct MainCamera;
+
+#[derive(Resource)]
+/// Tracks the target location of the camera, as well as internal state for interpolation.
+pub struct CameraRig(pub Vec2);
 
 /// Limits to the viewable gameplay area.
 ///
@@ -53,14 +64,16 @@ fn setup_main_camera(mut commands: Commands) {
     };
     camera.projection.scale = 1.0 / 6.0;
 
-    commands.spawn((MainCameraBundle {
-        camera,
-        marker: MainCamera,
-        despawn: StateDespawnMarker,
-        // TODO: manage this from somewhere
-        limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
-
-    }, BloomSettings::NATURAL));
+    commands.spawn((
+        MainCameraBundle {
+            camera,
+            marker: MainCamera,
+            despawn: StateDespawnMarker,
+            // TODO: manage this from somewhere
+            limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
+        },
+        BloomSettings::NATURAL,
+    ));
 }
 
 fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, With<MainCamera>>,
@@ -69,16 +82,48 @@ fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wit
     // TODO
 }
 
-//TODO
-fn camera_follow_player(
-    mut q_cam: Query<&mut Transform, With<MainCamera>>,
+/// Updates the Camera rig (ie, the camera target) based on where the player is going.
+fn camera_rig_follow_player(
+    mut rig: ResMut<CameraRig>,
     q_player: Query<&Transform, (With<PlayerGent>, Without<MainCamera>)>,
+    // Keeps track if the camera is leading ahead, or behind the player
+    mut lead_bckwrd: Local<bool>,
+) {
+    let Ok(player_xform) = q_player.get_single() else {
+        return;
+    };
+    // define how far away the player can get going in the unanticipated direction
+    // before the camera switches to track that direction
+    let max_err = 20.0;
+    // Define how far ahead the camera will lead the player by
+    let lead_amnt = 70.0;
+
+    // Default state is to predict the player goes forward, ie "right"
+    if !lead_bckwrd{
+
+    }
+
+    rig.0.x = player_xform.translation.x;
+    rig.0.y = player_xform.translation.y;
+}
+
+/// Camera updates the camera position to smoothly interpolate to the
+/// rig location
+fn update_camera_rig(
+    mut q_cam: Query<&mut Transform, With<MainCamera>>,
+    rig: Res<CameraRig>,
+    time: Res<Time>,
 ) {
     if let Ok(mut cam_xform) = q_cam.get_single_mut() {
-        if let Ok(player_xform) = q_player.get_single() {
-            cam_xform.translation.x = player_xform.translation.x;
-            cam_xform.translation.y = player_xform.translation.y;
-        }
+        let speed = 4.0;
+        cam_xform.translation.x = cam_xform
+            .translation
+            .x
+            .lerp(rig.0.x, time.delta_seconds() * speed);
+        cam_xform.translation.y = cam_xform
+            .translation
+            .y
+            .lerp(rig.0.y, time.delta_seconds() * speed);
     }
 }
 
