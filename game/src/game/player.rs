@@ -186,7 +186,7 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                     )
                     .build(),
             },
-            PlayerStateBundle::<Falling>::default(),
+            GentStateBundle::<Falling>::default(),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
@@ -230,83 +230,30 @@ impl Plugin for PlayerTransitionPlugin {
     }
 }
 
-// fn transition_from<T: Component + Send + Sync>(
-//     mut query: Query<(Entity, &mut TransitionsFrom<T>)>,
-//     mut commands: Commands,
-// ) {
-//     for (entity, mut trans) in query.iter_mut() {
-//         if !&trans.transitions.is_empty() {
-//             let transitions = std::mem::take(&mut trans.transitions);
-//             for transition in transitions {
-//                 transition(entity, &mut commands);
-//             }
-//             //could decide to remove state + transitionsfrom here
-//             commands.entity(entity).remove::<T>();
-//         }
-//     }
-// }
-
-// pub trait Transitionable<T: PlayerState> {
-//     fn new_transition(next: T) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
-//         Box::new(move |entity, commands| {
-//             commands.entity(entity).insert(PlayerStateBundle::<T> {
-//                 state: next,
-//                 transitions: TransitionsFrom::<T>::default(),
-//             });
-//         })
-//     }
-// }
-
-// #[derive(Component, Deref, DerefMut)]
-// struct TransitionsFrom<T> {
-//     marker: PhantomData<T>,
-//     #[deref]
-//     transitions: Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>,
-// }
-
-impl<T: PlayerState> GentState for T {
-
-}
-
-// impl<T: PlayerState> Default for TransitionsFrom<T> {
-//     fn default() -> Self {
-//         Self {
-//             marker: PhantomData::<T>::default(),
-//             transitions: Default::default(),
-//         }
-//     }
-// }
-
-#[derive(Bundle, Default)]
-pub struct PlayerStateBundle<T: PlayerState> {
-    state: T,
-    transitions: TransitionsFrom<T>,
-}
-
 // States
 // states are components which are added to the entity on transition.
 // an entity can be in multiple states at once, eg Grounded and Running/Idle
 // Impl Playerstate for each state
 // Impl Transitionable<T: PlayerState> for each state that that should be able to be transitioned
 // from by a state
-pub trait PlayerState: Component<Storage = SparseStorage> {}
+// pub trait GentState: Component<Storage = SparseStorage> {}
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Idle;
-impl PlayerState for Idle {}
+impl GentState for Idle {}
 impl Transitionable<Running> for Idle {}
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Running;
-impl PlayerState for Running {}
+impl GentState for Running {}
 impl Transitionable<Idle> for Running {}
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Falling;
-impl PlayerState for Falling {}
+impl GentState for Falling {}
 impl Transitionable<Grounded> for Falling {}
 impl Transitionable<Running> for Falling {}
 impl Transitionable<Idle> for Falling {}
@@ -326,21 +273,21 @@ impl Default for Jumping {
         }
     }
 }
-impl PlayerState for Jumping {}
+impl GentState for Jumping {}
 impl Transitionable<Falling> for Jumping {}
 impl Transitionable<Grounded> for Jumping {}
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
-impl PlayerState for Grounded {}
+impl GentState for Grounded {}
 //cant be Idle or Running if not Grounded
 impl Transitionable<Jumping> for Grounded {
     fn new_transition(next: Jumping) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
-                .insert(PlayerStateBundle::<Jumping> {
+                .insert(GentStateBundle::<Jumping> {
                     state: next,
                     transitions: TransitionsFrom::<Jumping>::default(),
                 })
@@ -354,7 +301,7 @@ impl Transitionable<Falling> for Grounded {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
-                .insert(PlayerStateBundle::<Falling>::default())
+                .insert(GentStateBundle::<Falling>::default())
                 .remove::<(Idle, Running)>();
         })
     }
@@ -363,7 +310,7 @@ impl Transitionable<Falling> for Grounded {
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Attacking;
-impl PlayerState for Attacking {}
+impl GentState for Attacking {}
 
 ///player behavior systems.
 ///do stuff here in states and add transitions to other states by pushing
