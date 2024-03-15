@@ -4,7 +4,7 @@ use crate::graphics::darkness::DarknessSettings;
 use crate::{game::player::PlayerGent, prelude::*};
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::tonemapping::Tonemapping;
-use glam::FloatExt;
+use ran::ran_f64_range;
 
 pub struct CameraPlugin;
 
@@ -24,6 +24,7 @@ impl Plugin for CameraPlugin {
 
         app.insert_resource(CameraRig {
             target: Default::default(),
+            camera: Default::default(),
             trauma: 0.0,
         });
         app.add_systems(GameTickUpdate, camera_rig_follow_player);
@@ -137,14 +138,39 @@ fn camera_rig_follow_player(
             *lead_bckwrd = !*lead_bckwrd
         }
     }
-
     //rig.position.x = player_xform.translation.x;
+
     rig.target.y = player_xform.translation.y;
 }
 
 /// Tiny system that just makes sure trauma is always going down linearly
-pub(crate) fn update_rig_trauma(mut rig: ResMut<CameraRig>, time: Res<Time>) {
+pub(crate) fn update_rig_trauma(
+    mut rig: ResMut<CameraRig>,
+    time: Res<Time>,
+    keyboard_input: Res<Input<KeyCode>>,
+) {
     rig.trauma = (rig.trauma - 1.75 * time.delta_seconds()).max(0.0);
+    #[cfg(feature = "dev")]
+    // Tests different levels based on number key if in dev
+    {
+        let number_keys = [
+            KeyCode::Key1,
+            KeyCode::Key2,
+            KeyCode::Key3,
+            KeyCode::Key4,
+            KeyCode::Key5,
+            KeyCode::Key6,
+            KeyCode::Key7,
+            KeyCode::Key8,
+            KeyCode::Key9,
+            KeyCode::Key0,
+        ];
+        for (i, key) in number_keys.iter().enumerate() {
+            if keyboard_input.pressed(*key) {
+                rig.trauma = (i as f32 + 1.0) * 0.1;
+            }
+        }
+    }
 }
 
 /// Camera updates the camera position to smoothly interpolate to the
@@ -167,16 +193,16 @@ pub(crate) fn update_camera_rig(
     let shake = rig.trauma.powi(3);
 
     // screen shake amounts
-    let angle = 5.0 * shake * getrandomminusonetoone();
-    let offsetx_x = 5.0 * shake * getrandomminusonetoone();
-    let offsetx_y = 5.0 * shake * getrandomminusonetoone();
+    let angle = 2.5 * (std::f32::consts::PI / 180.0) * shake * ran_f64_range(-1.0..=1.0) as f32;
+    let offset_x = 20.0 * shake * ran_f64_range(-1.0..=1.0) as f32;
+    let offset_y = 20.0 * shake * ran_f64_range(-1.0..=1.0) as f32;
 
     // todo: test if rotation should be around camera center, or rig target (ie player)
     //  one of the benefits of the rotational shake is enhanced focus on whatever is center.
 
     cam_xform.rotation.z = 0.0 + angle;
-    cam_xform.translation.x = rig.camera.x + offsetx_x;
-    cam_xform.translation.y = rig.camera.y + offsetx_y;
+    cam_xform.translation.x = rig.camera.x + offset_x;
+    cam_xform.translation.y = rig.camera.y + offset_y;
 }
 
 fn cli_camera_at(In(args): In<Vec<String>>, mut q_cam: Query<&mut Transform, With<MainCamera>>) {
