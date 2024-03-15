@@ -1,3 +1,5 @@
+use crate::camera::MainCamera;
+use crate::game::player::PlayerGent;
 use crate::parallax::Parallax;
 use bevy::core_pipeline::core_2d;
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
@@ -146,7 +148,20 @@ pub struct DarknessSettings {
 }
 
 /// Changes the intensity over time to show that the effect is controlled from the main world
-fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>) {
+fn darkness_dynamics(
+    mut settings: Query<&mut DarknessSettings>,
+    time: Res<Time>,
+    camera: Query<&Transform, (With<MainCamera>, Without<PlayerGent>)>,
+    player: Query<&Transform, (With<PlayerGent>, Without<MainCamera>)>,
+) {
+    let mut offest = Vec2::new(0.0, 0.0);
+    // make sure the lantern is centered on the player even if the camera isn't
+    if let Ok(cam_transform) = camera.get_single() {
+        if let Ok(player_transform) = player.get_single() {
+            offest = player_transform.translation.xy() - cam_transform.translation.xy()
+        };
+    };
+    println!("{}", offest);
     for mut setting in &mut settings {
         let seconds_per_day_cycle = 30.0;
 
@@ -165,6 +180,7 @@ fn darkness_dynamics(mut settings: Query<&mut DarknessSettings>, time: Res<Time>
         // Set the intensity.
         // This will then be extracted to the render world and uploaded to the gpu automatically by the [`UniformComponentPlugin`]
         setting.bg_light_level = intensity;
+        setting.lantern_position = offest;
     }
 }
 

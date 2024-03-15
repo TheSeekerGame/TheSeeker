@@ -107,9 +107,7 @@ fn camera_rig_follow_player(
     let lead_amnt = 70.0;
 
     // Default state is to predict the player goes forward, ie "right"
-    if !lead_bckwrd{
-
-    }
+    if !*lead_bckwrd {}
 
     rig.0.x = player_xform.translation.x;
     rig.0.y = player_xform.translation.y;
@@ -117,7 +115,7 @@ fn camera_rig_follow_player(
 
 /// Camera updates the camera position to smoothly interpolate to the
 /// rig location
-fn update_camera_rig(
+pub(crate) fn update_camera_rig(
     mut q_cam: Query<&mut Transform, With<MainCamera>>,
     rig: Res<CameraRig>,
     time: Res<Time>,
