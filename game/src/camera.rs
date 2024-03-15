@@ -1,5 +1,6 @@
 //! Everything to do with the in-game camera(s)
 
+use crate::graphics::darkness::DarknessSettings;
 use crate::{game::player::PlayerGent, prelude::*};
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::tonemapping::Tonemapping;
@@ -73,6 +74,13 @@ fn setup_main_camera(mut commands: Commands) {
             limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
         },
         BloomSettings::NATURAL,
+        DarknessSettings {
+            bg_light_level: 1.0,
+            lantern_position: Default::default(),
+            lantern: 0.0,
+            lantern_color: Vec3::new(0.965, 0.882, 0.678),
+            bg_light_color: Vec3::new(0.761, 0.773, 0.8),
+        },
     ));
 }
 
