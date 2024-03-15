@@ -58,7 +58,7 @@ serde_with = "3.6.1"
 thiserror = "1.0.56"
 toml = "0.8.10"
 unic-langid = "0.9.4"
-ran = "2.0.1" #for lighter weight/easier use ranomd noise then using rand
+ran = "2.0.1" #for lighter weight/easier use random noise then using rand
 
 [dependencies.serde]
 version = "1.0.196"

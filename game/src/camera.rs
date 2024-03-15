@@ -197,9 +197,6 @@ pub(crate) fn update_camera_rig(
     let offset_x = 20.0 * shake * ran_f64_range(-1.0..=1.0) as f32;
     let offset_y = 20.0 * shake * ran_f64_range(-1.0..=1.0) as f32;
 
-    // todo: test if rotation should be around camera center, or rig target (ie player)
-    //  one of the benefits of the rotational shake is enhanced focus on whatever is center.
-
     cam_xform.rotation.z = 0.0 + angle;
     cam_xform.translation.x = rig.camera.x + offset_x;
     cam_xform.translation.y = rig.camera.y + offset_y;
