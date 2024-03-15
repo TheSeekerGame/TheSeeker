@@ -22,8 +22,15 @@ impl Plugin for PlayerPlugin {
             (setup_player.run_if(in_state(GameState::Playing)))
                 .before(PlayerStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
+        );
+        app.add_systems(
+            OnEnter(GameState::Paused),
+            (
+                debug_player,
+                crate::game::enemy::debug_enemy,
+            )
+                .chain(),
         )
-        .add_systems(OnEnter(GameState::Paused), debug_player)
         .add_plugins((
             InputManagerPlugin::<PlayerAction>::default(),
             PlayerBehaviorPlugin,
@@ -139,7 +146,8 @@ fn debug_player_states(
     }
 }
 
-fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
+// fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
+fn debug_player(world: &World, query: Query<Entity, With<PlayerGfx>>) {
     for entity in query.iter() {
         let components = world.inspect_entity(entity);
         for component in components.iter() {
@@ -222,41 +230,55 @@ impl Plugin for PlayerTransitionPlugin {
     }
 }
 
-fn transition_from<T: Component + Send + Sync + 'static>(
-    mut query: Query<(Entity, &mut TransitionsFrom<T>)>,
-    mut commands: Commands,
-) {
-    for (entity, mut trans) in query.iter_mut() {
-        for transition in &trans.transitions {
-            transition(entity, &mut commands);
-        }
-        //could decide to remove state + transitionsfrom here
-        if !&trans.transitions.is_empty() {
-            commands.entity(entity).remove::<T>();
-            trans.transitions.clear();
-        }
-    }
+// fn transition_from<T: Component + Send + Sync>(
+//     mut query: Query<(Entity, &mut TransitionsFrom<T>)>,
+//     mut commands: Commands,
+// ) {
+//     for (entity, mut trans) in query.iter_mut() {
+//         if !&trans.transitions.is_empty() {
+//             let transitions = std::mem::take(&mut trans.transitions);
+//             for transition in transitions {
+//                 transition(entity, &mut commands);
+//             }
+//             //could decide to remove state + transitionsfrom here
+//             commands.entity(entity).remove::<T>();
+//         }
+//     }
+// }
+
+// pub trait Transitionable<T: PlayerState> {
+//     fn new_transition(next: T) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
+//         Box::new(move |entity, commands| {
+//             commands.entity(entity).insert(PlayerStateBundle::<T> {
+//                 state: next,
+//                 transitions: TransitionsFrom::<T>::default(),
+//             });
+//         })
+//     }
+// }
+
+// #[derive(Component, Deref, DerefMut)]
+// struct TransitionsFrom<T> {
+//     marker: PhantomData<T>,
+//     #[deref]
+//     transitions: Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>,
+// }
+
+impl<T: PlayerState> GentState for T {
+
 }
 
-pub trait Transitionable<T: PlayerState + Default> {
-    fn new_transition(_next: T) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
-        Box::new(|entity, commands| {
-            commands
-                .entity(entity)
-                .insert(PlayerStateBundle::<T>::default());
-        })
-    }
-}
-
-#[derive(Component, Deref, DerefMut, Default)]
-struct TransitionsFrom<T> {
-    t: PhantomData<T>,
-    #[deref]
-    transitions: Vec<Box<dyn Fn(Entity, &mut Commands) + Send + Sync>>,
-}
+// impl<T: PlayerState> Default for TransitionsFrom<T> {
+//     fn default() -> Self {
+//         Self {
+//             marker: PhantomData::<T>::default(),
+//             transitions: Default::default(),
+//         }
+//     }
+// }
 
 #[derive(Bundle, Default)]
-pub struct PlayerStateBundle<T: PlayerState + Default> {
+pub struct PlayerStateBundle<T: PlayerState> {
     state: T,
     transitions: TransitionsFrom<T>,
 }
@@ -267,21 +289,21 @@ pub struct PlayerStateBundle<T: PlayerState + Default> {
 // Impl Playerstate for each state
 // Impl Transitionable<T: PlayerState> for each state that that should be able to be transitioned
 // from by a state
-pub trait PlayerState: Component<Storage = SparseStorage> + Clone {}
+pub trait PlayerState: Component<Storage = SparseStorage> {}
 
-#[derive(Component, Default, Copy, Clone, Debug)]
+#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Idle;
 impl PlayerState for Idle {}
 impl Transitionable<Running> for Idle {}
 
-#[derive(Component, Default, Copy, Clone, Debug)]
+#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Running;
 impl PlayerState for Running {}
 impl Transitionable<Idle> for Running {}
 
-#[derive(Component, Default, Copy, Clone, Debug)]
+#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Falling;
 impl PlayerState for Falling {}
@@ -289,7 +311,7 @@ impl Transitionable<Grounded> for Falling {}
 impl Transitionable<Running> for Falling {}
 impl Transitionable<Idle> for Falling {}
 
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Jumping {
     current_air_ticks: u32,
@@ -308,28 +330,27 @@ impl PlayerState for Jumping {}
 impl Transitionable<Falling> for Jumping {}
 impl Transitionable<Grounded> for Jumping {}
 
-#[derive(Component, Default, Copy, Clone, Debug)]
+#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
 impl PlayerState for Grounded {}
 //cant be Idle or Running if not Grounded
 impl Transitionable<Jumping> for Grounded {
-    fn new_transition(
-        _next: Jumping,
-    ) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
+    fn new_transition(next: Jumping) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
-                .insert(PlayerStateBundle::<Jumping>::default())
+                .insert(PlayerStateBundle::<Jumping> {
+                    state: next,
+                    transitions: TransitionsFrom::<Jumping>::default(),
+                })
                 .remove::<(Idle, Running)>();
         })
     }
 }
 //cant be Idle or Running if not Grounded
 impl Transitionable<Falling> for Grounded {
-    fn new_transition(
-        _next: Falling,
-    ) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
+    fn new_transition(_next: Falling) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
@@ -339,7 +360,7 @@ impl Transitionable<Falling> for Grounded {
     }
 }
 
-#[derive(Component, Default, Copy, Clone, Debug)]
+#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Attacking;
 impl PlayerState for Attacking {}
@@ -370,12 +391,6 @@ impl Plugin for PlayerBehaviorPlugin {
             player_collisions.in_set(SubstepSet::SolveUserConstraints),
         );
     }
-}
-
-//TODO: put somewhere else + add to prelude
-pub fn any_with_components<T: Component, N: Component>(
-) -> impl FnMut(Query<(), (With<T>, With<N>)>) -> bool + Clone {
-    move |query: Query<(), (With<T>, With<N>)>| !query.is_empty()
 }
 
 fn player_idle(
@@ -412,6 +427,7 @@ fn player_move(
         &ActionState<PlayerAction>,
         &PlayerGent,
     )>,
+    //kinda dont want to do flipping here
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for (mut velocity, action_state, gent) in q_gent.iter_mut() {
