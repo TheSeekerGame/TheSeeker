@@ -8,6 +8,12 @@ frame_min = 0
 frame_max = 16
 frame_start = 0
 
+# Loop
+[[script]]
+run_at_frame = 16
+action = "SetFrameNext"
+frame_index = 0
+
 # needed for expected flip behavior
 [[script]]
 run_on_slot_enable = "DirectionLeft"

@@ -212,4 +212,11 @@
         rows: 1,
         columns: 17,
     ),
+    "anim.spider.Walk.sprite": TextureAtlas (
+        path: "sprites/spider/Walk.png",
+        tile_size_x: 90.,
+        tile_size_y: 90.,
+        rows: 1,
+        columns: 10,
+    ),
 })
