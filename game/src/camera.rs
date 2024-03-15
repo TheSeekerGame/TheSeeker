@@ -137,17 +137,24 @@ pub(crate) fn update_camera_rig(
     rig: Res<CameraRig>,
     time: Res<Time>,
 ) {
-    if let Ok(mut cam_xform) = q_cam.get_single_mut() {
-        let speed = 4.0;
-        cam_xform.translation.x = cam_xform
-            .translation
-            .x
-            .lerp(rig.0.x, time.delta_seconds() * speed);
-        cam_xform.translation.y = cam_xform
-            .translation
-            .y
-            .lerp(rig.0.y, time.delta_seconds() * speed);
-    }
+    let Ok(mut cam_xform) = q_cam.get_single_mut() else {
+        return;
+    };
+
+    // Calculate the distance to the target
+    let distance = rig.0.distance(cam_xform.translation.xy());
+    // Slow down the base speed at farther distances, capped at 1/4 speed
+    let speed = 4.0 / ((distance * 0.1).clamp(1.0, 3.0));
+
+    // Todo: after bevy 0.13 use the tween crate to make a better transition curve.
+    cam_xform.translation.x = cam_xform
+        .translation
+        .x
+        .lerp(rig.0.x, time.delta_seconds() * speed);
+    cam_xform.translation.y = cam_xform
+        .translation
+        .y
+        .lerp(rig.0.y, time.delta_seconds() * speed);
 }
 
 fn cli_camera_at(In(args): In<Vec<String>>, mut q_cam: Query<&mut Transform, With<MainCamera>>) {
