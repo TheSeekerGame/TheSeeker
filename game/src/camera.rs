@@ -102,14 +102,31 @@ fn camera_rig_follow_player(
     };
     // define how far away the player can get going in the unanticipated direction
     // before the camera switches to track that direction
-    let max_err = 20.0;
+    let max_err = 40.0;
     // Define how far ahead the camera will lead the player by
-    let lead_amnt = 70.0;
+    let lead_amnt = 40.0;
 
     // Default state is to predict the player goes forward, ie "right"
-    if !*lead_bckwrd {}
+    let delta_x = player_xform.translation.x - rig.0.x;
+    println!(
+        "delta_x: {} backwrd: {}",
+        delta_x, *lead_bckwrd
+    );
+    if !*lead_bckwrd {
+        if delta_x > -lead_amnt {
+            rig.0.x = player_xform.translation.x + lead_amnt
+        } else if delta_x < -lead_amnt - max_err {
+            *lead_bckwrd = !*lead_bckwrd
+        }
+    } else {
+        if delta_x < lead_amnt {
+            rig.0.x = player_xform.translation.x - lead_amnt
+        } else if delta_x > lead_amnt + max_err {
+            *lead_bckwrd = !*lead_bckwrd
+        }
+    }
 
-    rig.0.x = player_xform.translation.x;
+    //rig.0.x = player_xform.translation.x;
     rig.0.y = player_xform.translation.y;
 }
 

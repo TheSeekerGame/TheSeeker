@@ -161,7 +161,7 @@ fn darkness_dynamics(
             offest = player_transform.translation.xy() - cam_transform.translation.xy()
         };
     };
-    println!("{}", offest);
+
     for mut setting in &mut settings {
         let seconds_per_day_cycle = 30.0;
 
