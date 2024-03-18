@@ -92,4 +92,7 @@
     "anim.spider.Walk": File (
         path: "animations/spider/Walk.anim.toml",
     ),
+    "anim.spider.RangedAttack": File (
+        path: "animations/spider/RangedAttack.anim.toml",
+    ),
 })
