@@ -54,6 +54,22 @@ pub struct GentStateBundle<T: GentState> {
     pub transitions: TransitionsFrom<T>,
 }
 
+#[derive(Component, Default)]
+pub enum Facing {
+    #[default]
+    Right,
+    Left,
+}
+
+impl Facing {
+    pub fn direction(&self) -> f32 {
+        match self {
+            Facing::Right => 1.,
+            Facing::Left => -1.,
+        }
+    }
+}
+
 // States
 // states are components which are added to the entity on transition.
 // an entity can be in multiple states at once, eg Grounded and Running/Idle
@@ -66,71 +82,71 @@ pub trait GentState: Component<Storage = SparseStorage> {}
 #[component(storage = "SparseSet")]
 pub struct Idle;
 impl GentState for Idle {}
-impl Transitionable<Running> for Idle {}
+// impl Transitionable<Running> for Idle {}
 
-#[derive(Component, Default, Debug)]
-#[component(storage = "SparseSet")]
-pub struct Running;
-impl GentState for Running {}
-impl Transitionable<Idle> for Running {}
+// #[derive(Component, Default, Debug)]
+// #[component(storage = "SparseSet")]
+// pub struct Running;
+// impl GentState for Running {}
+// impl Transitionable<Idle> for Running {}
 
-#[derive(Component, Default, Debug)]
-#[component(storage = "SparseSet")]
-pub struct Falling;
-impl GentState for Falling {}
-impl Transitionable<Grounded> for Falling {}
-impl Transitionable<Running> for Falling {}
-impl Transitionable<Idle> for Falling {}
+// #[derive(Component, Default, Debug)]
+// #[component(storage = "SparseSet")]
+// pub struct Falling;
+// impl GentState for Falling {}
+// impl Transitionable<Grounded> for Falling {}
+// impl Transitionable<Running> for Falling {}
+// impl Transitionable<Idle> for Falling {}
 
-#[derive(Component, Debug)]
-#[component(storage = "SparseSet")]
-pub struct Jumping {
-    current_air_ticks: u32,
-    max_air_ticks: u32,
-}
-
-impl Default for Jumping {
-    fn default() -> Self {
-        Jumping {
-            current_air_ticks: 0,
-            max_air_ticks: 30,
-        }
-    }
-}
-impl GentState for Jumping {}
-impl Transitionable<Falling> for Jumping {}
-impl Transitionable<Grounded> for Jumping {}
+// #[derive(Component, Debug)]
+// #[component(storage = "SparseSet")]
+// pub struct Jumping {
+//     current_air_ticks: u32,
+//     max_air_ticks: u32,
+// }
+//
+// impl Default for Jumping {
+//     fn default() -> Self {
+//         Jumping {
+//             current_air_ticks: 0,
+//             max_air_ticks: 30,
+//         }
+//     }
+// }
+// impl GentState for Jumping {}
+// impl Transitionable<Falling> for Jumping {}
+// impl Transitionable<Grounded> for Jumping {}
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
 impl GentState for Grounded {}
 //cant be Idle or Running if not Grounded
-impl Transitionable<Jumping> for Grounded {
-    fn new_transition(
-        _next: Jumping,
-    ) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
-        Box::new(|entity, commands| {
-            commands
-                .entity(entity)
-                .insert(GentStateBundle::<Jumping>::default())
-                .remove::<(Idle, Running)>();
-        })
-    }
-}
-//cant be Idle or Running if not Grounded
-impl Transitionable<Falling> for Grounded {
-    fn new_transition(
-        _next: Falling,
-    ) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
-        Box::new(|entity, commands| {
-            commands
-                .entity(entity)
-                .insert(GentStateBundle::<Falling>::default())
-                .remove::<(Idle, Running)>();
-        })
-    }
-}
+// impl Transitionable<Jumping> for Grounded {
+//     fn new_transition(
+//         _next: Jumping,
+//     ) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
+//         Box::new(|entity, commands| {
+//             commands
+//                 .entity(entity)
+//                 .insert(GentStateBundle::<Jumping>::default())
+//                 .remove::<(Idle, Running)>();
+//         })
+//     }
+// }
+// //cant be Idle or Running if not Grounded
+// impl Transitionable<Falling> for Grounded {
+//     fn new_transition(
+//         _next: Falling,
+//     ) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
+//         Box::new(|entity, commands| {
+//             commands
+//                 .entity(entity)
+//                 .insert(GentStateBundle::<Falling>::default())
+//                 .remove::<(Idle, Running)>();
+//         })
+//     }
+// }
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]

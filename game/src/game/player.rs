@@ -166,14 +166,15 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                 phys: GentPhysicsBundle {
                     rb: RigidBody::Kinematic,
                     collider: Collider::cuboid(6.0, 10.0),
-                    shapecast: ShapeCaster::new(
-                        Collider::cuboid(6.0, 10.0),
-                        Vec2::new(0.0, -2.0),
-                        0.0,
-                        Vec2::NEG_Y.into(),
-                    ),
                 },
             },
+            //get rid of this, move to shapecast with spatialquery
+            ShapeCaster::new(
+                Collider::cuboid(6.0, 10.0),
+                Vec2::new(0.0, -2.0),
+                0.0,
+                Vec2::NEG_Y.into(),
+            ),
             //have to use builder here *i think* because of different types between keycode and
             //axis
             InputManagerBundle::<PlayerAction> {
