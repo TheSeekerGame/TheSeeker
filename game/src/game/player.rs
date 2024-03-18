@@ -92,6 +92,7 @@ pub struct PlayerGfx {
 pub enum PlayerAction {
     Move,
     Jump,
+    Attack,
 }
 
 fn debug_player_states(
@@ -185,6 +186,7 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                         VirtualAxis::from_keys(KeyCode::A, KeyCode::D),
                         PlayerAction::Move,
                     )
+                    .insert(KeyCode::Return, PlayerAction::Attack)
                     .build(),
             },
             GentStateBundle::<Falling>::default(),
@@ -284,7 +286,9 @@ pub struct Grounded;
 impl GentState for Grounded {}
 //cant be Idle or Running if not Grounded
 impl Transitionable<Jumping> for Grounded {
-    fn new_transition(next: Jumping) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
+    fn new_transition(
+        next: Jumping,
+    ) -> Box<dyn FnOnce(Entity, &mut Commands) -> bool + Send + Sync> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
@@ -293,17 +297,21 @@ impl Transitionable<Jumping> for Grounded {
                     transitions: TransitionsFrom::<Jumping>::default(),
                 })
                 .remove::<(Idle, Running)>();
+            true
         })
     }
 }
 //cant be Idle or Running if not Grounded
 impl Transitionable<Falling> for Grounded {
-    fn new_transition(_next: Falling) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
+    fn new_transition(
+        _next: Falling,
+    ) -> Box<dyn FnOnce(Entity, &mut Commands) -> bool + Send + Sync> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
                 .insert(GentStateBundle::<Falling>::default())
                 .remove::<(Idle, Running)>();
+            true
         })
     }
 }
