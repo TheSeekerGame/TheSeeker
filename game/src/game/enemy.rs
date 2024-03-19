@@ -1,7 +1,6 @@
 use crate::game::gentstate::*;
 use crate::game::player::PlayerGent;
 use crate::prelude::*;
-use bevy_xpbd_2d::SubstepSchedule;
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
     assets::animation::SpriteAnimation,
@@ -19,11 +18,6 @@ impl Plugin for EnemyPlugin {
                 .before(EnemyStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         );
-        // app.add_systems(
-        //     GameTickUpdate,
-        //     test_spawn.run_if(in_state(AppState::InGame)),
-        // );
-        // app.add_systems(OnEnter(GameState::Paused), debug_enemy);
         app.add_plugins((
             EnemyBehaviorPlugin,
             EnemyTransitionPlugin,
@@ -42,7 +36,6 @@ pub fn debug_enemy(world: &World, query: Query<Entity, With<EnemyGent>>) {
     }
 }
 
-//could have a GentStateSet if it doesnt need to be as granular
 #[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum EnemyStateSet {
     Behavior,
@@ -119,7 +112,6 @@ fn setup_enemy(q: Query<(&Transform, Entity), Added<EnemyBlueprint>>, mut comman
             },
             animation: Default::default(),
         },));
-        // println!("enemy spawned")
     }
 }
 
@@ -140,12 +132,6 @@ impl Plugin for EnemyBehaviorPlugin {
                         waiting.run_if(any_with_components::<Waiting, EnemyGent>()),
                     ),
                     walking.run_if(any_with_components::<Walking, EnemyGent>()),
-                    // enemy_idle.run_if(any_with_components::<Idle, EnemyGent>()),
-                    // enemy_run.run_if(any_with_components::<Running, EnemyGent>()),
-                    // enemy_jump.run_if(any_with_components::<Jumping, EnemyGent>()),
-                    // enemy_move,
-                    // enemy_grounded.run_if(any_with_components::<Grounded, EnemyGent>()),
-                    // enemy_falling.run_if(any_with_components::<Falling, EnemyGent>()),
                 )
                     .chain(),
                 sprite_flip,
@@ -153,24 +139,9 @@ impl Plugin for EnemyBehaviorPlugin {
                 .chain()
                 .run_if(in_state(AppState::InGame)),
         );
-        // app.add_systems(
-        //     SubstepSchedule,
-        //     //probably can switch to generic collision system
-        //     enemy_collisions.in_set(SubstepSet::SolveUserConstraints),
-        // );
     }
 }
 
-// fn debug_enemy(world: &World, query: Query<Entity, With<EnemyGent>>) {
-//     for entity in query.iter() {
-//         let components = world.inspect_entity(entity);
-//         for component in components.iter() {
-//             println!("{:?}", component.name());
-//         }
-//     }
-// }
-
-//do i want it to have enum substate? or patrolling + idle + moving + retargeting
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 struct Patrolling;
@@ -212,9 +183,7 @@ struct Waiting {
 }
 impl GentState for Waiting {}
 impl Transitionable<Walking> for Waiting {
-    fn new_transition(
-        next: Walking,
-    ) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
+    fn new_transition(next: Walking) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
         Box::new(move |entity, commands| {
             commands
                 .entity(entity)
@@ -266,23 +235,19 @@ fn patrolling(
                 println!("should transition to aggroed");
                 transitions.push(Patrolling::new_transition(Aggroed {
                     target: player_gent,
-                }))
+                }));
             } else if maybe_waiting.is_some() && maybe_waiting_trans.is_some() {
                 let waiting = maybe_waiting.unwrap();
                 let mut waiting_trans = maybe_waiting_trans.unwrap();
                 if waiting.current_waiting_ticks >= waiting.max_waiting_ticks {
                     waiting_trans.push(Waiting::new_transition(Walking {
-                        max_walking_ticks: 120,
+                        max_walking_ticks: 240,
                         current_walking_ticks: 0,
                     }));
                 }
             }
         }
     }
-
-    //if waiting, decide direction and add walking
-
-    //spatial query for range? line of sight?
 }
 
 fn waiting(mut query: Query<(&mut Waiting), With<EnemyGent>>) {
@@ -308,7 +273,6 @@ fn aggro(
     for (aggroed, mut facing, trans, mut transitions) in query.iter_mut() {
         if let Ok(player_trans) = player_query.get(aggroed.target) {
             //face player
-            //maybe this should be in the patrol sys, should it always face player in aggro?
             if trans.translation().x > player_trans.translation().x {
                 *facing = Facing::Right;
             } else if trans.translation().x < player_trans.translation().x {
@@ -383,6 +347,7 @@ fn walking(
             SpatialQueryFilter::new().without_entities([entity]),
         ) {
             if first_hit.time_of_impact > 0.0 {
+                //if not aggro turn around to walk away from edge
                 if maybe_aggroed.is_none() {
                     *facing = match *facing {
                         Facing::Right => Facing::Left,
@@ -393,17 +358,12 @@ fn walking(
                     transitions.push(Walking::new_transition(RangedAttack {
                         target: maybe_aggroed.unwrap().target,
                     }));
-                    //could put the reset to 0 in actual transition
                     velocity.x = 0.;
                 }
             };
             // println!("{:?}", first_hit);
         };
         walking.current_walking_ticks += 1;
-
-        // println!("{:?}", velocity);
-        //move in facing direction, update distance walked
-        //when reach end of distance walked, transition out of walking
     }
 }
 
@@ -443,11 +403,10 @@ impl Plugin for EnemyTransitionPlugin {
                     >()),
                     transition_from::<Aggroed>.run_if(any_with_components::<Aggroed, EnemyGent>()),
                     transition_from::<Waiting>.run_if(any_with_components::<Waiting, EnemyGent>()),
-                    // transition_from::<Idle>.run_if(any_with_component::<Idle>()),
-                    // transition_from::<Running>.run_if(any_with_component::<Running>()),
-                    // transition_from::<Grounded>.run_if(any_with_component::<Grounded>()),
-                    // transition_from::<Jumping>.run_if(any_with_component::<Jumping>()),
-                    // transition_from::<Falling>.run_if(any_with_component::<Falling>()),
+                    transition_from::<RangedAttack>.run_if(any_with_components::<
+                        RangedAttack,
+                        EnemyGent,
+                    >()),
                 ),
                 apply_deferred,
             )
@@ -469,12 +428,9 @@ impl Plugin for EnemyAnimationPlugin {
                 enemy_idle_animation,
                 enemy_walking_animation,
                 enemy_ranged_attack_animation,
-                // player_falling_animation,
-                // player_jumping_animation,
-                // player_running_animation,
             )
                 .in_set(EnemyStateSet::Animation)
-                // .after(EnemyStateSet::Transition)
+                .after(EnemyStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         );
     }
