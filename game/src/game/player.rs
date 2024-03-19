@@ -190,48 +190,51 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                 PlayerStateBundle::<Falling>::default(),
             ))
             .with_children(|parent| {
+                let filter = SpatialQueryFilter::new().without_entities([parent.parent_entity()]);
                 parent.spawn((
                     CharacterShapeCaster::Down,
                     ShapeCaster::new(
                         // uses special shape and origin because of spacial "grounded" state
-                        Collider::cuboid(3.99, 10.0),
+                        player_collider.clone(),
                         Vec2::new(0.0, -2.0),
                         0.0,
                         Vec2::NEG_Y.into(),
                     )
-                    .with_ignore_origin_penetration(true),
+                    .with_query_filter(filter.clone()),
                 ));
                 // Needs the tiny origin offsets because otherwise colliders might
                 // overlap exactly and fail to count origin/character as first collider.
+                let wide_col = Collider::cuboid(3.99, 0.001);
+                let tall_col = Collider::cuboid(0.001, 9.99);
                 parent.spawn((
                     CharacterShapeCaster::Right,
                     ShapeCaster::new(
-                        player_collider.clone(),
-                        Vec2::new(0.01, 0.0),
+                        tall_col.clone(),
+                        Vec2::new(0.000001, 0.0),
                         0.0,
                         Vec2::X.into(),
                     )
-                    .with_ignore_origin_penetration(true),
+                    .with_query_filter(filter.clone()),
                 ));
                 parent.spawn((
                     CharacterShapeCaster::Left,
                     ShapeCaster::new(
-                        player_collider.clone(),
-                        Vec2::new(-0.01, 0.0),
+                        tall_col.clone(),
+                        Vec2::new(-0.000001, 0.0),
                         0.0,
                         Vec2::NEG_X.into(),
                     )
-                    .with_ignore_origin_penetration(true),
+                    .with_query_filter(filter.clone()),
                 ));
                 parent.spawn((
                     CharacterShapeCaster::Up,
                     ShapeCaster::new(
-                        player_collider.clone(),
-                        Vec2::new(0.0, 0.01),
+                        wide_col.clone(),
+                        Vec2::new(0.0, 0.000001),
                         0.0,
                         Vec2::Y.into(),
                     )
-                    .with_ignore_origin_penetration(true),
+                    .with_query_filter(filter.clone()),
                 ));
             });
 
@@ -411,13 +414,11 @@ impl Plugin for PlayerBehaviorPlugin {
                 player_run.run_if(any_with_component::<Running>()),
                 player_jump.run_if(any_with_component::<Jumping>()),
                 player_move,
+                // player move sets velocity, and player collisions sets vel to zero to avoid collisions
+                player_collisions.after(player_move),
                 player_grounded.run_if(any_with_component::<Grounded>()),
                 player_falling.run_if(any_with_component::<Falling>()),
             ),
-        );
-        app.add_systems(
-            SubstepSchedule,
-            player_collisions.in_set(SubstepSet::SolveUserConstraints),
         );
     }
 }
@@ -546,12 +547,11 @@ fn player_jump(
     }
 }
 
-//TODO
-//add shapecasting forward/in movement direction to check for collisions
 fn player_collisions(
-    collisions: Res<Collisions>,
+    shape_casts_query: Query<(&ShapeHits, &CharacterShapeCaster)>,
     mut q_gent: Query<
         (
+            &Children,
             &mut Position,
             &Rotation,
             &mut LinearVelocity,
@@ -559,35 +559,47 @@ fn player_collisions(
         (With<PlayerGent>, With<RigidBody>),
     >,
 ) {
-    for contacts in collisions.iter() {
-        if !contacts.during_current_substep {
-            continue;
-        }
-
-        let is_first: bool;
-        let (mut position, rotation, mut linear_velocity) =
-            if let Ok(player) = q_gent.get_mut(contacts.entity1) {
-                is_first = true;
-                player
-            } else if let Ok(player) = q_gent.get_mut(contacts.entity2) {
-                is_first = false;
-                player
-            } else {
+    for (children, mut position, rotation, mut linear_velocity) in q_gent.iter_mut() {
+        let mut to_far_x = 0.0;
+        let mut to_far_y = 0.0;
+        for child in children.iter() {
+            let Ok((hits, direction)) = shape_casts_query.get(*child) else {
                 continue;
             };
-
-        for manifold in contacts.manifolds.iter() {
-            let normal = if is_first {
-                -manifold.global_normal1(rotation)
-            } else {
-                -manifold.global_normal2(rotation)
-            };
-
-            for contact in manifold.contacts.iter().filter(|c| c.penetration > 0.0) {
-                //position.0.x = position.0.x + normal.x * contact.penetration;
-                //linear_velocity.x = 0.0;
+            match direction {
+                CharacterShapeCaster::Left => {
+                    for hit in hits.iter() {
+                        if hit.time_of_impact < 2.001 {
+                            to_far_x = hit.time_of_impact + 2.0;
+                            linear_velocity.x = linear_velocity.x.clamp(0., 100.0);
+                            break;
+                        }
+                    }
+                },
+                CharacterShapeCaster::Right => {
+                    for hit in hits.iter() {
+                        if hit.time_of_impact < 2.001 {
+                            to_far_x = -hit.time_of_impact - 2.0;
+                            linear_velocity.x = linear_velocity.x.clamp(-100., 0.0);
+                            break;
+                        }
+                    }
+                },
+                CharacterShapeCaster::Up => {
+                    for hit in hits.iter() {
+                        if hit.time_of_impact < 5.001 {
+                            to_far_y = hit.time_of_impact + 5.0;
+                            linear_velocity.y = linear_velocity.y.clamp(-100., 0.0);
+                            break;
+                        }
+                    }
+                },
+                // handled by grounded affect
+                CharacterShapeCaster::Down => {},
             }
         }
+        position.0.x = position.0.x - to_far_x;
+        position.0.y = position.0.y - to_far_y;
     }
 }
 
@@ -602,20 +614,10 @@ fn player_grounded(
             &ActionState<PlayerAction>,
             &mut TransitionsFrom<Grounded>,
         ),
-        (
-            With<PlayerGent>,
-            With<Grounded>,
-            Without<ShapeHits>,
-        ),
+        (With<PlayerGent>, With<Grounded>),
     >,
 ) {
     for (parent, hits, direction) in shape_casts_query.iter() {
-        if *direction == CharacterShapeCaster::Left {
-            println!("left: {:?}", hits);
-        }
-        if *direction == CharacterShapeCaster::Right {
-            println!("right: {:?}", hits);
-        }
         if *direction == CharacterShapeCaster::Down {
             let Ok((action_state, mut transitions)) = query.get_mut(**parent) else {
                 continue;
@@ -648,11 +650,7 @@ fn player_falling(
             &ActionState<PlayerAction>,
             &mut TransitionsFrom<Falling>,
         ),
-        (
-            With<PlayerGent>,
-            With<Falling>,
-            Without<ShapeHits>,
-        ),
+        (With<PlayerGent>, With<Falling>),
     >,
 ) {
     for (parent, hits, direction) in shape_casts_query.iter() {
