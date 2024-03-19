@@ -12,48 +12,30 @@ pub fn transition_from<T: Component>(
         if !&trans.transitions.is_empty() {
             let transitions = std::mem::take(&mut trans.transitions);
             for transition in transitions {
-                if transition(entity, &mut commands) {
-                    commands.entity(entity).remove::<T>();
-                }
+                transition(entity, &mut commands);
             }
-            //could decide to remove state + transitionsfrom here
-            // commands.entity(entity).remove::<T>();
+            commands.entity(entity).remove::<T>();
         }
     }
 }
 
 pub trait Transitionable<T: GentState> {
-    fn new_transition(next: T) -> Box<dyn FnOnce(Entity, &mut Commands) -> bool + Send + Sync> {
+    fn new_transition(next: T) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
         Box::new(move |entity, commands| {
             commands.entity(entity).insert(GentStateBundle::<T> {
                 state: next,
                 transitions: TransitionsFrom::<T>::default(),
             });
-            //idk if i like this bool thing
-            true
-        })
-    }
-    fn new_nonex_transition(
-        next: T,
-    ) -> Box<dyn FnOnce(Entity, &mut Commands) -> bool + Send + Sync> {
-        Box::new(move |entity, commands| {
-            commands.entity(entity).insert(GentStateBundle::<T> {
-                state: next,
-                transitions: TransitionsFrom::<T>::default(),
-            });
-            false
         })
     }
 }
-
-//another trait or fn for non_exclusive transition?
 
 //common state
 #[derive(Component, Deref, DerefMut)]
 pub struct TransitionsFrom<T> {
     pub marker: PhantomData<T>,
     #[deref]
-    pub transitions: Vec<Box<dyn FnOnce(Entity, &mut Commands) -> bool + Send + Sync>>,
+    pub transitions: Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>,
 }
 
 impl<T: GentState> Default for TransitionsFrom<T> {

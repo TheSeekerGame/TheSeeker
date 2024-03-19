@@ -214,7 +214,7 @@ impl GentState for Waiting {}
 impl Transitionable<Walking> for Waiting {
     fn new_transition(
         next: Walking,
-    ) -> Box<dyn FnOnce(Entity, &mut Commands) -> bool + Send + Sync> {
+    ) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
         Box::new(move |entity, commands| {
             commands
                 .entity(entity)
@@ -223,8 +223,6 @@ impl Transitionable<Walking> for Waiting {
                     transitions: TransitionsFrom::<Walking>::default(),
                 })
                 .remove::<Idle>();
-            //idk if i like this bool thing
-            true
         })
     }
 }
@@ -327,7 +325,7 @@ fn aggro(
                 ));
             }
         }
-        //maybe if there is no player it should also return to patrol state
+        //if there is no player it should also return to patrol state
     }
 }
 

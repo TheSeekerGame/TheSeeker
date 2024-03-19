@@ -207,7 +207,7 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
     }
 }
 ///State transition plugin
-///Add a transition_from::<T: PlayerState>.run_if(any_with_component::<T>()) for each state
+///Add a transition_from::<T: GentState>.run_if(any_with_component::<T>()) for each state
 
 struct PlayerTransitionPlugin;
 
@@ -237,7 +237,7 @@ impl Plugin for PlayerTransitionPlugin {
 // states are components which are added to the entity on transition.
 // an entity can be in multiple states at once, eg Grounded and Running/Idle
 // Impl Playerstate for each state
-// Impl Transitionable<T: PlayerState> for each state that that should be able to be transitioned
+// Impl Transitionable<T: GentState> for each state that that should be able to be transitioned
 // from by a state
 // pub trait GentState: Component<Storage = SparseStorage> {}
 
@@ -288,7 +288,7 @@ impl GentState for Grounded {}
 impl Transitionable<Jumping> for Grounded {
     fn new_transition(
         next: Jumping,
-    ) -> Box<dyn FnOnce(Entity, &mut Commands) -> bool + Send + Sync> {
+    ) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
@@ -297,7 +297,6 @@ impl Transitionable<Jumping> for Grounded {
                     transitions: TransitionsFrom::<Jumping>::default(),
                 })
                 .remove::<(Idle, Running)>();
-            true
         })
     }
 }
@@ -305,13 +304,12 @@ impl Transitionable<Jumping> for Grounded {
 impl Transitionable<Falling> for Grounded {
     fn new_transition(
         _next: Falling,
-    ) -> Box<dyn FnOnce(Entity, &mut Commands) -> bool + Send + Sync> {
+    ) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
                 .insert(GentStateBundle::<Falling>::default())
                 .remove::<(Idle, Running)>();
-            true
         })
     }
 }
