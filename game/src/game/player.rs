@@ -161,46 +161,79 @@ pub enum CharacterShapeCaster {
 
 fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut commands: Commands) {
     for (xf_gent, e_gent) in q.iter() {
+        let player_collider = Collider::cuboid(4.0, 10.0);
         // Spawn shape casting children first because borrow rules.
-        let down = commands
-            .spawn((
-                Transform::default(),
-                GlobalTransform::default(),
-                CharacterShapeCaster::Down,
-                ShapeCaster::new(
-                    Collider::cuboid(3.99, 10.0),
-                    Vec2::new(0.0, -2.0),
-                    0.0,
-                    Vec2::NEG_Y.into(),
-                )
-                .with_ignore_origin_penetration(true),
-            ))
-            .id();
+
         let e_gfx = commands.spawn(()).id();
         let mut e_gent_commands = commands.entity(e_gent);
-        e_gent_commands.insert((
-            PlayerGentBundle {
-                marker: PlayerGent { e_gfx },
-                phys: GentPhysicsBundle {
-                    rb: RigidBody::Kinematic,
-                    collider: Collider::cuboid(4.0, 10.0),
+        e_gent_commands
+            .insert((
+                PlayerGentBundle {
+                    marker: PlayerGent { e_gfx },
+                    phys: GentPhysicsBundle {
+                        rb: RigidBody::Kinematic,
+                        collider: player_collider.clone(),
+                    },
                 },
-            },
-            //have to use builder here *i think* because of different types between keycode and
-            //axis
-            InputManagerBundle::<PlayerAction> {
-                action_state: ActionState::default(),
-                input_map: InputMap::default()
-                    .insert(KeyCode::Space, PlayerAction::Jump)
-                    .insert(
-                        VirtualAxis::from_keys(KeyCode::A, KeyCode::D),
-                        PlayerAction::Move,
+                //have to use builder here *i think* because of different types between keycode and
+                //axis
+                InputManagerBundle::<PlayerAction> {
+                    action_state: ActionState::default(),
+                    input_map: InputMap::default()
+                        .insert(KeyCode::Space, PlayerAction::Jump)
+                        .insert(
+                            VirtualAxis::from_keys(KeyCode::A, KeyCode::D),
+                            PlayerAction::Move,
+                        )
+                        .build(),
+                },
+                PlayerStateBundle::<Falling>::default(),
+            ))
+            .with_children(|parent| {
+                parent.spawn((
+                    CharacterShapeCaster::Down,
+                    ShapeCaster::new(
+                        // uses special shape and origin because of spacial "grounded" state
+                        Collider::cuboid(3.99, 10.0),
+                        Vec2::new(0.0, -2.0),
+                        0.0,
+                        Vec2::NEG_Y.into(),
                     )
-                    .build(),
-            },
-            PlayerStateBundle::<Falling>::default(),
-        ));
-        e_gent_commands.add_child(down);
+                    .with_ignore_origin_penetration(true),
+                ));
+                // Needs the tiny origin offsets because otherwise colliders might
+                // overlap exactly and fail to count origin/character as first collider.
+                parent.spawn((
+                    CharacterShapeCaster::Right,
+                    ShapeCaster::new(
+                        player_collider.clone(),
+                        Vec2::new(0.01, 0.0),
+                        0.0,
+                        Vec2::X.into(),
+                    )
+                    .with_ignore_origin_penetration(true),
+                ));
+                parent.spawn((
+                    CharacterShapeCaster::Left,
+                    ShapeCaster::new(
+                        player_collider.clone(),
+                        Vec2::new(-0.01, 0.0),
+                        0.0,
+                        Vec2::NEG_X.into(),
+                    )
+                    .with_ignore_origin_penetration(true),
+                ));
+                parent.spawn((
+                    CharacterShapeCaster::Up,
+                    ShapeCaster::new(
+                        player_collider.clone(),
+                        Vec2::new(0.0, 0.01),
+                        0.0,
+                        Vec2::Y.into(),
+                    )
+                    .with_ignore_origin_penetration(true),
+                ));
+            });
 
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
@@ -577,12 +610,17 @@ fn player_grounded(
     >,
 ) {
     for (parent, hits, direction) in shape_casts_query.iter() {
+        if *direction == CharacterShapeCaster::Left {
+            println!("left: {:?}", hits);
+        }
+        if *direction == CharacterShapeCaster::Right {
+            println!("right: {:?}", hits);
+        }
         if *direction == CharacterShapeCaster::Down {
             let Ok((action_state, mut transitions)) = query.get_mut(**parent) else {
                 continue;
             };
             let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
-            println!("{:?}", hits);
             //just pressed seems to get missed sometimes... but we need it because pressed makes you
             //jump continuously if held
             //known issue https://github.com/bevyengine/bevy/issues/6183
