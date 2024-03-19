@@ -30,7 +30,6 @@ pub trait Transitionable<T: GentState> {
     }
 }
 
-//common state
 #[derive(Component, Deref, DerefMut)]
 pub struct TransitionsFrom<T> {
     pub marker: PhantomData<T>,
@@ -69,14 +68,15 @@ impl Facing {
     }
 }
 
-// States
-// states are components which are added to the entity on transition.
-// an entity can be in multiple states at once, eg Grounded and Running/Idle
-// Impl Playerstate for each state
-// Impl Transitionable<T: GentState> for each state that that should be able to be transitioned
-// from by a state
+/// States
+/// states are components which are added to the entity on transition.
+/// an entity can be in multiple states at once, eg Grounded and Running/Idle
+/// Impl GentState for each state
+/// Impl Transitionable<T: GentState> for each state that that should be able to be transitioned
+/// from by a state
 pub trait GentState: Component<Storage = SparseStorage> {}
 
+//common states
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Idle;
