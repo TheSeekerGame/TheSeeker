@@ -118,9 +118,9 @@ fn camera_rig_follow_player(
     };
     // define how far away the player can get going in the unanticipated direction
     // before the camera switches to track that direction
-    let max_err = 40.0;
+    let max_err = 10.0;
     // Define how far ahead the camera will lead the player by
-    let lead_amnt = 40.0;
+    let lead_amnt = 15.0;
 
     // Default state is to predict the player goes forward, ie "right"
     let delta_x = player_xform.translation.x - rig.target.x;
@@ -184,7 +184,7 @@ pub(crate) fn update_camera_rig(
         return;
     };
 
-    let speed = 2.0;
+    let speed = 3.34;
 
     let new_xy = rig.camera.lerp(rig.target, time.delta_seconds() * speed);
 
