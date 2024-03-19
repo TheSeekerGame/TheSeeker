@@ -15,7 +15,6 @@ impl Plugin for GentPlugin {
 pub struct GentPhysicsBundle {
     pub rb: RigidBody,
     pub collider: Collider,
-    pub shapecast: ShapeCaster,
 }
 
 #[derive(Component)]

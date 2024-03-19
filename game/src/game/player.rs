@@ -148,21 +148,42 @@ fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
     }
 }
 
+/// A marker component for tracking which shape caster this is
+/// the enum type represent the *direction* the shape is cast respectively
+/// from the player.
+#[derive(Component, PartialEq, Eq)]
+pub enum CharacterShapeCaster {
+    Left,
+    Right,
+    Down,
+    Up,
+}
+
 fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut commands: Commands) {
     for (xf_gent, e_gent) in q.iter() {
+        // Spawn shape casting children first because borrow rules.
+        let down = commands
+            .spawn((
+                Transform::default(),
+                GlobalTransform::default(),
+                CharacterShapeCaster::Down,
+                ShapeCaster::new(
+                    Collider::cuboid(3.99, 10.0),
+                    Vec2::new(0.0, -2.0),
+                    0.0,
+                    Vec2::NEG_Y.into(),
+                )
+                .with_ignore_origin_penetration(true),
+            ))
+            .id();
         let e_gfx = commands.spawn(()).id();
-        commands.entity(e_gent).insert((
+        let mut e_gent_commands = commands.entity(e_gent);
+        e_gent_commands.insert((
             PlayerGentBundle {
                 marker: PlayerGent { e_gfx },
                 phys: GentPhysicsBundle {
                     rb: RigidBody::Kinematic,
                     collider: Collider::cuboid(4.0, 10.0),
-                    shapecast: ShapeCaster::new(
-                        Collider::cuboid(3.99, 10.0),
-                        Vec2::new(0.0, -2.0),
-                        0.0,
-                        Vec2::NEG_Y.into(),
-                    ),
                 },
             },
             //have to use builder here *i think* because of different types between keycode and
@@ -179,6 +200,8 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
             },
             PlayerStateBundle::<Falling>::default(),
         ));
+        e_gent_commands.add_child(down);
+
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
             gent2gfx: TransformGfxFromGent {
@@ -528,72 +551,100 @@ fn player_collisions(
             };
 
             for contact in manifold.contacts.iter().filter(|c| c.penetration > 0.0) {
-                position.0.x = position.0.x + normal.x * contact.penetration;
-                linear_velocity.x = 0.0;
+                //position.0.x = position.0.x + normal.x * contact.penetration;
+                //linear_velocity.x = 0.0;
             }
         }
     }
 }
 
 fn player_grounded(
+    shape_casts_query: Query<(
+        &Parent,
+        &ShapeHits,
+        &CharacterShapeCaster,
+    )>,
     mut query: Query<
         (
-            &ShapeHits,
             &ActionState<PlayerAction>,
             &mut TransitionsFrom<Grounded>,
         ),
-        (With<PlayerGent>, With<Grounded>),
+        (
+            With<PlayerGent>,
+            With<Grounded>,
+            Without<ShapeHits>,
+        ),
     >,
 ) {
-    for (hits, action_state, mut transitions) in query.iter_mut() {
-        let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
-        //just pressed seems to get missed sometimes... but we need it because pressed makes you
-        //jump continuously if held
-        //known issue https://github.com/bevyengine/bevy/issues/6183
-        if action_state.just_pressed(PlayerAction::Jump) {
-            // if action_state.pressed(PlayerAction::Jump) {
-            transitions.push(Grounded::new_transition(
-                Jumping::default(),
-            ))
-        } else if is_falling {
-            transitions.push(Grounded::new_transition(Falling))
+    for (parent, hits, direction) in shape_casts_query.iter() {
+        if *direction == CharacterShapeCaster::Down {
+            let Ok((action_state, mut transitions)) = query.get_mut(**parent) else {
+                continue;
+            };
+            let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
+            println!("{:?}", hits);
+            //just pressed seems to get missed sometimes... but we need it because pressed makes you
+            //jump continuously if held
+            //known issue https://github.com/bevyengine/bevy/issues/6183
+            if action_state.just_pressed(PlayerAction::Jump) {
+                // if action_state.pressed(PlayerAction::Jump) {
+                transitions.push(Grounded::new_transition(
+                    Jumping::default(),
+                ))
+            } else if is_falling {
+                transitions.push(Grounded::new_transition(Falling))
+            }
         }
     }
 }
 
 fn player_falling(
+    mut shape_casts_query: Query<(
+        &Parent,
+        &ShapeHits,
+        &CharacterShapeCaster,
+    )>,
     mut query: Query<
         (
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
-            &ShapeHits,
             &mut TransitionsFrom<Falling>,
         ),
-        (With<PlayerGent>, With<Falling>),
+        (
+            With<PlayerGent>,
+            With<Falling>,
+            Without<ShapeHits>,
+        ),
     >,
 ) {
-    for (mut velocity, action_state, hits, mut transitions) in query.iter_mut() {
-        let fall_accel = 2.9;
-        let mut falling = true;
-        for hit in hits.iter() {
-            //if we are ~touching the ground
-            if hit.time_of_impact < 0.001 {
-                transitions.push(Falling::new_transition(Grounded));
-                // println!("{:?} should be grounded", entity);
-                //stop falling
-                velocity.y = 0.0;
-                if action_state.pressed(PlayerAction::Move) {
-                    transitions.push(Falling::new_transition(Running));
-                    // println!("{:?} should be running", entity)
-                } else {
-                    transitions.push(Falling::new_transition(Idle));
+    for (parent, hits, direction) in shape_casts_query.iter() {
+        if *direction == CharacterShapeCaster::Down {
+            let Ok((mut velocity, action_state, mut transitions)) = query.get_mut(**parent) else {
+                continue;
+            };
+
+            let fall_accel = 2.9;
+            let mut falling = true;
+            for hit in hits.iter() {
+                //if we are ~touching the ground
+                if hit.time_of_impact < 0.001 {
+                    transitions.push(Falling::new_transition(Grounded));
+                    // println!("{:?} should be grounded", entity);
+                    //stop falling
+                    velocity.y = 0.0;
+                    if action_state.pressed(PlayerAction::Move) {
+                        transitions.push(Falling::new_transition(Running));
+                        // println!("{:?} should be running", entity)
+                    } else {
+                        transitions.push(Falling::new_transition(Idle));
+                    }
+                    falling = false;
                 }
-                falling = false;
             }
-        }
-        if falling {
-            velocity.y -= fall_accel;
-            velocity.y = velocity.y.clamp(-100., 0.);
+            if falling {
+                velocity.y -= fall_accel;
+                velocity.y = velocity.y.clamp(-100., 0.);
+            }
         }
     }
 }
