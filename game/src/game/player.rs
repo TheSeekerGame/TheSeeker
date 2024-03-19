@@ -471,18 +471,22 @@ fn player_jump(
         //can enter state and first frame jump not pressed if you tap
         //i think this is related to the fixedtimestep input
         // print!("{:?}", action_state.get_pressed());
-        if jumping.current_air_ticks >= jumping.max_air_ticks
-            || action_state.released(PlayerAction::Jump)
-        {
-            transitions.push(Jumping::new_transition(Falling));
+
+        let deaccel_rate = 2.5;
+
+        // Jump should not be limited by number if "ticks" should be physics driven.
+        if jumping.is_added() {
+            velocity.y += 150.0;
+        } else {
+            if (velocity.y - deaccel_rate < 0.0) || action_state.released(PlayerAction::Jump) {
+                transitions.push(Jumping::new_transition(Falling));
+            }
+            velocity.y -= deaccel_rate;
         }
+
         jumping.current_air_ticks += 1;
 
-        velocity.y += 20.;
-        if jumping.is_added() {
-            velocity.y += 60.;
-        }
-        velocity.y = velocity.y.clamp(0., 100.);
+        velocity.y = velocity.y.clamp(0., 150.);
     }
 }
 
@@ -569,6 +573,8 @@ fn player_falling(
     >,
 ) {
     for (mut velocity, action_state, hits, mut transitions) in query.iter_mut() {
+        let fall_accel = 2.9;
+        let mut falling = true;
         for hit in hits.iter() {
             //if we are ~touching the ground
             if hit.time_of_impact < 0.001 {
@@ -582,11 +588,12 @@ fn player_falling(
                 } else {
                     transitions.push(Falling::new_transition(Idle));
                 }
-            //fall
-            } else {
-                velocity.y -= 10.;
-                velocity.y = velocity.y.clamp(-100., 0.);
+                falling = false;
             }
+        }
+        if falling {
+            velocity.y -= fall_accel;
+            velocity.y = velocity.y.clamp(-100., 0.);
         }
     }
 }
