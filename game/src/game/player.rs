@@ -156,9 +156,9 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                 marker: PlayerGent { e_gfx },
                 phys: GentPhysicsBundle {
                     rb: RigidBody::Kinematic,
-                    collider: Collider::cuboid(6.0, 10.0),
+                    collider: Collider::cuboid(4.0, 10.0),
                     shapecast: ShapeCaster::new(
-                        Collider::cuboid(6.0, 10.0),
+                        Collider::cuboid(3.99, 10.0),
                         Vec2::new(0.0, -2.0),
                         0.0,
                         Vec2::NEG_Y.into(),
@@ -311,7 +311,9 @@ pub struct Grounded;
 impl PlayerState for Grounded {}
 //cant be Idle or Running if not Grounded
 impl Transitionable<Jumping> for Grounded {
-    fn new_transition(_next: Jumping) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
+    fn new_transition(
+        _next: Jumping,
+    ) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
@@ -322,7 +324,9 @@ impl Transitionable<Jumping> for Grounded {
 }
 //cant be Idle or Running if not Grounded
 impl Transitionable<Falling> for Grounded {
-    fn new_transition(_next: Falling) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
+    fn new_transition(
+        _next: Falling,
+    ) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
         Box::new(|entity, commands| {
             commands
                 .entity(entity)
@@ -520,8 +524,8 @@ fn player_collisions(
             };
 
             for contact in manifold.contacts.iter().filter(|c| c.penetration > 0.0) {
-                position.0 += normal * contact.penetration;
-                *linear_velocity = LinearVelocity::ZERO
+                position.0.x = position.0.x + normal.x * contact.penetration;
+                linear_velocity.x = 0.0;
             }
         }
     }
