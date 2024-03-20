@@ -1,55 +1,59 @@
-use std::marker::PhantomData;
-
 use bevy::ecs::component::SparseStorage;
 
 use crate::prelude::*;
 
-pub fn transition_from<T: Component>(
-    mut query: Query<(Entity, &mut TransitionsFrom<T>)>,
-    mut commands: Commands,
-) {
+//todo make generic
+pub fn transition(mut query: Query<(Entity, &mut TransitionQueue)>, mut commands: Commands) {
     for (entity, mut trans) in query.iter_mut() {
-        if !&trans.transitions.is_empty() {
-            let transitions = std::mem::take(&mut trans.transitions);
+        if !&trans.is_empty() {
+            let transitions = std::mem::take(&mut trans.0);
             for transition in transitions {
                 transition(entity, &mut commands);
             }
-            commands.entity(entity).remove::<T>();
         }
     }
 }
 
 pub trait Transitionable<T: GentState> {
-    fn new_transition(next: T) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
+    type Removals;
+    fn new_transition(next: T) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>
+    where
+        Self: GentState + Component,
+        <Self as Transitionable<T>>::Removals: Bundle,
+    {
         Box::new(move |entity, commands| {
-            commands.entity(entity).insert(GentStateBundle::<T> {
-                state: next,
-                transitions: TransitionsFrom::<T>::default(),
-            });
+            commands
+                .entity(entity)
+                .insert(next)
+                .remove::<Self::Removals>();
         })
     }
 }
 
-#[derive(Component, Deref, DerefMut)]
-pub struct TransitionsFrom<T> {
-    pub marker: PhantomData<T>,
-    #[deref]
-    pub transitions: Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>,
-}
+//make not component, make field of state machine
+#[derive(Component, Deref, DerefMut, Default)]
+pub struct TransitionQueue(Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>);
 
-impl<T: GentState> Default for TransitionsFrom<T> {
-    fn default() -> Self {
-        Self {
-            marker: PhantomData::<T>::default(),
-            transitions: Default::default(),
-        }
+#[derive(Component, Deref, DerefMut, Default)]
+pub struct AddQueue(Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>);
+
+impl AddQueue {
+    pub fn add<T: GentState>(&mut self, next: T) {
+        self.push(Box::new(move |entity, commands| {
+            commands.entity(entity).insert(next);
+        }))
     }
 }
 
-#[derive(Bundle, Default)]
-pub struct GentStateBundle<T: GentState> {
-    pub state: T,
-    pub transitions: TransitionsFrom<T>,
+pub fn add_states(mut query: Query<(Entity, &mut AddQueue)>, mut commands: Commands) {
+    for (entity, mut add_states) in query.iter_mut() {
+        if !&add_states.is_empty() {
+            let additions = std::mem::take(&mut add_states.0);
+            for addition in additions {
+                addition(entity, &mut commands);
+            }
+        }
+    }
 }
 
 #[derive(Component, Default)]
@@ -76,22 +80,34 @@ impl Facing {
 /// from by a state
 pub trait GentState: Component<Storage = SparseStorage> {}
 
+/// A GenericState has a blanket Transitionable impl for any GentState, 
+/// it will remove itsself on transition
+pub trait GenericState: Component<Storage = SparseStorage> {}
+
+impl<T: GentState, N: GentState + GenericState> Transitionable<T> for N {
+    type Removals = N;
+}
+
+//on leaving some states the state machine should ensure we are not also in other specific states,
+//in that case do not implement GenericState for the state and instead implement
+//Transitionable with type Removals = (the states to remove)
+
 //common states
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Idle;
 impl GentState for Idle {}
-
-#[derive(Component, Default, Debug)]
-#[component(storage = "SparseSet")]
-pub struct Grounded;
-impl GentState for Grounded {}
-
-#[derive(Component, Default, Debug)]
-#[component(storage = "SparseSet")]
-pub struct Attacking;
-impl GentState for Attacking {}
-
+//
+// #[derive(Component, Default, Debug)]
+// #[component(storage = "SparseSet")]
+// pub struct Grounded;
+// impl GentState for Grounded {}
+//
+// #[derive(Component, Default, Debug)]
+// #[component(storage = "SparseSet")]
+// pub struct Attacking;
+// impl GentState for Attacking {}
+//
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Hitstun;

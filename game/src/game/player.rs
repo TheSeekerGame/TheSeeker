@@ -1,6 +1,3 @@
-use std::marker::PhantomData;
-
-use bevy::ecs::component::SparseStorage;
 use bevy_xpbd_2d::{SubstepSchedule, SubstepSet};
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use theseeker_engine::{
@@ -189,7 +186,9 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                     .insert(KeyCode::Return, PlayerAction::Attack)
                     .build(),
             },
-            GentStateBundle::<Falling>::default(),
+            Falling::default(),
+            TransitionQueue::default(),
+            // GentStateBundle::<Falling>::default(),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
@@ -217,11 +216,7 @@ impl Plugin for PlayerTransitionPlugin {
             GameTickUpdate,
             (
                 (
-                    transition_from::<Idle>.run_if(any_with_component::<Idle>()),
-                    transition_from::<Running>.run_if(any_with_component::<Running>()),
-                    transition_from::<Grounded>.run_if(any_with_component::<Grounded>()),
-                    transition_from::<Jumping>.run_if(any_with_component::<Jumping>()),
-                    transition_from::<Falling>.run_if(any_with_component::<Falling>()),
+                    transition.run_if(any_with_component::<TransitionQueue>()),
                 ),
                 apply_deferred,
             )
@@ -245,21 +240,31 @@ impl Plugin for PlayerTransitionPlugin {
 #[component(storage = "SparseSet")]
 pub struct Idle;
 impl GentState for Idle {}
-impl Transitionable<Running> for Idle {}
+impl GenericState for Idle {}
+// impl Transitionable<Running> for Idle {}
+// does this work?
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Running;
 impl GentState for Running {}
-impl Transitionable<Idle> for Running {}
+impl GenericState for Running {}
+// impl<T: GenericState> Transitionable<T> for Running {
+//     type Removals = Running;
+// }
+// impl Transitionable<Idle> for Running {}
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Falling;
 impl GentState for Falling {}
-impl Transitionable<Grounded> for Falling {}
-impl Transitionable<Running> for Falling {}
-impl Transitionable<Idle> for Falling {}
+impl GenericState for Falling {}
+// impl Transitionable<Grounded> for Falling {}
+// impl Transitionable<Running> for Falling {}
+// impl Transitionable<Idle> for Falling {}
+// impl<T: GenericState> Transitionable<T> for Falling {
+//     type Removals = Falling;
+// }
 
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
@@ -277,8 +282,9 @@ impl Default for Jumping {
     }
 }
 impl GentState for Jumping {}
-impl Transitionable<Falling> for Jumping {}
-impl Transitionable<Grounded> for Jumping {}
+impl GenericState for Jumping {}
+// impl Transitionable<Falling> for Jumping {}
+// impl Transitionable<Grounded> for Jumping {}
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
@@ -286,32 +292,11 @@ pub struct Grounded;
 impl GentState for Grounded {}
 //cant be Idle or Running if not Grounded
 impl Transitionable<Jumping> for Grounded {
-    fn new_transition(
-        next: Jumping,
-    ) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
-        Box::new(|entity, commands| {
-            commands
-                .entity(entity)
-                .insert(GentStateBundle::<Jumping> {
-                    state: next,
-                    transitions: TransitionsFrom::<Jumping>::default(),
-                })
-                .remove::<(Idle, Running)>();
-        })
-    }
+    type Removals = (Grounded, Idle, Running);
 }
 //cant be Idle or Running if not Grounded
 impl Transitionable<Falling> for Grounded {
-    fn new_transition(
-        _next: Falling,
-    ) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
-        Box::new(|entity, commands| {
-            commands
-                .entity(entity)
-                .insert(GentStateBundle::<Falling>::default())
-                .remove::<(Idle, Running)>();
-        })
-    }
+    type Removals = (Grounded, Idle, Running);
 }
 
 #[derive(Component, Default, Debug)]
@@ -351,7 +336,7 @@ fn player_idle(
     mut query: Query<
         (
             &ActionState<PlayerAction>,
-            &mut TransitionsFrom<Idle>,
+            &mut TransitionQueue,
         ),
         (
             With<Grounded>,
@@ -412,7 +397,7 @@ fn player_run(
         (
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
-            &mut TransitionsFrom<Running>,
+            &mut TransitionQueue,
         ),
         (
             With<PlayerGent>,
@@ -444,7 +429,7 @@ fn player_jump(
             &ActionState<PlayerAction>,
             &mut LinearVelocity,
             &mut Jumping,
-            &mut TransitionsFrom<Jumping>,
+            &mut TransitionQueue,
         ),
         With<PlayerGent>,
     >,
@@ -518,7 +503,7 @@ fn player_grounded(
         (
             &ShapeHits,
             &ActionState<PlayerAction>,
-            &mut TransitionsFrom<Grounded>,
+            &mut TransitionQueue,
         ),
         (With<PlayerGent>, With<Grounded>),
     >,
@@ -545,10 +530,10 @@ fn player_falling(
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
             &ShapeHits,
-            &mut TransitionsFrom<Falling>,
+            &mut TransitionQueue,
         ),
-        (With<PlayerGent>, With<Falling>),
-    >,
+        (With<PlayerGent>, With<Falling>)>,
+
 ) {
     for (mut velocity, action_state, hits, mut transitions) in query.iter_mut() {
         for hit in hits.iter() {

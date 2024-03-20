@@ -91,14 +91,13 @@ fn setup_enemy(q: Query<(&Transform, Entity), Added<EnemyBlueprint>>, mut comman
             },
             Role::Melee,
             Facing::Right,
-            GentStateBundle::<Patrolling>::default(),
-            GentStateBundle::<Walking> {
-                state: Walking {
-                    current_walking_ticks: 0,
-                    max_walking_ticks: 300,
-                },
-                transitions: TransitionsFrom::<Walking>::default(),
-            },
+            AddQueue::default(),
+            Patrolling::default(),
+            Walking {
+                current_walking_ticks: 0,
+                max_walking_ticks: 300,
+            }, // transitions: TransitionsFrom::<Walking>::default(),
+            TransitionQueue::default(), // },
         ));
         commands.entity(e_gfx).insert((EnemyGfxBundle {
             marker: EnemyGfx { e_gent },
@@ -124,14 +123,13 @@ impl Plugin for EnemyBehaviorPlugin {
             (
                 (
                     (
-                        patrolling.run_if(any_with_components::<
-                            Patrolling,
-                            EnemyGent,
-                        >()),
-                        aggro.run_if(any_with_components::<Aggroed, EnemyGent>()),
-                        waiting.run_if(any_with_components::<Waiting, EnemyGent>()),
+                        patrolling.run_if(any_with_component::<Patrolling>()),
+                        aggro.run_if(any_with_component::<Aggroed>()),
+                        waiting.run_if(any_with_component::<Waiting>()),
+                        ranged_attack.run_if(any_with_component::<RangedAttack>()),
+                        melee_attack.run_if(any_with_component::<MeleeAttack>()),
                     ),
-                    walking.run_if(any_with_components::<Walking, EnemyGent>()),
+                    walking.run_if(any_with_component::<Walking>()),
                 )
                     .chain(),
                 sprite_flip,
@@ -146,8 +144,9 @@ impl Plugin for EnemyBehaviorPlugin {
 #[component(storage = "SparseSet")]
 struct Patrolling;
 impl GentState for Patrolling {}
-impl Transitionable<Aggroed> for Patrolling {}
-// impl Transitionable<Idle> for Patrolling {}
+impl Transitionable<Aggroed> for Patrolling {
+    type Removals = (Patrolling, Waiting);
+}
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
@@ -156,9 +155,7 @@ struct Walking {
     max_walking_ticks: u32,
 }
 impl GentState for Walking {}
-impl Transitionable<Idle> for Walking {}
-impl Transitionable<Waiting> for Walking {}
-impl Transitionable<RangedAttack> for Walking {}
+impl GenericState for Walking {}
 
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
@@ -166,7 +163,9 @@ struct Aggroed {
     target: Entity,
 }
 impl GentState for Aggroed {}
-impl Transitionable<Patrolling> for Aggroed {}
+impl Transitionable<Patrolling> for Aggroed {
+    type Removals = (Aggroed, RangedAttack);
+}
 
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
@@ -174,6 +173,13 @@ struct RangedAttack {
     target: Entity,
 }
 impl GentState for RangedAttack {}
+
+#[derive(Component, Debug)]
+#[component(storage = "SparseSet")]
+struct MeleeAttack {
+    target: Entity,
+}
+impl GentState for MeleeAttack {}
 
 #[derive(Component, Default)]
 #[component(storage = "SparseSet")]
@@ -183,17 +189,7 @@ struct Waiting {
 }
 impl GentState for Waiting {}
 impl Transitionable<Walking> for Waiting {
-    fn new_transition(next: Walking) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync> {
-        Box::new(move |entity, commands| {
-            commands
-                .entity(entity)
-                .insert(GentStateBundle::<Walking> {
-                    state: next,
-                    transitions: TransitionsFrom::<Walking>::default(),
-                })
-                .remove::<Idle>();
-        })
-    }
+    type Removals = (Waiting, Idle);
 }
 
 #[derive(Component)]
@@ -212,9 +208,8 @@ fn patrolling(
             &EnemyGent,
             &GlobalTransform,
             &Facing,
-            &mut TransitionsFrom<Patrolling>,
+            &mut TransitionQueue,
             Option<&Waiting>,
-            Option<&mut TransitionsFrom<Waiting>>,
         ),
         With<Patrolling>,
     >,
@@ -222,9 +217,7 @@ fn patrolling(
 ) {
     let aggro_distance = 60.;
     if let Ok((player_gent, player_trans)) = player_query.get_single() {
-        for (enemy, trans, facing, mut transitions, maybe_waiting, mut maybe_waiting_trans) in
-            query.iter_mut()
-        {
+        for (enemy, trans, facing, mut transitions, maybe_waiting) in query.iter_mut() {
             let distance = trans
                 .translation()
                 .truncate()
@@ -236,11 +229,10 @@ fn patrolling(
                 transitions.push(Patrolling::new_transition(Aggroed {
                     target: player_gent,
                 }));
-            } else if maybe_waiting.is_some() && maybe_waiting_trans.is_some() {
+            } else if maybe_waiting.is_some() {
                 let waiting = maybe_waiting.unwrap();
-                let mut waiting_trans = maybe_waiting_trans.unwrap();
                 if waiting.current_waiting_ticks >= waiting.max_waiting_ticks {
-                    waiting_trans.push(Waiting::new_transition(Walking {
+                    transitions.push(Waiting::new_transition(Walking {
                         max_walking_ticks: 240,
                         current_walking_ticks: 0,
                     }));
@@ -263,14 +255,15 @@ fn aggro(
             &Aggroed,
             &mut Facing,
             &GlobalTransform,
-            &mut TransitionsFrom<Aggroed>,
+            &mut TransitionQueue,
+            &mut AddQueue,
         ),
         (With<EnemyGent>),
     >,
     player_query: Query<(&GlobalTransform), (Without<EnemyGent>, With<PlayerGent>)>,
 ) {
     let aggro_distance = 60.;
-    for (aggroed, mut facing, trans, mut transitions) in query.iter_mut() {
+    for (aggroed, mut facing, trans, mut transitions, mut add_q) in query.iter_mut() {
         if let Ok(player_trans) = player_query.get(aggroed.target) {
             //face player
             if trans.translation().x > player_trans.translation().x {
@@ -284,13 +277,42 @@ fn aggro(
                 .truncate()
                 .distance(player_trans.translation().truncate());
             if distance > aggro_distance {
+                //and if not mid attack?
                 transitions.push(Aggroed::new_transition(
                     Patrolling::default(),
                 ));
+                add_q.add(Waiting::default());
+            } else {
+                transitions.push(Walking::new_transition(RangedAttack {
+                    target: aggroed.target,
+                }));
             }
         }
         //if there is no player it should also return to patrol state
     }
+}
+
+fn ranged_attack(
+    mut query: Query<(&RangedAttack, &mut LinearVelocity), With<EnemyGent>>,
+) {
+    for (attack, mut velocity) in query.iter_mut() {
+        velocity.x = 0.;
+    }
+
+}
+
+fn melee_attack(
+    mut query: Query<(Entity, &MeleeAttack), With<EnemyGent>>,
+    spatial_query: SpatialQuery,
+    mut commands: Commands
+) {
+    for (entity, attack) in query.iter_mut() {
+        //tick till end of attack startup frames (looks to be end of frame 7)
+        //spawn attack hitbox collider as child
+        //intersection check, check against player collider
+        //if hit, deal damage
+    }
+
 }
 
 //animation/behavior state
@@ -302,7 +324,8 @@ fn walking(
         &mut Facing,
         &mut LinearVelocity,
         &mut Walking,
-        &mut TransitionsFrom<Walking>,
+        &mut TransitionQueue,
+    &mut AddQueue,
         Option<&Aggroed>,
     )>,
     spatial_query: SpatialQuery,
@@ -315,6 +338,7 @@ fn walking(
         mut velocity,
         mut walking,
         mut transitions,
+        mut add_q,
         maybe_aggroed,
     ) in query.iter_mut()
     {
@@ -328,7 +352,7 @@ fn walking(
                 current_waiting_ticks: 0,
                 max_waiting_ticks: 240,
             }));
-            transitions.push(Walking::new_transition(Idle::default()));
+            add_q.add(Idle::default());
             continue;
         }
         let ray_origin = Vec2::new(
@@ -355,9 +379,6 @@ fn walking(
                     };
                     velocity.x *= -1.;
                 } else {
-                    transitions.push(Walking::new_transition(RangedAttack {
-                        target: maybe_aggroed.unwrap().target,
-                    }));
                     velocity.x = 0.;
                 }
             };
@@ -395,19 +416,11 @@ impl Plugin for EnemyTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                (
-                    transition_from::<Walking>.run_if(any_with_components::<Walking, EnemyGent>()),
-                    transition_from::<Patrolling>.run_if(any_with_components::<
-                        Patrolling,
-                        EnemyGent,
-                    >()),
-                    transition_from::<Aggroed>.run_if(any_with_components::<Aggroed, EnemyGent>()),
-                    transition_from::<Waiting>.run_if(any_with_components::<Waiting, EnemyGent>()),
-                    transition_from::<RangedAttack>.run_if(any_with_components::<
-                        RangedAttack,
-                        EnemyGent,
-                    >()),
-                ),
+                transition.run_if(any_with_components::<
+                    TransitionQueue,
+                    EnemyGent,
+                >()),
+                add_states.run_if(any_with_components::<AddQueue, EnemyGent>()),
                 apply_deferred,
             )
                 .chain()
@@ -464,7 +477,8 @@ fn enemy_ranged_attack_animation(
 ) {
     for gent in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.spider.RangedAttack");
+            // enemy.play_key("anim.spider.RangedAttack");
+            enemy.play_key("anim.spider.OffensiveAttack");
         }
     }
 }
