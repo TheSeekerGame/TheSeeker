@@ -10,6 +10,7 @@ use self::player::PlayerBlueprintBundle;
 pub mod enemy;
 pub mod gentstate;
 pub mod player;
+pub mod attack;
 mod wall;
 
 pub struct GameplayPlugin;
@@ -27,6 +28,7 @@ impl Plugin for GameplayPlugin {
         app.add_plugins((
             player::PlayerPlugin,
             enemy::EnemyPlugin,
+            attack::AttackPlugin,
             wall::WallPlugin,
         ));
     }

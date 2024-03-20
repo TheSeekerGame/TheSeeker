@@ -1,3 +1,4 @@
+use crate::game::attack::Attack;
 use crate::game::gentstate::*;
 use crate::game::player::PlayerGent;
 use crate::prelude::*;
@@ -178,8 +179,16 @@ impl GentState for RangedAttack {}
 #[component(storage = "SparseSet")]
 struct MeleeAttack {
     target: Entity,
+    current_ticks: u32,
+}
+impl MeleeAttack {
+    //frames
+    const STARTUP: u32 = 7;
+    const RECOVERY: u32 = 9;
+    const MAX: u32 = 10;
 }
 impl GentState for MeleeAttack {}
+impl GenericState for MeleeAttack {}
 
 #[derive(Component, Default)]
 #[component(storage = "SparseSet")]
@@ -257,13 +266,16 @@ fn aggro(
             &GlobalTransform,
             &mut TransitionQueue,
             &mut AddQueue,
+            Has<MeleeAttack>,
         ),
         (With<EnemyGent>),
     >,
     player_query: Query<(&GlobalTransform), (Without<EnemyGent>, With<PlayerGent>)>,
 ) {
     let aggro_distance = 60.;
-    for (aggroed, mut facing, trans, mut transitions, mut add_q) in query.iter_mut() {
+    for (aggroed, mut facing, trans, mut transitions, mut add_q, maybe_attacking) in
+        query.iter_mut()
+    {
         if let Ok(player_trans) = player_query.get(aggroed.target) {
             //face player
             if trans.translation().x > player_trans.translation().x {
@@ -282,9 +294,13 @@ fn aggro(
                     Patrolling::default(),
                 ));
                 add_q.add(Waiting::default());
-            } else {
-                transitions.push(Walking::new_transition(RangedAttack {
+            } else if !maybe_attacking {
+                // transitions.push(Walking::new_transition(RangedAttack {
+                //     target: aggroed.target,
+                // }));
+                transitions.push(Walking::new_transition(MeleeAttack {
                     target: aggroed.target,
+                    current_ticks: 0,
                 }));
             }
         }
@@ -292,27 +308,63 @@ fn aggro(
     }
 }
 
-fn ranged_attack(
-    mut query: Query<(&RangedAttack, &mut LinearVelocity), With<EnemyGent>>,
-) {
+fn ranged_attack(mut query: Query<(&RangedAttack, &mut LinearVelocity), With<EnemyGent>>) {
     for (attack, mut velocity) in query.iter_mut() {
         velocity.x = 0.;
     }
-
 }
 
 fn melee_attack(
-    mut query: Query<(Entity, &MeleeAttack), With<EnemyGent>>,
-    spatial_query: SpatialQuery,
-    mut commands: Commands
+    mut query: Query<
+        (
+            Entity,
+            &mut MeleeAttack,
+            &mut LinearVelocity,
+            &Facing,
+            &GlobalTransform,
+            &mut TransitionQueue,
+        ),
+        With<EnemyGent>,
+    >,
+    mut commands: Commands,
 ) {
-    for (entity, attack) in query.iter_mut() {
+    for (entity, mut attack, mut velocity, facing, transform, mut trans_q) in query.iter_mut() {
+        velocity.x = 0.;
+        attack.current_ticks += 1;
         //tick till end of attack startup frames (looks to be end of frame 7)
-        //spawn attack hitbox collider as child
+        // println!(
+        //     "current_ticks {:?}",
+        //     attack.current_ticks
+        // );
+        // println!("startup {:?}", MeleeAttack::STARTUP);
+        // if attack.current_ticks % 8 * MeleeAttack::STARTUP == 0 {
+        if attack.current_ticks == 8 * MeleeAttack::STARTUP {
+            //spawn attack hitbox collider as child
+            println!("collider should be spawned");
+            //why isnt transform working after setting parent?
+            let collider = commands
+                .spawn((
+                    Collider::cuboid(28., 10.),
+                    Attack::new(8),
+                    // TransformBundle::from_transform(Transform::from_xyz(
+                    //     10. * facing.direction() + transform.translation().x,
+                    //     transform.translation().y,
+                    //     0.,
+                    // )),
+                ))
+                .set_parent(entity)
+                .id();
+            // commands.entity(entity).add_child(collider);
+        }
+        if attack.current_ticks >= MeleeAttack::MAX * 8 {
+            trans_q.push(MeleeAttack::new_transition(
+                Waiting::default(),
+            ))
+        }
+
         //intersection check, check against player collider
         //if hit, deal damage
     }
-
 }
 
 //animation/behavior state
@@ -325,7 +377,7 @@ fn walking(
         &mut LinearVelocity,
         &mut Walking,
         &mut TransitionQueue,
-    &mut AddQueue,
+        &mut AddQueue,
         Option<&Aggroed>,
     )>,
     spatial_query: SpatialQuery,
@@ -441,6 +493,7 @@ impl Plugin for EnemyAnimationPlugin {
                 enemy_idle_animation,
                 enemy_walking_animation,
                 enemy_ranged_attack_animation,
+                enemy_melee_attack_animation,
             )
                 .in_set(EnemyStateSet::Animation)
                 .after(EnemyStateSet::Transition)
@@ -477,7 +530,17 @@ fn enemy_ranged_attack_animation(
 ) {
     for gent in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            // enemy.play_key("anim.spider.RangedAttack");
+            enemy.play_key("anim.spider.RangedAttack");
+        }
+    }
+}
+
+fn enemy_melee_attack_animation(
+    i_query: Query<&EnemyGent, Added<MeleeAttack>>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+) {
+    for gent in i_query.iter() {
+        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
             enemy.play_key("anim.spider.OffensiveAttack");
         }
     }

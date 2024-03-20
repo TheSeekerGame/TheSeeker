@@ -7,7 +7,7 @@ use theseeker_engine::{
     script::ScriptPlayer,
 };
 
-use crate::game::gentstate::*;
+use crate::game::{attack::Health, gentstate::*};
 use crate::prelude::*;
 
 pub struct PlayerPlugin;
@@ -77,12 +77,12 @@ pub struct PlayerBlueprint;
 
 #[derive(Component)]
 pub struct PlayerGent {
-    e_gfx: Entity,
+    pub e_gfx: Entity,
 }
 
 #[derive(Component)]
 pub struct PlayerGfx {
-    e_gent: Entity,
+    pub e_gent: Entity,
 }
 
 #[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
@@ -167,6 +167,10 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                 },
             },
             //get rid of this, move to shapecast with spatialquery
+            Health {
+                current: 100,
+                max: 100,
+            },
             ShapeCaster::new(
                 Collider::cuboid(6.0, 10.0),
                 Vec2::new(0.0, -2.0),
@@ -212,9 +216,7 @@ impl Plugin for PlayerTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                (
-                    transition.run_if(any_with_component::<TransitionQueue>()),
-                ),
+                (transition.run_if(any_with_component::<TransitionQueue>()),),
                 apply_deferred,
             )
                 .chain()
@@ -308,10 +310,10 @@ impl Plugin for PlayerBehaviorPlugin {
                 player_falling.run_if(any_with_components::<Falling, PlayerGent>()),
             ),
         );
-        app.add_systems(
-            SubstepSchedule,
-            player_collisions.in_set(SubstepSet::SolveUserConstraints),
-        );
+        // app.add_systems(
+        //     SubstepSchedule,
+        //     player_collisions.in_set(SubstepSet::SolveUserConstraints),
+        // );
     }
 }
 
@@ -512,11 +514,13 @@ fn player_falling(
         (
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
+            //TODO: remove shapehits, use SpatialQuery
             &ShapeHits,
             &mut TransitionQueue,
         ),
-        (With<PlayerGent>, With<Falling>)>,
-
+        (With<PlayerGent>, With<Falling>),
+    >,
+    //spatial_query: SpatialQuery
 ) {
     for (mut velocity, action_state, hits, mut transitions) in query.iter_mut() {
         for hit in hits.iter() {
