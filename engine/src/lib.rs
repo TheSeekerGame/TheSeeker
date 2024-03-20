@@ -21,6 +21,7 @@ pub mod prelude {
     pub use crate::time::{
         at_tick_multiples, GameTickMidFlush, GameTickSet, GameTickUpdate, GameTime,
     };
+    pub use crate::condition::any_with_components;
 }
 
 use bevy::app::PluginGroupBuilder;
@@ -33,6 +34,7 @@ pub mod data;
 pub mod gent;
 pub mod script;
 pub mod time;
+pub mod condition;
 
 pub struct EnginePlugins;
 

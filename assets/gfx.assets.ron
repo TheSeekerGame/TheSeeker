@@ -205,4 +205,32 @@
         rows: 1,
         columns: 6,
     ),
+    "anim.spider.Idle.sprite": TextureAtlas (
+        path: "sprites/spider/Idle.png",
+        tile_size_x: 90.,
+        tile_size_y: 90.,
+        rows: 1,
+        columns: 17,
+    ),
+    "anim.spider.Walk.sprite": TextureAtlas (
+        path: "sprites/spider/Walk.png",
+        tile_size_x: 90.,
+        tile_size_y: 90.,
+        rows: 1,
+        columns: 10,
+    ),
+    "anim.spider.RangedAttack.sprite": TextureAtlas (
+        path: "sprites/spider/RangedAttack.png",
+        tile_size_x: 90.,
+        tile_size_y: 90.,
+        rows: 1,
+        columns: 15,
+    ),
+    "anim.spider.OffensiveAttack.sprite": TextureAtlas (
+        path: "sprites/spider/OffensiveAttack.png",
+        tile_size_x: 90.,
+        tile_size_y: 90.,
+        rows: 1,
+        columns: 11,
+    ),
 })

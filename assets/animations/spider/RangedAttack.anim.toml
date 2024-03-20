@@ -1,0 +1,25 @@
+atlas_asset_key = "anim.spider.RangedAttack.sprite"
+
+[settings]
+time_base = "Relative"
+frame_start = 0
+tick_quant = "8"
+ticks_per_frame = 8
+frame_max = 14
+frame_min = 0
+
+# LOOP
+[[script]]
+action = "SetFrameNext"
+frame_index = 0
+run_at_frame = 14
+
+# Support left/right flipping
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

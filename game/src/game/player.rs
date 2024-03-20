@@ -1,6 +1,3 @@
-use std::marker::PhantomData;
-
-use bevy::ecs::component::SparseStorage;
 use bevy_xpbd_2d::{SubstepSchedule, SubstepSet};
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use theseeker_engine::{
@@ -10,6 +7,7 @@ use theseeker_engine::{
     script::ScriptPlayer,
 };
 
+use crate::game::{attack::Health, gentstate::*};
 use crate::prelude::*;
 
 pub struct PlayerPlugin;
@@ -18,12 +16,18 @@ impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             GameTickUpdate,
-            (setup_player.run_if(in_state(GameState::Playing)),)
-                .chain()
+            (setup_player.run_if(in_state(GameState::Playing)))
                 .before(PlayerStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
+        );
+        app.add_systems(
+            OnEnter(GameState::Paused),
+            (
+                debug_player,
+                crate::game::enemy::debug_enemy,
+            )
+                .chain(),
         )
-        .add_systems(OnEnter(GameState::Paused), debug_player)
         .add_plugins((
             InputManagerPlugin::<PlayerAction>::default(),
             PlayerBehaviorPlugin,
@@ -73,18 +77,19 @@ pub struct PlayerBlueprint;
 
 #[derive(Component)]
 pub struct PlayerGent {
-    e_gfx: Entity,
+    pub e_gfx: Entity,
 }
 
 #[derive(Component)]
 pub struct PlayerGfx {
-    e_gent: Entity,
+    pub e_gent: Entity,
 }
 
 #[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 pub enum PlayerAction {
     Move,
     Jump,
+    Attack,
 }
 
 fn debug_player_states(
@@ -139,6 +144,7 @@ fn debug_player_states(
     }
 }
 
+// fn debug_player(world: &World, query: Query<Entity, With<PlayerGfx>>) {
 fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
     for entity in query.iter() {
         let components = world.inspect_entity(entity);
@@ -150,6 +156,7 @@ fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
 
 fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut commands: Commands) {
     for (xf_gent, e_gent) in q.iter() {
+        println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
             PlayerGentBundle {
@@ -157,14 +164,19 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                 phys: GentPhysicsBundle {
                     rb: RigidBody::Kinematic,
                     collider: Collider::cuboid(6.0, 10.0),
-                    shapecast: ShapeCaster::new(
-                        Collider::cuboid(6.0, 10.0),
-                        Vec2::new(0.0, -2.0),
-                        0.0,
-                        Vec2::NEG_Y.into(),
-                    ),
                 },
             },
+            Health {
+                current: 100,
+                max: 100,
+            },
+            //get rid of this, move to shapecast with spatialquery
+            ShapeCaster::new(
+                Collider::cuboid(6.0, 10.0),
+                Vec2::new(0.0, -2.0),
+                0.0,
+                Vec2::NEG_Y.into(),
+            ),
             //have to use builder here *i think* because of different types between keycode and
             //axis
             InputManagerBundle::<PlayerAction> {
@@ -175,9 +187,11 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                         VirtualAxis::from_keys(KeyCode::A, KeyCode::D),
                         PlayerAction::Move,
                     )
+                    .insert(KeyCode::Return, PlayerAction::Attack)
                     .build(),
             },
-            PlayerStateBundle::<Falling>::default(),
+            Falling::default(),
+            TransitionQueue::default(),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
@@ -194,8 +208,6 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
         // println!("player spawned")
     }
 }
-///State transition plugin
-///Add a transition_from::<T: PlayerState>.run_if(any_with_component::<T>()) for each state
 
 struct PlayerTransitionPlugin;
 
@@ -204,11 +216,7 @@ impl Plugin for PlayerTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                transition_from::<Idle>.run_if(any_with_component::<Idle>()),
-                transition_from::<Running>.run_if(any_with_component::<Running>()),
-                transition_from::<Grounded>.run_if(any_with_component::<Grounded>()),
-                transition_from::<Jumping>.run_if(any_with_component::<Jumping>()),
-                transition_from::<Falling>.run_if(any_with_component::<Falling>()),
+                (transition.run_if(any_with_component::<TransitionQueue>()),),
                 apply_deferred,
             )
                 .chain()
@@ -219,74 +227,33 @@ impl Plugin for PlayerTransitionPlugin {
     }
 }
 
-fn transition_from<T: Component + Send + Sync + 'static>(
-    mut query: Query<(Entity, &mut TransitionsFrom<T>)>,
-    mut commands: Commands,
-) {
-    for (entity, mut trans) in query.iter_mut() {
-        for transition in &trans.transitions {
-            transition(entity, &mut commands);
-        }
-        //could decide to remove state + transitionsfrom here
-        if !&trans.transitions.is_empty() {
-            commands.entity(entity).remove::<T>();
-            trans.transitions.clear();
-        }
-    }
-}
-
-pub trait Transitionable<T: PlayerState + Default> {
-    fn new_transition(_next: T) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
-        Box::new(|entity, commands| {
-            commands
-                .entity(entity)
-                .insert(PlayerStateBundle::<T>::default());
-        })
-    }
-}
-
-#[derive(Component, Deref, DerefMut, Default)]
-struct TransitionsFrom<T> {
-    t: PhantomData<T>,
-    #[deref]
-    transitions: Vec<Box<dyn Fn(Entity, &mut Commands) + Send + Sync>>,
-}
-
-#[derive(Bundle, Default)]
-pub struct PlayerStateBundle<T: PlayerState + Default> {
-    state: T,
-    transitions: TransitionsFrom<T>,
-}
-
 // States
 // states are components which are added to the entity on transition.
 // an entity can be in multiple states at once, eg Grounded and Running/Idle
 // Impl Playerstate for each state
-// Impl Transitionable<T: PlayerState> for each state that that should be able to be transitioned
+// Impl Transitionable<T: GentState> for each state that that should be able to be transitioned
 // from by a state
-pub trait PlayerState: Component<Storage = SparseStorage> + Clone {}
+// pub trait GentState: Component<Storage = SparseStorage> {}
 
-#[derive(Component, Default, Copy, Clone, Debug)]
+#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Idle;
-impl PlayerState for Idle {}
-impl Transitionable<Running> for Idle {}
+impl GentState for Idle {}
+impl GenericState for Idle {}
 
-#[derive(Component, Default, Copy, Clone, Debug)]
+#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Running;
-impl PlayerState for Running {}
-impl Transitionable<Idle> for Running {}
+impl GentState for Running {}
+impl GenericState for Running {}
 
-#[derive(Component, Default, Copy, Clone, Debug)]
+#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Falling;
-impl PlayerState for Falling {}
-impl Transitionable<Grounded> for Falling {}
-impl Transitionable<Running> for Falling {}
-impl Transitionable<Idle> for Falling {}
+impl GentState for Falling {}
+impl GenericState for Falling {}
 
-#[derive(Component, Clone, Debug)]
+#[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Jumping {
     current_air_ticks: u32,
@@ -301,45 +268,30 @@ impl Default for Jumping {
         }
     }
 }
-impl PlayerState for Jumping {}
-impl Transitionable<Falling> for Jumping {}
-impl Transitionable<Grounded> for Jumping {}
+impl GentState for Jumping {}
+impl GenericState for Jumping {}
 
-#[derive(Component, Default, Copy, Clone, Debug)]
+#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
-impl PlayerState for Grounded {}
+impl GentState for Grounded {}
 //cant be Idle or Running if not Grounded
 impl Transitionable<Jumping> for Grounded {
-    fn new_transition(_next: Jumping) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
-        Box::new(|entity, commands| {
-            commands
-                .entity(entity)
-                .insert(PlayerStateBundle::<Jumping>::default())
-                .remove::<(Idle, Running)>();
-        })
-    }
+    type Removals = (Grounded, Idle, Running);
 }
 //cant be Idle or Running if not Grounded
 impl Transitionable<Falling> for Grounded {
-    fn new_transition(_next: Falling) -> Box<dyn Fn(Entity, &mut Commands) + Send + Sync + 'static> {
-        Box::new(|entity, commands| {
-            commands
-                .entity(entity)
-                .insert(PlayerStateBundle::<Falling>::default())
-                .remove::<(Idle, Running)>();
-        })
-    }
+    type Removals = (Grounded, Idle, Running);
 }
 
-#[derive(Component, Default, Copy, Clone, Debug)]
+#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Attacking;
-impl PlayerState for Attacking {}
+impl GentState for Attacking {}
 
-///player behavior systems.
-///do stuff here in states and add transitions to other states by pushing
-///to a TransitionsFrom<T: PlayerState> components queue of transitions.
+///Player behavior systems.
+///Do stuff here in states and add transitions to other states by pushing
+///to a TransitionQueue.
 struct PlayerBehaviorPlugin;
 
 impl Plugin for PlayerBehaviorPlugin {
@@ -347,18 +299,21 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                player_idle.run_if(any_with_component::<Idle>()),
-                player_run.run_if(any_with_component::<Running>()),
-                player_jump.run_if(any_with_component::<Jumping>()),
+                player_idle.run_if(any_with_components::<Idle, PlayerGent>()),
+                player_run.run_if(any_with_components::<Running, PlayerGent>()),
+                player_jump.run_if(any_with_components::<Jumping, PlayerGent>()),
                 player_move,
-                player_grounded.run_if(any_with_component::<Grounded>()),
-                player_falling.run_if(any_with_component::<Falling>()),
+                player_grounded.run_if(any_with_components::<
+                    Grounded,
+                    PlayerGent,
+                >()),
+                player_falling.run_if(any_with_components::<Falling, PlayerGent>()),
             ),
         );
-        app.add_systems(
-            SubstepSchedule,
-            player_collisions.in_set(SubstepSet::SolveUserConstraints),
-        );
+        // app.add_systems(
+        //     SubstepSchedule,
+        //     player_collisions.in_set(SubstepSet::SolveUserConstraints),
+        // );
     }
 }
 
@@ -366,7 +321,7 @@ fn player_idle(
     mut query: Query<
         (
             &ActionState<PlayerAction>,
-            &mut TransitionsFrom<Idle>,
+            &mut TransitionQueue,
         ),
         (
             With<Grounded>,
@@ -396,6 +351,7 @@ fn player_move(
         &ActionState<PlayerAction>,
         &PlayerGent,
     )>,
+    //kinda dont want to do flipping here
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for (mut velocity, action_state, gent) in q_gent.iter_mut() {
@@ -426,7 +382,7 @@ fn player_run(
         (
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
-            &mut TransitionsFrom<Running>,
+            &mut TransitionQueue,
         ),
         (
             With<PlayerGent>,
@@ -458,7 +414,7 @@ fn player_jump(
             &ActionState<PlayerAction>,
             &mut LinearVelocity,
             &mut Jumping,
-            &mut TransitionsFrom<Jumping>,
+            &mut TransitionQueue,
         ),
         With<PlayerGent>,
     >,
@@ -532,7 +488,7 @@ fn player_grounded(
         (
             &ShapeHits,
             &ActionState<PlayerAction>,
-            &mut TransitionsFrom<Grounded>,
+            &mut TransitionQueue,
         ),
         (With<PlayerGent>, With<Grounded>),
     >,
@@ -558,11 +514,13 @@ fn player_falling(
         (
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
+            //TODO: remove shapehits, use SpatialQuery
             &ShapeHits,
-            &mut TransitionsFrom<Falling>,
+            &mut TransitionQueue,
         ),
         (With<PlayerGent>, With<Falling>),
     >,
+    //spatial_query: SpatialQuery
 ) {
     for (mut velocity, action_state, hits, mut transitions) in query.iter_mut() {
         for hit in hits.iter() {
@@ -593,7 +551,7 @@ struct PlayerAnimationPlugin;
 impl Plugin for PlayerAnimationPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
-            Update,
+            GameTickUpdate,
             (
                 player_idle_animation,
                 player_falling_animation,
