@@ -144,8 +144,8 @@ fn debug_player_states(
     }
 }
 
-// fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
-fn debug_player(world: &World, query: Query<Entity, With<PlayerGfx>>) {
+// fn debug_player(world: &World, query: Query<Entity, With<PlayerGfx>>) {
+fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
     for entity in query.iter() {
         let components = world.inspect_entity(entity);
         for component in components.iter() {
@@ -166,11 +166,11 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                     collider: Collider::cuboid(6.0, 10.0),
                 },
             },
-            //get rid of this, move to shapecast with spatialquery
             Health {
                 current: 100,
                 max: 100,
             },
+            //get rid of this, move to shapecast with spatialquery
             ShapeCaster::new(
                 Collider::cuboid(6.0, 10.0),
                 Vec2::new(0.0, -2.0),
