@@ -226,4 +226,11 @@
         rows: 1,
         columns: 15,
     ),
+    "anim.spider.OffensiveAttack.sprite": TextureAtlas (
+        path: "sprites/spider/OffensiveAttack.png",
+        tile_size_x: 90.,
+        tile_size_y: 90.,
+        rows: 1,
+        columns: 11,
+    ),
 })
