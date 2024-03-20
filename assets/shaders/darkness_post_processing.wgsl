@@ -28,7 +28,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let widthf32 = vec2<f32>(f32(width.x), f32(width.y));
 
     let pos = in.position.xy;
-    let lantern_pos = settings.lantern_position.xy;
+    let lantern_pos = vec2(settings.lantern_position.x, -settings.lantern_position.y)*6.0;
 
     // use inverse square law for light intensity (ie: player must be carrying a light source)
     // and treat light as if it is 3d, and dist_a away from the 2d screen. (fixes sharp falloff)
