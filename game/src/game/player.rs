@@ -188,7 +188,6 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
             },
             Falling::default(),
             TransitionQueue::default(),
-            // GentStateBundle::<Falling>::default(),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
@@ -205,8 +204,6 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
         // println!("player spawned")
     }
 }
-///State transition plugin
-///Add a transition_from::<T: GentState>.run_if(any_with_component::<T>()) for each state
 
 struct PlayerTransitionPlugin;
 
@@ -241,30 +238,18 @@ impl Plugin for PlayerTransitionPlugin {
 pub struct Idle;
 impl GentState for Idle {}
 impl GenericState for Idle {}
-// impl Transitionable<Running> for Idle {}
-// does this work?
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Running;
 impl GentState for Running {}
 impl GenericState for Running {}
-// impl<T: GenericState> Transitionable<T> for Running {
-//     type Removals = Running;
-// }
-// impl Transitionable<Idle> for Running {}
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Falling;
 impl GentState for Falling {}
 impl GenericState for Falling {}
-// impl Transitionable<Grounded> for Falling {}
-// impl Transitionable<Running> for Falling {}
-// impl Transitionable<Idle> for Falling {}
-// impl<T: GenericState> Transitionable<T> for Falling {
-//     type Removals = Falling;
-// }
 
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
@@ -283,8 +268,6 @@ impl Default for Jumping {
 }
 impl GentState for Jumping {}
 impl GenericState for Jumping {}
-// impl Transitionable<Falling> for Jumping {}
-// impl Transitionable<Grounded> for Jumping {}
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
@@ -304,9 +287,9 @@ impl Transitionable<Falling> for Grounded {
 pub struct Attacking;
 impl GentState for Attacking {}
 
-///player behavior systems.
-///do stuff here in states and add transitions to other states by pushing
-///to a TransitionsFrom<T: PlayerState> components queue of transitions.
+///Player behavior systems.
+///Do stuff here in states and add transitions to other states by pushing
+///to a TransitionQueue.
 struct PlayerBehaviorPlugin;
 
 impl Plugin for PlayerBehaviorPlugin {
