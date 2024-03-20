@@ -64,16 +64,18 @@ fn attack_damage(
         for (entity, mut health, player_collider, player_gent) in player_query.iter_mut() {
             if colliding_entities.contains(&entity) {
                 if !attack.damaged.contains(&entity) {
-                    health.current -= attack.damage;
+                    health.current = health.current.saturating_sub(attack.damage);
                     attack.damaged.push(entity);
                     println!("player health, {:?}", health.current);
                     if let Ok(mut anim_player) = gfx_query.get_mut(player_gent.e_gfx) {
                         anim_player.set_slot("Damage", true);
                     }
                     //unset damage flash after certain time
-                    
+                    if health.current == 0 {
+                        println!("player dead");
+                    }
                 }
-                println!("colliding, attack with player")
+                println!("colliding, attack with player");
             }
             // spatial_query.shape_intersections(attack_collider, shape_position, shape_rotation, query_filter)
         }
