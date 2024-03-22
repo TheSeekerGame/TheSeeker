@@ -359,10 +359,9 @@ fn player_move(
             //use .clamped_value()?
             direction = action_state.value(PlayerAction::Move);
         }
-        let new_x_vel = /*velocity.x + */direction as f32 * 100.;
 
         velocity.x = 0.0;
-        velocity.x += new_x_vel;
+        velocity.x += direction as f32 * 100.0;;
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {
@@ -456,7 +455,6 @@ fn player_collisions(
 ) {
     for (entity, mut transform, mut linear_velocity, collider) in q_gent.iter_mut() {
         let mut collider = collider.clone();
-        let mut new_vel = Vec2::ZERO;
         let mut tries = 0;
         loop {
             if let Some(first_hit) = spatial_query.cast_shape(
@@ -465,7 +463,6 @@ fn player_collisions(
                 transform.translation.xy(),
                 0.0,
                 linear_velocity.normalize(),
-                // The 0.1 there is to prevent player from getting stuck
                 (linear_velocity.length() / (time.hz) as f32),
                 false,
                 SpatialQueryFilter::default().without_entities([entity]),
@@ -479,31 +476,21 @@ fn player_collisions(
                     tries += 1;
                     continue;
                 }
-                println!("First hit: {:?}", first_hit);
-                println!(
-                    "length: {:?} iter: {}",
-                    linear_velocity.length() / time.hz as f32,
-                    tries
-                );
 
                 // Applies a very small amount of bounce, as well as sliding to the character
                 // the bounce helps prevent the player from getting stuck.
 
-                // Calculate the sliding plane
                 let sliding_plane = first_hit.normal1;
 
-                // Calculate the bounce force
                 let bounce_coefficient = 0.1;
                 let bounce_force =
                     -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
 
                 let sliding_plane = first_hit.normal1;
 
-                // Project the velocity onto the sliding plane
                 let projected_velocity =
                     linear_velocity.xy() - sliding_plane * linear_velocity.dot(sliding_plane);
 
-                // Update the player's velocity
                 linear_velocity.0 = projected_velocity + bounce_force;
             }
             break;
