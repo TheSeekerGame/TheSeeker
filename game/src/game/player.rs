@@ -163,9 +163,9 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                 marker: PlayerGent { e_gfx },
                 phys: GentPhysicsBundle {
                     rb: RigidBody::Kinematic,
-                    collider: Collider::cuboid(6.0, 10.0),
+                    collider: Collider::cuboid(4.0, 10.0),
                     shapecast: ShapeCaster::new(
-                        Collider::cuboid(6.0, 10.0),
+                        Collider::cuboid(3.99, 10.0),
                         Vec2::new(0.0, -2.0),
                         0.0,
                         Vec2::NEG_Y.into(),
@@ -176,13 +176,6 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                 current: 100,
                 max: 100,
             },
-            //get rid of this, move to shapecast with spatialquery
-            ShapeCaster::new(
-                Collider::cuboid(6.0, 10.0),
-                Vec2::new(0.0, -2.0),
-                0.0,
-                Vec2::NEG_Y.into(),
-            ),
             //have to use builder here *i think* because of different types between keycode and
             //axis
             InputManagerBundle::<PlayerAction> {
@@ -309,12 +302,15 @@ impl Plugin for PlayerBehaviorPlugin {
                 player_run.run_if(any_with_components::<Running, PlayerGent>()),
                 player_jump.run_if(any_with_components::<Jumping, PlayerGent>()),
                 player_move,
-                player_collisions.after(player_move).after(player_jump),
                 player_grounded.run_if(any_with_components::<
                     Grounded,
                     PlayerGent,
                 >()),
                 player_falling.run_if(any_with_components::<Falling, PlayerGent>()),
+                player_collisions
+                    .after(player_move)
+                    .after(player_jump)
+                    .after(player_falling),
             ),
         );
     }
@@ -459,29 +455,58 @@ fn player_collisions(
     time: Res<GameTime>,
 ) {
     for (entity, mut transform, mut linear_velocity, collider) in q_gent.iter_mut() {
-        if let Some(first_hit) = spatial_query.cast_shape(
-            // smaller collider then the players collider to prevent getting stuck
-            &Collider::cuboid(3.5, 9.0),
-            transform.translation.xy(),
-            0.0,
-            linear_velocity.normalize(),
-            // The 0.1 there is to prevent player from getting stuck
-            (linear_velocity.length() / (time.hz) as f32) + 0.1,
-            false,
-            SpatialQueryFilter::default().without_entities([entity]),
-        ) {
-            println!("First hit: {:?}", first_hit);
-            println!(
-                "length: {:?}",
-                linear_velocity.length() / time.hz as f32
-            );
-            // Allows player to slide past surfaces if they are perfectly horizontal or vertical
-            if first_hit.normal1.x.abs() > 0.1 {
-                linear_velocity.x = 0.0;
+        let mut collider = collider.clone();
+        let mut new_vel = Vec2::ZERO;
+        let mut tries = 0;
+        loop {
+            if let Some(first_hit) = spatial_query.cast_shape(
+                // smaller collider then the players collider to prevent getting stuck
+                &collider,
+                transform.translation.xy(),
+                0.0,
+                linear_velocity.normalize(),
+                // The 0.1 there is to prevent player from getting stuck
+                (linear_velocity.length() / (time.hz) as f32),
+                false,
+                SpatialQueryFilter::default().without_entities([entity]),
+            ) {
+                // If time of impact is 0.0, it means we are inside the wall,
+                // by making the player collider smaller it allows them to attempt escape.
+                // Will prevent player from getting stuck unless they are *really* intent on it.
+                if first_hit.time_of_impact == 0.0 && tries < 5 {
+                    collider = collider.clone();
+                    collider.set_scale(collider.scale() * 0.95, 1);
+                    tries += 1;
+                    continue;
+                }
+                println!("First hit: {:?}", first_hit);
+                println!(
+                    "length: {:?} iter: {}",
+                    linear_velocity.length() / time.hz as f32,
+                    tries
+                );
+
+                // Applies a very small amount of bounce, as well as sliding to the character
+                // the bounce helps prevent the player from getting stuck.
+
+                // Calculate the sliding plane
+                let sliding_plane = first_hit.normal1;
+
+                // Calculate the bounce force
+                let bounce_coefficient = 0.1;
+                let bounce_force =
+                    -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
+
+                let sliding_plane = first_hit.normal1;
+
+                // Project the velocity onto the sliding plane
+                let projected_velocity =
+                    linear_velocity.xy() - sliding_plane * linear_velocity.dot(sliding_plane);
+
+                // Update the player's velocity
+                linear_velocity.0 = projected_velocity + bounce_force;
             }
-            if first_hit.normal1.y.abs() > 0.1 {
-                linear_velocity.y = 0.0;
-            }
+            break;
         }
     }
 }
