@@ -356,7 +356,7 @@ impl Plugin for PlayerBehaviorPlugin {
                 player_jump.run_if(any_with_component::<Jumping>()),
                 player_move,
                 // player move sets velocity, and player collisions sets vel to zero to avoid collisions
-                player_collisions.after(player_move),
+                player_collisions.after(player_move).after(player_jump),
                 player_grounded.run_if(any_with_component::<Grounded>()),
                 player_falling.run_if(any_with_component::<Falling>()),
             ),
@@ -393,19 +393,14 @@ fn player_idle(
 }
 
 fn player_move(
-    spatial_query: SpatialQuery,
     mut q_gent: Query<(
-        Entity,
-        &Position,
         &mut LinearVelocity,
         &ActionState<PlayerAction>,
         &PlayerGent,
-        &Collider,
     )>,
-    time: Res<GameTime>,
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for (entity, position, mut velocity, action_state, gent, collider) in q_gent.iter_mut() {
+    for (mut velocity, action_state, gent) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         if action_state.pressed(PlayerAction::Move) {
             //use .clamped_value()?
@@ -413,20 +408,6 @@ fn player_move(
         }
         let new_x_vel = /*velocity.x + */direction as f32 * 100.;
 
-        if let Some(first_hit) = spatial_query.cast_shape(
-            &collider,                                                // Shape
-            **position,                                               // Origin
-            0.0,                                                      // Shape rotation
-            velocity.xy() + Vec2::new(new_x_vel, velocity.y),         // Direction
-            velocity.length() / (time.hz as f32), // Maximum time of impact (travel distance)
-            false, // Should initial penetration at the origin be ignored
-            SpatialQueryFilter::default().without_entities([entity]), // Query filter
-        ) {
-            velocity.x = 0.0;
-        } else {
-            //TODO: accelerate for few frames then apply clamped velocity
-            //println!("No potential collisions detected!")
-        }
         velocity.x = 0.0;
         velocity.x += new_x_vel;
 
@@ -522,22 +503,22 @@ fn player_collisions(
 ) {
     for (entity, mut transform, mut linear_velocity, collider) in q_gent.iter_mut() {
         if let Some(first_hit) = spatial_query.cast_shape(
-            &collider,                                                // Shape
-            transform.translation.xy(),                               // Origin
-            0.0,                                                      // Shape rotation
-            linear_velocity.normalize(),                              // Direction
-            linear_velocity.length() / (time.hz + 0.001) as f32, // Maximum time of impact (travel distance)
-            false, // Should initial penetration at the origin be ignored
-            SpatialQueryFilter::default().without_entities([entity]), // Query filter
+            // smaller collider then the players collider to prevent getting stuck
+            &Collider::cuboid(3.5, 9.0),
+            transform.translation.xy(),
+            0.0,
+            linear_velocity.normalize(),
+            // The 0.1 there is to prevent player from getting stuck
+            (linear_velocity.length() / (time.hz) as f32) + 0.1,
+            false,
+            SpatialQueryFilter::default().without_entities([entity]),
         ) {
             println!("First hit: {:?}", first_hit);
             println!(
                 "length: {:?}",
-                linear_velocity.length() / time.hz as f32 + 0.001
+                linear_velocity.length() / time.hz as f32
             );
-            transform.translation = transform.translation
-                + (first_hit.time_of_impact - 0.001)
-                    * linear_velocity.normalize().extend(transform.translation.z);
+            // Allows player to slide past surfaces if they are perfectly horizontal or vertical
             if first_hit.normal1.x.abs() > 0.1 {
                 linear_velocity.x = 0.0;
             }
