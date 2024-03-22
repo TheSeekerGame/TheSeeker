@@ -148,96 +148,37 @@ fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
     }
 }
 
-/// A marker component for tracking which shape caster this is
-/// the enum type represent the *direction* the shape is cast respectively
-/// from the player.
-#[derive(Component, PartialEq, Eq)]
-pub enum CharacterShapeCaster {
-    Left,
-    Right,
-    Down,
-    Up,
-}
-
 fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut commands: Commands) {
     for (xf_gent, e_gent) in q.iter() {
-        let player_collider = Collider::cuboid(4.0, 10.0);
-        // Spawn shape casting children first because borrow rules.
-
         let e_gfx = commands.spawn(()).id();
-        let mut e_gent_commands = commands.entity(e_gent);
-        e_gent_commands
-            .insert((
-                PlayerGentBundle {
-                    marker: PlayerGent { e_gfx },
-                    phys: GentPhysicsBundle {
-                        rb: RigidBody::Kinematic,
-                        collider: player_collider.clone(),
-                    },
-                },
-                //have to use builder here *i think* because of different types between keycode and
-                //axis
-                InputManagerBundle::<PlayerAction> {
-                    action_state: ActionState::default(),
-                    input_map: InputMap::default()
-                        .insert(KeyCode::Space, PlayerAction::Jump)
-                        .insert(
-                            VirtualAxis::from_keys(KeyCode::A, KeyCode::D),
-                            PlayerAction::Move,
-                        )
-                        .build(),
-                },
-                PlayerStateBundle::<Falling>::default(),
-            ))
-            .with_children(|parent| {
-                let filter = SpatialQueryFilter::new().without_entities([parent.parent_entity()]);
-                parent.spawn((
-                    CharacterShapeCaster::Down,
-                    ShapeCaster::new(
-                        // uses special shape and origin because of spacial "grounded" state
-                        player_collider.clone(),
+        commands.entity(e_gent).insert((
+            PlayerGentBundle {
+                marker: PlayerGent { e_gfx },
+                phys: GentPhysicsBundle {
+                    rb: RigidBody::Kinematic,
+                    collider: Collider::cuboid(4.0, 10.0),
+                    shapecast: ShapeCaster::new(
+                        Collider::cuboid(3.99, 10.0),
                         Vec2::new(0.0, -2.0),
                         0.0,
                         Vec2::NEG_Y.into(),
+                    ),
+                },
+            },
+            //have to use builder here *i think* because of different types between keycode and
+            //axis
+            InputManagerBundle::<PlayerAction> {
+                action_state: ActionState::default(),
+                input_map: InputMap::default()
+                    .insert(KeyCode::Space, PlayerAction::Jump)
+                    .insert(
+                        VirtualAxis::from_keys(KeyCode::A, KeyCode::D),
+                        PlayerAction::Move,
                     )
-                    .with_query_filter(filter.clone()),
-                ));
-                // Needs the tiny origin offsets because otherwise colliders might
-                // overlap exactly and fail to count origin/character as first collider.
-                let wide_col = Collider::cuboid(3.99, 0.001);
-                let tall_col = Collider::cuboid(0.001, 9.99);
-                parent.spawn((
-                    CharacterShapeCaster::Right,
-                    ShapeCaster::new(
-                        tall_col.clone(),
-                        Vec2::new(0.000001, 0.0),
-                        0.0,
-                        Vec2::X.into(),
-                    )
-                    .with_query_filter(filter.clone()),
-                ));
-                parent.spawn((
-                    CharacterShapeCaster::Left,
-                    ShapeCaster::new(
-                        tall_col.clone(),
-                        Vec2::new(-0.000001, 0.0),
-                        0.0,
-                        Vec2::NEG_X.into(),
-                    )
-                    .with_query_filter(filter.clone()),
-                ));
-                parent.spawn((
-                    CharacterShapeCaster::Up,
-                    ShapeCaster::new(
-                        wide_col.clone(),
-                        Vec2::new(0.0, 0.000001),
-                        0.0,
-                        Vec2::Y.into(),
-                    )
-                    .with_query_filter(filter.clone()),
-                ));
-            });
-
+                    .build(),
+            },
+            PlayerStateBundle::<Falling>::default(),
+        ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
             gent2gfx: TransformGfxFromGent {
@@ -452,23 +393,42 @@ fn player_idle(
 }
 
 fn player_move(
+    spatial_query: SpatialQuery,
     mut q_gent: Query<(
+        Entity,
+        &Position,
         &mut LinearVelocity,
         &ActionState<PlayerAction>,
         &PlayerGent,
+        &Collider,
     )>,
+    time: Res<GameTime>,
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for (mut velocity, action_state, gent) in q_gent.iter_mut() {
+    for (entity, position, mut velocity, action_state, gent, collider) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         if action_state.pressed(PlayerAction::Move) {
             //use .clamped_value()?
             direction = action_state.value(PlayerAction::Move);
         }
+        let new_x_vel = /*velocity.x + */direction as f32 * 100.;
 
-        //TODO: accelerate for few frames then apply clamped velocity
+        if let Some(first_hit) = spatial_query.cast_shape(
+            &collider,                                                // Shape
+            **position,                                               // Origin
+            0.0,                                                      // Shape rotation
+            velocity.xy() + Vec2::new(new_x_vel, velocity.y),         // Direction
+            velocity.length() / (time.hz as f32), // Maximum time of impact (travel distance)
+            false, // Should initial penetration at the origin be ignored
+            SpatialQueryFilter::default().without_entities([entity]), // Query filter
+        ) {
+            velocity.x = 0.0;
+        } else {
+            //TODO: accelerate for few frames then apply clamped velocity
+            //println!("No potential collisions detected!")
+        }
         velocity.x = 0.0;
-        velocity.x += direction as f32 * 100.;
+        velocity.x += new_x_vel;
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {
@@ -548,139 +508,105 @@ fn player_jump(
 }
 
 fn player_collisions(
-    shape_casts_query: Query<(&ShapeHits, &CharacterShapeCaster)>,
+    spatial_query: SpatialQuery,
     mut q_gent: Query<
         (
-            &Children,
-            &mut Position,
-            &Rotation,
+            Entity,
+            &mut Transform,
             &mut LinearVelocity,
+            &Collider,
         ),
         (With<PlayerGent>, With<RigidBody>),
     >,
+    time: Res<GameTime>,
 ) {
-    for (children, mut position, rotation, mut linear_velocity) in q_gent.iter_mut() {
-        let mut to_far_x = 0.0;
-        let mut to_far_y = 0.0;
-        for child in children.iter() {
-            let Ok((hits, direction)) = shape_casts_query.get(*child) else {
-                continue;
-            };
-            match direction {
-                CharacterShapeCaster::Left => {
-                    for hit in hits.iter() {
-                        if hit.time_of_impact < 2.001 {
-                            to_far_x = hit.time_of_impact + 2.0;
-                            linear_velocity.x = linear_velocity.x.clamp(0., 100.0);
-                            break;
-                        }
-                    }
-                },
-                CharacterShapeCaster::Right => {
-                    for hit in hits.iter() {
-                        if hit.time_of_impact < 2.001 {
-                            to_far_x = -hit.time_of_impact - 2.0;
-                            linear_velocity.x = linear_velocity.x.clamp(-100., 0.0);
-                            break;
-                        }
-                    }
-                },
-                CharacterShapeCaster::Up => {
-                    for hit in hits.iter() {
-                        if hit.time_of_impact < 5.001 {
-                            to_far_y = hit.time_of_impact + 5.0;
-                            linear_velocity.y = linear_velocity.y.clamp(-100., 0.0);
-                            break;
-                        }
-                    }
-                },
-                // handled by grounded affect
-                CharacterShapeCaster::Down => {},
+    for (entity, mut transform, mut linear_velocity, collider) in q_gent.iter_mut() {
+        if let Some(first_hit) = spatial_query.cast_shape(
+            &collider,                                                // Shape
+            transform.translation.xy(),                               // Origin
+            0.0,                                                      // Shape rotation
+            linear_velocity.normalize(),                              // Direction
+            linear_velocity.length() / (time.hz + 0.001) as f32, // Maximum time of impact (travel distance)
+            false, // Should initial penetration at the origin be ignored
+            SpatialQueryFilter::default().without_entities([entity]), // Query filter
+        ) {
+            println!("First hit: {:?}", first_hit);
+            println!(
+                "length: {:?}",
+                linear_velocity.length() / time.hz as f32 + 0.001
+            );
+            transform.translation = transform.translation
+                + (first_hit.time_of_impact - 0.001)
+                    * linear_velocity.normalize().extend(transform.translation.z);
+            if first_hit.normal1.x.abs() > 0.1 {
+                linear_velocity.x = 0.0;
+            }
+            if first_hit.normal1.y.abs() > 0.1 {
+                linear_velocity.y = 0.0;
             }
         }
-        position.0.x = position.0.x - to_far_x;
-        position.0.y = position.0.y - to_far_y;
     }
 }
 
 fn player_grounded(
-    shape_casts_query: Query<(
-        &Parent,
-        &ShapeHits,
-        &CharacterShapeCaster,
-    )>,
     mut query: Query<
         (
+            &ShapeHits,
             &ActionState<PlayerAction>,
             &mut TransitionsFrom<Grounded>,
         ),
         (With<PlayerGent>, With<Grounded>),
     >,
 ) {
-    for (parent, hits, direction) in shape_casts_query.iter() {
-        if *direction == CharacterShapeCaster::Down {
-            let Ok((action_state, mut transitions)) = query.get_mut(**parent) else {
-                continue;
-            };
-            let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
-            //just pressed seems to get missed sometimes... but we need it because pressed makes you
-            //jump continuously if held
-            //known issue https://github.com/bevyengine/bevy/issues/6183
-            if action_state.just_pressed(PlayerAction::Jump) {
-                // if action_state.pressed(PlayerAction::Jump) {
-                transitions.push(Grounded::new_transition(
-                    Jumping::default(),
-                ))
-            } else if is_falling {
-                transitions.push(Grounded::new_transition(Falling))
-            }
+    for (hits, action_state, mut transitions) in query.iter_mut() {
+        let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
+        //just pressed seems to get missed sometimes... but we need it because pressed makes you
+        //jump continuously if held
+        //known issue https://github.com/bevyengine/bevy/issues/6183
+        if action_state.just_pressed(PlayerAction::Jump) {
+            // if action_state.pressed(PlayerAction::Jump) {
+            transitions.push(Grounded::new_transition(
+                Jumping::default(),
+            ))
+        } else if is_falling {
+            transitions.push(Grounded::new_transition(Falling))
         }
     }
 }
 
 fn player_falling(
-    mut shape_casts_query: Query<(
-        &Parent,
-        &ShapeHits,
-        &CharacterShapeCaster,
-    )>,
     mut query: Query<
         (
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
+            &ShapeHits,
             &mut TransitionsFrom<Falling>,
         ),
         (With<PlayerGent>, With<Falling>),
     >,
 ) {
-    for (parent, hits, direction) in shape_casts_query.iter() {
-        if *direction == CharacterShapeCaster::Down {
-            let Ok((mut velocity, action_state, mut transitions)) = query.get_mut(**parent) else {
-                continue;
-            };
-
-            let fall_accel = 2.9;
-            let mut falling = true;
-            for hit in hits.iter() {
-                //if we are ~touching the ground
-                if hit.time_of_impact < 0.001 {
-                    transitions.push(Falling::new_transition(Grounded));
-                    // println!("{:?} should be grounded", entity);
-                    //stop falling
-                    velocity.y = 0.0;
-                    if action_state.pressed(PlayerAction::Move) {
-                        transitions.push(Falling::new_transition(Running));
-                        // println!("{:?} should be running", entity)
-                    } else {
-                        transitions.push(Falling::new_transition(Idle));
-                    }
-                    falling = false;
+    for (mut velocity, action_state, hits, mut transitions) in query.iter_mut() {
+        let fall_accel = 2.9;
+        let mut falling = true;
+        for hit in hits.iter() {
+            //if we are ~touching the ground
+            if hit.time_of_impact < 0.001 {
+                transitions.push(Falling::new_transition(Grounded));
+                // println!("{:?} should be grounded", entity);
+                //stop falling
+                velocity.y = 0.0;
+                if action_state.pressed(PlayerAction::Move) {
+                    transitions.push(Falling::new_transition(Running));
+                    // println!("{:?} should be running", entity)
+                } else {
+                    transitions.push(Falling::new_transition(Idle));
                 }
+                falling = false;
             }
-            if falling {
-                velocity.y -= fall_accel;
-                velocity.y = velocity.y.clamp(-100., 0.);
-            }
+        }
+        if falling {
+            velocity.y -= fall_accel;
+            velocity.y = velocity.y.clamp(-100., 0.);
         }
     }
 }
