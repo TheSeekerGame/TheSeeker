@@ -4,6 +4,7 @@ use crate::graphics::darkness::DarknessSettings;
 use crate::{game::player::PlayerGent, prelude::*};
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::tonemapping::Tonemapping;
+use ran::ran_f64_range;
 
 pub struct CameraPlugin;
 
@@ -20,7 +21,18 @@ impl Plugin for CameraPlugin {
             setup_main_camera,
         );
         // app.add_systems(Update, (manage_camera_projection,));
-        app.add_systems(GameTickUpdate, camera_follow_player);
+
+        app.insert_resource(CameraRig {
+            target: Default::default(),
+            camera: Default::default(),
+            trauma: 0.0,
+        });
+        app.add_systems(GameTickUpdate, camera_rig_follow_player);
+        app.add_systems(GameTickUpdate, update_rig_trauma);
+        app.add_systems(
+            GameTickUpdate,
+            update_camera_rig.after(camera_rig_follow_player),
+        );
     }
 }
 
@@ -36,6 +48,21 @@ struct MainCameraBundle {
 /// Marker component for the main gameplay camera
 #[derive(Component)]
 pub struct MainCamera;
+
+#[derive(Resource)]
+/// Tracks the target location of the camera, as well as internal state for interpolation.
+pub struct CameraRig {
+    /// The camera is moved towards this position smoothly
+    target: Vec2,
+    /// the "base" position of the camera before screen shake is applied
+    camera: Vec2,
+    /// Applies screen shake based on this amount.
+    ///
+    /// value decreases over time. To use, add some amount based on impact intensity.
+    ///
+    /// 10.0 is a lot; death? 1.0 minor impact
+    trauma: f32,
+}
 
 /// Limits to the viewable gameplay area.
 ///
@@ -79,17 +106,100 @@ fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wit
     // TODO
 }
 
-//TODO
-fn camera_follow_player(
-    mut q_cam: Query<&mut Transform, With<MainCamera>>,
+/// Updates the Camera rig (ie, the camera target) based on where the player is going.
+fn camera_rig_follow_player(
+    mut rig: ResMut<CameraRig>,
     q_player: Query<&Transform, (With<PlayerGent>, Without<MainCamera>)>,
+    // Keeps track if the camera is leading ahead, or behind the player
+    mut lead_bckwrd: Local<bool>,
 ) {
-    if let Ok(mut cam_xform) = q_cam.get_single_mut() {
-        if let Ok(player_xform) = q_player.get_single() {
-            cam_xform.translation.x = player_xform.translation.x;
-            cam_xform.translation.y = player_xform.translation.y;
+    let Ok(player_xform) = q_player.get_single() else {
+        return;
+    };
+    // define how far away the player can get going in the unanticipated direction
+    // before the camera switches to track that direction
+    let max_err = 10.0;
+    // Define how far ahead the camera will lead the player by
+    let lead_amnt = 15.0;
+
+    // Default state is to predict the player goes forward, ie "right"
+    let delta_x = player_xform.translation.x - rig.target.x;
+
+    if !*lead_bckwrd {
+        if delta_x > -lead_amnt {
+            rig.target.x = player_xform.translation.x + lead_amnt
+        } else if delta_x < -lead_amnt - max_err {
+            *lead_bckwrd = !*lead_bckwrd
+        }
+    } else {
+        if delta_x < lead_amnt {
+            rig.target.x = player_xform.translation.x - lead_amnt
+        } else if delta_x > lead_amnt + max_err {
+            *lead_bckwrd = !*lead_bckwrd
         }
     }
+    //rig.position.x = player_xform.translation.x;
+
+    rig.target.y = player_xform.translation.y;
+}
+
+/// Tiny system that just makes sure trauma is always going down linearly
+pub(crate) fn update_rig_trauma(
+    mut rig: ResMut<CameraRig>,
+    time: Res<Time>,
+    keyboard_input: Res<Input<KeyCode>>,
+) {
+    rig.trauma = (rig.trauma - 1.75 * time.delta_seconds()).max(0.0);
+    #[cfg(feature = "dev")]
+    // Tests different levels based on number key if in dev
+    {
+        let number_keys = [
+            KeyCode::Key1,
+            KeyCode::Key2,
+            KeyCode::Key3,
+            KeyCode::Key4,
+            KeyCode::Key5,
+            KeyCode::Key6,
+            KeyCode::Key7,
+            KeyCode::Key8,
+            KeyCode::Key9,
+            KeyCode::Key0,
+        ];
+        for (i, key) in number_keys.iter().enumerate() {
+            if keyboard_input.pressed(*key) {
+                rig.trauma = (i as f32 + 1.0) * 0.1;
+            }
+        }
+    }
+}
+
+/// Camera updates the camera position to smoothly interpolate to the
+/// rig location. also applies camera shake
+pub(crate) fn update_camera_rig(
+    mut q_cam: Query<&mut Transform, With<MainCamera>>,
+    mut rig: ResMut<CameraRig>,
+    time: Res<Time>,
+) {
+    let Ok(mut cam_xform) = q_cam.get_single_mut() else {
+        return;
+    };
+
+    let speed = 3.34;
+
+    let new_xy = rig.camera.lerp(rig.target, time.delta_seconds() * speed);
+
+    rig.camera = new_xy;
+
+    let shake = rig.trauma.powi(3);
+
+    // screen shake amounts
+    let angle = 2.5 * (std::f32::consts::PI / 180.0) * shake * ran_f64_range(-1.0..=1.0) as f32;
+    let offset_x = 20.0 * shake * ran_f64_range(-1.0..=1.0) as f32;
+    let offset_y = 20.0 * shake * ran_f64_range(-1.0..=1.0) as f32;
+
+    cam_xform.rotation.z = 0.0 + angle;
+    cam_xform.translation.x = rig.camera.x + offset_x;
+    cam_xform.translation.y = rig.camera.y + offset_y;
 }
 
 fn cli_camera_at(In(args): In<Vec<String>>, mut q_cam: Query<&mut Transform, With<MainCamera>>) {

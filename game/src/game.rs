@@ -4,9 +4,13 @@
 
 use crate::prelude::*;
 
+use self::enemy::EnemyBlueprintBundle;
 use self::player::PlayerBlueprintBundle;
 
+pub mod enemy;
+pub mod gentstate;
 pub mod player;
+pub mod attack;
 mod wall;
 
 pub struct GameplayPlugin;
@@ -18,8 +22,14 @@ impl Plugin for GameplayPlugin {
         // Don't scatter it across the sub-modules/plugins!
         app.register_ldtk_int_cell::<wall::WallBundle>(17);
         app.register_ldtk_entity::<PlayerBlueprintBundle>("Player");
+        app.register_ldtk_entity::<EnemyBlueprintBundle>("Enemy");
 
         // Add the plugins for each game mechanic
-        app.add_plugins((player::PlayerPlugin, wall::WallPlugin));
+        app.add_plugins((
+            player::PlayerPlugin,
+            enemy::EnemyPlugin,
+            attack::AttackPlugin,
+            wall::WallPlugin,
+        ));
     }
 }
