@@ -361,7 +361,7 @@ fn player_move(
         }
 
         velocity.x = 0.0;
-        velocity.x += direction as f32 * 100.0;;
+        velocity.x += direction as f32 * 100.0;
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {
