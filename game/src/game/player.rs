@@ -383,7 +383,8 @@ fn player_move(
                 if action_state.just_released(PlayerAction::Move) {
                     velocity.x + initial_accel * 0.5 * action_state.value(PlayerAction::Move)
                 } else {
-                    velocity.x + accel * -velocity.x.signum()
+                    let max_vel = velocity.x.abs();
+                    (velocity.x + accel * -velocity.x.signum()).clamp(-max_vel, max_vel)
                 }
             }
         };
