@@ -88,6 +88,12 @@ fn setup_enemy(q: Query<(&Transform, Entity), Added<EnemyBlueprint>>, mut comman
                     //need to find a way to offset this one px toward back of enemys facing
                     //direction
                     collider: Collider::cuboid(22.0, 10.0),
+                    shapecast: ShapeCaster::new(
+                        Collider::cuboid(22.0, 10.0),
+                        Vec2::new(0.0, -2.0),
+                        0.0,
+                        Vec2::NEG_Y.into(),
+                    ),
                 },
             },
             Role::Melee,

@@ -1,4 +1,3 @@
-use bevy_xpbd_2d::{SubstepSchedule, SubstepSet};
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
@@ -62,6 +61,7 @@ pub struct PlayerBlueprintBundle {
 pub struct PlayerGentBundle {
     marker: PlayerGent,
     phys: GentPhysicsBundle,
+    coyote_time: CoyoteTime,
 }
 
 #[derive(Bundle)]
@@ -163,20 +163,20 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                 marker: PlayerGent { e_gfx },
                 phys: GentPhysicsBundle {
                     rb: RigidBody::Kinematic,
-                    collider: Collider::cuboid(6.0, 10.0),
+                    collider: Collider::cuboid(4.0, 10.0),
+                    shapecast: ShapeCaster::new(
+                        Collider::cuboid(4.0, 10.0),
+                        Vec2::new(0.0, -1.0),
+                        0.0,
+                        Vec2::NEG_Y.into(),
+                    ),
                 },
+                coyote_time: Default::default(),
             },
             Health {
                 current: 100,
                 max: 100,
             },
-            //get rid of this, move to shapecast with spatialquery
-            ShapeCaster::new(
-                Collider::cuboid(6.0, 10.0),
-                Vec2::new(0.0, -2.0),
-                0.0,
-                Vec2::NEG_Y.into(),
-            ),
             //have to use builder here *i think* because of different types between keycode and
             //axis
             InputManagerBundle::<PlayerAction> {
@@ -272,6 +272,9 @@ impl GentState for Jumping {}
 impl GenericState for Jumping {}
 
 #[derive(Component, Default, Debug)]
+pub struct CoyoteTime(f32);
+
+#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
 impl GentState for Grounded {}
@@ -308,12 +311,12 @@ impl Plugin for PlayerBehaviorPlugin {
                     PlayerGent,
                 >()),
                 player_falling.run_if(any_with_components::<Falling, PlayerGent>()),
+                player_collisions
+                    .after(player_move)
+                    .after(player_jump)
+                    .after(player_falling),
             ),
         );
-        // app.add_systems(
-        //     SubstepSchedule,
-        //     player_collisions.in_set(SubstepSet::SolveUserConstraints),
-        // );
     }
 }
 
@@ -350,20 +353,42 @@ fn player_move(
         &mut LinearVelocity,
         &ActionState<PlayerAction>,
         &PlayerGent,
+        Option<&Grounded>,
     )>,
     //kinda dont want to do flipping here
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for (mut velocity, action_state, gent) in q_gent.iter_mut() {
+    for (mut velocity, action_state, gent, grounded) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
-        if action_state.pressed(PlayerAction::Move) {
-            //use .clamped_value()?
-            direction = action_state.value(PlayerAction::Move);
-        }
+        // Uses high starting acceleration, to emulate "shoving" off the ground/start
+        // Acceleration is per game tick.
+        let initial_accel = 45.0;
+        let accel = 5.0;
 
-        //TODO: accelerate for few frames then apply clamped velocity
-        velocity.x = 0.0;
-        velocity.x += direction as f32 * 100.;
+        // What "%" does our character get slowed down per game tick.
+        let ground_friction = 0.7;
+
+        let new_vel = if action_state.just_pressed(PlayerAction::Move) {
+            direction = action_state.value(PlayerAction::Move);
+            velocity.x + accel * direction
+        } else if action_state.pressed(PlayerAction::Move) {
+            direction = action_state.value(PlayerAction::Move);
+            velocity.x + initial_accel * direction
+        } else {
+            // de-acceleration profile
+            if grounded.is_some() {
+                velocity.x + ground_friction * -velocity.x
+            } else {
+                // airtime de-acceleration profile
+                if action_state.just_released(PlayerAction::Move) {
+                    velocity.x + initial_accel * 0.5 * action_state.value(PlayerAction::Move)
+                } else {
+                    let max_vel = velocity.x.abs();
+                    (velocity.x + accel * -velocity.x.signum()).clamp(-max_vel, max_vel)
+                }
+            }
+        };
+        velocity.x = new_vel.clamp(-100.0, 100.0);
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {
@@ -380,7 +405,6 @@ fn player_move(
 fn player_run(
     mut q_gent: Query<
         (
-            &mut LinearVelocity,
             &ActionState<PlayerAction>,
             &mut TransitionQueue,
         ),
@@ -391,22 +415,19 @@ fn player_run(
         ),
     >,
 ) {
-    for (mut velocity, action_state, mut transitions) in q_gent.iter_mut() {
+    for (action_state, mut transitions) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         if action_state.pressed(PlayerAction::Move) {
             direction = action_state.value(PlayerAction::Move);
         }
         //should it account for decel and only transition to idle when player stops completely?
-
         //shouldnt be able to transition to idle if we also jump
         if direction == 0.0 && action_state.released(PlayerAction::Jump) {
             transitions.push(Running::new_transition(Idle));
-            velocity.x = 0.0;
         }
     }
 }
 
-//TODO: Coyote time, impulse/gravity damping/float at top, double jump
 //TODO: load jump properties from script/animation (velocity/accel + ticks/frames)
 fn player_jump(
     mut query: Query<
@@ -423,62 +444,79 @@ fn player_jump(
         //can enter state and first frame jump not pressed if you tap
         //i think this is related to the fixedtimestep input
         // print!("{:?}", action_state.get_pressed());
-        if jumping.current_air_ticks >= jumping.max_air_ticks
-            || action_state.released(PlayerAction::Jump)
-        {
-            transitions.push(Jumping::new_transition(Falling));
+
+        let deaccel_rate = 2.5;
+
+        // Jump should not be limited by number if "ticks" should be physics driven.
+        if jumping.is_added() {
+            velocity.y += 150.0;
+        } else {
+            if (velocity.y - deaccel_rate < 0.0) || action_state.released(PlayerAction::Jump) {
+                transitions.push(Jumping::new_transition(Falling));
+            }
+            velocity.y -= deaccel_rate;
         }
+
         jumping.current_air_ticks += 1;
 
-        velocity.y += 20.;
-        if jumping.is_added() {
-            velocity.y += 60.;
-        }
-        velocity.y = velocity.y.clamp(0., 100.);
+        velocity.y = velocity.y.clamp(0., 150.);
     }
 }
 
-//TODO
-//add shapecasting forward/in movement direction to check for collisions
 fn player_collisions(
-    collisions: Res<Collisions>,
+    spatial_query: SpatialQuery,
     mut q_gent: Query<
         (
-            &mut Position,
-            &Rotation,
+            Entity,
+            &Transform,
             &mut LinearVelocity,
+            &Collider,
         ),
         (With<PlayerGent>, With<RigidBody>),
     >,
+    time: Res<GameTime>,
 ) {
-    for contacts in collisions.iter() {
-        if !contacts.during_current_substep {
-            continue;
-        }
+    for (entity, transform, mut linear_velocity, collider) in q_gent.iter_mut() {
+        let mut collider = collider.clone();
+        let mut tries = 0;
+        loop {
+            if let Some(first_hit) = spatial_query.cast_shape(
+                // smaller collider then the players collider to prevent getting stuck
+                &collider,
+                transform.translation.xy(),
+                0.0,
+                linear_velocity.normalize(),
+                linear_velocity.length() / time.hz as f32,
+                false,
+                SpatialQueryFilter::default().without_entities([entity]),
+            ) {
+                // If time of impact is 0.0, it means we are inside the wall,
+                // by making the player collider smaller it allows them to attempt escape.
+                // Will prevent player from getting stuck unless they are *really* intent on it.
+                if first_hit.time_of_impact == 0.0 && tries < 5 {
+                    collider = collider.clone();
+                    collider.set_scale(collider.scale() * 0.95, 1);
+                    tries += 1;
+                    continue;
+                }
 
-        let is_first: bool;
-        let (mut position, rotation, mut linear_velocity) =
-            if let Ok(player) = q_gent.get_mut(contacts.entity1) {
-                is_first = true;
-                player
-            } else if let Ok(player) = q_gent.get_mut(contacts.entity2) {
-                is_first = false;
-                player
-            } else {
-                continue;
-            };
+                // Applies a very small amount of bounce, as well as sliding to the character
+                // the bounce helps prevent the player from getting stuck.
 
-        for manifold in contacts.manifolds.iter() {
-            let normal = if is_first {
-                -manifold.global_normal1(rotation)
-            } else {
-                -manifold.global_normal2(rotation)
-            };
+                let sliding_plane = first_hit.normal1;
 
-            for contact in manifold.contacts.iter().filter(|c| c.penetration > 0.0) {
-                position.0 += normal * contact.penetration;
-                *linear_velocity = LinearVelocity::ZERO
+                let bounce_coefficient = 0.1;
+                let bounce_force =
+                    -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
+
+                let sliding_plane = first_hit.normal1;
+
+                let projected_velocity =
+                    linear_velocity.xy() - sliding_plane * linear_velocity.dot(sliding_plane);
+
+                linear_velocity.0 = projected_velocity + bounce_force;
             }
+            break;
         }
     }
 }
@@ -488,13 +526,40 @@ fn player_grounded(
         (
             &ShapeHits,
             &ActionState<PlayerAction>,
+            &mut Position,
             &mut TransitionQueue,
+            Option<&mut CoyoteTime>,
         ),
         (With<PlayerGent>, With<Grounded>),
     >,
+    time: Res<GameTime>,
 ) {
-    for (hits, action_state, mut transitions) in query.iter_mut() {
-        let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
+    // in seconds
+    let max_coyote_time = 0.1;
+    for (hits, action_state, mut position, mut transitions, coyote_time) in query.iter_mut() {
+        let mut time_of_impact = 0.0;
+        let is_falling = hits.iter().any(|x| {
+            time_of_impact = x.time_of_impact;
+            x.time_of_impact > 1.01
+        });
+        // Ensures player character lands at the expected x height every time.
+        if !is_falling {
+            position.y = position.y - time_of_impact + 1.0;
+        }
+
+        let mut in_c_time = false;
+        if let Some(mut c_time) = coyote_time {
+            if !is_falling {
+                // resets the c_time every time ground gets close again.
+                c_time.0 = 0.0;
+            } else {
+                c_time.0 += (1.0 / time.hz) as f32;
+            }
+            if c_time.0 < max_coyote_time {
+                in_c_time = true;
+            }
+        };
+
         //just pressed seems to get missed sometimes... but we need it because pressed makes you
         //jump continuously if held
         //known issue https://github.com/bevyengine/bevy/issues/6183
@@ -504,7 +569,9 @@ fn player_grounded(
                 Jumping::default(),
             ))
         } else if is_falling {
-            transitions.push(Grounded::new_transition(Falling))
+            if !in_c_time {
+                transitions.push(Grounded::new_transition(Falling))
+            }
         }
     }
 }
@@ -514,15 +581,15 @@ fn player_falling(
         (
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
-            //TODO: remove shapehits, use SpatialQuery
             &ShapeHits,
             &mut TransitionQueue,
         ),
         (With<PlayerGent>, With<Falling>),
     >,
-    //spatial_query: SpatialQuery
 ) {
     for (mut velocity, action_state, hits, mut transitions) in query.iter_mut() {
+        let fall_accel = 2.9;
+        let mut falling = true;
         for hit in hits.iter() {
             //if we are ~touching the ground
             if hit.time_of_impact < 0.001 {
@@ -536,11 +603,12 @@ fn player_falling(
                 } else {
                     transitions.push(Falling::new_transition(Idle));
                 }
-            //fall
-            } else {
-                velocity.y -= 10.;
-                velocity.y = velocity.y.clamp(-100., 0.);
+                falling = false;
             }
+        }
+        if falling {
+            velocity.y -= fall_accel;
+            velocity.y = velocity.y.clamp(-100., 0.);
         }
     }
 }
