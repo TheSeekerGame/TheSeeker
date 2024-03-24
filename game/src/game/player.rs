@@ -474,13 +474,12 @@ fn player_collisions(
             &mut Transform,
             &mut LinearVelocity,
             &Collider,
-            Option<&mut CoyoteTime>,
         ),
         (With<PlayerGent>, With<RigidBody>),
     >,
     time: Res<GameTime>,
 ) {
-    for (entity, mut transform, mut linear_velocity, collider, coyote_time) in q_gent.iter_mut() {
+    for (entity, mut transform, mut linear_velocity, collider) in q_gent.iter_mut() {
         let mut collider = collider.clone();
         let mut tries = 0;
         loop {
@@ -538,25 +537,23 @@ fn player_grounded(
     time: Res<GameTime>,
 ) {
     // in seconds
-    let max_coyote_time = 1.2;
+    let max_coyote_time = 0.1;
     for (hits, action_state, mut transitions, mut coyote_time) in query.iter_mut() {
         let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
+
         let mut in_c_time = false;
-        if transitions.is_added() {
-            println!("grounded was added")
-        }
-        println!("grounded running");
         if let Some(mut c_time) = coyote_time {
             if !is_falling {
+                // resets the c_time every time ground gets close again.
                 c_time.0 = 0.0;
             } else {
                 c_time.0 += (1.0 / time.hz) as f32;
             }
-            // println!("{:?}", c_time);
             if c_time.0 < max_coyote_time {
                 in_c_time = true;
             }
         };
+
         //just pressed seems to get missed sometimes... but we need it because pressed makes you
         //jump continuously if held
         //known issue https://github.com/bevyengine/bevy/issues/6183
