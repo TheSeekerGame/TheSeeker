@@ -63,6 +63,7 @@ pub struct PlayerBlueprintBundle {
 pub struct PlayerGentBundle {
     marker: PlayerGent,
     phys: GentPhysicsBundle,
+    coyote_time: CoyoteTime,
 }
 
 #[derive(Bundle)]
@@ -172,6 +173,7 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                         Vec2::NEG_Y.into(),
                     ),
                 },
+                coyote_time: Default::default(),
             },
             Health {
                 current: 100,
@@ -271,10 +273,8 @@ impl Default for Jumping {
 impl GentState for Jumping {}
 impl GenericState for Jumping {}
 
-/// Entities with this component and a transition queue that supports the idle state
-/// Will transition to the idle state if they don't move for a while.
 #[derive(Component, Default, Debug)]
-pub struct IdleTimer(f32);
+pub struct CoyoteTime(f32);
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
@@ -362,7 +362,7 @@ fn player_move(
 ) {
     for (mut velocity, action_state, gent, grounded) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
-        // Uses high starting acceleration for better feel
+        // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
         let initial_accel = 45.0;
         let accel = 5.0;
@@ -377,10 +377,11 @@ fn player_move(
             direction = action_state.value(PlayerAction::Move);
             velocity.x + initial_accel * direction
         } else {
+            // de-acceleration profile
             if grounded.is_some() {
                 velocity.x + ground_friction * -velocity.x
             } else {
-                // airtime acceleration profile
+                // airtime de-acceleration profile
                 if action_state.just_released(PlayerAction::Move) {
                     velocity.x + initial_accel * 0.5 * action_state.value(PlayerAction::Move)
                 } else {
@@ -473,12 +474,13 @@ fn player_collisions(
             &mut Transform,
             &mut LinearVelocity,
             &Collider,
+            Option<&mut CoyoteTime>,
         ),
         (With<PlayerGent>, With<RigidBody>),
     >,
     time: Res<GameTime>,
 ) {
-    for (entity, mut transform, mut linear_velocity, collider) in q_gent.iter_mut() {
+    for (entity, mut transform, mut linear_velocity, collider, coyote_time) in q_gent.iter_mut() {
         let mut collider = collider.clone();
         let mut tries = 0;
         loop {
@@ -529,12 +531,32 @@ fn player_grounded(
             &ShapeHits,
             &ActionState<PlayerAction>,
             &mut TransitionQueue,
+            Option<&mut CoyoteTime>,
         ),
         (With<PlayerGent>, With<Grounded>),
     >,
+    time: Res<GameTime>,
 ) {
-    for (hits, action_state, mut transitions) in query.iter_mut() {
+    // in seconds
+    let max_coyote_time = 1.2;
+    for (hits, action_state, mut transitions, mut coyote_time) in query.iter_mut() {
         let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
+        let mut in_c_time = false;
+        if transitions.is_added() {
+            println!("grounded was added")
+        }
+        println!("grounded running");
+        if let Some(mut c_time) = coyote_time {
+            if !is_falling {
+                c_time.0 = 0.0;
+            } else {
+                c_time.0 += (1.0 / time.hz) as f32;
+            }
+            // println!("{:?}", c_time);
+            if c_time.0 < max_coyote_time {
+                in_c_time = true;
+            }
+        };
         //just pressed seems to get missed sometimes... but we need it because pressed makes you
         //jump continuously if held
         //known issue https://github.com/bevyengine/bevy/issues/6183
@@ -544,7 +566,9 @@ fn player_grounded(
                 Jumping::default(),
             ))
         } else if is_falling {
-            transitions.push(Grounded::new_transition(Falling))
+            if !in_c_time {
+                transitions.push(Grounded::new_transition(Falling))
+            }
         }
     }
 }
