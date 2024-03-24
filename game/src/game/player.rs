@@ -1,4 +1,3 @@
-use bevy_xpbd_2d::parry::na::clamp;
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
@@ -388,7 +387,7 @@ fn player_move(
                 }
             }
         };
-        velocity.x = clamp(new_vel, -100.0, 100.0);
+        velocity.x = new_vel.clamp(-100.0, 100.0);
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {
