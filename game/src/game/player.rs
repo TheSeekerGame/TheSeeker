@@ -1,5 +1,4 @@
 use bevy_xpbd_2d::parry::na::clamp;
-use bevy_xpbd_2d::{SubstepSchedule, SubstepSet};
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
@@ -406,7 +405,6 @@ fn player_move(
 fn player_run(
     mut q_gent: Query<
         (
-            &mut LinearVelocity,
             &ActionState<PlayerAction>,
             &mut TransitionQueue,
         ),
@@ -417,7 +415,7 @@ fn player_run(
         ),
     >,
 ) {
-    for (mut velocity, action_state, mut transitions) in q_gent.iter_mut() {
+    for (action_state, mut transitions) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         if action_state.pressed(PlayerAction::Move) {
             direction = action_state.value(PlayerAction::Move);
@@ -430,7 +428,6 @@ fn player_run(
     }
 }
 
-//TODO: Coyote time, impulse/gravity damping/float at top, double jump
 //TODO: load jump properties from script/animation (velocity/accel + ticks/frames)
 fn player_jump(
     mut query: Query<
@@ -471,7 +468,7 @@ fn player_collisions(
     mut q_gent: Query<
         (
             Entity,
-            &mut Transform,
+            &Transform,
             &mut LinearVelocity,
             &Collider,
         ),
@@ -479,7 +476,7 @@ fn player_collisions(
     >,
     time: Res<GameTime>,
 ) {
-    for (entity, mut transform, mut linear_velocity, collider) in q_gent.iter_mut() {
+    for (entity, transform, mut linear_velocity, collider) in q_gent.iter_mut() {
         let mut collider = collider.clone();
         let mut tries = 0;
         loop {
@@ -489,7 +486,7 @@ fn player_collisions(
                 transform.translation.xy(),
                 0.0,
                 linear_velocity.normalize(),
-                (linear_velocity.length() / (time.hz) as f32),
+                linear_velocity.length() / time.hz as f32,
                 false,
                 SpatialQueryFilter::default().without_entities([entity]),
             ) {
@@ -538,7 +535,7 @@ fn player_grounded(
 ) {
     // in seconds
     let max_coyote_time = 0.1;
-    for (hits, action_state, mut transitions, mut coyote_time) in query.iter_mut() {
+    for (hits, action_state, mut transitions, coyote_time) in query.iter_mut() {
         let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
 
         let mut in_c_time = false;
