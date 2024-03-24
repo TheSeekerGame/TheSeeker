@@ -1,3 +1,4 @@
+use bevy_xpbd_2d::parry::na::clamp;
 use bevy_xpbd_2d::{SubstepSchedule, SubstepSet};
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use theseeker_engine::{
@@ -270,6 +271,11 @@ impl Default for Jumping {
 impl GentState for Jumping {}
 impl GenericState for Jumping {}
 
+/// Entities with this component and a transition queue that supports the idle state
+/// Will transition to the idle state if they don't move for a while.
+#[derive(Component, Default, Debug)]
+pub struct IdleTimer(f32);
+
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
@@ -349,19 +355,40 @@ fn player_move(
         &mut LinearVelocity,
         &ActionState<PlayerAction>,
         &PlayerGent,
+        Option<&Grounded>,
     )>,
     //kinda dont want to do flipping here
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for (mut velocity, action_state, gent) in q_gent.iter_mut() {
+    for (mut velocity, action_state, gent, grounded) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
-        if action_state.pressed(PlayerAction::Move) {
-            //use .clamped_value()?
-            direction = action_state.value(PlayerAction::Move);
-        }
+        // Uses high starting acceleration for better feel
+        // Acceleration is per game tick.
+        let initial_accel = 45.0;
+        let accel = 5.0;
 
-        velocity.x = 0.0;
-        velocity.x += direction as f32 * 100.0;
+        // What "%" does our character get slowed down per game tick.
+        let ground_friction = 0.7;
+
+        let new_vel = if action_state.just_pressed(PlayerAction::Move) {
+            direction = action_state.value(PlayerAction::Move);
+            velocity.x + accel * direction
+        } else if action_state.pressed(PlayerAction::Move) {
+            direction = action_state.value(PlayerAction::Move);
+            velocity.x + initial_accel * direction
+        } else {
+            if grounded.is_some() {
+                velocity.x + ground_friction * -velocity.x
+            } else {
+                // airtime acceleration profile
+                if action_state.just_released(PlayerAction::Move) {
+                    velocity.x + initial_accel * 0.5 * action_state.value(PlayerAction::Move)
+                } else {
+                    velocity.x + accel * -velocity.x.signum()
+                }
+            }
+        };
+        velocity.x = clamp(new_vel, -100.0, 100.0);
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {
@@ -395,11 +422,9 @@ fn player_run(
             direction = action_state.value(PlayerAction::Move);
         }
         //should it account for decel and only transition to idle when player stops completely?
-
         //shouldnt be able to transition to idle if we also jump
         if direction == 0.0 && action_state.released(PlayerAction::Jump) {
             transitions.push(Running::new_transition(Idle));
-            velocity.x = 0.0;
         }
     }
 }
