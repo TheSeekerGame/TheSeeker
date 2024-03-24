@@ -165,8 +165,8 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                     rb: RigidBody::Kinematic,
                     collider: Collider::cuboid(4.0, 10.0),
                     shapecast: ShapeCaster::new(
-                        Collider::cuboid(3.99, 10.0),
-                        Vec2::new(0.0, -2.0),
+                        Collider::cuboid(4.0, 10.0),
+                        Vec2::new(0.0, -1.0),
                         0.0,
                         Vec2::NEG_Y.into(),
                     ),
@@ -526,6 +526,7 @@ fn player_grounded(
         (
             &ShapeHits,
             &ActionState<PlayerAction>,
+            &mut Position,
             &mut TransitionQueue,
             Option<&mut CoyoteTime>,
         ),
@@ -535,8 +536,16 @@ fn player_grounded(
 ) {
     // in seconds
     let max_coyote_time = 0.1;
-    for (hits, action_state, mut transitions, coyote_time) in query.iter_mut() {
-        let is_falling = hits.iter().any(|x| x.time_of_impact > 0.1);
+    for (hits, action_state, mut position, mut transitions, coyote_time) in query.iter_mut() {
+        let mut time_of_impact = 0.0;
+        let is_falling = hits.iter().any(|x| {
+            time_of_impact = x.time_of_impact;
+            x.time_of_impact > 1.01
+        });
+        // Ensures player character lands at the expected x height every time.
+        if !is_falling {
+            position.y = position.y - time_of_impact + 1.0;
+        }
 
         let mut in_c_time = false;
         if let Some(mut c_time) = coyote_time {
