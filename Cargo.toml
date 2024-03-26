@@ -12,7 +12,7 @@ bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker"
 bevy_asset = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
 bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
 bevy_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-bevy_xpbd_2d = { git = "https://github.com/TheSeekerGame/bevy_xpbd", branch = "TheSeeker" }
+bevy_xpbd_2d = { git = "https://github.com/TheSeekerGame/bevy_xpbd", rev = "ffc00068b5ce90e75b55985e9b238813f7652d87" }
 
 [lib]
 name = "theseeker_engine"
