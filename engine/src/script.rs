@@ -228,6 +228,10 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
         }
     }
 
+    pub fn asset_key(&self) -> Option<&str> {
+        self.runtime.key.as_ref().map(|x| x.as_str())
+    }
+
     pub fn add_action(
         mut self,
         run_if: &T::RunIf,

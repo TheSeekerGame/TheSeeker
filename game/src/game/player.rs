@@ -184,7 +184,7 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                 input_map: InputMap::default()
                     .insert(KeyCode::Space, PlayerAction::Jump)
                     .insert(
-                        VirtualAxis::from_keys(KeyCode::A, KeyCode::D),
+                        VirtualAxis::from_keys(KeyCode::KeyA, KeyCode::KeyD),
                         PlayerAction::Move,
                     )
                     .insert(KeyCode::Return, PlayerAction::Attack)
@@ -338,8 +338,8 @@ fn player_idle(
         // check for direction input
         let mut direction: f32 = 0.0;
         // println!("idleing, {:?}", action_state.get_pressed());
-        if action_state.pressed(PlayerAction::Move) {
-            direction = action_state.value(PlayerAction::Move);
+        if action_state.pressed(&PlayerAction::Move) {
+            direction = action_state.value(&PlayerAction::Move);
             // println!("moving??")
         }
         if direction != 0.0 {
@@ -362,6 +362,7 @@ fn player_move(
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
+// TODO change to &PlayerAction
         let initial_accel = 45.0;
         let accel = 5.0;
 
@@ -417,12 +418,12 @@ fn player_run(
 ) {
     for (action_state, mut transitions) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
-        if action_state.pressed(PlayerAction::Move) {
-            direction = action_state.value(PlayerAction::Move);
+        if action_state.pressed(&PlayerAction::Move) {
+            direction = action_state.value(&PlayerAction::Move);
         }
         //should it account for decel and only transition to idle when player stops completely?
         //shouldnt be able to transition to idle if we also jump
-        if direction == 0.0 && action_state.released(PlayerAction::Jump) {
+        if direction == 0.0 && action_state.released(&PlayerAction::Jump) {
             transitions.push(Running::new_transition(Idle));
         }
     }
@@ -563,7 +564,7 @@ fn player_grounded(
         //just pressed seems to get missed sometimes... but we need it because pressed makes you
         //jump continuously if held
         //known issue https://github.com/bevyengine/bevy/issues/6183
-        if action_state.just_pressed(PlayerAction::Jump) {
+        if action_state.just_pressed(&PlayerAction::Jump) {
             // if action_state.pressed(PlayerAction::Jump) {
             transitions.push(Grounded::new_transition(
                 Jumping::default(),
@@ -597,7 +598,7 @@ fn player_falling(
                 // println!("{:?} should be grounded", entity);
                 //stop falling
                 velocity.y = 0.0;
-                if action_state.pressed(PlayerAction::Move) {
+                if action_state.pressed(&PlayerAction::Move) {
                     transitions.push(Falling::new_transition(Running));
                     // println!("{:?} should be running", entity)
                 } else {
