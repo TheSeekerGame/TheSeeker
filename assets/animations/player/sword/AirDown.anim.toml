@@ -1,5 +1,3 @@
-atlas_asset_key = "anim.player.SwordAirDown.sprite"
-
 [settings]
 time_base = "Relative"
 tick_quant = "8"

@@ -1,0 +1,352 @@
+// This file is for ANIMATIONS; i.e any sprite-based animated assets
+// based on our custom animation system.
+({
+    "anim.player.FallForward": File (
+        path: "animations/player/movement/FallForward.anim.toml",
+    ),
+    "anim.player.FallForward.image": File (
+        path: "animations/player/movement/FallForward.png",
+    ),
+    "anim.player.FallForward.atlas": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 4,
+    ),
+    "anim.player.Fall": File (
+        path: "animations/player/movement/Fall.anim.toml",
+    ),
+    "anim.player.Fall.atlas": File (
+        path: "animations/player/movement/Fall.png",
+    ),
+    "anim.player.Fall.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 4,
+    ),
+    "anim.player.Fly": File (
+        path: "animations/player/movement/Fly.anim.toml",
+    ),
+    "anim.player.Fly.atlas": File (
+        path: "animations/player/movement/Fly.png",
+    ),
+    "anim.player.Fly.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 4,
+    ),
+    "anim.player.FlyForward": File (
+        path: "animations/player/movement/FlyForward.anim.toml",
+    ),
+    "anim.player.FlyForward.atlas": File (
+        path: "animations/player/movement/FlyForward.png",
+    ),
+    "anim.player.FlyForward.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 4,
+    ),
+    "anim.player.FlyFallTransition": File (
+        path: "animations/player/movement/FlyFallTransition.anim.toml",
+    ),
+    "anim.player.FlyFallTransition.atlas": File (
+        path: "animations/player/movement/FlyFallTransition.png",
+    ),
+    "anim.player.FlyFallTransition.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 2,
+    ),
+    "anim.player.FlyFallForwardTransition": File (
+        path: "animations/player/movement/FlyFallForwardTransition.anim.toml",
+    ),
+    "anim.player.FlyFallForwardTransition.atlas": File (
+        path: "animations/player/movement/FlyFallForwardTransition.png",
+    ),
+    "anim.player.FlyFallForwardTransition.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 2,
+    ),
+    "anim.player.Land": File (
+        path: "animations/player/movement/Land.anim.toml",
+    ),
+    "anim.player.Land.atlas": File (
+        path: "animations/player/movement/Land.png",
+    ),
+    "anim.player.Land.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 2,
+    ),
+    "anim.player.LandForward": File (
+        path: "animations/player/movement/LandForward.anim.toml",
+    ),
+    "anim.player.LandForward.atlas": File (
+        path: "animations/player/movement/LandForward.png",
+    ),
+    "anim.player.LandForward.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 2,
+    ),
+    "anim.player.Jump": File (
+        path: "animations/player/movement/Jump.anim.toml",
+    ),
+    "anim.player.Jump.atlas": File (
+        path: "animations/player/movement/Jump.png",
+    ),
+    "anim.player.Jump.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 2,
+    ),
+    "anim.player.JumpForward": File (
+        path: "animations/player/movement/JumpForward.anim.toml",
+    ),
+    "anim.player.JumpForward.atlas": File (
+        path: "animations/player/movement/JumpForward.png",
+    ),
+    "anim.player.JumpForward.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 2,
+    ),
+    "anim.player.Dash": File (
+        path: "animations/player/movement/Dash.anim.toml",
+    ),
+    "anim.player.Dash.atlas": File (
+        path: "animations/player/movement/Dash.png",
+    ),
+    "anim.player.Dash.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 1,
+    ),
+    "anim.player.Roll": File (
+        path: "animations/player/movement/Roll.anim.toml",
+    ),
+    "anim.player.Roll.atlas": File (
+        path: "animations/player/movement/Roll.png",
+    ),
+    "anim.player.Roll.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 4,
+    ),
+    "anim.player.WallSlide": File (
+        path: "animations/player/movement/WallSlide.anim.toml",
+    ),
+    "anim.player.WallSlide.atlas": File (
+        path: "animations/player/movement/WallSlide.png",
+    ),
+    "anim.player.WallSlide.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 3,
+    ),
+    "anim.player.Idle": File (
+        path: "animations/player/movement/Idle.anim.toml",
+    ),
+    "anim.player.Idle.atlas": File (
+        path: "animations/player/movement/Idle.png",
+    ),
+    "anim.player.Idle.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 2,
+        columns: 10,
+    ),
+    "anim.player.IdleLookUp": File (
+        path: "animations/player/movement/IdleLookUp.anim.toml",
+    ),
+    "anim.player.IdleLookUp.atlas": File (
+        path: "animations/player/movement/IdleLookUp.png",
+    ),
+    "anim.player.IdleLookUp.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 2,
+        columns: 11,
+    ),
+    "anim.player.IdleLookDown": File (
+        path: "animations/player/movement/IdleLookDown.anim.toml",
+    ),
+    "anim.player.IdleLookDown.atlas": File (
+        path: "animations/player/movement/IdleLookDown.png",
+    ),
+    "anim.player.IdleLookDown.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 2,
+        columns: 11,
+    ),
+    "anim.player.Run": File (
+        path: "animations/player/movement/Run.anim.toml",
+    ),
+    "anim.player.Run.atlas": File (
+        path: "animations/player/movement/Run.png",
+    ),
+    "anim.player.Run.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 8,
+    ),
+    "anim.player.SwordFrontA": File (
+        path: "animations/player/sword/FrontA.anim.toml",
+    ),
+    "anim.player.SwordFrontA.atlas": File (
+        path: "animations/player/sword/FrontA.png",
+    ),
+    "anim.player.SwordFrontA.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 5,
+    ),
+    "anim.player.SwordFrontB": File (
+        path: "animations/player/sword/FrontB.anim.toml",
+    ),
+    "anim.player.SwordFrontB.atlas": File (
+        path: "animations/player/sword/FrontB.png",
+    ),
+    "anim.player.SwordFrontB.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 5,
+    ),
+    "anim.player.SwordFrontC": File (
+        path: "animations/player/sword/FrontC.anim.toml",
+    ),
+    "anim.player.SwordFrontC.atlas": File (
+        path: "animations/player/sword/FrontC.png",
+    ),
+    "anim.player.SwordFrontC.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 5,
+    ),
+    "anim.player.SwordRunA": File (
+        path: "animations/player/sword/RunA.anim.toml",
+    ),
+    "anim.player.SwordRunA.atlas": File (
+        path: "animations/player/sword/RunA.png",
+    ),
+    "anim.player.SwordRunA.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 4,
+    ),
+    "anim.player.SwordRunB": File (
+        path: "animations/player/sword/RunB.anim.toml",
+    ),
+    "anim.player.SwordRunB.atlas": File (
+        path: "animations/player/sword/RunB.png",
+    ),
+    "anim.player.SwordRunB.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 4,
+    ),
+    "anim.player.SwordUp": File (
+        path: "animations/player/sword/Up.anim.toml",
+    ),
+    "anim.player.SwordUp.atlas": File (
+        path: "animations/player/sword/Up.png",
+    ),
+    "anim.player.SwordUp.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 5,
+    ),
+    "anim.player.SwordAirUp": File (
+        path: "animations/player/sword/AirUp.anim.toml",
+    ),
+    "anim.player.SwordAirUp.atlas": File (
+        path: "animations/player/sword/AirUp.png",
+    ),
+    "anim.player.SwordAirUp.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 5,
+    ),
+    "anim.player.SwordAirDown": File (
+        path: "animations/player/sword/AirDown.anim.toml",
+    ),
+    "anim.player.SwordAirDown.atlas": File (
+        path: "animations/player/sword/AirDown.png",
+    ),
+    "anim.player.SwordAirDown.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 5,
+    ),
+    "anim.player.SwordAirFrontA": File (
+        path: "animations/player/sword/AirFrontA.anim.toml",
+    ),
+    "anim.player.SwordAirFrontA.atlas": File (
+        path: "animations/player/sword/AirFrontA.png",
+    ),
+    "anim.player.SwordAirFrontA.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 5,
+    ),
+    "anim.player.SwordAirFrontB": File (
+        path: "animations/player/sword/AirFrontB.anim.toml",
+    ),
+    "anim.player.SwordAirFrontB.atlas": File (
+        path: "animations/player/sword/AirFrontB.png",
+    ),
+    "anim.player.SwordAirFrontB.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 5,
+    ),
+    "anim.player.SwordDashDownward": File (
+        path: "animations/player/sword/DashDownward.anim.toml",
+    ),
+    "anim.player.SwordDashDownward.atlas": File (
+        path: "animations/player/sword/DashDownward.png",
+    ),
+    "anim.player.SwordDashDownward.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 5,
+    ),
+    "anim.player.SwordWhirling": File (
+        path: "animations/player/sword/Whirling.anim.toml",
+    ),
+    "anim.player.SwordWhirling.atlas": File (
+        path: "animations/player/sword/Whirling.png",
+    ),
+    "anim.player.SwordWhirling.image": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 6,
+    ),
+})
