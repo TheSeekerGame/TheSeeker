@@ -68,9 +68,11 @@ features = [
 
 [dependencies.bevy]
 version = "0.13"
-# default-features = false
-# features = [
-# ]
+default-features = true
+features = [
+    "flac",
+    "jpeg",
+]
 
 [dependencies.bevy_asset_loader]
 version = "0.20"

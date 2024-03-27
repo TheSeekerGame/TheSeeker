@@ -10,9 +10,10 @@ use crate::prelude::*;
 #[derive(Serialize, Deserialize)]
 #[derive(TypePath)]
 pub struct Script {
-    /// List of actions to perform during playback
-    pub script: Vec<CommonScript>,
     pub settings: Option<CommonScriptSettings>,
+    /// List of actions to perform during playback
+    #[serde(default)]
+    pub script: Vec<CommonScript>,
 }
 
 #[derive(Debug, Default, Clone)]

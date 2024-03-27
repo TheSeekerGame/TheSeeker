@@ -14,6 +14,7 @@ pub struct SpriteAnimation {
     /// General animation parameters
     pub settings: ExtendedScriptSettings<SpriteAnimationSettings>,
     /// Optional "script": list of actions to perform during playback
+    #[serde(default)]
     pub script: Vec<
         ExtendedScript<
             SpriteAnimationScriptParams,
