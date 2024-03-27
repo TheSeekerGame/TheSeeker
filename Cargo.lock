@@ -1171,7 +1171,6 @@ name = "bevy_xpbd_2d"
 version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "627b7f58d53fc60ab233225e14b1357af6838623e47bd0f5c6961337a5b07b5f"
->>>>>>> 948d2fa (Cargo.toml upgrade dependencies + cargo update)
 dependencies = [
  "bevy",
  "bevy_math",
@@ -1190,7 +1189,6 @@ name = "bevy_xpbd_derive"
 version = "0.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3e1ef1d5e328abe1b76df974245f78e17fd17867583883d5e77444c6a8223a64"
->>>>>>> 948d2fa (Cargo.toml upgrade dependencies + cargo update)
 dependencies = [
  "quote",
  "syn 2.0.55",
