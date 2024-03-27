@@ -168,7 +168,8 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                         Collider::cuboid(4.0, 10.0),
                         Vec2::new(0.0, -1.0),
                         0.0,
-                        Vec2::NEG_Y.into(),
+                        Direction2d::NEG_Y,
+                        // Vec2::NEG_Y.into(),
                     ),
                 },
                 coyote_time: Default::default(),
@@ -182,12 +183,12 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
             InputManagerBundle::<PlayerAction> {
                 action_state: ActionState::default(),
                 input_map: InputMap::default()
-                    .insert(KeyCode::Space, PlayerAction::Jump)
+                    .insert(PlayerAction::Jump, KeyCode::Space)
                     .insert(
-                        VirtualAxis::from_keys(KeyCode::KeyA, KeyCode::KeyD),
                         PlayerAction::Move,
+                        VirtualAxis::from_keys(KeyCode::KeyA, KeyCode::KeyD),
                     )
-                    .insert(KeyCode::Return, PlayerAction::Attack)
+                    .insert(PlayerAction::Attack, KeyCode::Enter)
                     .build(),
             },
             Falling::default(),
@@ -216,7 +217,7 @@ impl Plugin for PlayerTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                (transition.run_if(any_with_component::<TransitionQueue>()),),
+                transition.run_if(any_with_component::<TransitionQueue>),
                 apply_deferred,
             )
                 .chain()
@@ -362,18 +363,18 @@ fn player_move(
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
-// TODO change to &PlayerAction
+        // TODO change to &PlayerAction
         let initial_accel = 45.0;
         let accel = 5.0;
 
         // What "%" does our character get slowed down per game tick.
         let ground_friction = 0.7;
 
-        let new_vel = if action_state.just_pressed(PlayerAction::Move) {
-            direction = action_state.value(PlayerAction::Move);
+        let new_vel = if action_state.just_pressed(&PlayerAction::Move) {
+            direction = action_state.value(&PlayerAction::Move);
             velocity.x + accel * direction
-        } else if action_state.pressed(PlayerAction::Move) {
-            direction = action_state.value(PlayerAction::Move);
+        } else if action_state.pressed(&PlayerAction::Move) {
+            direction = action_state.value(&PlayerAction::Move);
             velocity.x + initial_accel * direction
         } else {
             // de-acceleration profile
@@ -381,8 +382,8 @@ fn player_move(
                 velocity.x + ground_friction * -velocity.x
             } else {
                 // airtime de-acceleration profile
-                if action_state.just_released(PlayerAction::Move) {
-                    velocity.x + initial_accel * 0.5 * action_state.value(PlayerAction::Move)
+                if action_state.just_released(&PlayerAction::Move) {
+                    velocity.x + initial_accel * 0.5 * action_state.value(&PlayerAction::Move)
                 } else {
                     let max_vel = velocity.x.abs();
                     (velocity.x + accel * -velocity.x.signum()).clamp(-max_vel, max_vel)
@@ -452,7 +453,7 @@ fn player_jump(
         if jumping.is_added() {
             velocity.y += 150.0;
         } else {
-            if (velocity.y - deaccel_rate < 0.0) || action_state.released(PlayerAction::Jump) {
+            if (velocity.y - deaccel_rate < 0.0) || action_state.released(&PlayerAction::Jump) {
                 transitions.push(Jumping::new_transition(Falling));
             }
             velocity.y -= deaccel_rate;
@@ -486,10 +487,11 @@ fn player_collisions(
                 &collider,
                 transform.translation.xy(),
                 0.0,
-                linear_velocity.normalize(),
+                //TODO will this cause problems if its 0?
+                Direction2d::new_unchecked(linear_velocity.normalize()) ,
                 linear_velocity.length() / time.hz as f32,
                 false,
-                SpatialQueryFilter::default().without_entities([entity]),
+                SpatialQueryFilter::from_excluded_entities([entity]),
             ) {
                 // If time of impact is 0.0, it means we are inside the wall,
                 // by making the player collider smaller it allows them to attempt escape.
