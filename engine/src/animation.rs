@@ -213,7 +213,6 @@ impl ScriptAsset for SpriteAnimation {
     type BuildParam = (
         SQuery<(
             &'static mut Handle<Image>,
-            &'static mut Handle<TextureAtlasLayout>,
             &'static mut TextureAtlas,
             &'static mut Sprite,
         )>,
@@ -233,7 +232,7 @@ impl ScriptAsset for SpriteAnimation {
         entity: Entity,
         (q_atlas, preloaded): &mut <Self::BuildParam as SystemParam>::Item<'w, '_>,
     ) -> ScriptRuntimeBuilder<Self> {
-        let (mut image, mut layout, mut atlas, mut _sprite) = q_atlas
+        let (mut image, mut atlas, mut _sprite) = q_atlas
             .get_mut(entity)
             .expect("Animation entity must have Texture Atlas components");
 
@@ -241,17 +240,17 @@ impl ScriptAsset for SpriteAnimation {
             preloaded.get_single_asset(key)
         } else if let Some(key) = builder.asset_key() {
             let mut key = key.to_owned();
-            key.push_str("image");
+            key.push_str(".image");
             preloaded.get_single_asset(&key)
         } else {
             panic!("Unknown asset key for Animation Sprite Sheet Image")
         }.expect("Animation Sprite Sheet Image asset with specified key does not exist");
 
-        *layout = if let Some(key) = &self.settings.extended.atlas_asset_key {
+        atlas.layout = if let Some(key) = &self.settings.extended.atlas_asset_key {
             preloaded.get_single_asset(key)
         } else if let Some(key) = builder.asset_key() {
             let mut key = key.to_owned();
-            key.push_str("atlas");
+            key.push_str(".atlas");
             preloaded.get_single_asset(&key)
         } else {
             panic!("Unknown asset key for Animation Texture Atlas Layout")
