@@ -481,9 +481,9 @@ fn player_collisions(
     for (entity, transform, mut linear_velocity, collider) in q_gent.iter_mut() {
         let mut collider = collider.clone();
         let mut tries = 0;
-        loop {
-            //if we are not moving, we can not shapecast in direction of movement
-            if let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
+        //if we are not moving, we can not shapecast in direction of movement
+        if let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
+            loop {
                 if let Some(first_hit) = spatial_query.cast_shape(
                     // smaller collider then the players collider to prevent getting stuck
                     &collider,
