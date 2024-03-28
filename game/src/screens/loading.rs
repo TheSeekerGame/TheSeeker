@@ -1,4 +1,4 @@
-use bevy::core_pipeline::clear_color::ClearColorConfig;
+use bevy::render::camera::ClearColorConfig;
 use iyes_progress::TrackedProgressSet;
 
 use crate::prelude::*;
@@ -29,8 +29,9 @@ fn setup_loadscreen(mut commands: Commands) {
     commands.spawn((
         StateDespawnMarker,
         Camera2dBundle {
-            camera_2d: Camera2d {
+            camera: Camera {
                 clear_color: ClearColorConfig::Custom(Color::BLACK),
+                ..Default::default()
             },
             ..Default::default()
         },

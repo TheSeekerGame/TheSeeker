@@ -147,23 +147,23 @@ fn camera_rig_follow_player(
 pub(crate) fn update_rig_trauma(
     mut rig: ResMut<CameraRig>,
     time: Res<Time>,
-    keyboard_input: Res<Input<KeyCode>>,
+    keyboard_input: Res<ButtonInput<KeyCode>>,
 ) {
     rig.trauma = (rig.trauma - 1.75 * time.delta_seconds()).max(0.0);
     #[cfg(feature = "dev")]
     // Tests different levels based on number key if in dev
     {
         let number_keys = [
-            KeyCode::Key1,
-            KeyCode::Key2,
-            KeyCode::Key3,
-            KeyCode::Key4,
-            KeyCode::Key5,
-            KeyCode::Key6,
-            KeyCode::Key7,
-            KeyCode::Key8,
-            KeyCode::Key9,
-            KeyCode::Key0,
+            KeyCode::Digit1,
+            KeyCode::Digit2,
+            KeyCode::Digit3,
+            KeyCode::Digit4,
+            KeyCode::Digit5,
+            KeyCode::Digit6,
+            KeyCode::Digit7,
+            KeyCode::Digit8,
+            KeyCode::Digit9,
+            KeyCode::Digit0,
         ];
         for (i, key) in number_keys.iter().enumerate() {
             if keyboard_input.pressed(*key) {

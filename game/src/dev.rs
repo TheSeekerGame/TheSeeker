@@ -12,7 +12,7 @@ impl Plugin for DevPlugin {
         app.add_systems(
             Last,
             debug_progress
-                .run_if(resource_exists::<ProgressCounter>())
+                .run_if(resource_exists::<ProgressCounter>)
                 .after(iyes_progress::TrackedProgressSet),
         );
         app.add_systems(

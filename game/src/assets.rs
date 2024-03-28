@@ -14,7 +14,8 @@ impl Plugin for AssetsPlugin {
         // bevy_asset_loader
         app.add_loading_state(
             LoadingState::new(AppState::AssetsLoading)
-                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("gfx.assets.ron")
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("animations.assets.ron")
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("sprites.assets.ron")
                 .with_dynamic_assets_file::<StandardDynamicAssetCollection>("audio.assets.ron")
                 .with_dynamic_assets_file::<StandardDynamicAssetCollection>("levels.assets.ron")
                 .with_dynamic_assets_file::<StandardDynamicAssetCollection>("gameplay.assets.ron")

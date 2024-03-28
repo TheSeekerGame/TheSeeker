@@ -9,7 +9,7 @@ use bevy::render::extract_component::{
     ComponentUniforms, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
 };
 use bevy::render::render_graph::{
-    NodeRunError, RenderGraphApp, RenderGraphContext, ViewNode, ViewNodeRunner,
+    NodeRunError, RenderGraphApp, RenderGraphContext, ViewNode, ViewNodeRunner, RenderLabel
 };
 use bevy::render::render_resource::{
     BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
@@ -99,21 +99,26 @@ impl Plugin for DarknessPlugin {
             // matching the [`ViewQuery`]
             .add_render_graph_node::<ViewNodeRunner<DarknessPostProcessNode>>(
                 // Specify the name of the graph, in this case we want the graph for 3d
-                core_2d::graph::NAME,
+                core_2d::graph::Core2d,
                 // It also needs the name of the node
-                DarknessPostProcessNode::NAME,
+                DarknessPostProcessLabel,
+                // DarknessPostProcessNode::NAME,
             )
             .add_render_graph_edges(
-                core_2d::graph::NAME,
+                core_2d::graph::Core2d,
+                // core_2d::graph::NAME,
                 // Specify the node ordering.
                 // This will automatically create all required node edges to enforce the given ordering.
                 // Currently runs after ToneMapping, which seems to give best appearance... might need to revisit
                 // to handle bloom/ other glowing objects.
-                &[
-                    core_2d::graph::node::TONEMAPPING,
-                    DarknessPostProcessNode::NAME,
-                    core_2d::graph::node::END_MAIN_PASS_POST_PROCESSING,
-                ],
+                (
+                    core_2d::graph::Node2d::Tonemapping,
+                    // core_2d::graph::node::TONEMAPPING,
+                    DarknessPostProcessLabel,
+                    // DarknessPostProcessNode::NAME,
+                    core_2d::graph::Node2d::EndMainPassPostProcessing,
+                    // core_2d::graph::node::END_MAIN_PASS_POST_PROCESSING,
+                ),
             );
     }
 
@@ -216,9 +221,11 @@ fn darkness_parallax(
 // The post process node used for the render graph
 #[derive(Default)]
 struct DarknessPostProcessNode;
-impl DarknessPostProcessNode {
-    pub const NAME: &'static str = "darkness_post_process";
-}
+// impl DarknessPostProcessNode {
+//     pub const NAME: &'static str = "darkness_post_process";
+// }
+#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
+struct DarknessPostProcessLabel;
 
 // The ViewNode trait is required by the ViewNodeRunner
 impl ViewNode for DarknessPostProcessNode {
@@ -304,6 +311,8 @@ impl ViewNode for DarknessPostProcessNode {
                 ops: Operations::default(),
             })],
             depth_stencil_attachment: None,
+            timestamp_writes: None,
+            occlusion_query_set: None,
         });
 
         // This is mostly just wgpu boilerplate for drawing a fullscreen triangle,
@@ -329,9 +338,9 @@ impl FromWorld for DarknessPostProcessPipeline {
         let render_device = world.resource::<RenderDevice>();
 
         // We need to define the bind group layout used for our pipeline
-        let layout = render_device.create_bind_group_layout(&BindGroupLayoutDescriptor {
-            label: Some("darkness_post_process_bind_group_layout"),
-            entries: &[
+        let layout = render_device.create_bind_group_layout(
+            "darkness_post_process_bind_group_layout",
+            &[
                 // The screen texture
                 BindGroupLayoutEntry {
                     binding: 0,
@@ -362,7 +371,7 @@ impl FromWorld for DarknessPostProcessPipeline {
                     count: None,
                 },
             ],
-        });
+        );
 
         // We can create the sampler here since it won't change at runtime and doesn't depend on the view
         let sampler = render_device.create_sampler(&SamplerDescriptor::default());

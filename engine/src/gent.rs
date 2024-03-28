@@ -39,8 +39,8 @@ fn transform_gfx_from_gent(
         };
         *xf_target = *xf_src;
         if gfx2gent.pixel_aligned {
-            let xf = xf_target.compute_transform();
-            xf.translation.round();
+            let mut xf = xf_target.compute_transform();
+            xf.translation = xf.translation.round();
             *xf_target = xf.into();
         }
     }

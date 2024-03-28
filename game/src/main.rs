@@ -48,12 +48,14 @@ fn main() {
     let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
         filter: "info,wgpu_core=warn,wgpu_hal=warn,iyes_progress=trace,theseeker_game=trace,theseeker_engine=trace".into(),
         level: bevy::log::Level::TRACE,
+        update_subscriber: None,
     });
     #[cfg(not(feature = "dev"))]
     let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
         filter: "info,wgpu_core=warn,wgpu_hal=warn,theseeker_game=info,theseeker_engine=info"
             .into(),
         level: bevy::log::Level::INFO,
+        update_subscriber: None,
     });
     app.add_plugins(bevy_plugins);
 

@@ -53,6 +53,8 @@ additional behaviors (such as looping or scripts).
 
 You can have an animation without any `[[script]]` sections.
 
+### Required Settings
+
 The following properties must be specified:
 
 <details>
@@ -97,13 +99,41 @@ playing.
 
 </details>
 
+### Optional Settings
+
+The following additional properties may optionally be specified:
+
+<details>
+  <summary>
+  <code>atlas_asset_key</code>
+  </summary>
+
+Use a specific texture atlas layout, instead of the default. Provide the asset key string.
+
+The default is derived by appending `.atlas` to the asset key of this animation script
+asset file.
+
+</details>
+
+<details>
+  <summary>
+  <code>image_asset_key</code>
+  </summary>
+
+Use a specific spritesheet image, instead of the default. Provide the asset key string.
+
+The default is derived by appending `.image` to the asset key of this animation script
+asset file.
+
+</details>
+
 ## Actions
 
 Just like a [script file](./script-ref.md#actions), animations can contain any
 number of *actions* to be performed. The syntax is the same.
 
 All run conditions and actions available in scripts are also available in
-animations, but animations also offer extra animation-specific features.
+animations, but animations also offer extra animation-specific ones.
 
 Example:
 

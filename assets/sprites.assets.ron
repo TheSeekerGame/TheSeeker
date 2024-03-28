@@ -1,0 +1,7 @@
+// This file is for any static (non-animated) sprites used in the game
+// (not UI)
+({
+    "script.test": File (
+        path: "test.script.toml",
+    ),
+})
