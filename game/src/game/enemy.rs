@@ -76,8 +76,10 @@ pub struct EnemyGfx {
     e_gent: Entity,
 }
 
-fn setup_enemy(q: Query<(&Transform, Entity), Added<EnemyBlueprint>>, mut commands: Commands) {
-    for (xf_gent, e_gent) in q.iter() {
+fn setup_enemy(mut q: Query<(&mut Transform, Entity), Added<EnemyBlueprint>>, mut commands: Commands) {
+    for (mut xf_gent, e_gent) in q.iter_mut() {
+        //TODO: ensure propper z order
+        xf_gent.translation.z = 14.;
         // println!("{:?} enemy", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((

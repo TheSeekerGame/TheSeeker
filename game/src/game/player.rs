@@ -154,8 +154,11 @@ fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
     }
 }
 
-fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut commands: Commands) {
-    for (xf_gent, e_gent) in q.iter() {
+fn setup_player(mut q: Query<(&mut Transform, Entity), Added<PlayerBlueprint>>, mut commands: Commands) {
+    for (mut xf_gent, e_gent) in q.iter_mut() {
+        //TODO: proper way of ensuring z is correct
+        //why is this getting changed? xpbd?
+        xf_gent.translation.z = 15.;
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
@@ -169,7 +172,6 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                         Vec2::new(0.0, -1.0),
                         0.0,
                         Direction2d::NEG_Y,
-                        // Vec2::NEG_Y.into(),
                     ),
                 },
                 coyote_time: Default::default(),
