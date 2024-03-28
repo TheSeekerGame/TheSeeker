@@ -482,44 +482,48 @@ fn player_collisions(
         let mut collider = collider.clone();
         let mut tries = 0;
         loop {
-            if let Some(first_hit) = spatial_query.cast_shape(
-                // smaller collider then the players collider to prevent getting stuck
-                &collider,
-                transform.translation.xy(),
-                0.0,
-                //TODO will this cause problems if its 0?
-                Direction2d::new_unchecked(linear_velocity.normalize()) ,
-                linear_velocity.length() / time.hz as f32,
-                false,
-                SpatialQueryFilter::from_excluded_entities([entity]),
-            ) {
-                // If time of impact is 0.0, it means we are inside the wall,
-                // by making the player collider smaller it allows them to attempt escape.
-                // Will prevent player from getting stuck unless they are *really* intent on it.
-                if first_hit.time_of_impact == 0.0 && tries < 5 {
-                    collider = collider.clone();
-                    collider.set_scale(collider.scale() * 0.95, 1);
-                    tries += 1;
-                    continue;
+            //if we are not moving, we can not shapecast in direction of movement
+            if let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
+                if let Some(first_hit) = spatial_query.cast_shape(
+                    // smaller collider then the players collider to prevent getting stuck
+                    &collider,
+                    transform.translation.xy(),
+                    0.0,
+                    //TODO will this cause problems if its 0?
+                    // Direction2d::new_unchecked(linear_velocity.normalize()) ,
+                    shape_dir,
+                    linear_velocity.length() / time.hz as f32,
+                    false,
+                    SpatialQueryFilter::from_excluded_entities([entity]),
+                ) {
+                    // If time of impact is 0.0, it means we are inside the wall,
+                    // by making the player collider smaller it allows them to attempt escape.
+                    // Will prevent player from getting stuck unless they are *really* intent on it.
+                    if first_hit.time_of_impact == 0.0 && tries < 5 {
+                        collider = collider.clone();
+                        collider.set_scale(collider.scale() * 0.95, 1);
+                        tries += 1;
+                        continue;
+                    }
+
+                    // Applies a very small amount of bounce, as well as sliding to the character
+                    // the bounce helps prevent the player from getting stuck.
+
+                    let sliding_plane = first_hit.normal1;
+
+                    let bounce_coefficient = 0.1;
+                    let bounce_force =
+                        -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
+
+                    let sliding_plane = first_hit.normal1;
+
+                    let projected_velocity =
+                        linear_velocity.xy() - sliding_plane * linear_velocity.dot(sliding_plane);
+
+                    linear_velocity.0 = projected_velocity + bounce_force;
                 }
-
-                // Applies a very small amount of bounce, as well as sliding to the character
-                // the bounce helps prevent the player from getting stuck.
-
-                let sliding_plane = first_hit.normal1;
-
-                let bounce_coefficient = 0.1;
-                let bounce_force =
-                    -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
-
-                let sliding_plane = first_hit.normal1;
-
-                let projected_velocity =
-                    linear_velocity.xy() - sliding_plane * linear_velocity.dot(sliding_plane);
-
-                linear_velocity.0 = projected_velocity + bounce_force;
+                break;
             }
-            break;
         }
     }
 }
