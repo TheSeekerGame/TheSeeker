@@ -1,4 +1,4 @@
-use bevy::reflect::{TypePath, TypeUuid};
+use bevy::reflect::TypePath;
 
 use crate::data::*;
 use crate::prelude::*;
@@ -8,12 +8,12 @@ use crate::prelude::*;
 /// Would typically be loaded from TOML files.
 #[derive(Asset, Debug, Clone)]
 #[derive(Serialize, Deserialize)]
-#[derive(TypeUuid, TypePath)]
-#[uuid = "8D1B7F2F-3798-4438-9EB8-A5EEC3EA77A9"]
+#[derive(TypePath)]
 pub struct Script {
-    /// List of actions to perform during playback
-    pub script: Vec<CommonScript>,
     pub settings: Option<CommonScriptSettings>,
+    /// List of actions to perform during playback
+    #[serde(default)]
+    pub script: Vec<CommonScript>,
 }
 
 #[derive(Debug, Default, Clone)]

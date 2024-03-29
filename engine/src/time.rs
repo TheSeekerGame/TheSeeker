@@ -1,5 +1,4 @@
 use bevy::ecs::schedule::ScheduleLabel;
-use bevy::ecs::event::event_queue_update_system;
 
 use crate::prelude::*;
 
@@ -30,10 +29,6 @@ impl Plugin for GameTimePlugin {
             GameTickUpdate,
             apply_deferred.in_set(GameTickMidFlush),
         );
-        //does this need to be before or after anything else? seems ok...
-        //i think this causes inputs to drop when the framerate is faster than the gametick
-        //aka in release
-        app.add_systems(GameTickUpdate, event_queue_update_system);
     }
 }
 

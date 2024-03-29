@@ -154,8 +154,11 @@ fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
     }
 }
 
-fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut commands: Commands) {
-    for (xf_gent, e_gent) in q.iter() {
+fn setup_player(mut q: Query<(&mut Transform, Entity), Added<PlayerBlueprint>>, mut commands: Commands) {
+    for (mut xf_gent, e_gent) in q.iter_mut() {
+        //TODO: proper way of ensuring z is correct
+        //why is this getting changed? xpbd?
+        xf_gent.translation.z = 15.;
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
@@ -168,7 +171,7 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
                         Collider::cuboid(4.0, 10.0),
                         Vec2::new(0.0, -1.0),
                         0.0,
-                        Vec2::NEG_Y.into(),
+                        Direction2d::NEG_Y,
                     ),
                 },
                 coyote_time: Default::default(),
@@ -182,12 +185,12 @@ fn setup_player(q: Query<(&Transform, Entity), Added<PlayerBlueprint>>, mut comm
             InputManagerBundle::<PlayerAction> {
                 action_state: ActionState::default(),
                 input_map: InputMap::default()
-                    .insert(KeyCode::Space, PlayerAction::Jump)
+                    .insert(PlayerAction::Jump, KeyCode::Space)
                     .insert(
-                        VirtualAxis::from_keys(KeyCode::A, KeyCode::D),
                         PlayerAction::Move,
+                        VirtualAxis::from_keys(KeyCode::KeyA, KeyCode::KeyD),
                     )
-                    .insert(KeyCode::Return, PlayerAction::Attack)
+                    .insert(PlayerAction::Attack, KeyCode::Enter)
                     .build(),
             },
             Falling::default(),
@@ -216,7 +219,7 @@ impl Plugin for PlayerTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                (transition.run_if(any_with_component::<TransitionQueue>()),),
+                transition.run_if(any_with_component::<TransitionQueue>),
                 apply_deferred,
             )
                 .chain()
@@ -338,8 +341,8 @@ fn player_idle(
         // check for direction input
         let mut direction: f32 = 0.0;
         // println!("idleing, {:?}", action_state.get_pressed());
-        if action_state.pressed(PlayerAction::Move) {
-            direction = action_state.value(PlayerAction::Move);
+        if action_state.pressed(&PlayerAction::Move) {
+            direction = action_state.value(&PlayerAction::Move);
             // println!("moving??")
         }
         if direction != 0.0 {
@@ -362,17 +365,18 @@ fn player_move(
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
+        // TODO change to &PlayerAction
         let initial_accel = 45.0;
         let accel = 5.0;
 
         // What "%" does our character get slowed down per game tick.
         let ground_friction = 0.7;
 
-        let new_vel = if action_state.just_pressed(PlayerAction::Move) {
-            direction = action_state.value(PlayerAction::Move);
+        let new_vel = if action_state.just_pressed(&PlayerAction::Move) {
+            direction = action_state.value(&PlayerAction::Move);
             velocity.x + accel * direction
-        } else if action_state.pressed(PlayerAction::Move) {
-            direction = action_state.value(PlayerAction::Move);
+        } else if action_state.pressed(&PlayerAction::Move) {
+            direction = action_state.value(&PlayerAction::Move);
             velocity.x + initial_accel * direction
         } else {
             // de-acceleration profile
@@ -380,8 +384,8 @@ fn player_move(
                 velocity.x + ground_friction * -velocity.x
             } else {
                 // airtime de-acceleration profile
-                if action_state.just_released(PlayerAction::Move) {
-                    velocity.x + initial_accel * 0.5 * action_state.value(PlayerAction::Move)
+                if action_state.just_released(&PlayerAction::Move) {
+                    velocity.x + initial_accel * 0.5 * action_state.value(&PlayerAction::Move)
                 } else {
                     let max_vel = velocity.x.abs();
                     (velocity.x + accel * -velocity.x.signum()).clamp(-max_vel, max_vel)
@@ -417,12 +421,12 @@ fn player_run(
 ) {
     for (action_state, mut transitions) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
-        if action_state.pressed(PlayerAction::Move) {
-            direction = action_state.value(PlayerAction::Move);
+        if action_state.pressed(&PlayerAction::Move) {
+            direction = action_state.value(&PlayerAction::Move);
         }
         //should it account for decel and only transition to idle when player stops completely?
         //shouldnt be able to transition to idle if we also jump
-        if direction == 0.0 && action_state.released(PlayerAction::Jump) {
+        if direction == 0.0 && action_state.released(&PlayerAction::Jump) {
             transitions.push(Running::new_transition(Idle));
         }
     }
@@ -451,7 +455,7 @@ fn player_jump(
         if jumping.is_added() {
             velocity.y += 150.0;
         } else {
-            if (velocity.y - deaccel_rate < 0.0) || action_state.released(PlayerAction::Jump) {
+            if (velocity.y - deaccel_rate < 0.0) || action_state.released(&PlayerAction::Jump) {
                 transitions.push(Jumping::new_transition(Falling));
             }
             velocity.y -= deaccel_rate;
@@ -479,44 +483,49 @@ fn player_collisions(
     for (entity, transform, mut linear_velocity, collider) in q_gent.iter_mut() {
         let mut collider = collider.clone();
         let mut tries = 0;
-        loop {
-            if let Some(first_hit) = spatial_query.cast_shape(
-                // smaller collider then the players collider to prevent getting stuck
-                &collider,
-                transform.translation.xy(),
-                0.0,
-                linear_velocity.normalize(),
-                linear_velocity.length() / time.hz as f32,
-                false,
-                SpatialQueryFilter::default().without_entities([entity]),
-            ) {
-                // If time of impact is 0.0, it means we are inside the wall,
-                // by making the player collider smaller it allows them to attempt escape.
-                // Will prevent player from getting stuck unless they are *really* intent on it.
-                if first_hit.time_of_impact == 0.0 && tries < 5 {
-                    collider = collider.clone();
-                    collider.set_scale(collider.scale() * 0.95, 1);
-                    tries += 1;
-                    continue;
+        //if we are not moving, we can not shapecast in direction of movement
+        if let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
+            loop {
+                if let Some(first_hit) = spatial_query.cast_shape(
+                    // smaller collider then the players collider to prevent getting stuck
+                    &collider,
+                    transform.translation.xy(),
+                    0.0,
+                    //TODO will this cause problems if its 0?
+                    // Direction2d::new_unchecked(linear_velocity.normalize()) ,
+                    shape_dir,
+                    linear_velocity.length() / time.hz as f32,
+                    false,
+                    SpatialQueryFilter::from_excluded_entities([entity]),
+                ) {
+                    // If time of impact is 0.0, it means we are inside the wall,
+                    // by making the player collider smaller it allows them to attempt escape.
+                    // Will prevent player from getting stuck unless they are *really* intent on it.
+                    if first_hit.time_of_impact == 0.0 && tries < 5 {
+                        collider = collider.clone();
+                        collider.set_scale(collider.scale() * 0.95, 1);
+                        tries += 1;
+                        continue;
+                    }
+
+                    // Applies a very small amount of bounce, as well as sliding to the character
+                    // the bounce helps prevent the player from getting stuck.
+
+                    let sliding_plane = first_hit.normal1;
+
+                    let bounce_coefficient = 0.1;
+                    let bounce_force =
+                        -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
+
+                    let sliding_plane = first_hit.normal1;
+
+                    let projected_velocity =
+                        linear_velocity.xy() - sliding_plane * linear_velocity.dot(sliding_plane);
+
+                    linear_velocity.0 = projected_velocity + bounce_force;
                 }
-
-                // Applies a very small amount of bounce, as well as sliding to the character
-                // the bounce helps prevent the player from getting stuck.
-
-                let sliding_plane = first_hit.normal1;
-
-                let bounce_coefficient = 0.1;
-                let bounce_force =
-                    -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
-
-                let sliding_plane = first_hit.normal1;
-
-                let projected_velocity =
-                    linear_velocity.xy() - sliding_plane * linear_velocity.dot(sliding_plane);
-
-                linear_velocity.0 = projected_velocity + bounce_force;
+                break;
             }
-            break;
         }
     }
 }
@@ -563,7 +572,7 @@ fn player_grounded(
         //just pressed seems to get missed sometimes... but we need it because pressed makes you
         //jump continuously if held
         //known issue https://github.com/bevyengine/bevy/issues/6183
-        if action_state.just_pressed(PlayerAction::Jump) {
+        if action_state.just_pressed(&PlayerAction::Jump) {
             // if action_state.pressed(PlayerAction::Jump) {
             transitions.push(Grounded::new_transition(
                 Jumping::default(),
@@ -597,7 +606,7 @@ fn player_falling(
                 // println!("{:?} should be grounded", entity);
                 //stop falling
                 velocity.y = 0.0;
-                if action_state.pressed(PlayerAction::Move) {
+                if action_state.pressed(&PlayerAction::Move) {
                     transitions.push(Falling::new_transition(Running));
                     // println!("{:?} should be running", entity)
                 } else {

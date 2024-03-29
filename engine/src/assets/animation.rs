@@ -1,4 +1,4 @@
-use bevy::reflect::{TypePath, TypeUuid};
+use bevy::reflect::TypePath;
 
 use super::script::*;
 use crate::data::*;
@@ -9,14 +9,12 @@ use crate::prelude::*;
 /// Would typically be loaded from TOML files.
 #[derive(Asset, Debug, Clone)]
 #[derive(Serialize, Deserialize)]
-#[derive(TypeUuid, TypePath)]
-#[uuid = "6D201246-BDB4-4803-A52A-76D95E3B6C77"]
+#[derive(TypePath)]
 pub struct SpriteAnimation {
-    /// The Dynamic Asset key of the texture atlas asset to use
-    pub atlas_asset_key: String,
     /// General animation parameters
     pub settings: ExtendedScriptSettings<SpriteAnimationSettings>,
     /// Optional "script": list of actions to perform during playback
+    #[serde(default)]
     pub script: Vec<
         ExtendedScript<
             SpriteAnimationScriptParams,
@@ -29,6 +27,8 @@ pub struct SpriteAnimation {
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
 pub struct SpriteAnimationSettings {
+    pub atlas_asset_key: Option<String>,
+    pub image_asset_key: Option<String>,
     pub ticks_per_frame: u32,
     pub frame_start: u32,
     pub frame_min: u32,

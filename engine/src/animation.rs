@@ -41,7 +41,8 @@ impl ScriptAction for SpriteAnimationScriptAction {
     type ActionParams = SpriteAnimationScriptParams;
     type Param = (
         SQuery<(
-            &'static mut TextureAtlasSprite,
+            &'static mut TextureAtlas,
+            &'static mut Sprite,
             &'static mut Transform,
         )>,
     );
@@ -54,7 +55,7 @@ impl ScriptAction for SpriteAnimationScriptAction {
         tracker: &mut Self::Tracker,
         (q,): &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult {
-        let (mut sprite, mut xf) = q
+        let (mut atlas, mut sprite, mut xf) = q
             .get_mut(entity)
             .expect("Entity is missing sprite animation components!");
 
@@ -64,7 +65,7 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetFrameNow { frame_index } => {
-                sprite.index = *frame_index as usize;
+                atlas.index = *frame_index as usize;
                 ScriptUpdateResult::Loop
             },
             SpriteAnimationScriptAction::SetTicksPerFrame { ticks_per_frame } => {
@@ -134,7 +135,7 @@ impl ScriptTracker for SpriteAnimationTracker {
     type InitParam = ();
     type RunIf = SpriteAnimationScriptRunIf;
     type Settings = SpriteAnimationSettings;
-    type UpdateParam = (SQuery<&'static mut TextureAtlasSprite>,);
+    type UpdateParam = (SQuery<&'static mut TextureAtlas>,);
 
     fn init<'w>(
         &mut self,
@@ -171,14 +172,15 @@ impl ScriptTracker for SpriteAnimationTracker {
         (q,): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult {
-        let mut sprite = q
+        let mut atlas = q
             .get_mut(entity)
             .expect("Animation entity must have TextureAtlasSprite component");
+
         // if our sprite index was changed externally, respond to that by
         // running any frame actions and queueing up the next frame appropriately
-        if sprite.is_changed() && !sprite.is_added() {
-            self.next_frame = sprite.index as u32 + 1;
-            if let Some(action_id) = self.frame_actions.get(&(sprite.index as u32)) {
+        if atlas.is_changed() && !atlas.is_added() {
+            self.next_frame = atlas.index as u32 + 1;
+            if let Some(action_id) = self.frame_actions.get(&(atlas.index as u32)) {
                 queue.push(*action_id);
             }
         }
@@ -191,7 +193,7 @@ impl ScriptTracker for SpriteAnimationTracker {
             if let Some(action_id) = self.frame_actions.get(&self.next_frame) {
                 queue.push(*action_id);
             }
-            sprite.index = self.next_frame as usize;
+            atlas.index = self.next_frame as usize;
             self.next_frame += 1;
             self.ticks_remain = self.ticks_per_frame;
         }
@@ -209,7 +211,11 @@ impl ScriptAsset for SpriteAnimation {
     type Action = ExtendedScriptAction<SpriteAnimationScriptAction>;
     type ActionParams = ExtendedScriptParams<SpriteAnimationScriptParams>;
     type BuildParam = (
-        SQuery<(&'static mut Handle<TextureAtlas>, &'static mut TextureAtlasSprite)>,
+        SQuery<(
+            &'static mut Handle<Image>,
+            &'static mut TextureAtlas,
+            &'static mut Sprite,
+        )>,
         SRes<PreloadedAssets>,
     );
     type RunIf = ExtendedScriptRunIf<SpriteAnimationScriptRunIf>;
@@ -226,15 +232,31 @@ impl ScriptAsset for SpriteAnimation {
         entity: Entity,
         (q_atlas, preloaded): &mut <Self::BuildParam as SystemParam>::Item<'w, '_>,
     ) -> ScriptRuntimeBuilder<Self> {
-        let (mut atlas, mut sprite) = q_atlas
+        let (mut image, mut atlas, mut _sprite) = q_atlas
             .get_mut(entity)
             .expect("Animation entity must have Texture Atlas components");
-        let new_atlas = preloaded
-            .get_single_asset(&self.atlas_asset_key)
-            .expect("Invalid texture atlas asset key for animation");
-        *atlas = new_atlas;
 
-        sprite.index = self.settings.extended.frame_start
+        *image = if let Some(key) = &self.settings.extended.image_asset_key {
+            preloaded.get_single_asset(key)
+        } else if let Some(key) = builder.asset_key() {
+            let mut key = key.to_owned();
+            key.push_str(".image");
+            preloaded.get_single_asset(&key)
+        } else {
+            panic!("Unknown asset key for Animation Sprite Sheet Image")
+        }.expect("Animation Sprite Sheet Image asset with specified key does not exist");
+
+        atlas.layout = if let Some(key) = &self.settings.extended.atlas_asset_key {
+            preloaded.get_single_asset(key)
+        } else if let Some(key) = builder.asset_key() {
+            let mut key = key.to_owned();
+            key.push_str(".atlas");
+            preloaded.get_single_asset(&key)
+        } else {
+            panic!("Unknown asset key for Animation Texture Atlas Layout")
+        }.expect("Animation Texture Atlas Layout asset with specified key does not exist");
+
+        atlas.index = self.settings.extended.frame_start
             .min(self.settings.extended.frame_max)
             .max(self.settings.extended.frame_min)
             as usize;
@@ -246,6 +268,7 @@ impl ScriptAsset for SpriteAnimation {
                 &action.params,
             );
         }
+
         builder
     }
 }

@@ -76,8 +76,10 @@ pub struct EnemyGfx {
     e_gent: Entity,
 }
 
-fn setup_enemy(q: Query<(&Transform, Entity), Added<EnemyBlueprint>>, mut commands: Commands) {
-    for (xf_gent, e_gent) in q.iter() {
+fn setup_enemy(mut q: Query<(&mut Transform, Entity), Added<EnemyBlueprint>>, mut commands: Commands) {
+    for (mut xf_gent, e_gent) in q.iter_mut() {
+        //TODO: ensure propper z order
+        xf_gent.translation.z = 14.;
         // println!("{:?} enemy", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
@@ -92,7 +94,8 @@ fn setup_enemy(q: Query<(&Transform, Entity), Added<EnemyBlueprint>>, mut comman
                         Collider::cuboid(22.0, 10.0),
                         Vec2::new(0.0, -2.0),
                         0.0,
-                        Vec2::NEG_Y.into(),
+                        Direction2d::NEG_Y,
+                        // Vec2::NEG_Y.into(),
                     ),
                 },
             },
@@ -130,13 +133,13 @@ impl Plugin for EnemyBehaviorPlugin {
             (
                 (
                     (
-                        patrolling.run_if(any_with_component::<Patrolling>()),
-                        aggro.run_if(any_with_component::<Aggroed>()),
-                        waiting.run_if(any_with_component::<Waiting>()),
-                        ranged_attack.run_if(any_with_component::<RangedAttack>()),
-                        melee_attack.run_if(any_with_component::<MeleeAttack>()),
+                        patrolling.run_if(any_with_component::<Patrolling>),
+                        aggro.run_if(any_with_component::<Aggroed>),
+                        waiting.run_if(any_with_component::<Waiting>),
+                        ranged_attack.run_if(any_with_component::<RangedAttack>),
+                        melee_attack.run_if(any_with_component::<MeleeAttack>),
                     ),
-                    walking.run_if(any_with_component::<Walking>()),
+                    walking.run_if(any_with_component::<Walking>),
                 )
                     .chain(),
                 sprite_flip,
@@ -421,12 +424,13 @@ fn walking(
             //offset 10 x from center toward facing direction
             // g_transform.translation().truncate(),
             ray_origin,
-            Vec2::NEG_Y,
+            Direction2d::NEG_Y,
             //change
             100.,
             true,
             //switch this to only wall/floor entities?
-            SpatialQueryFilter::new().without_entities([entity]),
+            //TODO: use layers
+            SpatialQueryFilter::from_excluded_entities([entity]),
         ) {
             if first_hit.time_of_impact > 0.0 {
                 //if not aggro turn around to walk away from edge

@@ -12,24 +12,34 @@ that scripts can do + additional features tailored for animation use cases.
 
 ## Art Assets
 
-An animation file requires a "texture atlas". That is the file (typically PNG
-format) which provides the actual image data / frames to be displayed.
+An animation consists of 3 parts:
+ - The "spritesheet image" (typically PNG format), which provides the actual
+   image data / frames to be displayed.
+ - The "texture atlas layout": the metadata describing the dimensions of each
+   frame and the number of rows and columns in the spritesheet image.
+ - The "animation script", which allows our animation system to play the animation
+   and allows extra features and Rust integrations to be hooked up to it.
 
-Please don't confuse the two. They are separate things, two separate files:
- - The Texture Atlas, containing the image data.
-All the frames that can be displayed by an animation, in a grid layout.
-One such file can be used by multiple Animations.
- - The Animation Asset (what this page is about): the script that tells the game how to actually play the animation.
+Normally, when you want to add a new animation to the game, you should declare
+the above three things in `animations.assets.ron`. Example:
 
-You should create an animation asset for every piece/clip of animation that
-we want to be able to play in the game.
+```ron
+    "anim.player.FallForward": File (
+        path: "animations/player/movement/FallForward.anim.toml",
+    ),
+    "anim.player.FallForward.image": File (
+        path: "animations/player/movement/FallForward.png",
+    ),
+    "anim.player.FallForward.atlas": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 4,
+    ),
+```
 
-The texture atlases can be reused or split as convenient. Usually there will
-be one atlas per animation, but sometimes it might make sense to have one atlas
-shared between multiple animations:
- - If different animations need to display some of the same frames.
- - If you have multiple variants of an animation, like `Run` and `RunWithDamage` (which adds a blinking effect),
-   or left/right flipped variants.
+The convention is to append `.image` and `.atlas` for the asset keys of
+the spritesheet image and texture atlas layout, respectively.
 
 ## Testing
 
@@ -45,11 +55,3 @@ Or optionally with X/Y coordinates where to display it:
 ```
 spawn_anim anim.asset.key 100 200
 ```
-
-## Playing animations from Rust code
-
-// TODO
-
-I still need to figure out exactly how the Rust code for switching between
-different animations (say, as the player performs different actions on different
-inputs) is going to work. Coming soon.

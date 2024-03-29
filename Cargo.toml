@@ -6,13 +6,13 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [patch.crates-io]
-bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-bevy_ecs = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-bevy_asset = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-bevy_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-bevy_xpbd_2d = { git = "https://github.com/TheSeekerGame/bevy_xpbd", rev = "ffc00068b5ce90e75b55985e9b238813f7652d87" }
+# bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+# bevy_ecs = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+# bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+# bevy_asset = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+# bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+# bevy_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
+# bevy_xpbd_2d = { git = "https://github.com/TheSeekerGame/bevy_xpbd", branch = "TheSeeker" }
 
 [lib]
 name = "theseeker_engine"
@@ -67,37 +67,15 @@ features = [
 ]
 
 [dependencies.bevy]
-version = "0.12"
-default-features = false
+version = "0.13"
+default-features = true
 features = [
-    "multi-threaded",
-    "android_shared_stdcxx",
-    "animation",
-    "bevy_animation",
-    "bevy_asset",
-    "bevy_core_pipeline",
-    "bevy_gilrs",
-    "bevy_render",
-    "bevy_gizmos",
-    "bevy_scene",
-    "bevy_sprite",
-    "bevy_text",
-    "bevy_ui",
-    "bevy_winit",
-    "png",
-    "jpeg",
-    "ktx2",
-    "zstd",
-    "tonemapping_luts",
-    "x11",
-    #"wayland",
-    # FIXME: TEMPORARY
-    "bevy_audio",
     "flac",
+    "jpeg",
 ]
 
 [dependencies.bevy_asset_loader]
-version = "0.19"
+version = "0.20"
 features = [
     "2d",
     "progress_tracking",
@@ -105,7 +83,7 @@ features = [
 ]
 
 [dependencies.bevy_common_assets]
-version = "0.9"
+version = "0.10"
 features = [
     "toml",
     "ron",
@@ -114,18 +92,20 @@ features = [
 [dependencies.bevy_ecs_ldtk]
 # version = "0.8"
 git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
-rev = "68af1c11cb95b1ed85f9f5008e7308f41e8015f1"
+branch = "TheSeeker"
 
 [dependencies.bevy_ecs_tilemap]
-# version = "0.11"
+# version = "0.13"
 git = "https://github.com/StarArawn/bevy_ecs_tilemap"
-rev = "b08a5d997867d5e5a760e296dc38e435c6b268cc"
+rev = "25def41e029626bb5e84fe7aca1f16a1d6beccdc"
 
 [dependencies.bevy_fluent]
-version = "0.8"
+# version = "0.8"
+git = "https://github.com/brandon-reinhart/bevy_fluent"
+rev = "13d56c0e8e0d54fdd1ca6acba434c55529a99c62"
 
 [dependencies.bevy_tweening]
-version = "0.9"
+version = "0.10"
 
 [dependencies.iyes_bevy_extras]
 git = "https://github.com/IyesGames/iyes_bevy_extras"
@@ -135,7 +115,7 @@ features = ["2d"]
 git = "https://github.com/IyesGames/iyes_cli"
 
 [dependencies.iyes_progress]
-version = "0.10"
+version = "0.11"
 features = ["assets"]
 
 [dependencies.iyes_ui]
@@ -143,14 +123,8 @@ git = "https://github.com/IyesGames/iyes_ui"
 features = ["iyes_cli"]
 
 [dependencies.leafwing-input-manager]
-version = "0.11"
+version = "0.13"
 
 [dependencies.bevy_xpbd_2d]
-version = "=0.3.2"
-default-features = false
-features = [
-    "2d",
-    "f32",
-    # "parallel",
-    # "simd",
-]
+version = "0.4"
+default-features = true
