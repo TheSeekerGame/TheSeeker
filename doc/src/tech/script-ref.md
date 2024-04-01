@@ -2,6 +2,21 @@
 
 This page describes the syntax / file format for [Script Assets](./script.md).
 
+## Custom Configs
+
+A script file can have an optional `[config]` section, where you can put any
+custom values (`f32` floats) you want to access from Rust while the script
+is running. This is useful if you want to make some custom gameplay code be
+configurable via the asset files, instead of hardcoding values in Rust.
+
+Example:
+
+```toml
+[config]
+jump_height = 7.0
+collision_damage = 4.0
+```
+
 ## Settings
 
 A script file can have an optional `[settings]` section, where you can put

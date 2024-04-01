@@ -59,3 +59,28 @@ cases.
 
 These other asset types support everything that regular scripts can do, and
 more.
+
+## Manipulating already-playing scripts
+
+When a script is already playing, the Bevy entity will have a `ScriptPlayer`
+component, which you can use to interact with the script:
+
+```rust
+// Here we use `T: SpriteAnimation` to work with animation scripts.
+// It can also be `Script` for basic/common script assets, etc.
+fn manage_animation(mut q: Query<&mut ScriptPlayer<SpriteAnimation>, With<MyEntityMarker>>) {
+    for mut player in &mut q {
+        // set the value of a "slot" in the currently-playing script (to control the script)
+        player.set_slot("MySlot", true);
+        // read the value of a config parameter in the currently-playing script
+        let jump_height = player.config_value("jump_height")
+            .unwrap_or(1.0); // fallback value if unspecified
+
+        // queue a new script asset to play (starting from the next tick)
+        player.play_key("anim.my.animation.blah.blah");
+
+        // NOTE: if you access slots or configs now, they are still those of the old (current)
+        // script asset. The new asset does not start playing until the next game tick update!
+    }
+}
+```

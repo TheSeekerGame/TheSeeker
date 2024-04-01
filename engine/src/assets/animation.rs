@@ -11,6 +11,9 @@ use crate::prelude::*;
 #[derive(Serialize, Deserialize)]
 #[derive(TypePath)]
 pub struct SpriteAnimation {
+    /// Any customization configs
+    #[serde(default)]
+    pub config: ScriptConfig,
     /// General animation parameters
     pub settings: ExtendedScriptSettings<SpriteAnimationSettings>,
     /// Optional "script": list of actions to perform during playback

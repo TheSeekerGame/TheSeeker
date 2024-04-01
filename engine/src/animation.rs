@@ -261,6 +261,7 @@ impl ScriptAsset for SpriteAnimation {
             .max(self.settings.extended.frame_min)
             as usize;
 
+        builder.replace_config(&self.config);
         for action in self.script.iter() {
             builder = builder.add_action(
                 &action.run_if,

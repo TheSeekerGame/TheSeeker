@@ -10,6 +10,10 @@ use crate::prelude::*;
 #[derive(Serialize, Deserialize)]
 #[derive(TypePath)]
 pub struct Script {
+    /// Any customization configs
+    #[serde(default)]
+    pub config: ScriptConfig,
+    /// Settings for the script runtime
     pub settings: Option<CommonScriptSettings>,
     /// List of actions to perform during playback
     #[serde(default)]
@@ -37,6 +41,12 @@ pub enum TimeBase {
     /// Script time counts from app startup.
     Startup,
 }
+
+/// When initting a script, quantize time (from TimeBase).
+#[derive(Debug, Clone, Default)]
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ScriptConfig(pub HashMap<String, f32>);
 
 /// When initting a script, quantize time (from TimeBase).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

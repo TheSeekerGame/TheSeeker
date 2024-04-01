@@ -600,6 +600,7 @@ impl ScriptAsset for Script {
         _entity: Entity,
         _param: &mut <Self::BuildParam as SystemParam>::Item<'w, '_>,
     ) -> ScriptRuntimeBuilder<Self> {
+        builder.replace_config(&self.config);
         for action in self.script.iter() {
             builder = builder.add_action(
                 &action.run_if,

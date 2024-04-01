@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use bevy::asset::Asset;
 use bevy::ecs::system::{StaticSystemParam, SystemParam};
 
+use crate::assets::script::ScriptConfig;
 use crate::prelude::*;
 
 pub mod common;
@@ -199,6 +200,7 @@ pub struct ScriptRuntimeBuilder<T: ScriptAsset> {
 
 struct ScriptRuntime<T: ScriptAsset> {
     key: Option<String>,
+    config: ScriptConfig,
     settings: <T::Tracker as ScriptTracker>::Settings,
     actions: Vec<(T::ActionParams, T::Action)>,
     tracker: T::Tracker,
@@ -216,6 +218,7 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
         ScriptRuntimeBuilder {
             runtime: ScriptRuntime {
                 key: metadata.key.clone(),
+                config: ScriptConfig(Default::default()),
                 settings,
                 actions: vec![],
                 tracker,
@@ -225,6 +228,10 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
 
     pub fn asset_key(&self) -> Option<&str> {
         self.runtime.key.as_ref().map(|x| x.as_str())
+    }
+
+    pub fn replace_config(&mut self, config: &ScriptConfig) {
+        self.runtime.config = config.clone();
     }
 
     pub fn add_action(
@@ -659,21 +666,21 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
             _ => {}
         }
     }
-    pub fn has_slot(&mut self, slot: &str) -> bool {
-        match &mut self.state {
-            ScriptPlayerState::Playing { ref mut runtime } => {
+    pub fn has_slot(&self, slot: &str) -> bool {
+        match &self.state {
+            ScriptPlayerState::Playing { ref runtime } => {
                 runtime.tracker.has_slot(slot)
             }
-            ScriptPlayerState::Starting { ref mut runtime } => {
+            ScriptPlayerState::Starting { ref runtime } => {
                 runtime.tracker.has_slot(slot)
             }
-            ScriptPlayerState::Stopping { ref mut runtime } => {
+            ScriptPlayerState::Stopping { ref runtime } => {
                 runtime.tracker.has_slot(slot)
             }
-            ScriptPlayerState::PrePlayHandle { old_runtime: Some(ref mut old_runtime), .. } => {
+            ScriptPlayerState::PrePlayHandle { old_runtime: Some(ref old_runtime), .. } => {
                 old_runtime.tracker.has_slot(slot)
             }
-            ScriptPlayerState::PrePlayKey { old_runtime: Some(ref mut old_runtime), .. } => {
+            ScriptPlayerState::PrePlayKey { old_runtime: Some(ref old_runtime), .. } => {
                 old_runtime.tracker.has_slot(slot)
             }
             ScriptPlayerState::ChangingHandle { old_runtime, .. } => {
@@ -693,6 +700,32 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
         } else {
             self.set_slot(slot, true);
             true
+        }
+    }
+    pub fn config_value(&self, name: &str) -> Option<f32> {
+        match &self.state {
+            ScriptPlayerState::Playing { ref runtime } => {
+                runtime.config.0.get(name).copied()
+            }
+            ScriptPlayerState::Starting { ref runtime } => {
+                runtime.config.0.get(name).copied()
+            }
+            ScriptPlayerState::Stopping { ref runtime } => {
+                runtime.config.0.get(name).copied()
+            }
+            ScriptPlayerState::PrePlayHandle { old_runtime: Some(ref old_runtime), .. } => {
+                old_runtime.config.0.get(name).copied()
+            }
+            ScriptPlayerState::PrePlayKey { old_runtime: Some(ref old_runtime), .. } => {
+                old_runtime.config.0.get(name).copied()
+            }
+            ScriptPlayerState::ChangingHandle { old_runtime, .. } => {
+                old_runtime.config.0.get(name).copied()
+            }
+            ScriptPlayerState::ChangingKey { old_runtime, .. } => {
+                old_runtime.config.0.get(name).copied()
+            }
+            _ => { None }
         }
     }
 }
