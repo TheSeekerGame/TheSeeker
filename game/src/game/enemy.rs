@@ -483,7 +483,6 @@ impl Plugin for EnemyTransitionPlugin {
                     EnemyGent,
                 >()),
                 add_states.run_if(any_with_components::<AddQueue, EnemyGent>()),
-                apply_deferred,
             )
                 .chain()
                 .in_set(EnemyStateSet::Transition)

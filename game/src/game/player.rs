@@ -220,7 +220,6 @@ impl Plugin for PlayerTransitionPlugin {
             GameTickUpdate,
             (
                 transition.run_if(any_with_component::<TransitionQueue>),
-                apply_deferred,
             )
                 .chain()
                 .in_set(PlayerStateSet::Transition)

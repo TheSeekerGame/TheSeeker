@@ -15,17 +15,8 @@ impl Plugin for ScriptPlugin {
         app.configure_sets(
             GameTickUpdate,
             (
-                ScriptSet::Init.after(AssetsSet::ResolveKeysFlush),
-                ScriptSet::InitFlush.after(ScriptSet::Init),
-                ScriptSet::Run.after(ScriptSet::InitFlush),
-                ScriptSet::RunFlush.after(ScriptSet::Run),
-            ),
-        );
-        app.add_systems(
-            GameTickUpdate,
-            (
-                apply_deferred.in_set(ScriptSet::InitFlush),
-                apply_deferred.in_set(ScriptSet::RunFlush),
+                ScriptSet::Init.after(AssetsSet::ResolveKeys),
+                ScriptSet::Run.after(ScriptSet::Init),
             ),
         );
         app.add_plugins((
@@ -41,10 +32,8 @@ impl Plugin for ScriptPlugin {
 pub enum ScriptSet {
     /// This is when scripts get initialized (the `ScriptRuntime` component added to entities)
     Init,
-    InitFlush,
     /// This is when scripts get run/updated
     Run,
-    RunFlush,
 }
 
 /// Resource to track when the current game level was entered/loaded

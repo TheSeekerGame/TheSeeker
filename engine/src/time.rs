@@ -25,10 +25,6 @@ impl Plugin for GameTimePlugin {
             Update,
             GameTickSet::Post.after(run_gametickupdate_schedule),
         );
-        app.add_systems(
-            GameTickUpdate,
-            apply_deferred.in_set(GameTickMidFlush),
-        );
     }
 }
 
@@ -40,11 +36,6 @@ pub enum GameTickSet {
     /// Runs after the `GameTickUpdate` schedule
     Post,
 }
-
-/// Within `GameTickUpdate`, let's have a flush point to order things around.
-/// Ofc, we can add more if we need them, but let's try to reuse this one.
-#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct GameTickMidFlush;
 
 /// Our alternative to `FixedUpdate`
 #[derive(ScheduleLabel, Debug, Clone, Copy, PartialEq, Eq, Hash)]

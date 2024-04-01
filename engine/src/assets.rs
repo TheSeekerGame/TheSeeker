@@ -24,17 +24,9 @@ impl<S: States> Plugin for AssetsPlugin<S> {
         app.add_systems(
             GameTickUpdate,
             (
-                (
-                    resolve_asset_keys::<self::script::Script>,
-                    resolve_asset_keys::<self::animation::SpriteAnimation>,
-                )
-                    .in_set(AssetsSet::ResolveKeys),
-                apply_deferred.in_set(AssetsSet::ResolveKeysFlush),
-            ),
-        );
-        app.configure_sets(
-            GameTickUpdate,
-            AssetsSet::ResolveKeysFlush.after(AssetsSet::ResolveKeys),
+                resolve_asset_keys::<self::script::Script>,
+                resolve_asset_keys::<self::animation::SpriteAnimation>,
+            ).in_set(AssetsSet::ResolveKeys),
         );
 
         // asset preloading
@@ -61,7 +53,6 @@ impl<S: States> Plugin for AssetsPlugin<S> {
 pub enum AssetsSet {
     /// This is when `AssetKey` gets resolved to `Handle`
     ResolveKeys,
-    ResolveKeysFlush,
 }
 
 /// Component for when we want to use a dynamic asset key string to refer to an asset
