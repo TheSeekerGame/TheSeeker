@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use bevy::asset::Asset;
 use bevy::ecs::system::{StaticSystemParam, SystemParam};
 
+use crate::assets::config::DynamicConfigValue;
 use crate::assets::script::ScriptConfig;
 use crate::prelude::*;
 
@@ -702,28 +703,28 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
             true
         }
     }
-    pub fn config_value(&self, name: &str) -> Option<f32> {
+    pub fn config_value(&self, name: &str) -> Option<DynamicConfigValue> {
         match &self.state {
             ScriptPlayerState::Playing { ref runtime } => {
-                runtime.config.0.get(name).copied()
+                runtime.config.0.get(name).cloned()
             }
             ScriptPlayerState::Starting { ref runtime } => {
-                runtime.config.0.get(name).copied()
+                runtime.config.0.get(name).cloned()
             }
             ScriptPlayerState::Stopping { ref runtime } => {
-                runtime.config.0.get(name).copied()
+                runtime.config.0.get(name).cloned()
             }
             ScriptPlayerState::PrePlayHandle { old_runtime: Some(ref old_runtime), .. } => {
-                old_runtime.config.0.get(name).copied()
+                old_runtime.config.0.get(name).cloned()
             }
             ScriptPlayerState::PrePlayKey { old_runtime: Some(ref old_runtime), .. } => {
-                old_runtime.config.0.get(name).copied()
+                old_runtime.config.0.get(name).cloned()
             }
             ScriptPlayerState::ChangingHandle { old_runtime, .. } => {
-                old_runtime.config.0.get(name).copied()
+                old_runtime.config.0.get(name).cloned()
             }
             ScriptPlayerState::ChangingKey { old_runtime, .. } => {
-                old_runtime.config.0.get(name).copied()
+                old_runtime.config.0.get(name).cloned()
             }
             _ => { None }
         }
