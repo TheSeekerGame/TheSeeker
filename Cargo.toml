@@ -59,6 +59,8 @@ thiserror = "1.0.56"
 toml = "0.8.10"
 unic-langid = "0.9.4"
 ran = "2.0.1" #for lighter weight/easier use random noise then using rand
+rodio = { version = "0.17.3", default-features = false }
+cpal = "0.15.3"
 
 [dependencies.serde]
 version = "1.0.196"

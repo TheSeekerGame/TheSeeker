@@ -37,6 +37,7 @@ pub mod gent;
 pub mod script;
 pub mod time;
 pub mod condition;
+pub mod audio;
 
 pub struct EnginePlugins;
 
@@ -44,6 +45,7 @@ impl PluginGroup for EnginePlugins {
     fn build(self) -> PluginGroupBuilder {
         PluginGroupBuilder::start::<Self>()
             .add(crate::time::GameTimePlugin)
+            .add(crate::audio::AudioPlugin)
             .add(crate::script::ScriptPlugin)
             .add(crate::animation::SpriteAnimationPlugin)
             .add(crate::gent::GentPlugin)
