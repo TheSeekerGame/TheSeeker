@@ -153,9 +153,6 @@ impl ScriptTracker for CommonScriptTracker {
         (time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult {
-        // start with any extra queued actions
-        queue.append(&mut self.q_extra);
-
         // any delayed actions
         // we don't remove them here, only trigger them to run
         // they will manage themselves in/out of `q_delayed` when they run
@@ -199,6 +196,14 @@ impl ScriptTracker for CommonScriptTracker {
         } else {
             ScriptUpdateResult::NormalRun
         }
+    }
+
+    fn queue_extra_actions(
+        &mut self,
+        _settings: &Self::Settings,
+        queue: &mut Vec<ActionId>,
+    ) {
+        queue.append(&mut self.q_extra);
     }
 
     fn do_start<'w>(
@@ -460,6 +465,15 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
             },
             _ => ScriptUpdateResult::NormalRun,
         }
+    }
+
+    fn queue_extra_actions(
+        &mut self,
+        settings: &Self::Settings,
+        queue: &mut Vec<ActionId>,
+    ) {
+        self.extended.queue_extra_actions(&settings.extended, queue);
+        self.common.queue_extra_actions(&settings.common, queue);
     }
 
     fn do_start<'w>(

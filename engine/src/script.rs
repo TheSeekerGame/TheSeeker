@@ -112,6 +112,11 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult;
+    fn queue_extra_actions(
+        &mut self,
+        _settings: &Self::Settings,
+        _queue: &mut Vec<ActionId>,
+    ) {}
     fn set_slot(&mut self, _slot: &str, _state: bool) {}
     fn has_slot(&self, _slot: &str) -> bool { false }
     fn take_slots(&mut self) -> HashSet<String> {
@@ -370,26 +375,32 @@ fn script_driver_system<T: ScriptAsset>(
                     continue 'outer;
                 }
             };
-            // trace!(
-            //     "Script actions to run: {}",
-            //     action_queue.len(),
-            // );
-            for action_id in action_queue.0.drain(..) {
-                let action = &script_rt.actions[action_id];
-                let r = {
-                    let mut shouldrun_param = params.p2().into_inner();
-                    action.0.should_run(&mut script_rt.tracker, action_id, &mut shouldrun_param)
-                }.err().unwrap_or_else(|| {
-                    let mut action_param = params.p1().into_inner();
-                    script_rt.actions[action_id].1.run(
-                        e,
-                        &script_rt.actions[action_id].0,
-                        &mut script_rt.tracker,
-                        &mut action_param,
-                    )
-                });
-                is_loop |= r.is_loop();
-                is_end |= r.is_end();
+            loop {
+                script_rt.tracker.queue_extra_actions(&script_rt.settings, &mut action_queue.0);
+                if action_queue.0.is_empty() {
+                    break;
+                }
+                // trace!(
+                //     "Script actions to run: {}",
+                //     action_queue.len(),
+                // );
+                for action_id in action_queue.0.drain(..) {
+                    let action = &script_rt.actions[action_id];
+                    let r = {
+                        let mut shouldrun_param = params.p2().into_inner();
+                        action.0.should_run(&mut script_rt.tracker, action_id, &mut shouldrun_param)
+                    }.err().unwrap_or_else(|| {
+                        let mut action_param = params.p1().into_inner();
+                        script_rt.actions[action_id].1.run(
+                            e,
+                            &script_rt.actions[action_id].0,
+                            &mut script_rt.tracker,
+                            &mut action_param,
+                        )
+                    });
+                    is_loop |= r.is_loop();
+                    is_end |= r.is_end();
+                }
             }
             // put back the correct state
             player.state = match old_state {
