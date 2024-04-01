@@ -478,11 +478,8 @@ impl Plugin for EnemyTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                transition.run_if(any_with_components::<
-                    TransitionQueue,
-                    EnemyGent,
-                >()),
-                add_states.run_if(any_with_components::<AddQueue, EnemyGent>()),
+                transition.run_if(any_matching::<(With<TransitionQueue>, With<EnemyGent>)>()),
+                add_states.run_if(any_matching::<(With<AddQueue>, With<EnemyGent>)>()),
             )
                 .chain()
                 .in_set(EnemyStateSet::Transition)

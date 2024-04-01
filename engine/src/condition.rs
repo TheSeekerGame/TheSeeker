@@ -1,6 +1,7 @@
 use bevy::prelude::*;
+use bevy::ecs::query::QueryFilter;
 
-pub fn any_with_components<T: Component, N: Component>(
-) -> impl FnMut(Query<(), (With<T>, With<N>)>) -> bool + Clone {
-    move |query: Query<(), (With<T>, With<N>)>| !query.is_empty()
+pub fn any_matching<F: QueryFilter>(
+) -> impl FnMut(Query<(), F>) -> bool + Clone {
+    move |query: Query<(), F>| !query.is_empty()
 }

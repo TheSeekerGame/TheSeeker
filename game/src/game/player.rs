@@ -304,15 +304,12 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                player_idle.run_if(any_with_components::<Idle, PlayerGent>()),
-                player_run.run_if(any_with_components::<Running, PlayerGent>()),
-                player_jump.run_if(any_with_components::<Jumping, PlayerGent>()),
+                player_idle.run_if(any_matching::<(With<Idle>, With<PlayerGent>)>()),
+                player_run.run_if(any_matching::<(With<Running>, With<PlayerGent>)>()),
+                player_jump.run_if(any_matching::<(With<Jumping>, With<PlayerGent>)>()),
                 player_move,
-                player_grounded.run_if(any_with_components::<
-                    Grounded,
-                    PlayerGent,
-                >()),
-                player_falling.run_if(any_with_components::<Falling, PlayerGent>()),
+                player_grounded.run_if(any_matching::<(With<Grounded>, With<PlayerGent>)>()),
+                player_falling.run_if(any_matching::<(With<Falling>, With<PlayerGent>)>()),
                 player_collisions
                     .after(player_move)
                     .after(player_jump)
