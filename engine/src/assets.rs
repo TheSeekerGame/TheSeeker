@@ -7,6 +7,7 @@ use crate::prelude::*;
 
 pub mod animation;
 pub mod script;
+pub mod config;
 
 pub struct AssetsPlugin<S: States> {
     pub loading_state: S,
@@ -18,6 +19,7 @@ impl<S: States> Plugin for AssetsPlugin<S> {
         app.add_plugins((
             TomlAssetPlugin::<self::script::Script>::new(&["script.toml"]),
             TomlAssetPlugin::<self::animation::SpriteAnimation>::new(&["anim.toml"]),
+            TomlAssetPlugin::<self::config::DynamicConfig>::new(&["cfg.toml"]),
         ));
         // dynamic key resolvers for whatever we need
         // we want to be able to do things per-game-tick, so put this in `GameTickUpdate`

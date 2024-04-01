@@ -3,6 +3,8 @@ use bevy::reflect::TypePath;
 use crate::data::*;
 use crate::prelude::*;
 
+use super::config::DynamicConfigValue;
+
 /// Scripted Sequence Asset type
 ///
 /// Would typically be loaded from TOML files.
@@ -46,7 +48,7 @@ pub enum TimeBase {
 #[derive(Debug, Clone, Default)]
 #[derive(Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct ScriptConfig(pub HashMap<String, f32>);
+pub struct ScriptConfig(pub HashMap<String, DynamicConfigValue>);
 
 /// When initting a script, quantize time (from TimeBase).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]

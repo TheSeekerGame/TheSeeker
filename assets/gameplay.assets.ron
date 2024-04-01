@@ -4,4 +4,7 @@
     "script.test": File (
         path: "test.script.toml",
     ),
+    "cfg.test": File (
+        path: "test.cfg.toml",
+    ),
 })
