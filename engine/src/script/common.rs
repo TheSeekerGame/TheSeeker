@@ -239,6 +239,10 @@ impl ScriptTracker for CommonScriptTracker {
         }
     }
 
+    fn has_slot(&self, slot: &str) -> bool {
+        self.slots_enabled.contains(slot)
+    }
+
     fn take_slots(&mut self) -> HashSet<String> {
         for slot in self.slots_enabled.iter() {
             if let Some(actions) = self.slot_disable.get(slot) {
@@ -324,7 +328,7 @@ impl ScriptAction for CommonScriptAction {
         &self,
         entity: Entity,
         _actionparams: &Self::ActionParams,
-        _tracker: &mut Self::Tracker,
+        tracker: &mut Self::Tracker,
         (ref elabels, ref mut commands): &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult {
         match self {
@@ -358,6 +362,22 @@ impl ScriptAction for CommonScriptAction {
                 });
                 ScriptUpdateResult::NormalRun
             },
+            CommonScriptAction::SlotEnable { slot } => {
+                tracker.set_slot(slot, true);
+                ScriptUpdateResult::NormalRun
+            }
+            CommonScriptAction::SlotDisable { slot } => {
+                tracker.set_slot(slot, false);
+                ScriptUpdateResult::NormalRun
+            }
+            CommonScriptAction::SlotToggle { slot } => {
+                if tracker.has_slot(slot) {
+                    tracker.set_slot(slot, false);
+                } else {
+                    tracker.set_slot(slot, true);
+                }
+                ScriptUpdateResult::NormalRun
+            }
         }
     }
 }
@@ -467,6 +487,10 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
     fn set_slot(&mut self, slot: &str, state: bool) {
         self.common.set_slot(slot, state);
         self.extended.set_slot(slot, state);
+    }
+
+    fn has_slot(&self, slot: &str) -> bool {
+        self.common.has_slot(slot) || self.extended.has_slot(slot)
     }
 
     fn take_slots(&mut self) -> HashSet<String> {

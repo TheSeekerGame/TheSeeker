@@ -113,6 +113,7 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult;
     fn set_slot(&mut self, _slot: &str, _state: bool) {}
+    fn has_slot(&self, _slot: &str) -> bool { false }
     fn take_slots(&mut self) -> HashSet<String> {
         Default::default()
     }
@@ -645,6 +646,42 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
                 old_runtime.tracker.set_slot(slot, state);
             }
             _ => {}
+        }
+    }
+    pub fn has_slot(&mut self, slot: &str) -> bool {
+        match &mut self.state {
+            ScriptPlayerState::Playing { ref mut runtime } => {
+                runtime.tracker.has_slot(slot)
+            }
+            ScriptPlayerState::Starting { ref mut runtime } => {
+                runtime.tracker.has_slot(slot)
+            }
+            ScriptPlayerState::Stopping { ref mut runtime } => {
+                runtime.tracker.has_slot(slot)
+            }
+            ScriptPlayerState::PrePlayHandle { old_runtime: Some(ref mut old_runtime), .. } => {
+                old_runtime.tracker.has_slot(slot)
+            }
+            ScriptPlayerState::PrePlayKey { old_runtime: Some(ref mut old_runtime), .. } => {
+                old_runtime.tracker.has_slot(slot)
+            }
+            ScriptPlayerState::ChangingHandle { old_runtime, .. } => {
+                old_runtime.tracker.has_slot(slot)
+            }
+            ScriptPlayerState::ChangingKey { old_runtime, .. } => {
+                old_runtime.tracker.has_slot(slot)
+            }
+            _ => { false }
+        }
+    }
+    /// Toggles the value of a slot and returns the new value
+    pub fn toggle_slot(&mut self, slot: &str) -> bool {
+        if self.has_slot(slot) {
+            self.set_slot(slot, false);
+            false
+        } else {
+            self.set_slot(slot, true);
+            true
         }
     }
 }

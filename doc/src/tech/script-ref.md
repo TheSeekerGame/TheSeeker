@@ -109,6 +109,9 @@ forbid_slots_any = ["MyOtherSlot", "SlotSlot"]
 action = "..."
 ```
 
+You can also change the value of slots from within scripts, using the
+`SlotEnable`/`SlotDisable`/`SlotToggle` actions.
+
 ## Available Trigger Conditions
 
 The trigger condition is a mandatory part of every `[[script]]` section. It
@@ -447,6 +450,57 @@ Most actions accept/require additional parameters. Simply add those to the
 `[[script]]` section, depending on the kind of action.
 
 The available actions are:
+
+<details>
+  <summary>
+  <code>SlotEnable</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+action = "SlotEnable"
+slot = "MySlot"
+```
+
+Sets the value of `slot` to `true`.
+
+</details>
+
+<details>
+  <summary>
+  <code>SlotDisable</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+action = "SlotDisable"
+slot = "MySlot"
+```
+
+Sets the value of `slot` to `false`.
+
+</details>
+
+<details>
+  <summary>
+  <code>SlotToggle</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+action = "SlotToggle"
+slot = "MySlot"
+```
+
+Sets the value of `slot` to the inverse of its current value.
+
+</details>
 
 <details>
   <summary>

@@ -127,6 +127,18 @@ pub enum CommonScriptAction {
     },
     /// Spawn a new entity to run a script
     SpawnScript { asset_key: String },
+    /// Enable a Slot
+    SlotEnable {
+        slot: String,
+    },
+    /// Disable a Slot
+    SlotDisable {
+        slot: String,
+    },
+    /// Toggle a Slot
+    SlotToggle {
+        slot: String,
+    },
 }
 
 #[derive(Debug, Clone)]
