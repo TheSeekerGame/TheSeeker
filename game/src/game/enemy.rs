@@ -86,7 +86,6 @@ fn setup_enemy(mut q: Query<(&mut Transform, Entity), Added<EnemyBlueprint>>, mu
             EnemyGentBundle {
                 marker: EnemyGent { e_gfx },
                 phys: GentPhysicsBundle {
-                    rb: RigidBody::Kinematic,
                     //need to find a way to offset this one px toward back of enemys facing
                     //direction
                     collider: Collider::cuboid(22.0, 10.0),
