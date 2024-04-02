@@ -25,7 +25,6 @@ path = "game/src/main.rs"
 [features]
 dev = [
     "bevy/file_watcher",
-    "bevy_xpbd_2d/debug-plugin",
 ]
 
 # dev: Enable max optimizations for dependencies, but not for our code
@@ -125,6 +124,5 @@ features = ["iyes_cli"]
 [dependencies.leafwing-input-manager]
 version = "0.13"
 
-[dependencies.bevy_xpbd_2d]
-version = "0.4"
-default-features = true
+[dependencies.rapier2d]
+version = "0.18"

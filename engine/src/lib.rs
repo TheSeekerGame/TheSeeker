@@ -5,7 +5,6 @@ pub mod prelude {
     pub use bevy_asset_loader::prelude::*;
     pub use bevy_ecs_ldtk::prelude::*;
     pub use bevy_ecs_tilemap::prelude::*;
-    pub use bevy_xpbd_2d::prelude::*;
     pub use iyes_bevy_extras::prelude::*;
     pub use iyes_cli::prelude::*;
     pub use iyes_progress::prelude::*;
@@ -19,11 +18,12 @@ pub mod prelude {
     pub use std::sync::Arc;
 
     pub use crate::assets::{AssetKey, AssetsSet, PreloadedAssets};
+    pub use crate::condition::*;
     pub use crate::data::TickQuant;
     pub use crate::time::{
-        at_tick_multiples, GameTickSet, GameTickEventClearSet, GameTickUpdate, GameTime, GameTimeAppExt,
+        at_tick_multiples, GameTickEventClearSet, GameTickSet, GameTickUpdate, GameTime,
+        GameTimeAppExt,
     };
-    pub use crate::condition::*;
 }
 
 use bevy::app::PluginGroupBuilder;
@@ -32,11 +32,12 @@ use crate::prelude::*;
 
 pub mod animation;
 pub mod assets;
+pub mod condition;
 pub mod data;
 pub mod gent;
+pub mod physics;
 pub mod script;
 pub mod time;
-pub mod condition;
 
 pub struct EnginePlugins;
 

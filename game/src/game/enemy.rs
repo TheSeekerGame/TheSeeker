@@ -2,6 +2,11 @@ use crate::game::attack::Attack;
 use crate::game::gentstate::*;
 use crate::game::player::PlayerGent;
 use crate::prelude::*;
+use rapier2d::geometry::SharedShape;
+use rapier2d::prelude::{Group, InteractionGroups};
+use theseeker_engine::physics::{
+    Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, GROUND, PLAYER, SENSOR,
+};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
     assets::animation::SpriteAnimation,
@@ -76,7 +81,10 @@ pub struct EnemyGfx {
     e_gent: Entity,
 }
 
-fn setup_enemy(mut q: Query<(&mut Transform, Entity), Added<EnemyBlueprint>>, mut commands: Commands) {
+fn setup_enemy(
+    mut q: Query<(&mut Transform, Entity), Added<EnemyBlueprint>>,
+    mut commands: Commands,
+) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
         //TODO: ensure propper z order
         xf_gent.translation.z = 14.;
@@ -86,17 +94,28 @@ fn setup_enemy(mut q: Query<(&mut Transform, Entity), Added<EnemyBlueprint>>, mu
             EnemyGentBundle {
                 marker: EnemyGent { e_gfx },
                 phys: GentPhysicsBundle {
-                    rb: RigidBody::Kinematic,
                     //need to find a way to offset this one px toward back of enemys facing
                     //direction
-                    collider: Collider::cuboid(22.0, 10.0),
-                    shapecast: ShapeCaster::new(
-                        Collider::cuboid(22.0, 10.0),
-                        Vec2::new(0.0, -2.0),
-                        0.0,
-                        Direction2d::NEG_Y,
-                        // Vec2::NEG_Y.into(),
+                    collider: Collider::cuboid(
+                        22.0,
+                        10.0,
+                        InteractionGroups {
+                            memberships: ENEMY,
+                            filter: Group::all(),
+                        },
                     ),
+                    shapecast: ShapeCaster {
+                        shape: SharedShape::cuboid(22.0, 10.0),
+                        // Vec2::NEG_Y.into(),,
+                        direction: Direction2d::NEG_Y,
+                        origin: Vec2::new(0.0, -2.0),
+                        max_toi: 0.0,
+                        interaction: InteractionGroups {
+                            memberships: ENEMY,
+                            filter: GROUND,
+                        },
+                    },
+                    linear_velocity: LinearVelocity(Vec2::ZERO),
                 },
             },
             Role::Melee,
@@ -353,8 +372,16 @@ fn melee_attack(
             //why isnt transform working after setting parent?
             let collider = commands
                 .spawn((
-                    Collider::cuboid(28., 10.),
+                    Collider::cuboid(
+                        28.,
+                        10.,
+                        InteractionGroups {
+                            memberships: SENSOR,
+                            filter: PLAYER,
+                        },
+                    ),
                     Attack::new(8),
+                    TransformBundle::default(),
                     // TransformBundle::from_transform(Transform::from_xyz(
                     //     10. * facing.direction() + transform.translation().x,
                     //     transform.translation().y,
@@ -389,7 +416,7 @@ fn walking(
         &mut AddQueue,
         Option<&Aggroed>,
     )>,
-    spatial_query: SpatialQuery,
+    spatial_query: Res<PhysicsWorld>,
 ) {
     for (
         entity,
@@ -420,19 +447,20 @@ fn walking(
             g_transform.translation().x - 10. * facing.direction(),
             g_transform.translation().y - 9.,
         );
-        if let Some(first_hit) = spatial_query.cast_ray(
+        if let Some((hit_entity, first_hit)) = spatial_query.ray_cast(
             //offset 10 x from center toward facing direction
             // g_transform.translation().truncate(),
             ray_origin,
-            Direction2d::NEG_Y,
+            Vec2::NEG_Y,
             //change
             100.,
-            true,
-            //switch this to only wall/floor entities?
-            //TODO: use layers
-            SpatialQueryFilter::from_excluded_entities([entity]),
+            InteractionGroups {
+                memberships: ENEMY,
+                filter: GROUND,
+            },
+            Some(entity),
         ) {
-            if first_hit.time_of_impact > 0.0 {
+            if first_hit.toi > 0.0 {
                 //if not aggro turn around to walk away from edge
                 if maybe_aggroed.is_none() {
                     *facing = match *facing {
@@ -478,8 +506,14 @@ impl Plugin for EnemyTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                transition.run_if(any_matching::<(With<TransitionQueue>, With<EnemyGent>)>()),
-                add_states.run_if(any_matching::<(With<AddQueue>, With<EnemyGent>)>()),
+                transition.run_if(any_matching::<(
+                    With<TransitionQueue>,
+                    With<EnemyGent>,
+                )>()),
+                add_states.run_if(any_matching::<(
+                    With<AddQueue>,
+                    With<EnemyGent>,
+                )>()),
             )
                 .chain()
                 .in_set(EnemyStateSet::Transition)
