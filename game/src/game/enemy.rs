@@ -76,7 +76,10 @@ pub struct EnemyGfx {
     e_gent: Entity,
 }
 
-fn setup_enemy(mut q: Query<(&mut Transform, Entity), Added<EnemyBlueprint>>, mut commands: Commands) {
+fn setup_enemy(
+    mut q: Query<(&mut Transform, Entity), Added<EnemyBlueprint>>,
+    mut commands: Commands,
+) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
         //TODO: ensure propper z order
         xf_gent.translation.z = 14.;
@@ -477,8 +480,14 @@ impl Plugin for EnemyTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                transition.run_if(any_matching::<(With<TransitionQueue>, With<EnemyGent>)>()),
-                add_states.run_if(any_matching::<(With<AddQueue>, With<EnemyGent>)>()),
+                transition.run_if(any_matching::<(
+                    With<TransitionQueue>,
+                    With<EnemyGent>,
+                )>()),
+                add_states.run_if(any_matching::<(
+                    With<AddQueue>,
+                    With<EnemyGent>,
+                )>()),
             )
                 .chain()
                 .in_set(EnemyStateSet::Transition)

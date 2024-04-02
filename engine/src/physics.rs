@@ -1,16 +1,19 @@
 use crate::prelude::{GameTickUpdate, HashMap, HashSet};
 use bevy::prelude::*;
+use rapier2d::na::UnitComplex;
 use rapier2d::prelude::*;
 
 /// Opjects marked with this and a transform component will be updated in the
-/// collision scene. Parenting *should* work as expected. TODO make parenting work
+/// collision scene. Parenting is not currently kept in sync; global transforms are used instead.
 #[derive(Component)]
 pub struct Collider(rapier2d::prelude::Collider);
+
+#[derive(Component)]
 pub struct ColliderHandle(rapier2d::prelude::ColliderHandle);
 
-/// Todo: shape caster info; process in update queries pipeline
-#[derive(Component)]
-pub struct ShapeCaster();
+// Todo: shape caster info; process in update queries pipeline
+//#[derive(Component)]
+//pub struct ShapeCaster(rapier2d::prelude::Collider);
 
 /// Used to create queries on a physics world.
 #[derive(Resource)]
@@ -41,13 +44,14 @@ impl Plugin for PhysicsPlugin {
     }
 }
 
-fn init_physics_world(collider_set: ResMut<PhysicsWorld>) {
-    let mut bodies = RigidBodySet::new();
-    let mut colliders = ColliderSet::new();
-
-    let mut physics_pipeline = PhysicsPipeline::new();
-    let mut query_pipeline = rapier2d::prelude::QueryPipeline::new();
-    query_pipeline.update(&bodies, &collider_set.col_set);
+fn init_physics_world(world: Res<PhysicsWorld>, mut query_pipeline: ResMut<QueryPipeline>) {
+    let PhysicsWorld {
+        col_set,
+        islands,
+        rb_set,
+        id_tracker,
+    } = &*world;
+    query_pipeline.0.update(&rb_set, &col_set);
 }
 
 /// Updates the pipeline by reading all the positions/components with colliders
@@ -60,8 +64,14 @@ fn update_query_pipeline(
     mut query_pipeline: ResMut<QueryPipeline>,
     // Mutable reference because collider data is stored in an Arena that pipeline modifies
     mut world: ResMut<PhysicsWorld>,
-    phys_obj_query: Query<(&GlobalTransform, Ref<Collider>)>,
+    phys_obj_query: Query<(
+        Entity,
+        Ref<GlobalTransform>,
+        Ref<Collider>,
+        Option<&ColliderHandle>,
+    )>,
     mut removed: RemovedComponents<Collider>,
+    mut commands: Commands,
 ) {
     let pipeline = &mut query_pipeline.0;
     let PhysicsWorld {
@@ -70,25 +80,63 @@ fn update_query_pipeline(
         rb_set,
         id_tracker,
     } = &mut *world;
+
     let mut modified_colliders = vec![];
-    for (transform, collider_info) in &phys_obj_query {
-        if collider_info.is_added() {
-            col_set.insert(collider_info.0.clone());
+    for (entity, transform, collider_info, handle) in &phys_obj_query {
+        let col_id = if collider_info.is_added() {
+            let col_id = col_set.insert(collider_info.0.clone());
+            modified_colliders.push(col_id);
+            id_tracker.insert(entity, col_id);
+            commands
+                .get_entity(entity)
+                .unwrap()
+                .insert(ColliderHandle(col_id));
+            col_id
+        } else {
+            handle.unwrap().0
         };
+
+        if collider_info.is_changed() {
+            *col_set.get_mut(col_id).unwrap() = collider_info.0.clone();
+            modified_colliders.push(col_id);
+        }
+        if transform.is_changed() {
+            col_set
+                .get_mut(col_id)
+                .unwrap()
+                .set_translation(into_vec(transform.translation().xy()));
+            col_set
+                .get_mut(col_id)
+                .unwrap()
+                .set_rotation(UnitComplex::new(
+                    transform
+                        .compute_transform()
+                        .rotation
+                        .to_euler(EulerRot::XYZ)
+                        .2,
+                ));
+            modified_colliders.push(col_id);
+        }
     }
     let mut removed_colliders = vec![];
     // Go through the col_set, and see if any are there that aren't in our collider_set.
     for removed in removed.read() {
-        let Some(removed_id) = id_tracker.get(&removed) else {
+        let Some(removed_id) = id_tracker.get(&removed).copied() else {
             continue;
         };
-        removed_colliders.push(*removed_id);
-        col_set.remove(*removed_id, islands, rb_set, false);
+        id_tracker.remove(&removed);
+        removed_colliders.push(removed_id);
+        col_set.remove(removed_id, islands, rb_set, false);
     }
     pipeline.update_incremental(
-        &world.col_set,
+        &col_set,
         modified_colliders.as_slice(),
         removed_colliders.as_slice(),
         true,
     );
+}
+
+/// Utility to convert from vec to rapier compatible structure
+pub fn into_vec(vec: Vec2) -> Vector<f32> {
+    vector![vec.x, vec.y]
 }
