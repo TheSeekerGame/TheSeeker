@@ -1,4 +1,5 @@
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
+use theseeker_engine::physics::{Collider, LinearVelocity};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
     assets::animation::SpriteAnimation,
@@ -154,7 +155,10 @@ fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
     }
 }
 
-fn setup_player(mut q: Query<(&mut Transform, Entity), Added<PlayerBlueprint>>, mut commands: Commands) {
+fn setup_player(
+    mut q: Query<(&mut Transform, Entity), Added<PlayerBlueprint>>,
+    mut commands: Commands,
+) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
         //TODO: proper way of ensuring z is correct
         //why is this getting changed? xpbd?
@@ -165,7 +169,6 @@ fn setup_player(mut q: Query<(&mut Transform, Entity), Added<PlayerBlueprint>>, 
             PlayerGentBundle {
                 marker: PlayerGent { e_gfx },
                 phys: GentPhysicsBundle {
-                    rb: RigidBody::Kinematic,
                     collider: Collider::cuboid(4.0, 10.0),
                     shapecast: ShapeCaster::new(
                         Collider::cuboid(4.0, 10.0),
@@ -218,9 +221,7 @@ impl Plugin for PlayerTransitionPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             GameTickUpdate,
-            (
-                transition.run_if(any_with_component::<TransitionQueue>),
-            )
+            (transition.run_if(any_with_component::<TransitionQueue>),)
                 .chain()
                 .in_set(PlayerStateSet::Transition)
                 .after(PlayerStateSet::Behavior)
@@ -304,12 +305,27 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                player_idle.run_if(any_matching::<(With<Idle>, With<PlayerGent>)>()),
-                player_run.run_if(any_matching::<(With<Running>, With<PlayerGent>)>()),
-                player_jump.run_if(any_matching::<(With<Jumping>, With<PlayerGent>)>()),
+                player_idle.run_if(any_matching::<(
+                    With<Idle>,
+                    With<PlayerGent>,
+                )>()),
+                player_run.run_if(any_matching::<(
+                    With<Running>,
+                    With<PlayerGent>,
+                )>()),
+                player_jump.run_if(any_matching::<(
+                    With<Jumping>,
+                    With<PlayerGent>,
+                )>()),
                 player_move,
-                player_grounded.run_if(any_matching::<(With<Grounded>, With<PlayerGent>)>()),
-                player_falling.run_if(any_matching::<(With<Falling>, With<PlayerGent>)>()),
+                player_grounded.run_if(any_matching::<(
+                    With<Grounded>,
+                    With<PlayerGent>,
+                )>()),
+                player_falling.run_if(any_matching::<(
+                    With<Falling>,
+                    With<PlayerGent>,
+                )>()),
                 player_collisions
                     .after(player_move)
                     .after(player_jump)

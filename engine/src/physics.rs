@@ -8,6 +8,12 @@ use rapier2d::prelude::*;
 #[derive(Component)]
 pub struct Collider(rapier2d::prelude::Collider);
 
+impl Collider {
+    pub fn cuboid(x_length: f32, y_length: f32) -> Self {
+        Self(rapier2d::prelude::ColliderBuilder::cuboid(x_length, y_length).build())
+    }
+}
+
 #[derive(Component)]
 pub struct ColliderHandle(rapier2d::prelude::ColliderHandle);
 
@@ -16,11 +22,11 @@ pub struct ColliderHandle(rapier2d::prelude::ColliderHandle);
 //pub struct ShapeCaster(rapier2d::prelude::Collider);
 
 /// Used to create queries on a physics world.
-#[derive(Resource)]
-pub struct QueryPipeline(rapier2d::prelude::QueryPipeline);
-
 #[derive(Resource, Default)]
 pub struct PhysicsWorld {
+    // Can't make query's on this without most of the other structures,
+    // so it makes sense to group them imo.
+    pub query_pipeline: rapier2d::prelude::QueryPipeline,
     pub col_set: ColliderSet,
     pub islands: IslandManager,
     pub rb_set: RigidBodySet,
@@ -35,23 +41,21 @@ pub struct PhysicsPlugin;
 
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(QueryPipeline(
-            rapier2d::prelude::QueryPipeline::new(),
-        ));
         app.insert_resource(PhysicsWorld::default());
         app.add_systems(Startup, init_physics_world);
         app.add_systems(GameTickUpdate, update_query_pipeline);
     }
 }
 
-fn init_physics_world(world: Res<PhysicsWorld>, mut query_pipeline: ResMut<QueryPipeline>) {
+fn init_physics_world(mut world: ResMut<PhysicsWorld>) {
     let PhysicsWorld {
+        query_pipeline,
         col_set,
         islands,
         rb_set,
         id_tracker,
-    } = &*world;
-    query_pipeline.0.update(&rb_set, &col_set);
+    } = &mut *world;
+    query_pipeline.update(&rb_set, &col_set);
 }
 
 /// Updates the pipeline by reading all the positions/components with colliders
@@ -61,7 +65,6 @@ fn init_physics_world(world: Res<PhysicsWorld>, mut query_pipeline: ResMut<Query
 /// TODO make sure this always runs after the GameTickUpdate; consider creating a seperate
 /// [`ScheduleLabel`] for immediately after transform propagation
 fn update_query_pipeline(
-    mut query_pipeline: ResMut<QueryPipeline>,
     // Mutable reference because collider data is stored in an Arena that pipeline modifies
     mut world: ResMut<PhysicsWorld>,
     phys_obj_query: Query<(
@@ -73,14 +76,14 @@ fn update_query_pipeline(
     mut removed: RemovedComponents<Collider>,
     mut commands: Commands,
 ) {
-    let pipeline = &mut query_pipeline.0;
     let PhysicsWorld {
+        query_pipeline,
         col_set,
         islands,
         rb_set,
         id_tracker,
     } = &mut *world;
-
+    //query_pipeline.cast_shape()
     let mut modified_colliders = vec![];
     for (entity, transform, collider_info, handle) in &phys_obj_query {
         let col_id = if collider_info.is_added() {
@@ -128,7 +131,7 @@ fn update_query_pipeline(
         removed_colliders.push(removed_id);
         col_set.remove(removed_id, islands, rb_set, false);
     }
-    pipeline.update_incremental(
+    query_pipeline.update_incremental(
         &col_set,
         modified_colliders.as_slice(),
         removed_colliders.as_slice(),
@@ -140,3 +143,9 @@ fn update_query_pipeline(
 pub fn into_vec(vec: Vec2) -> Vector<f32> {
     vector![vec.x, vec.y]
 }
+
+/// A convenient component type for referring to velocity of an entity.
+///
+/// Doesn't do anything on its own, but character controllers use it.
+#[derive(Component, Deref, DerefMut)]
+pub struct LinearVelocity(Vec2);
