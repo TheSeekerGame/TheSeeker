@@ -69,13 +69,21 @@ impl PhysicsWorld {
         cast: Vec2,
         shape: &dyn Shape,
         max_toi: f32,
-        layer: Layer,
+        // todo
+        // layer: Group,
+        exclude: Option<Entity>,
     ) -> Option<(Entity, parry::query::TOI)> {
-        let filter = QueryFilter::new().groups(InteractionGroups {
-            // I *think* this is setup properly... needs testing though to verify
-            memberships: layer.0,
-            filter: Group::all(),
-        });
+        let mut filter = QueryFilter::new(); /*.groups(InteractionGroups {
+                                                 // I *think* this is setup properly... needs testing though to verify
+                                                 memberships: layer.0,
+                                                 filter: Group::all(),
+                                             });*/
+        if let Some(exclude) = exclude {
+            // Entity might not be added yet; or even exist.
+            if let Some(col_id) = self.id_tracker.get(&exclude) {
+                filter = filter.exclude_collider(*col_id)
+            }
+        }
         let result = self.query_pipeline.cast_shape(
             &self.rb_set,
             &self.col_set,
