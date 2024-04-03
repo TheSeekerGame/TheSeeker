@@ -2,7 +2,7 @@ use crate::game::attack::Attack;
 use crate::game::gentstate::*;
 use crate::game::player::PlayerGent;
 use crate::prelude::*;
-use theseeker_engine::physics::{Collider, LinearVelocity};
+use theseeker_engine::physics::{Collider, LinearVelocity, PhysicsWorld, ShapeCaster};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
     assets::animation::SpriteAnimation,
@@ -392,7 +392,7 @@ fn walking(
         &mut AddQueue,
         Option<&Aggroed>,
     )>,
-    spatial_query: SpatialQuery,
+    spatial_query: Res<PhysicsWorld>,
 ) {
     for (
         entity,

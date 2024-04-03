@@ -1,5 +1,5 @@
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
-use theseeker_engine::physics::{Collider, LinearVelocity};
+use theseeker_engine::physics::{Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ShapeHit};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
     assets::animation::SpriteAnimation,
@@ -480,7 +480,7 @@ fn player_jump(
 }
 
 fn player_collisions(
-    spatial_query: SpatialQuery,
+    spatial_query: Res<PhysicsWorld>,
     mut q_gent: Query<
         (
             Entity,
@@ -488,7 +488,7 @@ fn player_collisions(
             &mut LinearVelocity,
             &Collider,
         ),
-        (With<PlayerGent>, With<RigidBody>),
+        (With<PlayerGent>),
     >,
     time: Res<GameTime>,
 ) {
@@ -545,9 +545,9 @@ fn player_collisions(
 fn player_grounded(
     mut query: Query<
         (
-            &ShapeHits,
+            &ShapeHit,
             &ActionState<PlayerAction>,
-            &mut Position,
+            &mut Transform,
             &mut TransitionQueue,
             Option<&mut CoyoteTime>,
         ),
@@ -602,7 +602,7 @@ fn player_falling(
         (
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
-            &ShapeHits,
+            &ShapeHit,
             &mut TransitionQueue,
         ),
         (With<PlayerGent>, With<Falling>),
