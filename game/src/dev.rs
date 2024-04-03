@@ -1,12 +1,11 @@
+use crate::gamestate::{pause, unpause};
 use crate::prelude::*;
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
-use crate::gamestate::{pause, unpause};
 
 pub struct DevPlugin;
 
 impl Plugin for DevPlugin {
     fn build(&self, app: &mut App) {
-        app.register_clicommand_args("spawn_phystester", cli_spawn_phystester);
         app.register_clicommand_args("spawn_script", cli_spawn_script);
         app.register_clicommand_args("spawn_anim", cli_spawn_anim);
         app.add_systems(
@@ -62,29 +61,6 @@ fn debug_spawn_player(mut commands: Commands) {
         PlayerBlueprint,
         SpatialBundle { ..default() },
     ));
-}
-
-fn cli_spawn_phystester(In(args): In<Vec<String>>, mut commands: Commands) {
-    if args.len() != 2 {
-        error!("\"spawn_phystester <x> <y>\"");
-        return;
-    }
-    if let (Ok(x), Ok(y)) = (args[0].parse(), args[1].parse()) {
-        commands.spawn((
-            RigidBody::Dynamic,
-            Mass(1.0),
-            Collider::ball(4.0),
-            SpriteBundle {
-                sprite: Sprite {
-                    color: Color::PINK,
-                    custom_size: Some(Vec2::splat(8.0)),
-                    ..Default::default()
-                },
-                transform: Transform::from_xyz(x, y, 100.0),
-                ..Default::default()
-            },
-        ));
-    }
 }
 
 fn cli_spawn_script(In(args): In<Vec<String>>, world: &mut World) {

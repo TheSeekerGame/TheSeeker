@@ -35,13 +35,17 @@ impl Collider {
 pub struct ColliderHandle(pub rapier2d::prelude::ColliderHandle);
 
 // Todo: shape caster info; process in update queries pipeline
+//  or maybe seoperate system
 #[derive(Component)]
 pub struct ShapeCaster {
-    shape: ColliderShape,
-    vec: Vec2,
-    max_toi: f32,
-    layer: Layer,
+    pub shape: SharedShape,
+    pub vec: Vec2,
+    pub offset: Vec2,
+    pub max_toi: f32,
+    //layer: Layer,
 }
+
+#[derive(Component)]
 pub struct ShapeHit(Option<Entity>);
 
 /// Used to create queries on a physics world.

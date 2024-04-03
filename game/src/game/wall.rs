@@ -1,4 +1,5 @@
 use crate::prelude::*;
+use theseeker_engine::physics::Collider;
 
 pub struct WallPlugin;
 
@@ -175,13 +176,9 @@ pub fn spawn_wall_collision(
                             (wall_rect.top as f32 - wall_rect.bottom as f32 + 1.)
                                 * grid_size as f32,
                         ),
-                        RigidBody::Static,
-                        Friction::new(1.0),
                         Transform::from_xyz(
-                            (wall_rect.left + wall_rect.right + 1) as f32 * grid_size as f32
-                                / 2.,
-                            (wall_rect.bottom + wall_rect.top + 1) as f32 * grid_size as f32
-                                / 2.,
+                            (wall_rect.left + wall_rect.right + 1) as f32 * grid_size as f32 / 2.,
+                            (wall_rect.bottom + wall_rect.top + 1) as f32 * grid_size as f32 / 2.,
                             10.,
                         ),
                         GlobalTransform::default(),

@@ -1,4 +1,4 @@
-use crate::physics::Collider;
+use crate::physics::{Collider, ShapeCaster};
 use crate::prelude::*;
 
 pub struct GentPlugin;
@@ -12,13 +12,10 @@ impl Plugin for GentPlugin {
     }
 }
 
-#[derive(Component)]
-pub struct ShapeCasterInfo {}
-
 #[derive(Bundle)]
 pub struct GentPhysicsBundle {
     pub collider: Collider,
-    pub shapecast: ShapeCasterInfo,
+    pub shapecast: ShapeCaster,
 }
 
 #[derive(Component)]

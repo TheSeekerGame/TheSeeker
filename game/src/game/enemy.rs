@@ -2,6 +2,7 @@ use crate::game::attack::Attack;
 use crate::game::gentstate::*;
 use crate::game::player::PlayerGent;
 use crate::prelude::*;
+use rapier2d::geometry::SharedShape;
 use theseeker_engine::physics::{Collider, LinearVelocity, PhysicsWorld, ShapeCaster};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
@@ -93,13 +94,13 @@ fn setup_enemy(
                     //need to find a way to offset this one px toward back of enemys facing
                     //direction
                     collider: Collider::cuboid(22.0, 10.0),
-                    shapecast: ShapeCaster::new(
-                        Collider::cuboid(22.0, 10.0),
-                        Vec2::new(0.0, -2.0),
-                        0.0,
-                        Direction2d::NEG_Y,
-                        // Vec2::NEG_Y.into(),
-                    ),
+                    shapecast: ShapeCaster {
+                        shape: SharedShape::cuboid(22.0, 10.0),
+                        // Vec2::NEG_Y.into(),,
+                        vec: Vec2::NEG_Y,
+                        offset: Vec2::new(0.0, -2.0),
+                        max_toi: 0.0,
+                    },
                 },
             },
             Role::Melee,
