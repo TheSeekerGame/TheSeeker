@@ -176,6 +176,7 @@ fn setup_player(
                         max_toi: 10.0,
                         vec: Vec2::NEG_Y,
                     },
+                    linear_velocity: LinearVelocity(Vec2::ZERO),
                 },
                 coyote_time: Default::default(),
             },
@@ -366,14 +367,16 @@ fn player_idle(
 fn player_move(
     mut q_gent: Query<(
         &mut LinearVelocity,
+        &mut Transform,
         &ActionState<PlayerAction>,
         &PlayerGent,
         Option<&Grounded>,
     )>,
+    time: Res<GameTime>,
     //kinda dont want to do flipping here
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for (mut velocity, action_state, gent, grounded) in q_gent.iter_mut() {
+    for (mut velocity, mut pos, action_state, gent, grounded) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
@@ -405,6 +408,10 @@ fn player_move(
             }
         };
         velocity.x = new_vel.clamp(-100.0, 100.0);
+        let z = pos.translation.z;
+        pos.translation += (velocity.xy() * (1.0 / time.hz as f32)).extend(z);
+        println!("vel: {:?}", velocity.xy());
+        println!("pos: {:?}", pos);
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {

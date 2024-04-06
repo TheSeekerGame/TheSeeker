@@ -120,7 +120,7 @@ impl PhysicsWorld {
             filter,
         );
         if let Some((collider, toi)) = result {
-            let entity: Entity = self.collider2entity(collider);
+            let entity: Entity = self.collider2entity(collider)?;
             Some((entity, toi))
         } else {
             None
@@ -155,7 +155,7 @@ impl PhysicsWorld {
             filter,
         );
         if let Some((collider, intersection)) = result {
-            let entity: Entity = self.collider2entity(collider);
+            let entity: Entity = self.collider2entity(collider)?;
             Some((entity, intersection))
         } else {
             None
@@ -184,7 +184,7 @@ impl PhysicsWorld {
             shape,
             filter,
             |collider| {
-                let entity: Entity = self.collider2entity(collider);
+                let entity: Entity = self.collider2entity(collider).unwrap();
                 intersections.push(entity);
                 true
             },
@@ -194,11 +194,18 @@ impl PhysicsWorld {
 
     /// Small utility function that gets the entity associated with the collider;
     /// panics if entity does not exist.
-    pub fn collider2entity(&self, handle: rapier2d::prelude::ColliderHandle) -> Entity {
-        self.col_set
-            .get(handle)
-            .map(|co| Entity::from_bits(co.user_data as u64))
-            .expect("Internal error: entity not found for collider.")
+    pub fn collider2entity(&self, handle: rapier2d::prelude::ColliderHandle) -> Option<Entity> {
+        if let Some(result) = self.col_set.get(handle) {
+            match Entity::try_from_bits(result.user_data as u64) {
+                Ok(e) => Some(e),
+                Err(e) => {
+                    println!("Warning Failed to find entity for collider!: tried entity: {e} with col: {handle:?}");
+                    None
+                },
+            }
+        } else {
+            None
+        }
     }
 }
 

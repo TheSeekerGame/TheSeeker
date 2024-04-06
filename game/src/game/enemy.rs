@@ -101,6 +101,7 @@ fn setup_enemy(
                         offset: Vec2::new(0.0, -2.0),
                         max_toi: 0.0,
                     },
+                    linear_velocity: LinearVelocity(Vec2::ZERO),
                 },
             },
             Role::Melee,
