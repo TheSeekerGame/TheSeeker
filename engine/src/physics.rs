@@ -199,7 +199,10 @@ impl PhysicsWorld {
             match Entity::try_from_bits(result.user_data as u64) {
                 Ok(e) => Some(e),
                 Err(e) => {
-                    println!("Warning Failed to find entity for collider!: tried entity: {e} with col: {handle:?}");
+                    if result.user_data == 0 {
+                        println!("Warning! detected colider with no associated entity/user data!");
+                    }
+                    println!("Warning Failed to find entity for collider!: tried entity: {} with col: {handle:?}", result.user_data);
                     None
                 },
             }
@@ -273,14 +276,33 @@ fn update_query_pipeline(
             // so that when we get a query result with a collider id we can lookup
             // what entity its associated with.
             col_set.get_mut(col_id).unwrap().user_data = entity.to_bits() as u128;
+            println!(
+                "inserted entity with id: {} and col_id: {:?}",
+                entity.to_bits(),
+                col_id
+            );
             col_id
         } else {
             handle.unwrap().0
         };
 
         if collider_info.is_changed() {
+            println!(
+                "changed col with id: {:?} before_usr data:{:?}",
+                col_id,
+                col_set.get_mut(col_id).unwrap().user_data,
+            );
+
+            let old_entity = col_set.get(col_id).unwrap().user_data;
             *col_set.get_mut(col_id).unwrap() = collider_info.0.clone();
+            col_set.get_mut(col_id).unwrap().user_data = old_entity;
             modified_colliders.push(col_id);
+
+            println!(
+                "changed col with id: {:?} after user data:{:?}",
+                col_id,
+                col_set.get_mut(col_id).unwrap().user_data,
+            );
         }
         if transform.is_changed() {
             col_set

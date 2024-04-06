@@ -409,9 +409,9 @@ fn player_move(
         };
         velocity.x = new_vel.clamp(-100.0, 100.0);
         let z = pos.translation.z;
-        pos.translation += (velocity.xy() * (1.0 / time.hz as f32)).extend(z);
-        println!("vel: {:?}", velocity.xy());
-        println!("pos: {:?}", pos);
+        pos.translation = (pos.translation.xy() + velocity.xy() * (1.0 / time.hz as f32)).extend(z);
+        //println!("vel: {:?}", velocity.xy());
+        //println!("pos: {:?}", pos);
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {
