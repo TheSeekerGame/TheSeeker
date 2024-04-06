@@ -106,6 +106,71 @@ impl PhysicsWorld {
         }
     }
 
+    pub fn ray_cast(
+        &self,
+        origin: Vec2,
+        cast: Vec2,
+        max_toi: f32,
+        // todo
+        // layer: Group,
+        exclude: Option<Entity>,
+    ) -> Option<(Entity, parry::query::RayIntersection)> {
+        let mut filter = QueryFilter::new();
+        if let Some(exclude) = exclude {
+            if let Some(col_id) = self.id_tracker.get(&exclude) {
+                filter = filter.exclude_collider(*col_id)
+            }
+        }
+        let ray = Ray::new(
+            into_vec(origin).into(),
+            into_vec(cast).into(),
+        );
+        let result = self.query_pipeline.cast_ray_and_get_normal(
+            &self.rb_set,
+            &self.col_set,
+            &ray,
+            max_toi,
+            true,
+            filter,
+        );
+        if let Some((collider, intersection)) = result {
+            let entity: Entity = self.collider2entity(collider);
+            Some((entity, intersection))
+        } else {
+            None
+        }
+    }
+
+    pub fn intersect(
+        &self,
+        origin: Vec2,
+        shape: &dyn Shape,
+        // todo
+        // layer: Group,
+        exclude: Option<Entity>,
+    ) -> Vec<Entity> {
+        let mut filter = QueryFilter::new();
+        if let Some(exclude) = exclude {
+            if let Some(col_id) = self.id_tracker.get(&exclude) {
+                filter = filter.exclude_collider(*col_id)
+            }
+        }
+        let mut intersections = Vec::new();
+        self.query_pipeline.intersections_with_shape(
+            &self.rb_set,
+            &self.col_set,
+            &into_vec(origin).into(),
+            shape,
+            filter,
+            |collider| {
+                let entity: Entity = self.collider2entity(collider);
+                intersections.push(entity);
+                true
+            },
+        );
+        intersections
+    }
+
     /// Small utility function that gets the entity associated with the collider;
     /// panics if entity does not exist.
     pub fn collider2entity(&self, handle: rapier2d::prelude::ColliderHandle) -> Entity {
