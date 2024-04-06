@@ -517,6 +517,7 @@ fn player_collisions(
                     // If time of impact is 0.0, it means we are inside the wall,
                     // by making the player collider smaller it allows them to attempt escape.
                     // Will prevent player from getting stuck unless they are *really* intent on it.
+                    println!("tio: {:?}", first_hit.toi);
                     if first_hit.toi == 0.0 && tries < 5 {
                         //shape = shape.clone();
                         let extents = shape.as_cuboid().unwrap().half_extents * 0.95; //collider.scale() * 0.95, 1);

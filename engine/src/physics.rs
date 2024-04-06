@@ -21,12 +21,15 @@ impl Layer {
 
 /// Objects marked with this and a transform component will be updated in the
 /// collision scene. Parenting is not currently kept in sync; global transforms are used instead.
+/// Colliders ignore all scaling!
 #[derive(Component)]
 pub struct Collider(pub rapier2d::prelude::Collider);
 
 impl Collider {
     pub fn cuboid(x_length: f32, y_length: f32) -> Self {
-        Self(rapier2d::prelude::ColliderBuilder::cuboid(x_length, y_length).build())
+        // Rapiers cuboid is subtely different from xpbd, as rapier is defined by its
+        // half extents, and xpbd is by its extents.
+        Self(rapier2d::prelude::ColliderBuilder::cuboid(x_length * 0.5, y_length * 0.5).build())
     }
 }
 
@@ -248,6 +251,7 @@ fn update_query_pipeline(
     mut world: ResMut<PhysicsWorld>,
     phys_obj_query: Query<(
         Entity,
+        &Transform,
         Ref<GlobalTransform>,
         Ref<Collider>,
         Option<&ColliderHandle>,
@@ -264,7 +268,7 @@ fn update_query_pipeline(
     } = &mut *world;
     //query_pipeline.cast_shape()
     let mut modified_colliders = vec![];
-    for (entity, transform, collider_info, handle) in &phys_obj_query {
+    for (entity, trnsfm, transform, collider_info, handle) in &phys_obj_query {
         let col_id = if collider_info.is_added() && handle.is_none() {
             let col_id = col_set.insert(collider_info.0.clone());
             modified_colliders.push(col_id);
