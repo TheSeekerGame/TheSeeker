@@ -534,7 +534,7 @@ fn player_collisions(
 
                     let sliding_plane = into_vec2(first_hit.normal1);
 
-                    let bounce_coefficient = 0.1;
+                    let bounce_coefficient = 0.0;
                     let bounce_force =
                         -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
 
@@ -589,6 +589,13 @@ fn player_grounded(
             )
             .iter()
             .any(|x| {
+                /*if into_vec2(x.1.normal1).dot(Vec2::Y) < 0.7 {
+                    // Slope too steep
+                    true
+                } else {
+                    time_of_impact = x.1.toi;
+                    x.1.toi > 1.01
+                }*/
                 time_of_impact = x.1.toi;
                 x.1.toi > 1.01
             });
