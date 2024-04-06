@@ -1,6 +1,6 @@
 use crate::prelude::{GameTickUpdate, HashMap, HashSet};
 use bevy::prelude::*;
-use rapier2d::na::UnitComplex;
+use rapier2d::na::{Unit, UnitComplex};
 use rapier2d::parry;
 use rapier2d::prelude::*;
 
@@ -22,7 +22,7 @@ impl Layer {
 /// Objects marked with this and a transform component will be updated in the
 /// collision scene. Parenting is not currently kept in sync; global transforms are used instead.
 #[derive(Component)]
-pub struct Collider(rapier2d::prelude::Collider);
+pub struct Collider(pub rapier2d::prelude::Collider);
 
 impl Collider {
     pub fn cuboid(x_length: f32, y_length: f32) -> Self {
@@ -45,8 +45,29 @@ pub struct ShapeCaster {
     //layer: Layer,
 }
 
-#[derive(Component)]
-pub struct ShapeHit(Option<Entity>);
+impl ShapeCaster {
+    pub fn cast(
+        &self,
+        physics_world: &PhysicsWorld,
+        transform: &GlobalTransform,
+        ignore: Option<Entity>,
+    ) -> Option<(Entity, parry::query::TOI)> {
+        let origin = transform.translation().xy() + self.offset;
+        let shape = &*self.shape;
+
+        physics_world.shape_cast(
+            origin,
+            self.vec,
+            shape,
+            self.max_toi,
+            // self.layer,
+            ignore,
+        )
+    }
+}
+
+/*#[derive(Component)]
+pub struct ShapeHit(Option<Entity>);*/
 
 /// Used to create queries on a physics world.
 ///
@@ -290,9 +311,14 @@ fn update_query_pipeline(
     );
 }
 
-/// Utility to convert from vec to rapier compatible structure
+/// Utility to convert from [`Vec2`] to rapier compatible structure
 pub fn into_vec(vec: Vec2) -> Vector<f32> {
     vector![vec.x, vec.y]
+}
+
+/// Utility to convert from rapier type to [`Vec2`]
+pub fn into_vec2(vec: Unit<Vector<f32>>) -> Vec2 {
+    Vec2::new(vec.x, vec.y)
 }
 
 /// A convenient component type for referring to velocity of an entity.

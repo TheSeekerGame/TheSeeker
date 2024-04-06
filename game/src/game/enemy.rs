@@ -424,19 +424,18 @@ fn walking(
             g_transform.translation().x - 10. * facing.direction(),
             g_transform.translation().y - 9.,
         );
-        if let Some(first_hit) = spatial_query.cast_ray(
+        if let Some((hit_entity, first_hit)) = spatial_query.ray_cast(
             //offset 10 x from center toward facing direction
             // g_transform.translation().truncate(),
             ray_origin,
-            Direction2d::NEG_Y,
+            Vec2::NEG_Y,
             //change
             100.,
-            true,
             //switch this to only wall/floor entities?
             //TODO: use layers
-            SpatialQueryFilter::from_excluded_entities([entity]),
+            Some(entity),
         ) {
-            if first_hit.time_of_impact > 0.0 {
+            if first_hit.toi > 0.0 {
                 //if not aggro turn around to walk away from edge
                 if maybe_aggroed.is_none() {
                     *facing = match *facing {
