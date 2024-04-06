@@ -173,7 +173,7 @@ fn setup_player(
                     shapecast: ShapeCaster {
                         shape: Collider::cuboid(4.0, 10.0).0.shared_shape().clone(),
                         origin: Vec2::new(0.0, -1.0),
-                        max_toi: 0.0,
+                        max_toi: f32::MAX,
                         direction: Direction2d::NEG_Y,
                     },
                     linear_velocity: LinearVelocity(Vec2::ZERO),
@@ -329,6 +329,7 @@ impl Plugin for PlayerBehaviorPlugin {
                 )>()),
                 player_collisions
                     .after(player_move)
+                    .after(player_grounded)
                     .after(player_jump)
                     .after(player_falling),
             ),
@@ -517,7 +518,6 @@ fn player_collisions(
                     // If time of impact is 0.0, it means we are inside the wall,
                     // by making the player collider smaller it allows them to attempt escape.
                     // Will prevent player from getting stuck unless they are *really* intent on it.
-                    println!("tio: {:?}", first_hit.toi);
                     if first_hit.toi == 0.0 && tries < 5 {
                         //shape = shape.clone();
                         let extents = shape.as_cuboid().unwrap().half_extents * 0.95; //collider.scale() * 0.95, 1);
@@ -594,9 +594,9 @@ fn player_grounded(
             });
         // Ensures player character lands at the expected x height every time.
         if !is_falling {
-            //position.translation.y = global_pos.translation().y - time_of_impact + 1.0;
+            position.translation.y = position.translation.y - time_of_impact;
         }
-
+        println!("grounded: {}", time_of_impact);
         let mut in_c_time = false;
         if let Some(mut c_time) = coyote_time {
             if !is_falling {
@@ -644,7 +644,6 @@ fn player_falling(
         let fall_accel = 2.9;
         let mut falling = true;
         if let Some((hit_entity, tio)) = hits.cast(&*spatial_query, transform, Some(entity)) {
-            println!("tio: {:?}", tio);
             //if we are ~touching the ground
             if tio.toi < 0.001 {
                 transitions.push(Falling::new_transition(Grounded));
