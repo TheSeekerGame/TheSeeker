@@ -97,8 +97,8 @@ fn setup_enemy(
                     shapecast: ShapeCaster {
                         shape: SharedShape::cuboid(22.0, 10.0),
                         // Vec2::NEG_Y.into(),,
-                        vec: Vec2::NEG_Y,
-                        offset: Vec2::new(0.0, -2.0),
+                        direction: Direction2d::NEG_Y,
+                        origin: Vec2::new(0.0, -2.0),
                         max_toi: 0.0,
                     },
                     linear_velocity: LinearVelocity(Vec2::ZERO),

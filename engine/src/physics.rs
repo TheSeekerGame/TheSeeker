@@ -39,8 +39,9 @@ pub struct ColliderHandle(pub rapier2d::prelude::ColliderHandle);
 #[derive(Component)]
 pub struct ShapeCaster {
     pub shape: SharedShape,
-    pub vec: Vec2,
-    pub offset: Vec2,
+    /// Offsets the origin of the shape cast from the transform
+    pub origin: Vec2,
+    pub direction: Direction2d,
     pub max_toi: f32,
     //layer: Layer,
 }
@@ -52,12 +53,12 @@ impl ShapeCaster {
         transform: &GlobalTransform,
         ignore: Option<Entity>,
     ) -> Option<(Entity, parry::query::TOI)> {
-        let origin = transform.translation().xy() + self.offset;
+        let origin = transform.translation().xy() + self.origin;
         let shape = &*self.shape;
 
         physics_world.shape_cast(
             origin,
-            self.vec,
+            self.direction,
             shape,
             self.max_toi,
             // self.layer,
@@ -91,7 +92,7 @@ impl PhysicsWorld {
     pub fn shape_cast(
         &self,
         origin: Vec2,
-        cast: Vec2,
+        direction: Direction2d,
         shape: &dyn Shape,
         max_toi: f32,
         // todo
@@ -113,7 +114,7 @@ impl PhysicsWorld {
             &self.rb_set,
             &self.col_set,
             &into_vec(origin).into(),
-            &into_vec(cast).into(),
+            &into_vec(direction.xy()).into(),
             shape,
             max_toi,
             true,
@@ -276,33 +277,16 @@ fn update_query_pipeline(
             // so that when we get a query result with a collider id we can lookup
             // what entity its associated with.
             col_set.get_mut(col_id).unwrap().user_data = entity.to_bits() as u128;
-            println!(
-                "inserted entity with id: {} and col_id: {:?}",
-                entity.to_bits(),
-                col_id
-            );
             col_id
         } else {
             handle.unwrap().0
         };
 
         if collider_info.is_changed() {
-            println!(
-                "changed col with id: {:?} before_usr data:{:?}",
-                col_id,
-                col_set.get_mut(col_id).unwrap().user_data,
-            );
-
             let old_entity = col_set.get(col_id).unwrap().user_data;
             *col_set.get_mut(col_id).unwrap() = collider_info.0.clone();
             col_set.get_mut(col_id).unwrap().user_data = old_entity;
             modified_colliders.push(col_id);
-
-            println!(
-                "changed col with id: {:?} after user data:{:?}",
-                col_id,
-                col_set.get_mut(col_id).unwrap().user_data,
-            );
         }
         if transform.is_changed() {
             col_set

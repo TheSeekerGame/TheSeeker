@@ -172,9 +172,9 @@ fn setup_player(
                     collider: Collider::cuboid(4.0, 10.0),
                     shapecast: ShapeCaster {
                         shape: Collider::cuboid(4.0, 10.0).0.shared_shape().clone(),
-                        offset: Vec2::new(0.0, -1.0),
-                        max_toi: 10.0,
-                        vec: Vec2::NEG_Y,
+                        origin: Vec2::new(0.0, -1.0),
+                        max_toi: 0.0,
+                        direction: Direction2d::NEG_Y,
                     },
                     linear_velocity: LinearVelocity(Vec2::ZERO),
                 },
@@ -408,8 +408,6 @@ fn player_move(
             }
         };
         velocity.x = new_vel.clamp(-100.0, 100.0);
-        let z = pos.translation.z;
-        pos.translation = (pos.translation.xy() + velocity.xy() * (1.0 / time.hz as f32)).extend(z);
         //println!("vel: {:?}", velocity.xy());
         //println!("pos: {:?}", pos);
 
@@ -491,7 +489,8 @@ fn player_collisions(
     mut q_gent: Query<
         (
             Entity,
-            &Transform,
+            &mut Transform,
+            &GlobalTransform,
             &mut LinearVelocity,
             &Collider,
         ),
@@ -499,15 +498,15 @@ fn player_collisions(
     >,
     time: Res<GameTime>,
 ) {
-    for (entity, transform, mut linear_velocity, collider) in q_gent.iter_mut() {
+    for (entity, mut pos, global_transform, mut linear_velocity, collider) in q_gent.iter_mut() {
         let mut shape = collider.0.shared_shape().clone();
         let mut tries = 0;
         //if we are not moving, we can not shapecast in direction of movement
         if let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
             loop {
                 if let Some((e, first_hit)) = spatial_query.shape_cast(
-                    transform.translation.xy(),
-                    shape_dir.xy(),
+                    global_transform.translation().xy(),
+                    shape_dir,
                     // smaller collider then the players collider to prevent getting stuck
                     &*shape,
                     //TODO will this cause problems if its 0?
@@ -546,6 +545,9 @@ fn player_collisions(
                 break;
             }
         }
+        let z = pos.translation.z;
+        pos.translation =
+            (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
     }
 }
 
@@ -591,7 +593,7 @@ fn player_grounded(
             });
         // Ensures player character lands at the expected x height every time.
         if !is_falling {
-            position.translation.y = global_pos.translation().y - time_of_impact + 1.0;
+            //position.translation.y = global_pos.translation().y - time_of_impact + 1.0;
         }
 
         let mut in_c_time = false;
@@ -641,6 +643,7 @@ fn player_falling(
         let fall_accel = 2.9;
         let mut falling = true;
         if let Some((hit_entity, tio)) = hits.cast(&*spatial_query, transform, Some(entity)) {
+            println!("tio: {:?}", tio);
             //if we are ~touching the ground
             if tio.toi < 0.001 {
                 transitions.push(Falling::new_transition(Grounded));
