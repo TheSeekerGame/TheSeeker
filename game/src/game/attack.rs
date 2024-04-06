@@ -1,3 +1,4 @@
+use theseeker_engine::physics::{update_query_pipeline, Collider, PhysicsWorld};
 use theseeker_engine::{assets::animation::SpriteAnimation, script::ScriptPlayer};
 
 use super::player::{PlayerGent, PlayerGfx};
@@ -46,10 +47,12 @@ impl Attack {
     }
 }
 fn attack_damage(
+    spatial_query: Res<PhysicsWorld>,
     mut query: Query<(
+        Entity,
+        &GlobalTransform,
         &mut Attack,
         &Collider,
-        &CollidingEntities,
     )>,
     mut player_query: Query<(
         Entity,
@@ -60,7 +63,12 @@ fn attack_damage(
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     //animation query to flash red?
 ) {
-    for (mut attack, attack_collider, colliding_entities) in query.iter_mut() {
+    for (entity, pos, mut attack, attack_collider) in query.iter_mut() {
+        let colliding_entities = spatial_query.intersect(
+            pos.translation().xy(),
+            attack_collider.0.shape(),
+            Some(entity),
+        );
         for (entity, mut health, player_collider, player_gent) in player_query.iter_mut() {
             if colliding_entities.contains(&entity) {
                 if !attack.damaged.contains(&entity) {

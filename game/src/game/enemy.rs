@@ -360,6 +360,7 @@ fn melee_attack(
                 .spawn((
                     Collider::cuboid(28., 10.),
                     Attack::new(8),
+                    TransformBundle::default(),
                     // TransformBundle::from_transform(Transform::from_xyz(
                     //     10. * facing.direction() + transform.translation().x,
                     //     transform.translation().y,

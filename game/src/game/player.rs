@@ -596,7 +596,6 @@ fn player_grounded(
         if !is_falling {
             position.translation.y = position.translation.y - time_of_impact;
         }
-        println!("grounded: {}", time_of_impact);
         let mut in_c_time = false;
         if let Some(mut c_time) = coyote_time {
             if !is_falling {

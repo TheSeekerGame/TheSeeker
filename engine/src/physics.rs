@@ -246,7 +246,7 @@ fn init_physics_world(mut world: ResMut<PhysicsWorld>) {
 ///
 /// TODO make sure this always runs after the GameTickUpdate; consider creating a seperate
 /// [`ScheduleLabel`] for immediately after transform propagation
-fn update_query_pipeline(
+pub fn update_query_pipeline(
     // Mutable reference because collider data is stored in an Arena that pipeline modifies
     mut world: ResMut<PhysicsWorld>,
     phys_obj_query: Query<(
@@ -281,6 +281,7 @@ fn update_query_pipeline(
             // so that when we get a query result with a collider id we can lookup
             // what entity its associated with.
             col_set.get_mut(col_id).unwrap().user_data = entity.to_bits() as u128;
+            //println!("new collider added: {col_id:?}");
             col_id
         } else {
             handle.unwrap().0
