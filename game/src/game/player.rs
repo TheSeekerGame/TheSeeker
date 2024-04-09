@@ -1,5 +1,6 @@
 use bevy::transform::TransformSystem::TransformPropagate;
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
+use rapier2d::parry::query::TOIStatus;
 use theseeker_engine::physics::{into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
@@ -494,7 +495,6 @@ fn player_collisions(
         (
             Entity,
             &mut Transform,
-            &GlobalTransform,
             &mut LinearVelocity,
             &Collider,
         ),
@@ -502,14 +502,14 @@ fn player_collisions(
     >,
     time: Res<GameTime>,
 ) {
-    for (entity, mut pos, global_transform, mut linear_velocity, collider) in q_gent.iter_mut() {
+    for (entity, mut pos, mut linear_velocity, collider) in q_gent.iter_mut() {
         let mut shape = collider.0.shared_shape().clone();
         let mut tries = 0;
         //if we are not moving, we can not shapecast in direction of movement
         if let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
             loop {
                 if let Some((e, first_hit)) = spatial_query.shape_cast(
-                    global_transform.translation().xy(),
+                    pos.translation.xy(),
                     shape_dir,
                     // smaller collider then the players collider to prevent getting stuck
                     &*shape,
@@ -533,6 +533,13 @@ fn player_collisions(
                     // Applies a very small amount of bounce, as well as sliding to the character
                     // the bounce helps prevent the player from getting stuck.
 
+                    println!(
+                        "linear_vel in grounded: {:?} toi: {} status: {:?}",
+                        linear_velocity.xy(),
+                        first_hit.toi,
+                        first_hit.status,
+                    );
+
                     let sliding_plane = into_vec2(first_hit.normal1);
 
                     let bounce_coefficient = 0.05;
@@ -542,7 +549,13 @@ fn player_collisions(
                     let projected_velocity = linear_velocity.xy()
                         - sliding_plane * linear_velocity.xy().dot(sliding_plane);
 
-                    //linear_velocity.0 = projected_velocity + bounce_force;
+                    if first_hit.status != TOIStatus::Penetrating {
+                        linear_velocity.0 = projected_velocity + bounce_force;
+                    }
+                    println!(
+                        "linear_vel_after: {}",
+                        linear_velocity.xy()
+                    )
                 }
                 break;
             }
@@ -552,6 +565,11 @@ fn player_collisions(
             (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
     }
 }
+
+/// Tries to keep the characters shape caster this far above the ground
+///
+/// Needs to be non-zero to avoid getting stuck in the ground.
+const GROUNDED_THRESHOLD: f32 = 1.0;
 
 fn player_grounded(
     spatial_query: Res<PhysicsWorld>,
@@ -582,7 +600,6 @@ fn player_grounded(
     ) in query.iter_mut()
     {
         let mut time_of_impact = 0.0;
-        let mut status = None;
         let is_falling = ray_cast_info
             .cast(&*spatial_query, &position, Some(entity))
             .iter()
@@ -595,15 +612,8 @@ fn player_grounded(
                     x.1.toi > 1.01
                 }*/
                 time_of_impact = x.1.toi;
-                status = Some(x.1.status);
-                x.1.toi > GROUNDED_THRESHOLD * 2.0
+                x.1.toi > GROUNDED_THRESHOLD + 0.01
             });
-        println!(
-            "linear_vel in grounded: {:?} toi: {} falling? {is_falling} status: {:?}",
-            liner_vel.xy(),
-            time_of_impact,
-            status,
-        );
         // Ensures player character lands at the expected x height every time.
         if !is_falling && time_of_impact != 0.0 {
             position.translation.y = position.translation.y - time_of_impact + GROUNDED_THRESHOLD;
@@ -626,23 +636,16 @@ fn player_grounded(
         //known issue https://github.com/bevyengine/bevy/issues/6183
         if action_state.just_pressed(&PlayerAction::Jump) {
             // if action_state.pressed(PlayerAction::Jump) {
-            println!("jumping");
             transitions.push(Grounded::new_transition(
                 Jumping::default(),
             ))
         } else if is_falling {
             if !in_c_time {
-                println!("falling");
                 transitions.push(Grounded::new_transition(Falling))
             }
         }
     }
 }
-
-/// Tries to keep the character this far above the ground colliders
-///
-/// Needs to be non-zero to avoid getting stuck in the ground.
-const GROUNDED_THRESHOLD: f32 = 0.01;
 
 fn player_falling(
     spatial_query: Res<PhysicsWorld>,
@@ -684,11 +687,6 @@ fn player_falling(
                 }
                 falling = false;
             }
-            println!(
-                "vel in_falling: {:?} toi: {}",
-                velocity.xy(),
-                toi.toi
-            );
         }
         if falling {
             velocity.y -= fall_accel;
