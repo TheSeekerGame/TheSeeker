@@ -513,7 +513,7 @@ fn player_collisions(
                     shape_dir,
                     // smaller collider then the players collider to prevent getting stuck
                     &*shape,
-                    linear_velocity.length() / time.hz as f32,
+                    linear_velocity.length() / time.hz as f32 + 0.5,
                     Some(entity),
                 ) {
                     // If time of impact is 0.0, it means we are inside the wall,
@@ -534,23 +534,39 @@ fn player_collisions(
                     // the bounce helps prevent the player from getting stuck.
 
                     println!(
-                        "linear_vel in grounded: {:?} toi: {} status: {:?}",
+                        "linear_vel: {:?} pos: {} toi: {} status: {:?}",
                         linear_velocity.xy(),
+                        pos.translation.xy(),
                         first_hit.toi,
                         first_hit.status,
                     );
 
-                    let sliding_plane = into_vec2(first_hit.normal1);
-
-                    let bounce_coefficient = 0.05;
-                    let bounce_force =
-                        -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
-
-                    let projected_velocity = linear_velocity.xy()
-                        - sliding_plane * linear_velocity.xy().dot(sliding_plane);
-
                     if first_hit.status != TOIStatus::Penetrating {
+                        let sliding_plane = into_vec2(first_hit.normal1);
+
+                        let bounce_coefficient = 0.05;
+                        let bounce_force = -sliding_plane
+                            * linear_velocity.dot(sliding_plane)
+                            * bounce_coefficient;
+
+                        let projected_velocity = linear_velocity.xy()
+                            - sliding_plane * linear_velocity.xy().dot(sliding_plane);
                         linear_velocity.0 = projected_velocity + bounce_force;
+
+                        let sliding_plane = into_vec2(first_hit.normal2);
+
+                        let bounce_force = -sliding_plane
+                            * linear_velocity.dot(sliding_plane)
+                            * bounce_coefficient;
+
+                        let projected_velocity = linear_velocity.xy()
+                            - sliding_plane * linear_velocity.xy().dot(sliding_plane);
+                        linear_velocity.0 = projected_velocity + bounce_force;
+
+                        //let new_pos = pos.translation.xy()
+                        //    + shape_dir.xy() * (1.0 / time.hz as f32) * (first_hit.toi - 0.5);
+                        //pos.translation.x = new_pos.x;
+                        //pos.translation.x = new_pos.y;
                     }
                     println!(
                         "linear_vel_after: {}",
