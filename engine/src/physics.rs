@@ -1,5 +1,6 @@
 use crate::prelude::{GameTickUpdate, HashMap, HashSet};
 use bevy::prelude::*;
+use bevy::transform::TransformSystem::TransformPropagate;
 use rapier2d::na::{Unit, UnitComplex};
 use rapier2d::parry;
 use rapier2d::prelude::*;
@@ -216,6 +217,9 @@ impl PhysicsWorld {
     }
 }
 
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+struct PhysicsSet;
+
 /// A manual implementation of rapier to only use the features required by our project
 ///
 /// It only supports setting colliders in the scene, and making shapecast queries on them.
@@ -225,7 +229,14 @@ impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(PhysicsWorld::default());
         app.add_systems(Startup, init_physics_world);
-        app.add_systems(GameTickUpdate, update_query_pipeline);
+        app.configure_sets(
+            GameTickUpdate,
+            PhysicsSet.after(TransformPropagate),
+        );
+        app.add_systems(
+            GameTickUpdate,
+            update_query_pipeline.in_set(PhysicsSet),
+        );
     }
 }
 

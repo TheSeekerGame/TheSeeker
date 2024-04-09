@@ -1,3 +1,4 @@
+use bevy::transform::TransformSystem::TransformPropagate;
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use theseeker_engine::physics::{into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster};
 use theseeker_engine::{
@@ -172,7 +173,7 @@ fn setup_player(
                     collider: Collider::cuboid(4.0, 10.0),
                     shapecast: ShapeCaster {
                         shape: Collider::cuboid(4.0, 10.0).0.shared_shape().clone(),
-                        origin: Vec2::new(0.0, -1.0),
+                        origin: Vec2::new(0.0, 0.0),
                         max_toi: f32::MAX,
                         direction: Direction2d::NEG_Y,
                     },
@@ -319,19 +320,22 @@ impl Plugin for PlayerBehaviorPlugin {
                     With<PlayerGent>,
                 )>()),
                 player_move,
+                player_falling
+                    .run_if(any_matching::<(
+                        With<Falling>,
+                        With<PlayerGent>,
+                    )>())
+                    .before(player_grounded),
                 player_grounded.run_if(any_matching::<(
                     With<Grounded>,
-                    With<PlayerGent>,
-                )>()),
-                player_falling.run_if(any_matching::<(
-                    With<Falling>,
                     With<PlayerGent>,
                 )>()),
                 player_collisions
                     .after(player_move)
                     .after(player_grounded)
                     .after(player_jump)
-                    .after(player_falling),
+                    .after(player_falling)
+                    .before(TransformPropagate),
             ),
         );
     }
@@ -368,7 +372,6 @@ fn player_idle(
 fn player_move(
     mut q_gent: Query<(
         &mut LinearVelocity,
-        &mut Transform,
         &ActionState<PlayerAction>,
         &PlayerGent,
         Option<&Grounded>,
@@ -377,7 +380,7 @@ fn player_move(
     //kinda dont want to do flipping here
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for (mut velocity, mut pos, action_state, gent, grounded) in q_gent.iter_mut() {
+    for (mut velocity, action_state, gent, grounded) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
@@ -510,38 +513,36 @@ fn player_collisions(
                     shape_dir,
                     // smaller collider then the players collider to prevent getting stuck
                     &*shape,
-                    //TODO will this cause problems if its 0?
-                    // Direction2d::new_unchecked(linear_velocity.normalize()) ,
                     linear_velocity.length() / time.hz as f32,
                     Some(entity),
                 ) {
                     // If time of impact is 0.0, it means we are inside the wall,
                     // by making the player collider smaller it allows them to attempt escape.
                     // Will prevent player from getting stuck unless they are *really* intent on it.
-                    if first_hit.toi == 0.0 && tries < 5 {
-                        //shape = shape.clone();
+                    /*if first_hit.toi == 0.0 && tries < 5 {
                         let extents = shape.as_cuboid().unwrap().half_extents * 0.95; //collider.scale() * 0.95, 1);
                         shape = Collider::cuboid(extents.x, extents.y)
                             .0
                             .shared_shape()
                             .clone();
                         tries += 1;
+                        println!("{}", tries);
                         continue;
-                    }
+                    }*/
 
                     // Applies a very small amount of bounce, as well as sliding to the character
                     // the bounce helps prevent the player from getting stuck.
 
                     let sliding_plane = into_vec2(first_hit.normal1);
 
-                    let bounce_coefficient = 0.0;
+                    let bounce_coefficient = 0.05;
                     let bounce_force =
                         -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
 
                     let projected_velocity = linear_velocity.xy()
                         - sliding_plane * linear_velocity.xy().dot(sliding_plane);
 
-                    linear_velocity.0 = projected_velocity + bounce_force;
+                    //linear_velocity.0 = projected_velocity + bounce_force;
                 }
                 break;
             }
@@ -560,6 +561,7 @@ fn player_grounded(
             &ShapeCaster,
             &ActionState<PlayerAction>,
             &GlobalTransform,
+            &LinearVelocity,
             &mut Transform,
             &mut TransitionQueue,
             Option<&mut CoyoteTime>,
@@ -574,13 +576,15 @@ fn player_grounded(
         entity,
         ray_cast_info,
         action_state,
-        mut global_pos,
+        global_pos,
+        liner_vel,
         mut position,
         mut transitions,
         coyote_time,
     ) in query.iter_mut()
     {
         let mut time_of_impact = 0.0;
+        let mut status = None;
         let is_falling = ray_cast_info
             .cast(
                 &*spatial_query,
@@ -597,11 +601,18 @@ fn player_grounded(
                     x.1.toi > 1.01
                 }*/
                 time_of_impact = x.1.toi;
-                x.1.toi > 1.01
+                status = Some(x.1.status);
+                x.1.toi > 0.10
             });
+        println!(
+            "linear_vel in grounded: {:?} toi: {} falling? {is_falling} status: {:?}",
+            liner_vel.xy(),
+            time_of_impact,
+            status,
+        );
         // Ensures player character lands at the expected x height every time.
-        if !is_falling {
-            position.translation.y = position.translation.y - time_of_impact;
+        if !is_falling && time_of_impact != 0.0 {
+            position.translation.y = position.translation.y - time_of_impact + 0.05;
         }
         let mut in_c_time = false;
         if let Some(mut c_time) = coyote_time {
@@ -621,11 +632,13 @@ fn player_grounded(
         //known issue https://github.com/bevyengine/bevy/issues/6183
         if action_state.just_pressed(&PlayerAction::Jump) {
             // if action_state.pressed(PlayerAction::Jump) {
+            println!("jumping");
             transitions.push(Grounded::new_transition(
                 Jumping::default(),
             ))
         } else if is_falling {
             if !in_c_time {
+                println!("falling");
                 transitions.push(Grounded::new_transition(Falling))
             }
         }
@@ -645,13 +658,14 @@ fn player_falling(
         ),
         (With<PlayerGent>, With<Falling>),
     >,
+    time: Res<GameTime>,
 ) {
     for (entity, transform, mut velocity, action_state, hits, mut transitions) in query.iter_mut() {
         let fall_accel = 2.9;
         let mut falling = true;
-        if let Some((hit_entity, tio)) = hits.cast(&*spatial_query, transform, Some(entity)) {
+        if let Some((hit_entity, toi)) = hits.cast(&*spatial_query, transform, Some(entity)) {
             //if we are ~touching the ground
-            if tio.toi < 0.001 {
+            if (toi.toi + velocity.y * (1.0 / time.hz) as f32) < 0.05 {
                 transitions.push(Falling::new_transition(Grounded));
                 // println!("{:?} should be grounded", entity);
                 //stop falling
@@ -664,6 +678,11 @@ fn player_falling(
                 }
                 falling = false;
             }
+            println!(
+                "vel in_falling: {:?} toi: {}",
+                velocity.xy(),
+                toi.toi
+            );
         }
         if falling {
             velocity.y -= fall_accel;

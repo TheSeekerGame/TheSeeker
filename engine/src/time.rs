@@ -51,8 +51,7 @@ impl GameTimeAppExt for App {
             self.init_resource::<Events<T>>();
             self.add_systems(
                 GameTickUpdate,
-                minimal_event_update_system::<T>
-                    .in_set(GameTickEventClearSet)
+                minimal_event_update_system::<T>.in_set(GameTickEventClearSet),
             );
         } else {
             warn!("Attempted to add a Game Tick event type that had already been added as an event before!");
@@ -61,9 +60,7 @@ impl GameTimeAppExt for App {
     }
 }
 
-fn minimal_event_update_system<T: Event>(
-    mut events: ResMut<Events<T>>,
-) {
+fn minimal_event_update_system<T: Event>(mut events: ResMut<Events<T>>) {
     events.update();
 }
 
