@@ -560,7 +560,6 @@ fn player_grounded(
             Entity,
             &ShapeCaster,
             &ActionState<PlayerAction>,
-            &GlobalTransform,
             &LinearVelocity,
             &mut Transform,
             &mut TransitionQueue,
@@ -576,7 +575,6 @@ fn player_grounded(
         entity,
         ray_cast_info,
         action_state,
-        global_pos,
         liner_vel,
         mut position,
         mut transitions,
@@ -586,11 +584,7 @@ fn player_grounded(
         let mut time_of_impact = 0.0;
         let mut status = None;
         let is_falling = ray_cast_info
-            .cast(
-                &*spatial_query,
-                global_pos,
-                Some(entity),
-            )
+            .cast(&*spatial_query, &position, Some(entity))
             .iter()
             .any(|x| {
                 /*if into_vec2(x.1.normal1).dot(Vec2::Y) < 0.7 {
@@ -602,7 +596,7 @@ fn player_grounded(
                 }*/
                 time_of_impact = x.1.toi;
                 status = Some(x.1.status);
-                x.1.toi > 0.10
+                x.1.toi > GROUNDED_THRESHOLD * 2.0
             });
         println!(
             "linear_vel in grounded: {:?} toi: {} falling? {is_falling} status: {:?}",
@@ -612,7 +606,7 @@ fn player_grounded(
         );
         // Ensures player character lands at the expected x height every time.
         if !is_falling && time_of_impact != 0.0 {
-            position.translation.y = position.translation.y - time_of_impact + 0.05;
+            position.translation.y = position.translation.y - time_of_impact + GROUNDED_THRESHOLD;
         }
         let mut in_c_time = false;
         if let Some(mut c_time) = coyote_time {
@@ -645,12 +639,17 @@ fn player_grounded(
     }
 }
 
+/// Tries to keep the character this far above the ground colliders
+///
+/// Needs to be non-zero to avoid getting stuck in the ground.
+const GROUNDED_THRESHOLD: f32 = 0.01;
+
 fn player_falling(
     spatial_query: Res<PhysicsWorld>,
     mut query: Query<
         (
             Entity,
-            &GlobalTransform,
+            &mut Transform,
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
             &ShapeCaster,
@@ -660,16 +659,23 @@ fn player_falling(
     >,
     time: Res<GameTime>,
 ) {
-    for (entity, transform, mut velocity, action_state, hits, mut transitions) in query.iter_mut() {
+    for (entity, mut transform, mut velocity, action_state, hits, mut transitions) in
+        query.iter_mut()
+    {
         let fall_accel = 2.9;
         let mut falling = true;
-        if let Some((hit_entity, toi)) = hits.cast(&*spatial_query, transform, Some(entity)) {
+        if let Some((hit_entity, toi)) = hits.cast(
+            &*spatial_query,
+            &transform,
+            Some(entity),
+        ) {
             //if we are ~touching the ground
-            if (toi.toi + velocity.y * (1.0 / time.hz) as f32) < 0.05 {
+            if (toi.toi + velocity.y * (1.0 / time.hz) as f32) < GROUNDED_THRESHOLD {
                 transitions.push(Falling::new_transition(Grounded));
                 // println!("{:?} should be grounded", entity);
                 //stop falling
                 velocity.y = 0.0;
+                transform.translation.y = transform.translation.y - toi.toi + GROUNDED_THRESHOLD;
                 if action_state.pressed(&PlayerAction::Move) {
                     transitions.push(Falling::new_transition(Running));
                     // println!("{:?} should be running", entity)

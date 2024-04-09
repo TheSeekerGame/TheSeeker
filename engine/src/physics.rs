@@ -54,10 +54,10 @@ impl ShapeCaster {
     pub fn cast(
         &self,
         physics_world: &PhysicsWorld,
-        transform: &GlobalTransform,
+        transform: &Transform,
         ignore: Option<Entity>,
     ) -> Option<(Entity, parry::query::TOI)> {
-        let origin = transform.translation().xy() + self.origin;
+        let origin = transform.translation.xy() + self.origin;
         let shape = &*self.shape;
 
         physics_world.shape_cast(
