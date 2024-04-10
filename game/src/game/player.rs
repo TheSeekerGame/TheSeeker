@@ -413,8 +413,6 @@ fn player_move(
             }
         };
         velocity.x = new_vel.clamp(-100.0, 100.0);
-        //println!("vel: {:?}", velocity.xy());
-        //println!("pos: {:?}", pos);
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {
@@ -507,30 +505,21 @@ fn player_collisions(
         let mut tries = 0;
         let mut original_pos = pos.translation.xy();
 
-        //if we are not moving, we can not shapecast in direction of movement
+        // We loop over the shape cast operation to check if the new trajectory might *also* collide.
+        // This can happen in a corner for example, where the first collision is on one wall, and
+        // so the velocity is only stopped in the x direction, but not the y, so without the extra
+        // check with the new velocity and position, the y might clip the player through the roof
+        // of the corner.
         loop {
+            //if we are not moving, we can not shapecast in direction of movement
             if let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
                 if let Some((e, first_hit)) = spatial_query.shape_cast(
                     pos.translation.xy(),
                     shape_dir,
-                    // smaller collider then the players collider to prevent getting stuck
                     &*shape,
                     linear_velocity.length() / time.hz as f32 + 0.5,
                     Some(entity),
                 ) {
-                    // If time of impact is 0.0, it means we are inside the wall,
-                    // by making the player collider smaller it allows them to attempt escape.
-                    // Will prevent player from getting stuck unless they are *really* intent on it.
-                    /*if first_hit.status == TOIStatus::Penetrating && tries < 5 {
-                        let extents = shape.as_cuboid().unwrap().half_extents * 0.95; //collider.scale() * 0.95, 1);
-                        shape = Collider::cuboid(extents.x, extents.y)
-                            .0
-                            .shared_shape()
-                            .clone();
-                        tries += 1;
-                        println!("attempt: {}", tries);
-                        continue;
-                    }*/
 
                     // Applies a very small amount of bounce, as well as sliding to the character
                     // the bounce helps prevent the player from getting stuck.
@@ -578,12 +567,6 @@ fn player_collisions(
                         linear_velocity.0 = Vec2::ZERO;
                         break;
                     }
-                    println!(
-                        "linear_vel_after: {} pos_after: {}",
-                        linear_velocity.xy(),
-                        pos.translation.xy()
-                    );
-                    println!("attempt: {}", tries);
                     tries += 1;
                 } else {
                     break;
@@ -598,12 +581,6 @@ fn player_collisions(
         let z = pos.translation.z;
         pos.translation =
             (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
-        if tries > 0 {
-            println!(
-                "final_final_pos: {}",
-                pos.translation.xy()
-            )
-        }
     }
 }
 
@@ -645,13 +622,6 @@ fn player_grounded(
             .cast(&*spatial_query, &position, Some(entity))
             .iter()
             .any(|x| {
-                /*if into_vec2(x.1.normal1).dot(Vec2::Y) < 0.7 {
-                    // Slope too steep
-                    true
-                } else {
-                    time_of_impact = x.1.toi;
-                    x.1.toi > 1.01
-                }*/
                 time_of_impact = x.1.toi;
                 x.1.toi > GROUNDED_THRESHOLD + 0.01
             });
@@ -716,13 +686,11 @@ fn player_falling(
             //if we are ~touching the ground
             if (toi.toi + velocity.y * (1.0 / time.hz) as f32) < GROUNDED_THRESHOLD {
                 transitions.push(Falling::new_transition(Grounded));
-                // println!("{:?} should be grounded", entity);
                 //stop falling
                 velocity.y = 0.0;
                 transform.translation.y = transform.translation.y - toi.toi + GROUNDED_THRESHOLD;
                 if action_state.pressed(&PlayerAction::Move) {
                     transitions.push(Falling::new_transition(Running));
-                    // println!("{:?} should be running", entity)
                 } else {
                     transitions.push(Falling::new_transition(Idle));
                 }
