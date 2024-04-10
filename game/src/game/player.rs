@@ -520,7 +520,6 @@ fn player_collisions(
                     linear_velocity.length() / time.hz as f32 + 0.5,
                     Some(entity),
                 ) {
-
                     // Applies a very small amount of bounce, as well as sliding to the character
                     // the bounce helps prevent the player from getting stuck.
 
