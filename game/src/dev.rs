@@ -21,7 +21,6 @@ impl Plugin for DevPlugin {
                 unpause.run_if(in_state(GameState::Paused)),
             ),
         );
-        //app.add_plugins(PhysicsDebugPlugin::default());
         app.add_plugins((
             FrameTimeDiagnosticsPlugin,
             LogDiagnosticsPlugin::default(),
