@@ -541,18 +541,9 @@ fn player_collisions(
                     },
                     Some(entity),
                 ) {
-                    // Applies a very small amount of bounce, as well as sliding to the character
-                    // the bounce helps prevent the player from getting stuck.
-
-                    println!(
-                        "linear_vel: {:?} pos: {} toi: {} status: {:?}",
-                        linear_velocity.xy(),
-                        pos.translation.xy(),
-                        first_hit.toi,
-                        first_hit.status,
-                    );
-
                     if first_hit.status != TOIStatus::Penetrating {
+                        // Applies a very small amount of bounce, as well as sliding to the character
+                        // the bounce helps prevent the player from getting stuck.
                         let sliding_plane = into_vec2(first_hit.normal1);
 
                         let bounce_coefficient = 0.05;
@@ -564,17 +555,6 @@ fn player_collisions(
                             - sliding_plane * linear_velocity.xy().dot(sliding_plane);
                         linear_velocity.0 = projected_velocity + bounce_force;
 
-                        println!(
-                            "norm1: {} norm2: {}",
-                            into_vec2(first_hit.normal1),
-                            into_vec2(first_hit.normal2)
-                        );
-
-                        println!(
-                            "pos: {}, shape_dir: {}",
-                            pos.translation.xy(),
-                            shape_dir.xy()
-                        );
                         let new_pos =
                             pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
                         pos.translation.x = new_pos.x;
