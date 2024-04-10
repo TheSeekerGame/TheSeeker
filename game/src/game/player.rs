@@ -505,9 +505,11 @@ fn player_collisions(
     for (entity, mut pos, mut linear_velocity, collider) in q_gent.iter_mut() {
         let mut shape = collider.0.shared_shape().clone();
         let mut tries = 0;
+        let mut original_pos = pos.translation.xy();
+
         //if we are not moving, we can not shapecast in direction of movement
-        if let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
-            loop {
+        loop {
+            if let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
                 if let Some((e, first_hit)) = spatial_query.shape_cast(
                     pos.translation.xy(),
                     shape_dir,
@@ -519,14 +521,14 @@ fn player_collisions(
                     // If time of impact is 0.0, it means we are inside the wall,
                     // by making the player collider smaller it allows them to attempt escape.
                     // Will prevent player from getting stuck unless they are *really* intent on it.
-                    /*if first_hit.toi == 0.0 && tries < 5 {
+                    /*if first_hit.status == TOIStatus::Penetrating && tries < 5 {
                         let extents = shape.as_cuboid().unwrap().half_extents * 0.95; //collider.scale() * 0.95, 1);
                         shape = Collider::cuboid(extents.x, extents.y)
                             .0
                             .shared_shape()
                             .clone();
                         tries += 1;
-                        println!("{}", tries);
+                        println!("attempt: {}", tries);
                         continue;
                     }*/
 
@@ -553,32 +555,55 @@ fn player_collisions(
                             - sliding_plane * linear_velocity.xy().dot(sliding_plane);
                         linear_velocity.0 = projected_velocity + bounce_force;
 
-                        let sliding_plane = into_vec2(first_hit.normal2);
+                        println!(
+                            "norm1: {} norm2: {}",
+                            into_vec2(first_hit.normal1),
+                            into_vec2(first_hit.normal2)
+                        );
 
-                        let bounce_force = -sliding_plane
-                            * linear_velocity.dot(sliding_plane)
-                            * bounce_coefficient;
-
-                        let projected_velocity = linear_velocity.xy()
-                            - sliding_plane * linear_velocity.xy().dot(sliding_plane);
-                        linear_velocity.0 = projected_velocity + bounce_force;
-
-                        //let new_pos = pos.translation.xy()
-                        //    + shape_dir.xy() * (1.0 / time.hz as f32) * (first_hit.toi - 0.5);
-                        //pos.translation.x = new_pos.x;
-                        //pos.translation.x = new_pos.y;
+                        println!(
+                            "pos: {}, shape_dir: {}",
+                            pos.translation.xy(),
+                            shape_dir.xy()
+                        );
+                        let new_pos =
+                            pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
+                        pos.translation.x = new_pos.x;
+                        pos.translation.y = new_pos.y;
+                    } else if tries > 1 {
+                        // If we tried a few times and still penetrating, just abort the whole movement
+                        // thing entirely. This scenario rarely occurs, so stopping movement is fine.
+                        pos.translation.x = original_pos.x;
+                        pos.translation.y = original_pos.y;
+                        linear_velocity.0 = Vec2::ZERO;
+                        break;
                     }
                     println!(
-                        "linear_vel_after: {}",
-                        linear_velocity.xy()
-                    )
+                        "linear_vel_after: {} pos_after: {}",
+                        linear_velocity.xy(),
+                        pos.translation.xy()
+                    );
+                    println!("attempt: {}", tries);
+                    tries += 1;
+                } else {
+                    break;
                 }
+                if tries > 5 {
+                    break;
+                }
+            } else {
                 break;
             }
         }
         let z = pos.translation.z;
         pos.translation =
             (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
+        if tries > 0 {
+            println!(
+                "final_final_pos: {}",
+                pos.translation.xy()
+            )
+        }
     }
 }
 
