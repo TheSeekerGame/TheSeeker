@@ -5,20 +5,15 @@ use rapier2d::na::{Unit, UnitComplex};
 use rapier2d::parry;
 use rapier2d::prelude::*;
 
-// Layers used for collision checks.
-
-pub struct Layer(Group);
-impl Layer {
-    // Todo impl consts
-    // Sets it up so that the character and enemies layers only
-    // interact with the world
-    // Emissions on world layer will ignore colliders in world
-    // const WORLD: Layer = Layer(Group::GROUP_2 | Group::GROUP_3);
-    // Emissions on character layer will ignore colliders in enemies and character
-    //   const CHARACTER: Layer = Layer(Group::GROUP_1);
-    // Emissions on enemies layer will ignore colliders in enemies and character
-    // const ENEMIES: Layer = Layer(Group::GROUP_1);
-}
+/// The player collision group
+pub const PLAYER: Group = Group::from_bits_truncate(0b0001);
+/// The enemy collision group
+pub const ENEMY: Group = Group::from_bits_truncate(0b0010);
+/// The ground collision group
+pub const GROUND: Group = Group::from_bits_truncate(0b0100);
+/// The for when the other two groups don't make sense,
+/// and you just want to detect something
+pub const SENSOR: Group = Group::from_bits_truncate(0b1000);
 
 /// Objects marked with this and a transform component will be updated in the
 /// collision scene. Parenting is not currently kept in sync; global transforms are used instead.
@@ -27,10 +22,14 @@ impl Layer {
 pub struct Collider(pub rapier2d::prelude::Collider);
 
 impl Collider {
-    pub fn cuboid(x_length: f32, y_length: f32) -> Self {
+    pub fn cuboid(x_length: f32, y_length: f32, interaction: InteractionGroups) -> Self {
         // Rapiers cuboid is subtely different from xpbd, as rapier is defined by its
         // half extents, and xpbd is by its extents.
-        Self(rapier2d::prelude::ColliderBuilder::cuboid(x_length * 0.5, y_length * 0.5).build())
+        Self(
+            rapier2d::prelude::ColliderBuilder::cuboid(x_length * 0.5, y_length * 0.5)
+                .collision_groups(interaction)
+                .build(),
+        )
     }
 }
 
@@ -47,7 +46,7 @@ pub struct ShapeCaster {
     pub origin: Vec2,
     pub direction: Direction2d,
     pub max_toi: f32,
-    //layer: Layer,
+    pub interaction: InteractionGroups,
 }
 
 impl ShapeCaster {
@@ -65,7 +64,7 @@ impl ShapeCaster {
             self.direction,
             shape,
             self.max_toi,
-            // self.layer,
+            self.interaction,
             ignore,
         )
     }
@@ -99,15 +98,10 @@ impl PhysicsWorld {
         direction: Direction2d,
         shape: &dyn Shape,
         max_toi: f32,
-        // todo
-        // layer: Group,
+        interaction: InteractionGroups,
         exclude: Option<Entity>,
     ) -> Option<(Entity, parry::query::TOI)> {
-        let mut filter = QueryFilter::new(); /*.groups(InteractionGroups {
-                                                 // I *think* this is setup properly... needs testing though to verify
-                                                 memberships: layer.0,
-                                                 filter: Group::all(),
-                                             });*/
+        let mut filter = QueryFilter::new().groups(interaction);
         if let Some(exclude) = exclude {
             // Entity might not be added yet; or even exist.
             if let Some(col_id) = self.id_tracker.get(&exclude) {
@@ -137,11 +131,10 @@ impl PhysicsWorld {
         origin: Vec2,
         cast: Vec2,
         max_toi: f32,
-        // todo
-        // layer: Group,
+        interaction: InteractionGroups,
         exclude: Option<Entity>,
     ) -> Option<(Entity, parry::query::RayIntersection)> {
-        let mut filter = QueryFilter::new();
+        let mut filter = QueryFilter::new().groups(interaction);
         if let Some(exclude) = exclude {
             if let Some(col_id) = self.id_tracker.get(&exclude) {
                 filter = filter.exclude_collider(*col_id)
@@ -171,11 +164,10 @@ impl PhysicsWorld {
         &self,
         origin: Vec2,
         shape: &dyn Shape,
-        // todo
-        // layer: Group,
+        interaction: InteractionGroups,
         exclude: Option<Entity>,
     ) -> Vec<Entity> {
-        let mut filter = QueryFilter::new();
+        let mut filter = QueryFilter::new().groups(interaction);
         if let Some(exclude) = exclude {
             if let Some(col_id) = self.id_tracker.get(&exclude) {
                 filter = filter.exclude_collider(*col_id)

@@ -1,7 +1,10 @@
 use bevy::transform::TransformSystem::TransformPropagate;
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
+use rapier2d::geometry::{Group, InteractionGroups};
 use rapier2d::parry::query::TOIStatus;
-use theseeker_engine::physics::{into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster};
+use theseeker_engine::physics::{
+    into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, GROUND, PLAYER,
+};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
     assets::animation::SpriteAnimation,
@@ -171,12 +174,26 @@ fn setup_player(
             PlayerGentBundle {
                 marker: PlayerGent { e_gfx },
                 phys: GentPhysicsBundle {
-                    collider: Collider::cuboid(4.0, 10.0),
+                    collider: Collider::cuboid(
+                        4.0,
+                        10.0,
+                        InteractionGroups {
+                            memberships: PLAYER,
+                            filter: Group::all(),
+                        },
+                    ),
                     shapecast: ShapeCaster {
-                        shape: Collider::cuboid(4.0, 10.0).0.shared_shape().clone(),
+                        shape: Collider::cuboid(4.0, 10.0, InteractionGroups::none())
+                            .0
+                            .shared_shape()
+                            .clone(),
                         origin: Vec2::new(0.0, 0.0),
                         max_toi: f32::MAX,
                         direction: Direction2d::NEG_Y,
+                        interaction: InteractionGroups {
+                            memberships: PLAYER,
+                            filter: GROUND,
+                        },
                     },
                     linear_velocity: LinearVelocity(Vec2::ZERO),
                 },
@@ -518,6 +535,10 @@ fn player_collisions(
                     shape_dir,
                     &*shape,
                     linear_velocity.length() / time.hz as f32 + 0.5,
+                    InteractionGroups {
+                        memberships: PLAYER,
+                        filter: GROUND,
+                    },
                     Some(entity),
                 ) {
                     // Applies a very small amount of bounce, as well as sliding to the character

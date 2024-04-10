@@ -1,4 +1,5 @@
-use theseeker_engine::physics::{update_query_pipeline, Collider, PhysicsWorld};
+use rapier2d::geometry::InteractionGroups;
+use theseeker_engine::physics::{update_query_pipeline, Collider, PhysicsWorld, GROUND, PLAYER};
 use theseeker_engine::{assets::animation::SpriteAnimation, script::ScriptPlayer};
 
 use super::player::{PlayerGent, PlayerGfx};
@@ -67,6 +68,7 @@ fn attack_damage(
         let colliding_entities = spatial_query.intersect(
             pos.translation().xy(),
             attack_collider.0.shape(),
+            attack_collider.0.collision_groups(),
             Some(entity),
         );
         for (entity, mut health, player_collider, player_gent) in player_query.iter_mut() {

@@ -3,7 +3,10 @@ use crate::game::gentstate::*;
 use crate::game::player::PlayerGent;
 use crate::prelude::*;
 use rapier2d::geometry::SharedShape;
-use theseeker_engine::physics::{Collider, LinearVelocity, PhysicsWorld, ShapeCaster};
+use rapier2d::prelude::{Group, InteractionGroups};
+use theseeker_engine::physics::{
+    Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, GROUND, PLAYER, SENSOR,
+};
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
     assets::animation::SpriteAnimation,
@@ -93,13 +96,24 @@ fn setup_enemy(
                 phys: GentPhysicsBundle {
                     //need to find a way to offset this one px toward back of enemys facing
                     //direction
-                    collider: Collider::cuboid(22.0, 10.0),
+                    collider: Collider::cuboid(
+                        22.0,
+                        10.0,
+                        InteractionGroups {
+                            memberships: ENEMY,
+                            filter: Group::all(),
+                        },
+                    ),
                     shapecast: ShapeCaster {
                         shape: SharedShape::cuboid(22.0, 10.0),
                         // Vec2::NEG_Y.into(),,
                         direction: Direction2d::NEG_Y,
                         origin: Vec2::new(0.0, -2.0),
                         max_toi: 0.0,
+                        interaction: InteractionGroups {
+                            memberships: ENEMY,
+                            filter: GROUND,
+                        },
                     },
                     linear_velocity: LinearVelocity(Vec2::ZERO),
                 },
@@ -358,7 +372,14 @@ fn melee_attack(
             //why isnt transform working after setting parent?
             let collider = commands
                 .spawn((
-                    Collider::cuboid(28., 10.),
+                    Collider::cuboid(
+                        28.,
+                        10.,
+                        InteractionGroups {
+                            memberships: SENSOR,
+                            filter: PLAYER,
+                        },
+                    ),
                     Attack::new(8),
                     TransformBundle::default(),
                     // TransformBundle::from_transform(Transform::from_xyz(
@@ -433,8 +454,10 @@ fn walking(
             Vec2::NEG_Y,
             //change
             100.,
-            //switch this to only wall/floor entities?
-            //TODO: use layers
+            InteractionGroups {
+                memberships: ENEMY,
+                filter: GROUND,
+            },
             Some(entity),
         ) {
             if first_hit.toi > 0.0 {
