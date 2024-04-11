@@ -4,6 +4,7 @@ use bevy::transform::TransformSystem::TransformPropagate;
 use rapier2d::na::{Unit, UnitComplex};
 use rapier2d::parry;
 use rapier2d::prelude::*;
+use std::f32::consts::PI;
 
 /// The player collision group
 pub const PLAYER: Group = Group::from_bits_truncate(0b0001);
@@ -18,6 +19,8 @@ pub const SENSOR: Group = Group::from_bits_truncate(0b1000);
 /// Objects marked with this and a transform component will be updated in the
 /// collision scene. Parenting is not currently kept in sync; global transforms are used instead.
 /// Colliders ignore all scaling!
+///
+/// Only colliders that have an easy build wrapper are shown in the collider debug system.
 #[derive(Component)]
 pub struct Collider(pub rapier2d::prelude::Collider);
 
@@ -229,6 +232,12 @@ impl Plugin for PhysicsPlugin {
             GameTickUpdate,
             update_query_pipeline.in_set(PhysicsSet),
         );
+        #[cfg(feature = "dev")]
+        app.init_gizmo_group::<PhsyicsCollidersGizmos>()
+            .add_systems(
+                GameTickUpdate,
+                debug_colliders.after(PhysicsSet),
+            );
     }
 }
 
@@ -330,6 +339,33 @@ pub fn update_query_pipeline(
         removed_colliders.as_slice(),
         true,
     );
+}
+
+#[derive(Default, Reflect, GizmoConfigGroup)]
+struct PhsyicsCollidersGizmos {}
+
+/// Draws colliders using bevy's gizmos to assist with debugging.
+pub fn debug_colliders(
+    world: ResMut<PhysicsWorld>,
+    //mut gizmos: Gizmos,
+    mut collider_gizmos: Gizmos<PhsyicsCollidersGizmos>,
+) {
+    for (handle, collider) in world.col_set.iter() {
+        let pos = Vec2::new(
+            collider.position().translation.x,
+            collider.position().translation.y,
+        );
+        let rotation: f32 = collider.rotation().angle();
+        if let Some(cube) = collider.shared_shape().as_cuboid() {
+            let half_extents = Vec2::new(cube.half_extents.x, cube.half_extents.y);
+            collider_gizmos.rect(
+                pos.extend(0.0),
+                Quat::from_rotation_z(rotation - PI),
+                half_extents * 2.0,
+                Color::GREEN,
+            );
+        }
+    }
 }
 
 /// Utility to convert from [`Vec2`] to rapier compatible structure
