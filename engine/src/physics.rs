@@ -73,9 +73,6 @@ impl ShapeCaster {
     }
 }
 
-/*#[derive(Component)]
-pub struct ShapeHit(Option<Entity>);*/
-
 /// Used to create queries on a physics world.
 ///
 /// To add a collider, you don't need this Resource, instead
