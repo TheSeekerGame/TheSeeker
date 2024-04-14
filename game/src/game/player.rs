@@ -3,10 +3,11 @@ use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use rapier2d::geometry::{Group, InteractionGroups};
 use rapier2d::parry::query::TOIStatus;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
-use theseeker_engine::physics::{
-    into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, GROUND, PLAYER, PLAYER_ATTACK,
-};
 use theseeker_engine::gent::{Gent, GentPhysicsBundle};
+use theseeker_engine::physics::{
+    into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, GROUND, PLAYER,
+    PLAYER_ATTACK,
+};
 use theseeker_engine::{
     animation::SpriteAnimationBundle, assets::animation::SpriteAnimation,
     gent::TransformGfxFromGent, script::ScriptPlayer,
@@ -520,11 +521,13 @@ fn player_move(
             &ActionState<PlayerAction>,
             &mut Facing,
             Option<&Grounded>,
+            &Gent,
         ),
         (With<Player>),
     >,
+    mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for (mut velocity, action_state, mut facing, grounded) in q_gent.iter_mut() {
+    for (mut velocity, action_state, mut facing, grounded, gent) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
@@ -580,6 +583,7 @@ fn player_move(
                 player.set_slot("MovingVertically", false);
                 player.set_slot("MovingHorizontally", false);
             }
+        }
         if direction > 0.0 {
             *facing = Facing::Right;
         } else if direction < 0.0 {
@@ -900,7 +904,11 @@ fn player_attack(
                     // InteractionGroups::new(PLAYER_ATTACK, ENEMY),
                     // CollisionLayers::new([Layer::PlayerAttack], [Layer::Enemy]),
                     //TODO: rapier collider
-                    Collider::cuboid(10., 10., InteractionGroups::new(PLAYER_ATTACK, ENEMY)),
+                    Collider::cuboid(
+                        10.,
+                        10.,
+                        InteractionGroups::new(PLAYER_ATTACK, ENEMY),
+                    ),
                     Attack::new(16),
                 ))
                 .set_parent(entity);
