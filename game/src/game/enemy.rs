@@ -1,18 +1,23 @@
-use crate::game::attack::Attack;
-use crate::game::gentstate::*;
-use crate::game::player::PlayerGent;
+use crate::game::{attack::*, gentstate::*};
 use crate::prelude::*;
 use rapier2d::geometry::SharedShape;
 use rapier2d::prelude::{Group, InteractionGroups};
+use theseeker_engine::gent::GentPhysicsBundle;
 use theseeker_engine::physics::{
-    Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, GROUND, PLAYER, SENSOR,
+    Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, GROUND, PLAYER,
+    SENSOR,
 };
+//what is this for?
+use bevy::reflect::List;
+use rand::distributions::Standard;
 use theseeker_engine::{
     animation::SpriteAnimationBundle,
     assets::animation::SpriteAnimation,
-    gent::{GentPhysicsBundle, TransformGfxFromGent},
+    gent::{Gent, TransformGfxFromGent},
     script::ScriptPlayer,
 };
+
+use super::player::Player;
 
 pub struct EnemyPlugin;
 
@@ -24,6 +29,10 @@ impl Plugin for EnemyPlugin {
                 .before(EnemyStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         );
+        app.add_systems(
+            GameTickUpdate,
+            spawn_enemy.after(setup_enemy),
+        );
         app.add_plugins((
             EnemyBehaviorPlugin,
             EnemyTransitionPlugin,
@@ -32,7 +41,7 @@ impl Plugin for EnemyPlugin {
     }
 }
 
-pub fn debug_enemy(world: &World, query: Query<Entity, With<EnemyGent>>) {
+pub fn debug_enemy(world: &World, query: Query<Entity, With<Gent>>) {
     for entity in query.iter() {
         let components = world.inspect_entity(entity);
         println!("enemy");
@@ -54,19 +63,42 @@ pub struct EnemyBlueprintBundle {
     marker: EnemyBlueprint,
 }
 
+#[derive(Bundle, LdtkEntity, Default)]
+pub struct EnemySpawnerBundle {
+    marker: EnemySpawner,
+}
+
+//how doe i make it generic over size?
+#[derive(Component, Default)]
+pub struct EnemySpawner {
+    //pub num: u32,
+    // pub enemies: Vec<Entity>,
+    pub enemy: Option<Entity>,
+    pub cooldown_ticks: u32,
+}
+
+impl EnemySpawner {
+    const COOLDOWN: u32 = 620;
+}
+//TODO: should spawn an enemy, then if its enemy dies respawn after a delay
+
 #[derive(Component, Default)]
 pub struct EnemyBlueprint;
 
 #[derive(Bundle)]
 pub struct EnemyGentBundle {
-    marker: EnemyGent,
+    enemy: Enemy,
+    marker: Gent,
     phys: GentPhysicsBundle,
 }
 
+// #[derive(Component)]
+// pub struct Gent {
+//     e_gfx: Entity,
+// }
+
 #[derive(Component)]
-pub struct EnemyGent {
-    e_gfx: Entity,
-}
+pub struct Enemy;
 
 #[derive(Bundle)]
 pub struct EnemyGfxBundle {
@@ -81,6 +113,35 @@ pub struct EnemyGfx {
     e_gent: Entity,
 }
 
+fn spawn_enemy(
+    mut q: Query<(Entity, &Transform, &mut EnemySpawner)>,
+    enemy_q: Query<(Entity), (With<Enemy>, Without<EnemySpawner>)>,
+    mut commands: Commands,
+) {
+    for (e, transform, mut spawner) in q.iter_mut() {
+        if let Some(enemy) = spawner.enemy {
+            // if its no longer alive
+            // dbg!(enemy_q.get(enemy));
+            if !enemy_q.get(enemy).is_ok() && spawner.cooldown_ticks >= EnemySpawner::COOLDOWN {
+                spawner.enemy = None;
+            } else {
+                spawner.cooldown_ticks += 1;
+            }
+        } else {
+            let id = commands
+                .spawn((
+                    EnemyBlueprintBundle::default(),
+                    TransformBundle::from_transform(*transform),
+                ))
+                .id();
+            spawner.enemy = Some(id);
+            spawner.cooldown_ticks = 0;
+        }
+    }
+}
+
+//some problem with ordering causing the attack transform to be incorrect if this is ordered as
+//expected
 fn setup_enemy(
     mut q: Query<(&mut Transform, Entity), Added<EnemyBlueprint>>,
     mut commands: Commands,
@@ -88,11 +149,11 @@ fn setup_enemy(
     for (mut xf_gent, e_gent) in q.iter_mut() {
         //TODO: ensure propper z order
         xf_gent.translation.z = 14.;
-        // println!("{:?} enemy", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
             EnemyGentBundle {
-                marker: EnemyGent { e_gfx },
+                enemy: Enemy,
+                marker: Gent { e_gfx },
                 phys: GentPhysicsBundle {
                     //need to find a way to offset this one px toward back of enemys facing
                     //direction
@@ -112,20 +173,32 @@ fn setup_enemy(
                         max_toi: 0.0,
                         interaction: InteractionGroups {
                             memberships: ENEMY,
+                            //aka wall
                             filter: GROUND,
                         },
                     },
                     linear_velocity: LinearVelocity(Vec2::ZERO),
                 },
             },
-            Role::Melee,
+            Range::None,
+            Health {
+                current: 100,
+                max: 100,
+            },
+            Role::random(),
+            Grouped,
+            // Retreating {
+            //     current_ticks: 0,
+            //     max_ticks: 300,
+            // },
             Facing::Right,
-            AddQueue::default(),
+            // Defense::default(),
             Patrolling::default(),
             Walking {
-                current_walking_ticks: 0,
-                max_walking_ticks: 300,
-            }, // transitions: TransitionsFrom::<Walking>::default(),
+                current_ticks: 0,
+                max_ticks: 300,
+            },
+            AddQueue::default(),
             TransitionQueue::default(), // },
         ));
         commands.entity(e_gfx).insert((EnemyGfxBundle {
@@ -151,21 +224,32 @@ impl Plugin for EnemyBehaviorPlugin {
             GameTickUpdate,
             (
                 (
+                    // assign_group,
+                    // check_player_range,
                     (
                         patrolling.run_if(any_with_component::<Patrolling>),
                         aggro.run_if(any_with_component::<Aggroed>),
                         waiting.run_if(any_with_component::<Waiting>),
+                        defense.run_if(any_with_component::<Defense>),
                         ranged_attack.run_if(any_with_component::<RangedAttack>),
                         melee_attack.run_if(any_with_component::<MeleeAttack>),
+                        pushback_attack.run_if(any_with_component::<PushbackAttack>),
+                        // retreat.run_if(any_with_component::<Retreating>),
                     ),
                     walking.run_if(any_with_component::<Walking>),
+                    retreating.run_if(any_with_component::<Retreating>),
                 )
                     .chain(),
-                sprite_flip,
+                // sprite_flip,
             )
                 .chain()
-                .run_if(in_state(AppState::InGame)),
+                .run_if(in_state(AppState::InGame))
+                .in_set(EnemyStateSet::Behavior),
         );
+        // app.add_systems(
+        //     GameTickUpdate,
+        //     assign_group.in_set(EnemyStateSet::Behavior),
+        // );
     }
 }
 
@@ -180,8 +264,8 @@ impl Transitionable<Aggroed> for Patrolling {
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 struct Walking {
-    current_walking_ticks: u32,
-    max_walking_ticks: u32,
+    current_ticks: u32,
+    max_ticks: u32,
 }
 impl GentState for Walking {}
 impl GenericState for Walking {}
@@ -191,22 +275,44 @@ impl GenericState for Walking {}
 struct Aggroed {
     target: Entity,
 }
+impl Aggroed {
+    const RANGE: f32 = 60.;
+}
+
 impl GentState for Aggroed {}
 impl Transitionable<Patrolling> for Aggroed {
     type Removals = (Aggroed, RangedAttack);
 }
 
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
+struct Defense {
+    cooldown_ticks: u32,
+}
+impl Defense {
+    const COOLDOWN: u32 = 100;
+}
+
+impl GentState for Defense {}
+impl GenericState for Defense {}
+
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
 struct RangedAttack {
     target: Entity,
+    current_ticks: u32,
+}
+impl RangedAttack {
+    const STARTUP: u32 = 6;
+    const RANGE: f32 = 40.;
 }
 impl GentState for RangedAttack {}
+impl GenericState for RangedAttack {}
 
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
 struct MeleeAttack {
-    target: Entity,
+    // target: Entity,
     current_ticks: u32,
 }
 impl MeleeAttack {
@@ -217,6 +323,21 @@ impl MeleeAttack {
 }
 impl GentState for MeleeAttack {}
 impl GenericState for MeleeAttack {}
+
+#[derive(Component, Default, Debug)]
+#[component(storage = "SparseSet")]
+struct PushbackAttack {
+    // target: Entity,
+    current_ticks: u32,
+}
+impl PushbackAttack {
+    //frames
+    const STARTUP: u32 = 5;
+    // const RECOVERY: u32 = 7;
+    const MAX: u32 = 10;
+}
+impl GentState for PushbackAttack {}
+impl GenericState for PushbackAttack {}
 
 #[derive(Component, Default)]
 #[component(storage = "SparseSet")]
@@ -235,34 +356,173 @@ enum Role {
     Ranged,
 }
 
-//check if in group
+impl Role {
+    fn random() -> Role {
+        let mut rng = rand::thread_rng();
+        rng.gen()
+    }
+}
 
-//ai Intents
-//need way to check edges of platform
+impl Distribution<Role> for Standard {
+    fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Role {
+        let index: u8 = rng.gen_range(0..=1);
+        match index {
+            0 => Role::Melee,
+            1 => Role::Ranged,
+            _ => unreachable!(),
+        }
+    }
+}
+
+#[derive(Component, Debug)]
+#[component(storage = "SparseSet")]
+struct Retreating {
+    current_ticks: u32,
+    max_ticks: u32,
+}
+impl GentState for Retreating {}
+impl GenericState for Retreating {}
+
+//make component hold optional range?
+#[derive(Component, Debug)]
+enum Range {
+    Melee,
+    Ranged,
+    Aggro,
+    Deaggro,
+    None,
+}
+
+impl Range {
+    const MELEE: f32 = 10.;
+    const RANGED: f32 = 60.;
+    const AGGRO: f32 = 61.;
+}
+
+// fn check_player_range(
+//     mut query: Query<(Entity, &mut Range, &GlobalTransform), With<Enemy>>,
+//     spatial_query: SpatialQuery,
+// ) {
+//     for (entity, mut range, transform) in query.iter_mut() {
+//         let project_from = transform.translation().truncate();
+//         if let Some(projection) = spatial_query.project_point(
+//             project_from,
+//             false,
+//             SpatialQueryFilter::from_mask(Layer::Player),
+//         ) {
+//             let distance = project_from.distance(projection.point);
+//             if distance <= Range::MELEE {
+//                 *range = Range::Melee
+//             } else if distance <= Range::RANGED {
+//                 *range = Range::Ranged
+//             } else if distance <= Range::AGGRO {
+//                 *range = Range::Aggro
+//             } else {
+//                 *range = Range::Deaggro
+//             }
+//         } else {
+//             *range = Range::None
+//         }
+//         // dbg!(range);
+//     }
+// }
+
+//TODO: project point
+fn retreat(
+    mut query: Query<
+        (
+            Entity,
+            &Facing,
+            &GlobalTransform,
+            &mut TransitionQueue,
+            Has<Grouped>,
+        ),
+        (With<Retreating>, With<Enemy>),
+    >,
+    // spatial_query: SpatialQuery,
+    spatial_query: Res<PhysicsWorld>,
+) {
+    for (entity, facing, transform, mut transitions, is_grouped) in query.iter_mut() {
+        // if is_grouped {
+        //     transitions.push(Retreating::new_transition(Aggroed))
+        // }
+        let project_from = transform.translation().truncate();
+        // if let Some(projection) = spatial_query.project_point(
+        //     project_from,
+        //     false,
+        //
+        //     // SpatialQueryFilter::from_mask(Layer::Player),
+        // ) {
+        //     //put this all in aggro system...
+        //     let distance = project_from.distance(projection.point);
+        //     let aggro_range = 80.;
+        //     let ranged_range = 60.;
+        //     if distance > aggro_range {
+        //         // return to patrolling
+        //     } else if distance < aggro_range && distance < ranged_range {
+        //         // ranged attacks
+        //     } else if distance > ranged_range {
+        //         //walk away from player
+        //     }
+        // }
+    }
+}
+
+//check if in group
+//
+fn assign_group(
+    query: Query<(Entity, &GlobalTransform, Has<Grouped>), With<Enemy>>,
+    spatial_query: Res<PhysicsWorld>,
+    // spatial_query: SpatialQuery,
+) {
+    for (entity, transform, is_grouped) in query.iter() {
+        let project_from = transform.translation().truncate();
+        //TODO: there is no project point yet
+        // if let Some(projection) = spatial_query.project_point(
+        //     project_from,
+        //     false,
+        //     SpatialQueryFilter::from_mask(Layer::Enemy).with_excluded_entities([entity]),
+        // ) {
+        //     let closest = project_from.distance(projection.point);
+        //     if closest < 60. && !is_grouped {
+        //         // commands.entity(entity).insert(Grouped);
+        //     } else if closest >= 60. && is_grouped {
+        //         // commands.entity(entity).remove::<Grouped>();
+        //     }
+        // }
+    }
+    //
+    //point project spatial query, filter everything except enemies,
+}
+
+//could be its own entity
+//TODO: change to enum
+#[derive(Component, Debug)]
+struct Grouped;
+
 fn patrolling(
     mut query: Query<
         (
-            &EnemyGent,
             &GlobalTransform,
             &Facing,
             &mut TransitionQueue,
+            &mut AddQueue,
             Option<&Waiting>,
         ),
-        With<Patrolling>,
+        (With<Patrolling>, With<Enemy>),
     >,
-    player_query: Query<(Entity, &GlobalTransform), (Without<EnemyGent>, With<PlayerGent>)>,
+    player_query: Query<(Entity, &GlobalTransform), (Without<Enemy>, With<Player>)>,
 ) {
     let aggro_distance = 60.;
     if let Ok((player_gent, player_trans)) = player_query.get_single() {
-        for (enemy, trans, facing, mut transitions, maybe_waiting) in query.iter_mut() {
+        for (trans, facing, mut transitions, mut additions, maybe_waiting) in query.iter_mut() {
             let distance = trans
                 .translation()
                 .truncate()
                 .distance(player_trans.translation().truncate());
             //if player comes close, aggro
             //
-            if distance < aggro_distance {
-                println!("should transition to aggroed");
+            if distance < Range::AGGRO {
                 transitions.push(Patrolling::new_transition(Aggroed {
                     target: player_gent,
                 }));
@@ -270,18 +530,86 @@ fn patrolling(
                 let waiting = maybe_waiting.unwrap();
                 if waiting.current_waiting_ticks >= waiting.max_waiting_ticks {
                     transitions.push(Waiting::new_transition(Walking {
-                        max_walking_ticks: 240,
-                        current_walking_ticks: 0,
+                        max_ticks: 240,
+                        current_ticks: 0,
                     }));
+                }
+            }
+        }
+    //if there is no player
+    } else {
+        for (trans, facing, transitions, mut additions, maybe_waiting) in query.iter_mut() {
+            if let Some(waiting) = maybe_waiting {
+                //when the animation is finished to transition back to idle
+                if waiting.current_waiting_ticks >= 15 * 8 {
+                    additions.add(Idle::default());
                 }
             }
         }
     }
 }
 
-fn waiting(mut query: Query<(&mut Waiting), With<EnemyGent>>) {
+fn waiting(mut query: Query<(&mut Waiting), With<Enemy>>) {
     for mut waiting in query.iter_mut() {
         waiting.current_waiting_ticks += 1;
+    }
+}
+
+//TODO: ensure animation wont transition till finished
+fn defense(mut query: Query<(&mut Defense, &mut TransitionQueue), With<Enemy>>) {
+    for (mut defense, mut transitions) in query.iter_mut() {
+        defense.cooldown_ticks += 1;
+        if defense.cooldown_ticks == Defense::COOLDOWN * 8 {
+            transitions.push(Defense::new_transition(
+                PushbackAttack::default(),
+            ));
+            defense.cooldown_ticks = 0;
+        }
+    }
+}
+
+fn pushback_attack(
+    mut query: Query<
+        (
+            Entity,
+            &Facing,
+            &mut PushbackAttack,
+            &mut TransitionQueue,
+        ),
+        With<Enemy>,
+    >,
+    mut commands: Commands,
+) {
+    for (entity, facing, mut attack, mut transitions) in query.iter_mut() {
+        attack.current_ticks += 1;
+        if attack.current_ticks == PushbackAttack::STARTUP * 8 {
+            commands
+                .spawn((
+                    // CollisionLayers::new([Layer::EnemyAttack], [Layer::Player]),
+                    TransformBundle::from_transform(Transform::from_xyz(
+                        10. * -facing.direction(),
+                        0.,
+                        0.,
+                    )),
+                    Collider::cuboid(
+                        10.,
+                        10.,
+                        InteractionGroups {
+                            memberships: ENEMY_ATTACK,
+                            filter: PLAYER,
+                        },
+                    ),
+                    Attack::new(8),
+                    Pushback::default(),
+                ))
+                .set_parent(entity);
+            //TODO: Add pushback, add pushback to attack system
+        }
+        if attack.current_ticks >= PushbackAttack::MAX * 8 {
+            transitions.push(PushbackAttack::new_transition(
+                Defense::default(),
+            ))
+        }
     }
 }
 
@@ -294,17 +622,31 @@ fn aggro(
             &GlobalTransform,
             &mut TransitionQueue,
             &mut AddQueue,
+            &Range,
+            &Role,
+            Has<Grouped>,
+            Has<RangedAttack>,
             Has<MeleeAttack>,
         ),
-        (With<EnemyGent>),
+        (With<Enemy>),
     >,
-    player_query: Query<(&GlobalTransform), (Without<EnemyGent>, With<PlayerGent>)>,
+    player_query: Query<(&GlobalTransform), (Without<Enemy>, With<Player>)>,
 ) {
-    let aggro_distance = 60.;
-    for (aggroed, mut facing, trans, mut transitions, mut add_q, maybe_attacking) in
-        query.iter_mut()
+    for (
+        aggroed,
+        mut facing,
+        trans,
+        mut transitions,
+        mut add_q,
+        range,
+        role,
+        is_grouped,
+        is_r_attacking,
+        is_m_attacking,
+    ) in query.iter_mut()
     {
         if let Ok(player_trans) = player_query.get(aggroed.target) {
+            let is_attacking = is_r_attacking || is_m_attacking;
             //face player
             if trans.translation().x > player_trans.translation().x {
                 *facing = Facing::Right;
@@ -316,29 +658,93 @@ fn aggro(
                 .translation()
                 .truncate()
                 .distance(player_trans.translation().truncate());
-            if distance > aggro_distance {
+            if distance > Range::AGGRO {
                 //and if not mid attack?
                 transitions.push(Aggroed::new_transition(
                     Patrolling::default(),
                 ));
                 add_q.add(Waiting::default());
-            } else if !maybe_attacking {
-                // transitions.push(Walking::new_transition(RangedAttack {
-                //     target: aggroed.target,
-                // }));
-                transitions.push(Walking::new_transition(MeleeAttack {
-                    target: aggroed.target,
+            } else if !is_attacking && !is_grouped {
+                //TODO: duration of retreat should be random
+                transitions.push(Walking::new_transition(Retreating {
                     current_ticks: 0,
+                    max_ticks: 300,
                 }));
+            } else if !is_attacking && is_grouped {
+                match role {
+                    Role::Ranged => transitions.push(Walking::new_transition(RangedAttack {
+                        target: aggroed.target,
+                        current_ticks: 0,
+                    })),
+                    Role::Melee => transitions.push(Walking::new_transition(MeleeAttack {
+                        current_ticks: 0,
+                    })),
+                }
             }
+        } else {
+            transitions.push(Aggroed::new_transition(
+                Patrolling::default(),
+            ));
         }
         //if there is no player it should also return to patrol state
     }
 }
 
-fn ranged_attack(mut query: Query<(&RangedAttack, &mut LinearVelocity), With<EnemyGent>>) {
-    for (attack, mut velocity) in query.iter_mut() {
-        velocity.x = 0.;
+fn chase(
+    mut query: Query<&mut LinearVelocity, With<Enemy>>,
+    mut player_query: Query<(Entity, &GlobalTransform), With<Player>>,
+) {
+    for (mut velocity) in query.iter_mut() {
+        //ranged move into ranged range, ranged attack
+        //melee
+        //move toward player, if reach edge stop
+    }
+}
+
+fn ranged_attack(
+    mut query: Query<
+        (
+            &mut RangedAttack,
+            &mut LinearVelocity,
+            &mut TransitionQueue,
+        ),
+        With<Enemy>,
+    >,
+    player_query: Query<(&Transform), With<Player>>,
+    mut commands: Commands,
+) {
+    for (mut attack, mut velocity, mut trans_q) in query.iter_mut() {
+        if attack.current_ticks == 0 {
+            velocity.x = 0.;
+        }
+        attack.current_ticks += 1;
+        if attack.current_ticks >= 15 * 8 {
+            trans_q.push(RangedAttack::new_transition(
+                Waiting::default(),
+            ));
+        }
+        //if player isnt alive just transition back
+        let Ok(transform) = player_query.get(attack.target) else {
+            // trans_q.push(RangedAttack::new_transition(
+            //     Waiting::default(),
+            //     // Idle::default(),
+            // ));
+            continue;
+        };
+        if attack.current_ticks == RangedAttack::STARTUP * 8 {
+            commands.spawn((
+                Attack::new(100),
+                // RigidBody::Static,
+                // Sensor,
+                Collider::cuboid(
+                    10.,
+                    10.,
+                    InteractionGroups::new(ENEMY_ATTACK, PLAYER),
+                ),
+                // CollisionLayers::new([Layer::EnemyAttack], [Layer::Player]),
+                TransformBundle::from_transform(*transform),
+            ));
+        }
     }
 }
 
@@ -352,7 +758,7 @@ fn melee_attack(
             &GlobalTransform,
             &mut TransitionQueue,
         ),
-        With<EnemyGent>,
+        With<Enemy>,
     >,
     mut commands: Commands,
 ) {
@@ -368,29 +774,27 @@ fn melee_attack(
         // if attack.current_ticks % 8 * MeleeAttack::STARTUP == 0 {
         if attack.current_ticks == 8 * MeleeAttack::STARTUP {
             //spawn attack hitbox collider as child
-            println!("collider should be spawned");
-            //why isnt transform working after setting parent?
             let collider = commands
                 .spawn((
                     Collider::cuboid(
-                        28.,
+                        //todo, half extents correct?
+                        10.,
                         10.,
                         InteractionGroups {
                             memberships: SENSOR,
                             filter: PLAYER,
                         },
                     ),
+                    // CollisionLayers::new([Layer::EnemyAttack], [Layer::Player]),
+                    TransformBundle::from_transform(Transform::from_xyz(
+                        10. * -facing.direction(),
+                        0.,
+                        0.,
+                    )),
                     Attack::new(8),
-                    TransformBundle::default(),
-                    // TransformBundle::from_transform(Transform::from_xyz(
-                    //     10. * facing.direction() + transform.translation().x,
-                    //     transform.translation().y,
-                    //     0.,
-                    // )),
                 ))
                 .set_parent(entity)
                 .id();
-            // commands.entity(entity).add_child(collider);
         }
         if attack.current_ticks >= MeleeAttack::MAX * 8 {
             trans_q.push(MeleeAttack::new_transition(
@@ -405,22 +809,23 @@ fn melee_attack(
 
 //animation/behavior state
 fn walking(
-    mut query: Query<(
-        Entity,
-        &EnemyGent,
-        &GlobalTransform,
-        &mut Facing,
-        &mut LinearVelocity,
-        &mut Walking,
-        &mut TransitionQueue,
-        &mut AddQueue,
-        Option<&Aggroed>,
-    )>,
+    mut query: Query<
+        (
+            Entity,
+            &GlobalTransform,
+            &mut Facing,
+            &mut LinearVelocity,
+            &mut Walking,
+            &mut TransitionQueue,
+            &mut AddQueue,
+            Option<&Aggroed>,
+        ),
+        (With<Enemy>, Without<Retreating>),
+    >,
     spatial_query: Res<PhysicsWorld>,
 ) {
     for (
         entity,
-        enemy,
         g_transform,
         mut facing,
         mut velocity,
@@ -434,7 +839,7 @@ fn walking(
         //     velocity.x = -20. * facing.direction();
         // }
         velocity.x = -20. * facing.direction();
-        if walking.current_walking_ticks >= walking.max_walking_ticks {
+        if walking.current_ticks >= walking.max_ticks {
             velocity.x = 0.;
             transitions.push(Walking::new_transition(Waiting {
                 current_waiting_ticks: 0,
@@ -472,30 +877,103 @@ fn walking(
                     velocity.x = 0.;
                 }
             };
-            // println!("{:?}", first_hit);
+        } else {
+            if maybe_aggroed.is_none() {
+                *facing = match *facing {
+                    Facing::Right => Facing::Left,
+                    Facing::Left => Facing::Right,
+                };
+                velocity.x *= -1.;
+            } else {
+                velocity.x = 0.;
+            }
         };
-        walking.current_walking_ticks += 1;
+        //TODO: another shapecast in walking direction to check if we are walking into a wall
+        // if let Some(first_hit) = spatial_query.cast_shape(
+        //
+        // ) {}
+        walking.current_ticks += 1;
     }
 }
 
-fn sprite_flip(
-    query: Query<(&Facing, &EnemyGent)>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+fn retreating(
+    mut query: Query<
+        (
+            Entity,
+            &GlobalTransform,
+            &mut Facing,
+            &mut LinearVelocity,
+            &mut Retreating,
+            &mut TransitionQueue,
+            &mut AddQueue,
+            Option<&Aggroed>,
+        ),
+        (With<Enemy>, Without<Walking>),
+    >,
+    player_query: Query<(Entity), With<Player>>,
+    spatial_query: Res<PhysicsWorld>,
+    // spatial_query: SpatialQuery,
 ) {
-    for (facing, gent) in query.iter() {
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            match facing {
-                Facing::Right => {
-                    //TODO: toggle facing script action
-                    player.set_slot("DirectionRight", true);
-                    player.set_slot("DirectionLeft", false);
-                },
-                Facing::Left => {
-                    player.set_slot("DirectionRight", false);
-                    player.set_slot("DirectionLeft", true);
-                },
-            }
+    for (
+        entity,
+        g_transform,
+        mut facing,
+        mut velocity,
+        mut retreating,
+        mut transitions,
+        mut add_q,
+        maybe_aggroed,
+    ) in query.iter_mut()
+    {
+        // if walking.current_walking_ticks == 0 {
+        //     velocity.x = -20. * facing.direction();
+        // }
+        velocity.x = 20. * facing.direction();
+        if retreating.current_ticks >= retreating.max_ticks {
+            velocity.x = 0.;
+            // transitions.push(Retreating::new_transition(Waiting {
+            //     current_waiting_ticks: 0,
+            //     max_waiting_ticks: 240,
+            // }));
+            add_q.add(Idle::default());
+            continue;
         }
+        let ray_origin = Vec2::new(
+            g_transform.translation().x - 10. * -facing.direction(),
+            g_transform.translation().y - 9.,
+        );
+        if let Some((hit_entity, first_hit)) = spatial_query.ray_cast(
+            //offset 10 x from center toward facing direction
+            // g_transform.translation().truncate(),
+            ray_origin,
+            // Direction2d::NEG_Y,
+            Vec2::NEG_Y,
+            //change
+            100.,
+            // true,
+            //switch this to only wall/floor entities?
+            //TODO: use layers
+            InteractionGroups::new(ENEMY, GROUND),
+            None,
+            // SpatialQueryFilter::from_excluded_entities([entity]),
+        ) {
+            // dbg!(first_hit.time_of_impact);
+            if first_hit.toi > 0.0 {
+                velocity.x = 0.;
+                //transition to defense or ranged attack
+                transitions.push(Retreating::new_transition(
+                    RangedAttack {
+                        target: player_query.get_single().expect("no player"),
+                        current_ticks: 0,
+                    },
+                ));
+            };
+        };
+        //TODO: another shapecast in walking direction to check if we are walking into a wal
+        // if let Some(first_hit) = spatial_query.cast_shape(
+        //
+        // ) {}
+        retreating.current_ticks += 1;
     }
 }
 
@@ -506,14 +984,9 @@ impl Plugin for EnemyTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                transition.run_if(any_matching::<(
-                    With<TransitionQueue>,
-                    With<EnemyGent>,
-                )>()),
-                add_states.run_if(any_matching::<(
-                    With<AddQueue>,
-                    With<EnemyGent>,
-                )>()),
+                transition.run_if(any_with_component::<Enemy>),
+                add_states.run_if(any_with_component::<AddQueue>),
+                apply_deferred,
             )
                 .chain()
                 .in_set(EnemyStateSet::Transition)
@@ -531,9 +1004,13 @@ impl Plugin for EnemyAnimationPlugin {
             GameTickUpdate,
             (
                 enemy_idle_animation,
+                enemy_defense_animation,
                 enemy_walking_animation,
+                enemy_retreat_animation,
                 enemy_ranged_attack_animation,
                 enemy_melee_attack_animation,
+                enemy_pushback_attack_animation,
+                sprite_flip,
             )
                 .in_set(EnemyStateSet::Animation)
                 .after(EnemyStateSet::Transition)
@@ -543,7 +1020,7 @@ impl Plugin for EnemyAnimationPlugin {
 }
 
 fn enemy_idle_animation(
-    i_query: Query<&EnemyGent, Added<Idle>>,
+    i_query: Query<&Gent, (Added<Idle>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
     for gent in i_query.iter() {
@@ -554,7 +1031,7 @@ fn enemy_idle_animation(
 }
 
 fn enemy_walking_animation(
-    i_query: Query<&EnemyGent, Added<Walking>>,
+    i_query: Query<&Gent, (Added<Walking>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
     for gent in i_query.iter() {
@@ -565,7 +1042,7 @@ fn enemy_walking_animation(
 }
 
 fn enemy_ranged_attack_animation(
-    i_query: Query<&EnemyGent, Added<RangedAttack>>,
+    i_query: Query<&Gent, (Added<RangedAttack>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
     for gent in i_query.iter() {
@@ -576,12 +1053,66 @@ fn enemy_ranged_attack_animation(
 }
 
 fn enemy_melee_attack_animation(
-    i_query: Query<&EnemyGent, Added<MeleeAttack>>,
+    i_query: Query<&Gent, (Added<MeleeAttack>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
     for gent in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
             enemy.play_key("anim.spider.OffensiveAttack");
+        }
+    }
+}
+
+fn enemy_pushback_attack_animation(
+    i_query: Query<&Gent, (Added<PushbackAttack>, With<Enemy>)>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+) {
+    for gent in i_query.iter() {
+        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
+            enemy.play_key("anim.spider.DefensiveAttack");
+        }
+    }
+}
+
+fn enemy_defense_animation(
+    i_query: Query<&Gent, (Added<Defense>, With<Enemy>)>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+) {
+    for gent in i_query.iter() {
+        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
+            enemy.play_key("anim.spider.Defense");
+        }
+    }
+}
+
+fn enemy_retreat_animation(
+    i_query: Query<&Gent, (Added<Retreating>, With<Enemy>)>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+) {
+    for gent in i_query.iter() {
+        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
+            enemy.play_key("anim.spider.Retreat");
+        }
+    }
+}
+
+fn sprite_flip(
+    query: Query<(&Facing, &Gent), With<Enemy>>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+) {
+    for (facing, gent) in query.iter() {
+        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            match facing {
+                Facing::Right => {
+                    //TODO: toggle facing script action
+                    player.set_slot("DirectionRight", true);
+                    player.set_slot("DirectionLeft", false);
+                },
+                Facing::Left => {
+                    player.set_slot("DirectionRight", false);
+                    player.set_slot("DirectionLeft", true);
+                },
+            }
         }
     }
 }

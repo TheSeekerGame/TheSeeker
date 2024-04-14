@@ -1,8 +1,8 @@
 use rapier2d::geometry::InteractionGroups;
 use theseeker_engine::physics::{update_query_pipeline, Collider, PhysicsWorld, GROUND, PLAYER};
-use theseeker_engine::{assets::animation::SpriteAnimation, script::ScriptPlayer};
+use theseeker_engine::{assets::animation::SpriteAnimation, gent::Gent, script::ScriptPlayer};
 
-use super::player::{PlayerGent, PlayerGfx};
+use super::{enemy::EnemyGfx, player::PlayerGfx};
 use crate::prelude::*;
 
 pub struct AttackPlugin;
@@ -15,9 +15,11 @@ impl Plugin for AttackPlugin {
                 attack_damage,
                 attack_tick,
                 attack_cleanup,
+                damage_flash,
             )
                 .chain(),
         );
+        app.add_systems(GameTickUpdate, despawn_dead);
     }
 }
 
@@ -28,8 +30,16 @@ pub struct Attack {
     damage: u32,
     damaged: Vec<Entity>,
     //target: Entity
-    //or
-    //damage_team: Team::Player
+}
+
+#[derive(Bundle)]
+pub struct AttackBundle {
+    attack: Attack,
+    collider: Collider,
+    //layers: CollisionLayers,
+    //rigid body...
+    //ranged vs melee
+    //
 }
 
 #[derive(Component)]
@@ -47,6 +57,22 @@ impl Attack {
         }
     }
 }
+
+#[derive(Component)]
+pub struct DamageFlash {
+    pub current_ticks: u32,
+    pub max_ticks: u32,
+}
+
+#[derive(Component, Default)]
+pub struct Pushback {
+    //direction
+}
+
+//TODO: change to a gentstate once we have death animations
+#[derive(Component)]
+pub struct Dead;
+
 fn attack_damage(
     spatial_query: Res<PhysicsWorld>,
     mut query: Query<(
@@ -55,13 +81,15 @@ fn attack_damage(
         &mut Attack,
         &Collider,
     )>,
-    mut player_query: Query<(
-        Entity,
-        &mut Health,
-        &Collider,
-        &PlayerGent,
-    )>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    mut damageable_query: Query<(Entity, &mut Health, &Collider, &Gent)>,
+    mut gfx_query: Query<
+        (
+            Entity,
+            &mut ScriptPlayer<SpriteAnimation>,
+        ),
+        Or<(With<PlayerGfx>, With<EnemyGfx>)>,
+    >,
+    mut commands: Commands,
     //animation query to flash red?
 ) {
     for (entity, pos, mut attack, attack_collider) in query.iter_mut() {
@@ -71,24 +99,61 @@ fn attack_damage(
             attack_collider.0.collision_groups(),
             Some(entity),
         );
-        for (entity, mut health, player_collider, player_gent) in player_query.iter_mut() {
-            if colliding_entities.contains(&entity) {
-                if !attack.damaged.contains(&entity) {
-                    health.current = health.current.saturating_sub(attack.damage);
-                    attack.damaged.push(entity);
-                    println!("player health, {:?}", health.current);
-                    if let Ok(mut anim_player) = gfx_query.get_mut(player_gent.e_gfx) {
-                        anim_player.set_slot("Damage", true);
+        // for (entity, mut health, collider, gent) in damageable_query.iter_mut() {
+            // =======
+            //     mut query: Query<(&mut Attack, &CollidingEntities)>,
+            //     mut damageable_query: Query<(Entity, &mut Health, &Gent)>,
+            //     mut gfx_query: Query<
+            //         (
+            //             Entity,
+            //             &mut ScriptPlayer<SpriteAnimation>,
+            //         ),
+            //         Or<(With<PlayerGfx>, With<EnemyGfx>)>,
+            //     >,
+            // ) {
+            // for (mut attack, colliding_entities) in query.iter_mut() {
+            for (entity, mut health, collider, gent) in damageable_query.iter_mut() {
+                // >>>>>>> abcd8c0 (attacks)
+                if colliding_entities.contains(&entity) {
+                    if !attack.damaged.contains(&entity) {
+                        health.current = health.current.saturating_sub(attack.damage);
+                        attack.damaged.push(entity);
+                        println!("player health, {:?}", health.current);
+                        if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
+                            // is there any way to check if a slot is set?
+                            anim_player.set_slot("Damage", true);
+                            commands.entity(anim_entity).insert(DamageFlash {
+                                current_ticks: 0,
+                                max_ticks: 8,
+                            });
+                        }
+                        //unset damage flash after certain time
+                        if health.current == 0 {
+                            println!("player dead");
+                            commands.entity(entity).insert(Dead);
+                        }
                     }
-                    //unset damage flash after certain time
-                    if health.current == 0 {
-                        println!("player dead");
-                    }
+                    println!("colliding, attack with player");
                 }
-                println!("colliding, attack with player");
             }
-            // spatial_query.shape_intersections(attack_collider, shape_position, shape_rotation, query_filter)
         }
+    // }
+}
+
+fn damage_flash(
+    mut query: Query<(
+        Entity,
+        &mut DamageFlash,
+        &mut ScriptPlayer<SpriteAnimation>,
+    )>,
+    mut commands: Commands,
+) {
+    for (entity, mut damage_flash, mut anim_player) in query.iter_mut() {
+        if damage_flash.current_ticks == damage_flash.max_ticks {
+            commands.entity(entity).remove::<DamageFlash>();
+            anim_player.set_slot("Damage", false);
+        }
+        damage_flash.current_ticks += 1;
     }
 }
 
@@ -104,5 +169,13 @@ fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
             println!("despawned attack collider");
             commands.entity(entity).despawn();
         }
+    }
+}
+
+//TODO: change to a gentstate once we have death animations
+fn despawn_dead(query: Query<(Entity, &Gent), With<Dead>>, mut commands: Commands) {
+    for (entity, gent) in query.iter() {
+        commands.entity(gent.e_gfx).despawn_recursive();
+        commands.entity(entity).despawn_recursive();
     }
 }

@@ -10,11 +10,15 @@ use std::f32::consts::PI;
 pub const PLAYER: Group = Group::from_bits_truncate(0b0001);
 /// The enemy collision group
 pub const ENEMY: Group = Group::from_bits_truncate(0b0010);
+/// The player attack collision group
+pub const PLAYER_ATTACK: Group = Group::from_bits_truncate(0b0100);
+/// The enemy attack collision group
+pub const ENEMY_ATTACK: Group = Group::from_bits_truncate(0b1000);
 /// The ground collision group
-pub const GROUND: Group = Group::from_bits_truncate(0b0100);
+pub const GROUND: Group = Group::from_bits_truncate(0b10000);
 /// The for when the other two groups don't make sense,
 /// and you just want to detect something
-pub const SENSOR: Group = Group::from_bits_truncate(0b1000);
+pub const SENSOR: Group = Group::from_bits_truncate(0b100000);
 
 /// Objects marked with this and a transform component will be updated in the
 /// collision scene. Parenting is not currently kept in sync; global transforms are used instead.

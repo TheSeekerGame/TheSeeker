@@ -3,12 +3,12 @@ time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
 frame_min = 0
-frame_max = 
+frame_max = 10
 frame_start = 0
 
 # LOOP
 [[script]]
-run_at_frame = 
+run_at_frame = 10
 action = "SetFrameNext"
 frame_index = 0
 

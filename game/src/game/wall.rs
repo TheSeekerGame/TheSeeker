@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use rapier2d::geometry::InteractionGroups;
 use rapier2d::prelude::Group;
-use theseeker_engine::physics::{Collider, GROUND, PLAYER};
+use theseeker_engine::physics::{Collider, ENEMY, GROUND, PLAYER};
 
 pub struct WallPlugin;
 
@@ -179,6 +179,7 @@ pub fn spawn_wall_collision(
                                 * grid_size as f32,
                             InteractionGroups {
                                 memberships: GROUND,
+                                //TODO: layers, player and enemy
                                 filter: Group::all(),
                             },
                         ),
