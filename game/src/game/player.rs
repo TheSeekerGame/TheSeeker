@@ -84,18 +84,8 @@ pub struct PlayerGfxBundle {
 #[derive(Component, Default)]
 pub struct PlayerBlueprint;
 
-// #[derive(Component)]
-// pub struct Gent {
-//     pub e_gfx: Entity,
-// }
-
 #[derive(Component)]
 pub struct Player;
-
-//pub struct Gent {
-//e_gfx: Entity
-//}
-//
 
 #[derive(Component)]
 pub struct PlayerGfx {
@@ -219,8 +209,6 @@ fn setup_player(
                 current: 100,
                 max: 100,
             },
-            //we dont want the player ever to be slept by xpbd
-            // SleepingDisabled,
             //have to use builder here *i think* because of different types between keycode and
             //axis
             InputManagerBundle::<PlayerAction> {
@@ -234,7 +222,7 @@ fn setup_player(
                     .insert(PlayerAction::Attack, KeyCode::Enter)
                     .build(),
             },
-            Falling::default(),
+            Falling,
             TransitionQueue::default(),
             AddQueue::default(),
         ));
@@ -298,20 +286,7 @@ impl GenericState for Falling {}
 
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
-pub struct Jumping {
-    //TODO: remove ticks here, no longer needed
-    current_air_ticks: u32,
-    max_air_ticks: u32,
-}
-
-impl Default for Jumping {
-    fn default() -> Self {
-        Jumping {
-            current_air_ticks: 0,
-            max_air_ticks: 30,
-        }
-    }
-}
+pub struct Jumping;
 impl GentState for Jumping {}
 impl GenericState for Jumping {}
 
@@ -375,6 +350,8 @@ impl Plugin for PlayerBehaviorPlugin {
                 player_jump.run_if(any_with_component::<Jumping>),
                 player_grounded.run_if(any_with_component::<Grounded>),
                 player_falling.run_if(any_with_component::<Falling>),
+                //consider a set for all movement/systems modify velocity, then collisions/move
+                //moves based on velocity
                 player_collisions
                     .after(player_move)
                     .after(player_grounded)
@@ -507,7 +484,7 @@ fn player_idle(
             // println!("moving??")
         }
         if direction != 0.0 {
-            transitions.push(Idle::new_transition(Running::default()));
+            transitions.push(Idle::new_transition(Running));
         }
     }
 }
@@ -647,8 +624,6 @@ fn player_jump(
             velocity.y -= deaccel_rate;
         }
 
-        jumping.current_air_ticks += 1;
-
         velocity.y = velocity.y.clamp(0., config.jump_vel_init);
     }
 }
@@ -676,57 +651,50 @@ fn player_collisions(
         // so the velocity is only stopped in the x direction, but not the y, so without the extra
         // check with the new velocity and position, the y might clip the player through the roof
         // of the corner.
-        loop {
-            //if we are not moving, we can not shapecast in direction of movement
-            if let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
-                if let Some((e, first_hit)) = spatial_query.shape_cast(
-                    pos.translation.xy(),
-                    shape_dir,
-                    &*shape,
-                    linear_velocity.length() / time.hz as f32 + 0.5,
-                    InteractionGroups {
-                        memberships: PLAYER,
-                        filter: GROUND,
-                    },
-                    Some(entity),
-                ) {
-                    if first_hit.status != TOIStatus::Penetrating {
-                        // Applies a very small amount of bounce, as well as sliding to the character
-                        // the bounce helps prevent the player from getting stuck.
-                        let sliding_plane = into_vec2(first_hit.normal1);
+        //if we are not moving, we can not shapecast in direction of movement
+        while let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
+            if let Some((e, first_hit)) = spatial_query.shape_cast(
+                pos.translation.xy(),
+                shape_dir,
+                &*shape,
+                linear_velocity.length() / time.hz as f32 + 0.5,
+                InteractionGroups {
+                    memberships: PLAYER,
+                    filter: GROUND,
+                },
+                Some(entity),
+            ) {
+                if first_hit.status != TOIStatus::Penetrating {
+                    // Applies a very small amount of bounce, as well as sliding to the character
+                    // the bounce helps prevent the player from getting stuck.
+                    let sliding_plane = into_vec2(first_hit.normal1);
 
-                        let bounce_coefficient = 0.05;
-                        let bounce_force = -sliding_plane
-                            * linear_velocity.dot(sliding_plane)
-                            * bounce_coefficient;
+                    let bounce_coefficient = 0.05;
+                    let bounce_force =
+                        -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
 
-                        let projected_velocity = linear_velocity.xy()
-                            - sliding_plane * linear_velocity.xy().dot(sliding_plane);
-                        linear_velocity.0 = projected_velocity + bounce_force;
+                    let projected_velocity = linear_velocity.xy()
+                        - sliding_plane * linear_velocity.xy().dot(sliding_plane);
+                    linear_velocity.0 = projected_velocity + bounce_force;
 
-                        let new_pos =
-                            pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
-                        pos.translation.x = new_pos.x;
-                        pos.translation.y = new_pos.y;
-                    } else if tries > 1 {
-                        // If we tried a few times and still penetrating, just abort the whole movement
-                        // thing entirely. This scenario rarely occurs, so stopping movement is fine.
-                        pos.translation.x = original_pos.x;
-                        pos.translation.y = original_pos.y;
-                        linear_velocity.0 = Vec2::ZERO;
-                        break;
-                    }
-                    tries += 1;
-                } else {
+                    let new_pos = pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
+                    pos.translation.x = new_pos.x;
+                    pos.translation.y = new_pos.y;
+                } else if tries > 1 {
+                    // If we tried a few times and still penetrating, just abort the whole movement
+                    // thing entirely. This scenario rarely occurs, so stopping movement is fine.
+                    pos.translation.x = original_pos.x;
+                    pos.translation.y = original_pos.y;
+                    linear_velocity.0 = Vec2::ZERO;
                     break;
                 }
-                if tries > 5 {
-                    break;
-                }
+                tries += 1;
             } else {
                 break;
             }
-            break;
+            if tries > 5 {
+                break;
+            }
         }
         let z = pos.translation.z;
         pos.translation =
@@ -798,10 +766,7 @@ fn player_grounded(
         //jump continuously if held
         //known issue https://github.com/bevyengine/bevy/issues/6183
         if action_state.just_pressed(&PlayerAction::Jump) {
-            // if action_state.pressed(PlayerAction::Jump) {
-            transitions.push(Grounded::new_transition(
-                Jumping::default(),
-            ))
+            transitions.push(Grounded::new_transition(Jumping))
         } else if is_falling {
             if !in_c_time {
                 transitions.push(Grounded::new_transition(Falling))
@@ -894,16 +859,11 @@ fn player_attack(
         if attacking.ticks == Attacking::STARTUP * 8 {
             commands
                 .spawn((
-                    // RigidBody::Kinematic,
-                    // Sensor,
                     TransformBundle::from_transform(Transform::from_xyz(
                         10. * facing.direction(),
                         0.,
                         0.,
                     )),
-                    // InteractionGroups::new(PLAYER_ATTACK, ENEMY),
-                    // CollisionLayers::new([Layer::PlayerAttack], [Layer::Enemy]),
-                    //TODO: rapier collider
                     Collider::cuboid(
                         10.,
                         10.,
@@ -919,7 +879,6 @@ fn player_attack(
         }
     }
     //3 attack chain,
-    //.....
 }
 
 ///play animations here, run after transitions

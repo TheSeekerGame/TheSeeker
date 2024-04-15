@@ -56,7 +56,7 @@ pub fn add_states(mut query: Query<(Entity, &mut AddQueue)>, mut commands: Comma
     }
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Debug, Default)]
 pub enum Facing {
     #[default]
     Right,
@@ -80,7 +80,7 @@ impl Facing {
 /// from by a state
 pub trait GentState: Component<Storage = SparseStorage> {}
 
-/// A GenericState has a blanket Transitionable impl for any GentState, 
+/// A GenericState has a blanket Transitionable impl for any GentState,
 /// it will remove itsself on transition
 pub trait GenericState: Component<Storage = SparseStorage> {}
 

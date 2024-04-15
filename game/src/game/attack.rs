@@ -1,8 +1,8 @@
-use theseeker_engine::physics::{Collider, PhysicsWorld};
+use theseeker_engine::physics::{Collider, LinearVelocity, PhysicsWorld};
 use theseeker_engine::{assets::animation::SpriteAnimation, gent::Gent, script::ScriptPlayer};
 
 use super::{enemy::EnemyGfx, player::PlayerGfx};
-use crate::prelude::*;
+use crate::{game::player::PlayerStateSet, prelude::*};
 
 pub struct AttackPlugin;
 
@@ -16,7 +16,8 @@ impl Plugin for AttackPlugin {
                 attack_cleanup,
                 damage_flash,
             )
-                .chain(),
+                .chain()
+                .before(PlayerStateSet::Behavior),
         );
         app.add_systems(GameTickUpdate, despawn_dead);
     }
@@ -60,7 +61,7 @@ pub struct DamageFlash {
 
 #[derive(Component, Default)]
 pub struct Pushback {
-    //direction
+    pub direction: f32,
 }
 
 //TODO: change to a gentstate once we have death animations
@@ -74,8 +75,15 @@ fn attack_damage(
         &GlobalTransform,
         &mut Attack,
         &Collider,
+        Option<&Pushback>,
     )>,
-    mut damageable_query: Query<(Entity, &mut Health, &Collider, &Gent)>,
+    mut damageable_query: Query<(
+        Entity,
+        &mut Health,
+        &Collider,
+        &Gent,
+        &mut LinearVelocity,
+    )>,
     mut gfx_query: Query<
         (
             Entity,
@@ -86,37 +94,37 @@ fn attack_damage(
     mut commands: Commands,
     //animation query to flash red?
 ) {
-    for (entity, pos, mut attack, attack_collider) in query.iter_mut() {
+    for (entity, pos, mut attack, attack_collider, maybe_pushback) in query.iter_mut() {
         let colliding_entities = spatial_query.intersect(
             pos.translation().xy(),
             attack_collider.0.shape(),
             attack_collider.0.collision_groups(),
             Some(entity),
         );
-            for (entity, mut health, collider, gent) in damageable_query.iter_mut() {
-                if colliding_entities.contains(&entity) {
-                    if !attack.damaged.contains(&entity) {
-                        health.current = health.current.saturating_sub(attack.damage);
-                        attack.damaged.push(entity);
-                        println!("player health, {:?}", health.current);
-                        if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
-                            // is there any way to check if a slot is set?
-                            anim_player.set_slot("Damage", true);
-                            commands.entity(anim_entity).insert(DamageFlash {
-                                current_ticks: 0,
-                                max_ticks: 8,
-                            });
-                        }
-                        //unset damage flash after certain time
-                        if health.current == 0 {
-                            println!("player dead");
-                            commands.entity(entity).insert(Dead);
-                        }
-                    }
-                    println!("colliding, attack with player");
+        for (entity, mut health, collider, gent, mut velocity) in damageable_query.iter_mut() {
+            if colliding_entities.contains(&entity) && !attack.damaged.contains(&entity) {
+                health.current = health.current.saturating_sub(attack.damage);
+                attack.damaged.push(entity);
+                println!("player health, {:?}", health.current);
+                if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
+                    // is there any way to check if a slot is set?
+                    anim_player.set_slot("Damage", true);
+                    commands.entity(anim_entity).insert(DamageFlash {
+                        current_ticks: 0,
+                        max_ticks: 8,
+                    });
+                }
+                if health.current == 0 {
+                    commands.entity(entity).insert(Dead);
+                }
+                if let Some(pushback) = maybe_pushback {
+                    //TODO:this doesnt work
+                    //also should add knockback gentstate
+                    velocity.x += pushback.direction * 40.;
                 }
             }
         }
+    }
 }
 
 fn damage_flash(
