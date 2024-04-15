@@ -1,5 +1,4 @@
-use rapier2d::geometry::InteractionGroups;
-use theseeker_engine::physics::{update_query_pipeline, Collider, PhysicsWorld, GROUND, PLAYER};
+use theseeker_engine::physics::{Collider, PhysicsWorld};
 use theseeker_engine::{assets::animation::SpriteAnimation, gent::Gent, script::ScriptPlayer};
 
 use super::{enemy::EnemyGfx, player::PlayerGfx};
@@ -29,17 +28,12 @@ pub struct Attack {
     max_lifetime: u32,
     damage: u32,
     damaged: Vec<Entity>,
-    //target: Entity
 }
 
 #[derive(Bundle)]
 pub struct AttackBundle {
     attack: Attack,
     collider: Collider,
-    //layers: CollisionLayers,
-    //rigid body...
-    //ranged vs melee
-    //
 }
 
 #[derive(Component)]
@@ -99,21 +93,7 @@ fn attack_damage(
             attack_collider.0.collision_groups(),
             Some(entity),
         );
-        // for (entity, mut health, collider, gent) in damageable_query.iter_mut() {
-            // =======
-            //     mut query: Query<(&mut Attack, &CollidingEntities)>,
-            //     mut damageable_query: Query<(Entity, &mut Health, &Gent)>,
-            //     mut gfx_query: Query<
-            //         (
-            //             Entity,
-            //             &mut ScriptPlayer<SpriteAnimation>,
-            //         ),
-            //         Or<(With<PlayerGfx>, With<EnemyGfx>)>,
-            //     >,
-            // ) {
-            // for (mut attack, colliding_entities) in query.iter_mut() {
             for (entity, mut health, collider, gent) in damageable_query.iter_mut() {
-                // >>>>>>> abcd8c0 (attacks)
                 if colliding_entities.contains(&entity) {
                     if !attack.damaged.contains(&entity) {
                         health.current = health.current.saturating_sub(attack.damage);
@@ -137,7 +117,6 @@ fn attack_damage(
                 }
             }
         }
-    // }
 }
 
 fn damage_flash(
@@ -172,7 +151,7 @@ fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
     }
 }
 
-//TODO: change to a gentstate once we have death animations
+//TODO: change to a gentstate Dying once we have death animations
 fn despawn_dead(query: Query<(Entity, &Gent), With<Dead>>, mut commands: Commands) {
     for (entity, gent) in query.iter() {
         commands.entity(gent.e_gfx).despawn_recursive();

@@ -334,7 +334,7 @@ impl Transitionable<Falling> for Grounded {
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
 pub struct Attacking {
-    current_ticks: u32,
+    ticks: u32,
 }
 impl Attacking {
     const STARTUP: u32 = 1;
@@ -891,7 +891,7 @@ fn player_attack(
     mut commands: Commands,
 ) {
     for (entity, facing, mut attacking, mut transitions) in query.iter_mut() {
-        if attacking.current_ticks == Attacking::STARTUP * 8 {
+        if attacking.ticks == Attacking::STARTUP * 8 {
             commands
                 .spawn((
                     // RigidBody::Kinematic,
@@ -913,8 +913,8 @@ fn player_attack(
                 ))
                 .set_parent(entity);
         }
-        attacking.current_ticks += 1;
-        if attacking.current_ticks == Attacking::MAX * 8 {
+        attacking.ticks += 1;
+        if attacking.ticks == Attacking::MAX * 8 {
             transitions.push(Attacking::new_transition(CanAttack));
         }
     }
