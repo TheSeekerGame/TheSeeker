@@ -193,6 +193,33 @@ impl PhysicsWorld {
         intersections
     }
 
+    pub fn point_project(
+        &self,
+        point: Vec2,
+        interaction: InteractionGroups,
+        //TODO: might want to be able to exclude multiple entities?
+        exclude: Option<Entity>,
+    ) -> Option<(Entity, parry::query::PointProjection)> {
+        let mut filter = QueryFilter::new().groups(interaction);
+        if let Some(exclude) = exclude {
+            if let Some(col_id) = self.id_tracker.get(&exclude) {
+                filter = filter.exclude_collider(*col_id)
+            }
+        }
+        if let Some((collider, point)) = self.query_pipeline.project_point(
+            &self.rb_set,
+            &self.col_set,
+            &into_vec(point).into(),
+            true,
+            filter,
+        ) {
+            let entity: Entity = self.collider2entity(collider)?;
+            Some((entity, point))
+        } else {
+            None
+        }
+    }
+
     /// Small utility function that gets the entity associated with the collider;
     /// panics if entity does not exist.
     pub fn collider2entity(&self, handle: rapier2d::prelude::ColliderHandle) -> Option<Entity> {
