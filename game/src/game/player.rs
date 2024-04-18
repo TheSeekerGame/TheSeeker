@@ -206,8 +206,8 @@ fn setup_player(
             },
             Facing::Right,
             Health {
-                current: 100,
-                max: 100,
+                current: 600,
+                max: 600,
             },
             //have to use builder here *i think* because of different types between keycode and
             //axis

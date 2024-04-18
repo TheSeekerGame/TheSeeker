@@ -110,10 +110,12 @@ fn spawn_enemy(
 ) {
     for (e, transform, mut spawner) in q.iter_mut() {
         if let Some(enemy) = spawner.enemy {
-            if !enemy_q.get(enemy).is_ok() && spawner.cooldown_ticks >= EnemySpawner::COOLDOWN {
-                spawner.enemy = None;
-            } else {
-                spawner.cooldown_ticks += 1;
+            if !enemy_q.get(enemy).is_ok() {
+                if spawner.cooldown_ticks >= EnemySpawner::COOLDOWN {
+                    spawner.enemy = None;
+                } else {
+                    spawner.cooldown_ticks += 1;
+                }
             }
         } else {
             let id = commands
@@ -235,7 +237,7 @@ impl Plugin for EnemyBehaviorPlugin {
                     .chain(),
                 // sprite_flip,
             )
-                .chain()
+                // .chain()
                 .run_if(in_state(AppState::InGame))
                 .in_set(EnemyStateSet::Behavior),
         );
@@ -441,7 +443,7 @@ fn assign_group(
 ) {
     for (entity, transform, is_grouped) in query.iter() {
         let project_from = transform.translation().truncate();
-        if let Some((entity, projection)) = spatial_query.point_project(
+        if let Some((other, projection)) = spatial_query.point_project(
             project_from,
             InteractionGroups::new(SENSOR, ENEMY),
             Some(entity),
@@ -450,8 +452,12 @@ fn assign_group(
             if closest < Range::AGGRO && !is_grouped {
                 commands.entity(entity).insert(Grouped);
             } else if closest >= Range::AGGRO && is_grouped {
+                println!("should become ungrouped due to distance");
                 commands.entity(entity).remove::<Grouped>();
             }
+        } else {
+            println!("should become ungrouped due to no other enemy");
+            commands.entity(entity).remove::<Grouped>();
         };
     }
 }

@@ -19,7 +19,10 @@ impl Plugin for AttackPlugin {
                 .chain()
                 .before(PlayerStateSet::Behavior),
         );
-        app.add_systems(GameTickUpdate, despawn_dead);
+        app.add_systems(
+            GameTickUpdate,
+            despawn_dead.after(PlayerStateSet::Transition),
+        );
     }
 }
 
@@ -105,7 +108,6 @@ fn attack_damage(
             if colliding_entities.contains(&entity) && !attack.damaged.contains(&entity) {
                 health.current = health.current.saturating_sub(attack.damage);
                 attack.damaged.push(entity);
-                println!("player health, {:?}", health.current);
                 if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
                     // is there any way to check if a slot is set?
                     anim_player.set_slot("Damage", true);
@@ -117,11 +119,12 @@ fn attack_damage(
                 if health.current == 0 {
                     commands.entity(entity).insert(Dead);
                 }
-                if let Some(pushback) = maybe_pushback {
-                    //TODO:this doesnt work
-                    //also should add knockback gentstate
-                    velocity.x += pushback.direction * 40.;
-                }
+                //TODO: should happen after movement systems but before collision systems?
+                // if let Some(pushback) = maybe_pushback {
+                //     //TODO:this doesnt work
+                //     //also should add knockback gentstate
+                //     velocity.x = pushback.direction * 40.;
+                // }
             }
         }
     }
