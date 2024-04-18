@@ -241,7 +241,7 @@ impl PhysicsWorld {
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-struct PhysicsSet;
+pub struct PhysicsSet;
 
 /// A manual implementation of rapier to only use the features required by our project
 ///
