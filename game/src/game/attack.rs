@@ -1,4 +1,4 @@
-use theseeker_engine::physics::{Collider, LinearVelocity, PhysicsWorld};
+use theseeker_engine::physics::{Collider, LinearVelocity, PhysicsSet, PhysicsWorld};
 use theseeker_engine::{assets::animation::SpriteAnimation, gent::Gent, script::ScriptPlayer};
 
 use super::{enemy::EnemyGfx, player::PlayerGfx};
@@ -21,7 +21,9 @@ impl Plugin for AttackPlugin {
         );
         app.add_systems(
             GameTickUpdate,
-            despawn_dead.after(PlayerStateSet::Transition),
+            despawn_dead
+                .after(PlayerStateSet::Transition)
+                .before(PhysicsSet),
         );
     }
 }
