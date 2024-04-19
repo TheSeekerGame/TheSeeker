@@ -418,7 +418,6 @@ fn load_player_config(
                     let mut config = PlayerConfig {
                         max_move_vel: 0.0,
                         max_fall_vel: 0.0,
-                        max_jump_vel: 0.0,
                         move_accel_init: 0.0,
                         move_accel: 0.0,
                         jump_vel_init: 0.0,
@@ -435,13 +434,11 @@ fn load_player_config(
             },
             AssetEvent::Modified { id } => {
                 if let Some(cfg) = cfgs.get(*id) {
-                    if let Some(mut config) = player_config.as_mut() {
-                        println!("before:");
-                        dbg!(cfg);
-                        update_player_config(&mut config, cfg);
-                        println!("after:");
-                        dbg!(cfg);
-                    }
+                    println!("before:");
+                    dbg!(cfg);
+                    update_player_config(&mut player_config, cfg);
+                    println!("after:");
+                    dbg!(cfg);
                 }
             },
             _ => {},
