@@ -810,7 +810,10 @@ fn player_falling(
         }
         if falling {
             velocity.y -= fall_accel;
-            velocity.y = velocity.y.clamp(-config.max_fall_vel, 0.);
+            velocity.y = velocity.y.clamp(
+                -config.max_fall_vel,
+                config.jump_vel_init,
+            );
         }
     }
 }
