@@ -410,35 +410,34 @@ fn load_player_config(
     preloaded: Res<PreloadedAssets>,
     mut player_config: ResMut<PlayerConfig>,
     mut commands: Commands,
+    mut initialized_config: Local<bool>,
 ) {
+    // convert from asset key string to bevy handle
+    let Some(cfg_handle) = preloaded.get_single_asset::<DynamicConfig>("cfg.player") else {
+        return;
+    };
+    // The reason we do this here instead of in an AssetEvent::Added match arm, is because
+    // the Added match arm fires before preloaded updates with the asset key; as a result
+    // you can't tell what specific DynamicConfig loaded in like that.
+    if !*initialized_config {
+        if let Some(cfg) = cfgs.get(cfg_handle.clone()) {
+            update_player_config(&mut player_config, cfg);
+            println!("init:");
+            dbg!(&player_config);
+        }
+        *initialized_config = true;
+    }
     for ev in ev_asset.read() {
         match ev {
-            AssetEvent::Added { id } => {
-                if let Some(cfg) = cfgs.get(*id) {
-                    let mut config = PlayerConfig {
-                        max_move_vel: 0.0,
-                        max_fall_vel: 0.0,
-                        move_accel_init: 0.0,
-                        move_accel: 0.0,
-                        jump_vel_init: 0.0,
-                        jump_fall_accel: 0.0,
-                        fall_accel: 0.0,
-                        max_coyote_time: 0.0,
-                    };
-
-                    update_player_config(&mut config, cfg);
-                    println!("init:");
-                    dbg!(cfg);
-                    commands.insert_resource(config);
-                }
-            },
             AssetEvent::Modified { id } => {
                 if let Some(cfg) = cfgs.get(*id) {
-                    println!("before:");
-                    dbg!(cfg);
-                    update_player_config(&mut player_config, cfg);
-                    println!("after:");
-                    dbg!(cfg);
+                    if cfg_handle.id() == *id {
+                        println!("before:");
+                        dbg!(&player_config);
+                        update_player_config(&mut player_config, cfg);
+                        println!("after:");
+                        dbg!(&player_config);
+                    }
                 }
             },
             _ => {},
@@ -597,7 +596,7 @@ fn player_jump(
         //i think this is related to the fixedtimestep input
         // print!("{:?}", action_state.get_pressed());
 
-        let deaccel_rate = config.fall_accel;
+        let deaccel_rate = config.jump_fall_accel;
 
         if jumping.is_added() {
             velocity.y += config.jump_vel_init;

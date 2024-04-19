@@ -1,3 +1,5 @@
+# Note: Setting some of these to negative values *WILL* cause a panic
+
 # The maximum horizontal velocity the player can move at.
 # (in pixels/second)
 max_move_vel = 100.0

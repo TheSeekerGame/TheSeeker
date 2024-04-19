@@ -51,7 +51,12 @@ impl DynamicConfigValue {
     }
 }
 
-/// A utility type for loading config values, see player.rs update_player_config() for example usage.
+/// A utility type for loading config values. Use like:
+///
+/// ```
+/// let mut errors = Vec::new();
+/// update_field(&mut errors, &dynamic_cfg.0, "jump_vel_init", |val| struct_config.jump_vel_init = val);
+/// ```
 pub fn update_field<F>(
     errors: &mut Vec<String>,
     config: &HashMap<String, DynamicConfigValue>,
