@@ -475,7 +475,6 @@ fn player_idle(
             With<PlayerGent>,
         ),
     >,
-    mut player_config: Res<PlayerConfig>,
 ) {
     for (action_state, mut transitions) in query.iter_mut() {
         // println!("is idle");
