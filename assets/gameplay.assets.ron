@@ -7,4 +7,7 @@
     "cfg.test": File (
         path: "test.cfg.toml",
     ),
+    "cfg.player": File (
+        path: "player.cfg.toml",
+    ),
 })

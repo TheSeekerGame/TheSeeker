@@ -1,0 +1,14 @@
+max_move_vel = 300.0
+max_fall_vel = 800.0
+max_jump_vel = 600.0
+
+move_accel_init = 2000.0
+move_accel = 1000.0
+
+jump_vel_init = 400.0
+
+jump_fall_accel = 1200.0
+
+fall_accel = 1800.0
+
+max_coyote_time = 0.15

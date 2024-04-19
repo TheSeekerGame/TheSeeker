@@ -2,6 +2,7 @@ use bevy::transform::TransformSystem::TransformPropagate;
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use rapier2d::geometry::{Group, InteractionGroups};
 use rapier2d::parry::query::TOIStatus;
+use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::physics::{
     into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, GROUND, PLAYER,
 };
@@ -322,6 +323,7 @@ struct PlayerBehaviorPlugin;
 
 impl Plugin for PlayerBehaviorPlugin {
     fn build(&self, app: &mut App) {
+        app.add_systems(Startup, load_player_config);
         app.add_systems(
             GameTickUpdate,
             (
@@ -356,6 +358,122 @@ impl Plugin for PlayerBehaviorPlugin {
                     .before(TransformPropagate),
             ),
         );
+    }
+}
+
+#[derive(Resource, Debug)]
+pub struct PlayerConfig {
+    /// The maximum horizontal velocity the player can move at.
+    ///
+    /// (in pixels/second)
+    max_move_vel: f32,
+
+    /// The maximum downward velocity the player can fall at.
+    ///
+    /// (in pixels/second)
+    max_fall_vel: f32,
+
+    /// The maximum upward velocity the player can jump at.
+    ///
+    /// (in pixels/second)
+    max_jump_vel: f32,
+
+    /// The initial acceleration applied to the player for the first tick they start moving.
+    ///
+    /// (in pixels/second^2)
+    move_accel_init: f32,
+
+    /// The acceleration applied to the player while they continue moving horizontally.
+    ///
+    /// (in pixels/second^2)
+    move_accel: f32,
+
+    /// How much velocity does the player have at the moment they jump?
+    ///
+    /// (in pixels/second)
+    jump_vel_init: f32,
+
+    /// How fast does the player accelerate downward while holding down the jump button?
+    ///
+    /// (in pixels/second^2)
+    jump_fall_accel: f32,
+
+    /// How fast does the player accelerate downward while in the falling state?
+    /// (ie: after releasing the jump key)
+    ///
+    /// (in pixels/second^2)
+    fall_accel: f32,
+
+    /// How many seconds does our characters innate hover boots work?
+    max_coyote_time: f32,
+}
+
+fn load_player_config(
+    mut ev_asset: EventReader<AssetEvent<DynamicConfig>>,
+    cfgs: Res<Assets<DynamicConfig>>,
+    preloaded: Res<PreloadedAssets>,
+    mut player_config: Option<ResMut<PlayerConfig>>,
+    mut commands: Commands,
+) {
+    for ev in ev_asset.read() {
+        match ev {
+            AssetEvent::Added { id } => {
+                if let Some(cfg) = cfgs.get(*id) {
+                    // Create the `PlayerConfig` resource if it doesn't exist
+                    if player_config.is_none() {
+                        let mut config = PlayerConfig {
+                            max_move_vel: 0.0,
+                            max_fall_vel: 0.0,
+                            max_jump_vel: 0.0,
+                            move_accel_init: 0.0,
+                            move_accel: 0.0,
+                            jump_vel_init: 0.0,
+                            jump_fall_accel: 0.0,
+                            fall_accel: 0.0,
+                            max_coyote_time: 0.0,
+                        };
+
+                        update_player_config(&mut config, cfg);
+                        println!("init:");
+                        dbg!(cfg);
+                        commands.insert_resource(config);
+                    }
+                }
+            },
+            AssetEvent::Modified { id } => {
+                if let Some(cfg) = cfgs.get(*id) {
+                    if let Some(mut config) = player_config.as_mut() {
+                        println!("before:");
+                        dbg!(cfg);
+                        update_player_config(&mut config, cfg);
+                        println!("after:");
+                        dbg!(cfg);
+                    }
+                }
+            },
+            _ => {},
+        }
+    }
+}
+
+#[rustfmt::skip]
+fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) -> Result<(), Vec<String>> {
+    let mut errors = Vec::new();
+
+    update_field(&mut errors, &cfg.0, "max_move_vel", |val| config.max_move_vel = val);
+    update_field(&mut errors, &cfg.0, "max_fall_vel", |val| config.max_fall_vel = val);
+    update_field(&mut errors, &cfg.0, "max_jump_vel", |val| config.max_jump_vel = val);
+    update_field(&mut errors, &cfg.0, "move_accel_init", |val| config.move_accel_init = val);
+    update_field(&mut errors, &cfg.0, "move_accel", |val| config.move_accel = val);
+    update_field(&mut errors, &cfg.0, "jump_vel_init", |val| config.jump_vel_init = val);
+    update_field(&mut errors, &cfg.0, "jump_fall_accel", |val| config.jump_fall_accel = val);
+    update_field(&mut errors, &cfg.0, "fall_accel", |val| config.fall_accel = val);
+    update_field(&mut errors, &cfg.0, "max_coyote_time", |val| config.max_coyote_time = val);
+
+    if errors.is_empty() {
+        Ok(())
+    } else {
+        Err(errors)
     }
 }
 
@@ -402,19 +520,19 @@ fn player_move(
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
-        // TODO change to &PlayerAction
         let initial_accel = 45.0;
         let accel = 5.0;
 
         // What "%" does our character get slowed down per game tick.
+        // Todo: Have this value be determined by tile type at some point?
         let ground_friction = 0.7;
 
         let new_vel = if action_state.just_pressed(&PlayerAction::Move) {
             direction = action_state.value(&PlayerAction::Move);
-            velocity.x + accel * direction
+            velocity.x + accel * direction * ground_friction
         } else if action_state.pressed(&PlayerAction::Move) {
             direction = action_state.value(&PlayerAction::Move);
-            velocity.x + initial_accel * direction
+            velocity.x + initial_accel * direction * ground_friction
         } else {
             // de-acceleration profile
             if grounded.is_some() {
