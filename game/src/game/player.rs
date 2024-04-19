@@ -323,7 +323,8 @@ struct PlayerBehaviorPlugin;
 
 impl Plugin for PlayerBehaviorPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Startup, load_player_config);
+        app.insert_resource(PlayerConfig::default());
+        app.add_systems(GameTickUpdate, load_player_config);
         app.add_systems(
             GameTickUpdate,
             (
@@ -361,7 +362,7 @@ impl Plugin for PlayerBehaviorPlugin {
     }
 }
 
-#[derive(Resource, Debug)]
+#[derive(Resource, Debug, Default)]
 pub struct PlayerConfig {
     /// The maximum horizontal velocity the player can move at.
     ///
@@ -372,11 +373,6 @@ pub struct PlayerConfig {
     ///
     /// (in pixels/second)
     max_fall_vel: f32,
-
-    /// The maximum upward velocity the player can jump at.
-    ///
-    /// (in pixels/second)
-    max_jump_vel: f32,
 
     /// The initial acceleration applied to the player for the first tick they start moving.
     ///
@@ -412,32 +408,29 @@ fn load_player_config(
     mut ev_asset: EventReader<AssetEvent<DynamicConfig>>,
     cfgs: Res<Assets<DynamicConfig>>,
     preloaded: Res<PreloadedAssets>,
-    mut player_config: Option<ResMut<PlayerConfig>>,
+    mut player_config: ResMut<PlayerConfig>,
     mut commands: Commands,
 ) {
     for ev in ev_asset.read() {
         match ev {
             AssetEvent::Added { id } => {
                 if let Some(cfg) = cfgs.get(*id) {
-                    // Create the `PlayerConfig` resource if it doesn't exist
-                    if player_config.is_none() {
-                        let mut config = PlayerConfig {
-                            max_move_vel: 0.0,
-                            max_fall_vel: 0.0,
-                            max_jump_vel: 0.0,
-                            move_accel_init: 0.0,
-                            move_accel: 0.0,
-                            jump_vel_init: 0.0,
-                            jump_fall_accel: 0.0,
-                            fall_accel: 0.0,
-                            max_coyote_time: 0.0,
-                        };
+                    let mut config = PlayerConfig {
+                        max_move_vel: 0.0,
+                        max_fall_vel: 0.0,
+                        max_jump_vel: 0.0,
+                        move_accel_init: 0.0,
+                        move_accel: 0.0,
+                        jump_vel_init: 0.0,
+                        jump_fall_accel: 0.0,
+                        fall_accel: 0.0,
+                        max_coyote_time: 0.0,
+                    };
 
-                        update_player_config(&mut config, cfg);
-                        println!("init:");
-                        dbg!(cfg);
-                        commands.insert_resource(config);
-                    }
+                    update_player_config(&mut config, cfg);
+                    println!("init:");
+                    dbg!(cfg);
+                    commands.insert_resource(config);
                 }
             },
             AssetEvent::Modified { id } => {
@@ -457,12 +450,11 @@ fn load_player_config(
 }
 
 #[rustfmt::skip]
-fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) -> Result<(), Vec<String>> {
+fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     let mut errors = Vec::new();
 
     update_field(&mut errors, &cfg.0, "max_move_vel", |val| config.max_move_vel = val);
     update_field(&mut errors, &cfg.0, "max_fall_vel", |val| config.max_fall_vel = val);
-    update_field(&mut errors, &cfg.0, "max_jump_vel", |val| config.max_jump_vel = val);
     update_field(&mut errors, &cfg.0, "move_accel_init", |val| config.move_accel_init = val);
     update_field(&mut errors, &cfg.0, "move_accel", |val| config.move_accel = val);
     update_field(&mut errors, &cfg.0, "jump_vel_init", |val| config.jump_vel_init = val);
@@ -470,11 +462,9 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) -> Resul
     update_field(&mut errors, &cfg.0, "fall_accel", |val| config.fall_accel = val);
     update_field(&mut errors, &cfg.0, "max_coyote_time", |val| config.max_coyote_time = val);
 
-    if errors.is_empty() {
-        Ok(())
-    } else {
-        Err(errors)
-    }
+   for error in errors{
+       warn!("failed to load player cfg value: {}", error);
+   }
 }
 
 fn player_idle(
@@ -489,6 +479,7 @@ fn player_idle(
             With<PlayerGent>,
         ),
     >,
+    mut player_config: Res<PlayerConfig>,
 ) {
     for (action_state, mut transitions) in query.iter_mut() {
         // println!("is idle");
@@ -513,6 +504,7 @@ fn player_move(
         Option<&Grounded>,
     )>,
     time: Res<GameTime>,
+    config: Res<PlayerConfig>,
     //kinda dont want to do flipping here
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
@@ -520,8 +512,8 @@ fn player_move(
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
-        let initial_accel = 45.0;
-        let accel = 5.0;
+        let initial_accel = config.move_accel_init;
+        let accel = config.move_accel;
 
         // What "%" does our character get slowed down per game tick.
         // Todo: Have this value be determined by tile type at some point?
@@ -547,7 +539,10 @@ fn player_move(
                 }
             }
         };
-        velocity.x = new_vel.clamp(-100.0, 100.0);
+        velocity.x = new_vel.clamp(
+            -config.max_move_vel,
+            config.max_move_vel,
+        );
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {
@@ -598,17 +593,17 @@ fn player_jump(
         ),
         With<PlayerGent>,
     >,
+    config: Res<PlayerConfig>,
 ) {
     for (action_state, mut velocity, mut jumping, mut transitions) in query.iter_mut() {
         //can enter state and first frame jump not pressed if you tap
         //i think this is related to the fixedtimestep input
         // print!("{:?}", action_state.get_pressed());
 
-        let deaccel_rate = 2.5;
+        let deaccel_rate = config.fall_accel;
 
-        // Jump should not be limited by number if "ticks" should be physics driven.
         if jumping.is_added() {
-            velocity.y += 150.0;
+            velocity.y += config.jump_vel_init;
         } else {
             if (velocity.y - deaccel_rate < 0.0) || action_state.released(&PlayerAction::Jump) {
                 transitions.push(Jumping::new_transition(Falling));
@@ -618,7 +613,7 @@ fn player_jump(
 
         jumping.current_air_ticks += 1;
 
-        velocity.y = velocity.y.clamp(0., 150.);
+        velocity.y = velocity.y.clamp(0., config.jump_vel_init);
     }
 }
 
@@ -722,9 +717,10 @@ fn player_grounded(
         (With<PlayerGent>, With<Grounded>),
     >,
     time: Res<GameTime>,
+    config: Res<PlayerConfig>,
 ) {
     // in seconds
-    let max_coyote_time = 0.1;
+    let max_coyote_time = config.max_coyote_time;
     for (
         entity,
         ray_cast_info,
@@ -790,11 +786,12 @@ fn player_falling(
         (With<PlayerGent>, With<Falling>),
     >,
     time: Res<GameTime>,
+    config: Res<PlayerConfig>,
 ) {
     for (entity, mut transform, mut velocity, action_state, hits, mut transitions) in
         query.iter_mut()
     {
-        let fall_accel = 2.9;
+        let fall_accel = config.fall_accel;
         let mut falling = true;
         if let Some((hit_entity, toi)) = hits.cast(
             &*spatial_query,
@@ -817,7 +814,7 @@ fn player_falling(
         }
         if falling {
             velocity.y -= fall_accel;
-            velocity.y = velocity.y.clamp(-100., 0.);
+            velocity.y = velocity.y.clamp(-config.max_fall_vel, 0.);
         }
     }
 }
