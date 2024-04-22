@@ -18,6 +18,7 @@ mod game;
 mod gamestate;
 mod level;
 mod locale;
+mod stepping_egui;
 
 mod screens {
     pub mod loading;
@@ -92,7 +93,7 @@ fn main() {
         crate::parallax::ParallaxPlugin,
         crate::game::GameplayPlugin,
         crate::gamestate::GameStatePlugin,
-        crate::graphics::GraphicsFxPlugin,
+        // crate::graphics::GraphicsFxPlugin,
     ));
 
     #[cfg(feature = "dev")]

@@ -172,6 +172,7 @@ fn setup_player(
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
+            Name::new("Player"),
             PlayerGentBundle {
                 player: Player,
                 marker: Gent { e_gfx },

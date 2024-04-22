@@ -24,8 +24,8 @@ pub trait Transitionable<T: GentState> {
         Box::new(move |entity, commands| {
             commands
                 .entity(entity)
-                .insert(next)
-                .remove::<Self::Removals>();
+                .remove::<Self::Removals>()
+                .insert(next);
         })
     }
 }
@@ -85,7 +85,7 @@ pub trait GentState: Component<Storage = SparseStorage> {}
 pub trait GenericState: Component<Storage = SparseStorage> {}
 
 impl<T: GentState, N: GentState + GenericState> Transitionable<T> for N {
-    type Removals = N;
+    type Removals = (N, Idle);
 }
 
 //on leaving some states the state machine should ensure we are not also in other specific states,
