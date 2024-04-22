@@ -1,5 +1,6 @@
 use crate::game::{attack::*, gentstate::*};
 use crate::prelude::*;
+#[cfg(feature = "dev")]
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use rand::distributions::Standard;
 use rapier2d::geometry::SharedShape;
@@ -38,9 +39,8 @@ impl Plugin for EnemyPlugin {
             EnemyAnimationPlugin,
         ));
         app.register_type::<Range>();
-        app.add_plugins(FilterQueryInspectorPlugin::<
-            (With<Enemy>),
-        >::default());
+        #[cfg(feature = "dev")]
+        app.add_plugins(FilterQueryInspectorPlugin::<With<Enemy>>::default());
     }
 }
 
@@ -109,11 +109,11 @@ pub struct EnemyGfx {
 }
 
 fn spawn_enemy(
-    mut q: Query<(Entity, &Transform, &mut EnemySpawner)>,
-    enemy_q: Query<(Entity), (With<Enemy>, Without<EnemySpawner>)>,
+    mut spawner_q: Query<(&Transform, &mut EnemySpawner)>,
+    enemy_q: Query<Entity, (With<Enemy>, Without<EnemySpawner>)>,
     mut commands: Commands,
 ) {
-    for (e, transform, mut spawner) in q.iter_mut() {
+    for (transform, mut spawner) in spawner_q.iter_mut() {
         if let Some(enemy) = spawner.enemy {
             if !enemy_q.get(enemy).is_ok() {
                 spawner.cooldown_ticks += 1;
@@ -160,13 +160,11 @@ fn setup_enemy(
                     ),
                     shapecast: ShapeCaster {
                         shape: SharedShape::cuboid(22.0, 10.0),
-                        // Vec2::NEG_Y.into(),,
                         direction: Direction2d::NEG_Y,
                         origin: Vec2::new(0.0, -2.0),
                         max_toi: 0.0,
                         interaction: InteractionGroups {
                             memberships: ENEMY,
-                            //aka wall
                             filter: GROUND,
                         },
                     },
@@ -178,23 +176,11 @@ fn setup_enemy(
                 current: 100,
                 max: 100,
             },
-            // Role::Melee,
-            // Role::Ranged,
             Role::random(),
-            // Grouped,
-            // Retreating {
-            //     current_ticks: 0,
-            //     max_ticks: 300,
-            // },
             Facing::Right,
-            // Defense::default(),
             Patrolling,
             Idle,
             Waiting::new(12),
-            // Walking {
-            //     current_ticks: 0,
-            //     max_ticks: 300,
-            // },
             AddQueue::default(),
             TransitionQueue::default(), // },
         ));
@@ -219,37 +205,29 @@ impl Plugin for EnemyBehaviorPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             GameTickUpdate,
-            (
+            ((
+                assign_group,
+                check_player_range,
                 (
-                    assign_group,
-                    check_player_range,
-                    (
-                        patrolling.run_if(any_with_component::<Patrolling>),
-                        aggro.run_if(any_with_component::<Aggroed>),
-                        waiting.run_if(any_with_component::<Waiting>),
-                        defense.run_if(any_with_component::<Defense>),
-                        ranged_attack.run_if(any_with_component::<RangedAttack>),
-                        melee_attack.run_if(any_with_component::<MeleeAttack>),
-                        pushback_attack.run_if(any_with_component::<PushbackAttack>),
-                    ),
-                    (
-                        walking.run_if(any_with_component::<Walking>),
-                        retreating.run_if(any_with_component::<Retreating>),
-                        chasing.run_if(any_with_component::<Chasing>),
-                    ),
-                    move_collide,
-                )
-                    .chain(),
-                // sprite_flip,
+                    patrolling.run_if(any_with_component::<Patrolling>),
+                    aggro.run_if(any_with_component::<Aggroed>),
+                    waiting.run_if(any_with_component::<Waiting>),
+                    defense.run_if(any_with_component::<Defense>),
+                    ranged_attack.run_if(any_with_component::<RangedAttack>),
+                    melee_attack.run_if(any_with_component::<MeleeAttack>),
+                    pushback_attack.run_if(any_with_component::<PushbackAttack>),
+                ),
+                (
+                    walking.run_if(any_with_component::<Walking>),
+                    retreating.run_if(any_with_component::<Retreating>),
+                    chasing.run_if(any_with_component::<Chasing>),
+                ),
+                move_collide,
             )
-                // .chain()
+                .chain(),)
                 .run_if(in_state(AppState::InGame))
                 .in_set(EnemyStateSet::Behavior),
         );
-        // app.add_systems(
-        //     GameTickUpdate,
-        //     assign_group.in_set(EnemyStateSet::Behavior),
-        // );
     }
 }
 
@@ -320,7 +298,7 @@ struct RangedAttack {
 }
 impl RangedAttack {
     const STARTUP: u32 = 6;
-    const RANGE: f32 = 40.;
+    // const RANGE: f32 = 40.;
 }
 impl GentState for RangedAttack {}
 impl GenericState for RangedAttack {}
@@ -331,9 +309,8 @@ struct MeleeAttack {
     ticks: u32,
 }
 impl MeleeAttack {
-    //frames
     const STARTUP: u32 = 7;
-    const RECOVERY: u32 = 9;
+    // const RECOVERY: u32 = 9;
     const MAX: u32 = 10;
 }
 impl GentState for MeleeAttack {}
@@ -345,7 +322,6 @@ struct PushbackAttack {
     ticks: u32,
 }
 impl PushbackAttack {
-    //frames
     const STARTUP: u32 = 5;
     // const RECOVERY: u32 = 7;
     const MAX: u32 = 10;
@@ -369,9 +345,6 @@ impl Waiting {
 }
 impl GentState for Waiting {}
 impl GenericState for Waiting {}
-// impl Transitionable<Walking> for Waiting {
-//     type Removals = (Waiting, Idle);
-// }
 
 #[derive(Component)]
 enum Role {
@@ -397,7 +370,6 @@ impl Distribution<Role> for Standard {
     }
 }
 
-//make component hold optional range?
 #[derive(Component, Debug, Reflect)]
 enum Range {
     Melee,
@@ -414,11 +386,10 @@ impl Range {
 }
 
 fn check_player_range(
-    mut query: Query<(Entity, &mut Range, &GlobalTransform), With<Enemy>>,
-    // spatial_query: SpatialQuery,
+    mut query: Query<(&mut Range, &GlobalTransform), With<Enemy>>,
     spatial_query: Res<PhysicsWorld>,
 ) {
-    for (entity, mut range, transform) in query.iter_mut() {
+    for (mut range, transform) in query.iter_mut() {
         let project_from = transform.translation().truncate();
         if let Some((point_ent, projection)) = spatial_query.point_project(
             project_from,
@@ -484,6 +455,7 @@ fn patrolling(
     player_query: Query<(Entity, &GlobalTransform), (Without<Enemy>, With<Player>)>,
 ) {
     if let Ok((player_gent, player_trans)) = player_query.get_single() {
+        let mut rng = rand::thread_rng();
         for (trans, facing, mut transitions, mut additions, maybe_waiting) in query.iter_mut() {
             let distance = trans
                 .translation()
@@ -498,7 +470,7 @@ fn patrolling(
                 let waiting = maybe_waiting.unwrap();
                 if waiting.ticks >= waiting.max_ticks {
                     transitions.push(Waiting::new_transition(Walking {
-                        max_ticks: 240,
+                        max_ticks: rng.gen_range(24..300),
                         ticks: 0,
                     }));
                 }
@@ -550,6 +522,7 @@ fn pushback_attack(
     for (entity, facing, mut attack, mut transitions) in query.iter_mut() {
         attack.ticks += 1;
         if attack.ticks == PushbackAttack::STARTUP * 8 {
+            //TODO: pushback attack currently doesnt actually apply knockback
             commands
                 .spawn((
                     TransformBundle::from_transform(Transform::from_xyz(
@@ -571,7 +544,6 @@ fn pushback_attack(
                     },
                 ))
                 .set_parent(entity);
-            //TODO: Add pushback, add pushback to attack system
         }
         if attack.ticks >= PushbackAttack::MAX * 8 {
             transitions.push(PushbackAttack::new_transition(
@@ -581,7 +553,6 @@ fn pushback_attack(
     }
 }
 
-//in aggro the enemy should not turn around at edge, rather pause
 fn aggro(
     mut query: Query<
         (
@@ -600,7 +571,6 @@ fn aggro(
         ),
         (
             With<Enemy>,
-            //AHHHHHHHHHHHHHHHH
             Without<Retreating>,
             Without<Walking>,
         ),
@@ -623,6 +593,7 @@ fn aggro(
     ) in query.iter_mut()
     {
         if let Ok(player_trans) = player_query.get(aggroed.target) {
+            let mut rng = rand::thread_rng();
             let is_attacking = is_r_attacking || is_m_attacking || is_d_attacking;
             //face player
             if trans.translation().x > player_trans.translation().x {
@@ -630,29 +601,27 @@ fn aggro(
             } else if trans.translation().x < player_trans.translation().x {
                 *facing = Facing::Left;
             }
-            //return to patrol
             let distance = trans
                 .translation()
                 .truncate()
                 .distance(player_trans.translation().truncate());
+            //return to patrol
             if distance > Range::AGGRO {
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if !is_attacking && !is_grouped && !is_defending && distance > Range::MELEE {
                 //TODO: duration of retreat should be random
                 transitions.push(Waiting::new_transition(Retreating {
                     ticks: 0,
-                    max_ticks: 300,
+                    max_ticks: rng.gen_range(24..300),
                 }));
             } else if !is_attacking && !is_grouped && !is_defending && distance <= Range::MELEE {
                 transitions.push(Waiting::new_transition(
                     Defense::default(),
                 ));
-            //TODO?
             } else if distance > Range::MELEE && !is_grouped && is_defending {
-                transitions.push(Defense::new_transition(Waiting {
-                    ticks: 0,
-                    max_ticks: 100,
-                }));
+                transitions.push(Defense::new_transition(Waiting::new(
+                    rng.gen_range(16..100),
+                )));
             } else if !is_attacking && is_grouped {
                 transitions.push(Waiting::new_transition(Chasing));
             }
@@ -739,8 +708,6 @@ fn ranged_attack(
         if attack.ticks == RangedAttack::STARTUP * 8 {
             commands.spawn((
                 Attack::new(100),
-                // RigidBody::Static,
-                // Sensor,
                 Collider::cuboid(
                     10.,
                     10.,
