@@ -514,11 +514,10 @@ fn player_move(
         // Todo: Have this value be determined by tile type at some point?
         let ground_friction = 0.7;
 
+        direction = action_state.value(&PlayerAction::Move);
         let new_vel = if action_state.just_pressed(&PlayerAction::Move) {
-            direction = action_state.value(&PlayerAction::Move);
             velocity.x + accel * direction * ground_friction
         } else if action_state.pressed(&PlayerAction::Move) {
-            direction = action_state.value(&PlayerAction::Move);
             velocity.x + initial_accel * direction * ground_friction
         } else {
             // de-acceleration profile
@@ -661,7 +660,18 @@ fn player_collisions(
 
                         let projected_velocity = linear_velocity.xy()
                             - sliding_plane * linear_velocity.xy().dot(sliding_plane);
-                        linear_velocity.0 = projected_velocity + bounce_force;
+
+                        // Applies downward friction only when player tries to push
+                        // against the wall while falling. Ignores x component.
+                        let friction_coefficient = 0.25;
+                        let friction_force = if projected_velocity.y < -0.0 {
+                            -(projected_velocity.y * friction_coefficient)
+                        } else {
+                            0.0
+                        };
+                        let friction_vec = Vec2::new(0.0, friction_force);
+
+                        linear_velocity.0 = projected_velocity + friction_vec + bounce_force;
 
                         let new_pos =
                             pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
