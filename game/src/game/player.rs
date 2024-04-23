@@ -299,6 +299,9 @@ impl GenericState for Jumping {}
 pub struct CoyoteTime(f32);
 
 #[derive(Component, Default, Debug)]
+pub struct Sliding(f32);
+
+#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
 impl GentState for Grounded {}
@@ -357,6 +360,10 @@ impl Plugin for PlayerBehaviorPlugin {
                     .after(player_jump)
                     .after(player_falling)
                     .before(TransformPropagate),
+                player_sliding
+                    .before(player_collisions)
+                    .after(player_jump)
+                    .after(player_falling),
             ),
         );
     }
@@ -402,6 +409,10 @@ pub struct PlayerConfig {
 
     /// How many seconds does our characters innate hover boots work?
     max_coyote_time: f32,
+
+    /// Onlly applies in the downward y direction while the player is falling
+    /// and trying to walk into the wall
+    sliding_friction: f32,
 }
 
 fn load_player_config(
@@ -457,6 +468,7 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "jump_fall_accel", |val| config.jump_fall_accel = val);
     update_field(&mut errors, &cfg.0, "fall_accel", |val| config.fall_accel = val);
     update_field(&mut errors, &cfg.0, "max_coyote_time", |val| config.max_coyote_time = val);
+    update_field(&mut errors, &cfg.0, "sliding_friction", |val| config.sliding_friction = val);
 
    for error in errors{
        warn!("failed to load player cfg value: {}", error);
@@ -623,6 +635,7 @@ fn player_collisions(
         (With<PlayerGent>),
     >,
     time: Res<GameTime>,
+    config: Res<PlayerConfig>,
 ) {
     for (entity, mut pos, mut linear_velocity, collider) in q_gent.iter_mut() {
         let mut shape = collider.0.shared_shape().clone();
@@ -663,7 +676,7 @@ fn player_collisions(
 
                         // Applies downward friction only when player tries to push
                         // against the wall while falling. Ignores x component.
-                        let friction_coefficient = 0.25;
+                        let friction_coefficient = config.sliding_friction;
                         let friction_force = if projected_velocity.y < -0.0 {
                             -(projected_velocity.y * friction_coefficient)
                         } else {
@@ -827,6 +840,23 @@ fn player_falling(
     }
 }
 
+/// Handles updating the player animation while they are sliding,
+/// as well as tracking how long they are sliding for.
+///
+/// Note: actual sliding calculation is handled by the collision function
+/// this just increments the time since
+fn player_sliding(
+    mut query: Query<(&ActionState<PlayerAction>, &mut Sliding), (With<PlayerGent>,)>,
+) {
+    for (action_state, mut transitions) in query.iter_mut() {
+        let mut direction: f32 = 0.0;
+        if action_state.pressed(&PlayerAction::Move) {
+            direction = action_state.value(&PlayerAction::Move);
+        }
+
+    }
+}
+
 ///play animations here, run after transitions
 struct PlayerAnimationPlugin;
 
@@ -861,10 +891,11 @@ fn player_idle_animation(
 //TODO: add FallForward
 fn player_falling_animation(
     f_query: Query<&PlayerGent, Added<Falling>>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    mut gfx_query: Query<(&mut ScriptPlayer<SpriteAnimation>, Option<&Sliding>), With<PlayerGfx>>,
 ) {
     for gent in f_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            if let Some(sliding) gent
             player.play_key("anim.player.Fall")
         }
     }
