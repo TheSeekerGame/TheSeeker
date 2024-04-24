@@ -69,6 +69,7 @@ features = [
 version = "0.13"
 default-features = true
 features = [
+    "wayland",
     "flac",
     "jpeg",
 ]
