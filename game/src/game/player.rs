@@ -547,6 +547,18 @@ fn player_move(
                 player.set_slot("DirectionRight", false);
                 player.set_slot("DirectionLeft", true);
             }
+            if velocity.length() > 0.001 {
+                if velocity.x.abs() > velocity.y.abs() {
+                    player.set_slot("MovingVertically", false);
+                    player.set_slot("MovingHorizontally", true);
+                } else {
+                    player.set_slot("MovingVertically", true);
+                    player.set_slot("MovingHorizontally", false);
+                }
+            } else {
+                player.set_slot("MovingVertically", false);
+                player.set_slot("MovingHorizontally", false);
+            }
         }
     }
 }
