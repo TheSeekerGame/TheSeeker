@@ -2,6 +2,7 @@ use bevy::transform::TransformSystem::TransformPropagate;
 use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use rapier2d::geometry::{Group, InteractionGroups};
 use rapier2d::parry::query::TOIStatus;
+use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::physics::{
     into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, GROUND, PLAYER,
 };
@@ -322,6 +323,8 @@ struct PlayerBehaviorPlugin;
 
 impl Plugin for PlayerBehaviorPlugin {
     fn build(&self, app: &mut App) {
+        app.insert_resource(PlayerConfig::default());
+        app.add_systems(GameTickUpdate, load_player_config);
         app.add_systems(
             GameTickUpdate,
             (
@@ -357,6 +360,107 @@ impl Plugin for PlayerBehaviorPlugin {
             ),
         );
     }
+}
+
+#[derive(Resource, Debug, Default)]
+pub struct PlayerConfig {
+    /// The maximum horizontal velocity the player can move at.
+    ///
+    /// (in pixels/second)
+    max_move_vel: f32,
+
+    /// The maximum downward velocity the player can fall at.
+    ///
+    /// (in pixels/second)
+    max_fall_vel: f32,
+
+    /// The initial acceleration applied to the player for the first tick they start moving.
+    ///
+    /// (in pixels/second^2)
+    move_accel_init: f32,
+
+    /// The acceleration applied to the player while they continue moving horizontally.
+    ///
+    /// (in pixels/second^2)
+    move_accel: f32,
+
+    /// How much velocity does the player have at the moment they jump?
+    ///
+    /// (in pixels/second)
+    jump_vel_init: f32,
+
+    /// How fast does the player accelerate downward while holding down the jump button?
+    ///
+    /// (in pixels/second^2)
+    jump_fall_accel: f32,
+
+    /// How fast does the player accelerate downward while in the falling state?
+    /// (ie: after releasing the jump key)
+    ///
+    /// (in pixels/second^2)
+    fall_accel: f32,
+
+    /// How many seconds does our characters innate hover boots work?
+    max_coyote_time: f32,
+}
+
+fn load_player_config(
+    mut ev_asset: EventReader<AssetEvent<DynamicConfig>>,
+    cfgs: Res<Assets<DynamicConfig>>,
+    preloaded: Res<PreloadedAssets>,
+    mut player_config: ResMut<PlayerConfig>,
+    mut commands: Commands,
+    mut initialized_config: Local<bool>,
+) {
+    // convert from asset key string to bevy handle
+    let Some(cfg_handle) = preloaded.get_single_asset::<DynamicConfig>("cfg.player") else {
+        return;
+    };
+    // The reason we do this here instead of in an AssetEvent::Added match arm, is because
+    // the Added match arm fires before preloaded updates with the asset key; as a result
+    // you can't tell what specific DynamicConfig loaded in like that.
+    if !*initialized_config {
+        if let Some(cfg) = cfgs.get(cfg_handle.clone()) {
+            update_player_config(&mut player_config, cfg);
+            println!("init:");
+            dbg!(&player_config);
+        }
+        *initialized_config = true;
+    }
+    for ev in ev_asset.read() {
+        match ev {
+            AssetEvent::Modified { id } => {
+                if let Some(cfg) = cfgs.get(*id) {
+                    if cfg_handle.id() == *id {
+                        println!("before:");
+                        dbg!(&player_config);
+                        update_player_config(&mut player_config, cfg);
+                        println!("after:");
+                        dbg!(&player_config);
+                    }
+                }
+            },
+            _ => {},
+        }
+    }
+}
+
+#[rustfmt::skip]
+fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
+    let mut errors = Vec::new();
+
+    update_field(&mut errors, &cfg.0, "max_move_vel", |val| config.max_move_vel = val);
+    update_field(&mut errors, &cfg.0, "max_fall_vel", |val| config.max_fall_vel = val);
+    update_field(&mut errors, &cfg.0, "move_accel_init", |val| config.move_accel_init = val);
+    update_field(&mut errors, &cfg.0, "move_accel", |val| config.move_accel = val);
+    update_field(&mut errors, &cfg.0, "jump_vel_init", |val| config.jump_vel_init = val);
+    update_field(&mut errors, &cfg.0, "jump_fall_accel", |val| config.jump_fall_accel = val);
+    update_field(&mut errors, &cfg.0, "fall_accel", |val| config.fall_accel = val);
+    update_field(&mut errors, &cfg.0, "max_coyote_time", |val| config.max_coyote_time = val);
+
+   for error in errors{
+       warn!("failed to load player cfg value: {}", error);
+   }
 }
 
 fn player_idle(
@@ -395,6 +499,7 @@ fn player_move(
         Option<&Grounded>,
     )>,
     time: Res<GameTime>,
+    config: Res<PlayerConfig>,
     //kinda dont want to do flipping here
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
@@ -402,19 +507,19 @@ fn player_move(
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
-        // TODO change to &PlayerAction
-        let initial_accel = 45.0;
-        let accel = 5.0;
+        let initial_accel = config.move_accel_init;
+        let accel = config.move_accel;
 
         // What "%" does our character get slowed down per game tick.
+        // Todo: Have this value be determined by tile type at some point?
         let ground_friction = 0.7;
 
         let new_vel = if action_state.just_pressed(&PlayerAction::Move) {
             direction = action_state.value(&PlayerAction::Move);
-            velocity.x + accel * direction
+            velocity.x + accel * direction * ground_friction
         } else if action_state.pressed(&PlayerAction::Move) {
             direction = action_state.value(&PlayerAction::Move);
-            velocity.x + initial_accel * direction
+            velocity.x + initial_accel * direction * ground_friction
         } else {
             // de-acceleration profile
             if grounded.is_some() {
@@ -429,7 +534,10 @@ fn player_move(
                 }
             }
         };
-        velocity.x = new_vel.clamp(-100.0, 100.0);
+        velocity.x = new_vel.clamp(
+            -config.max_move_vel,
+            config.max_move_vel,
+        );
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
             if direction > 0.0 {
@@ -480,17 +588,17 @@ fn player_jump(
         ),
         With<PlayerGent>,
     >,
+    config: Res<PlayerConfig>,
 ) {
     for (action_state, mut velocity, mut jumping, mut transitions) in query.iter_mut() {
         //can enter state and first frame jump not pressed if you tap
         //i think this is related to the fixedtimestep input
         // print!("{:?}", action_state.get_pressed());
 
-        let deaccel_rate = 2.5;
+        let deaccel_rate = config.jump_fall_accel;
 
-        // Jump should not be limited by number if "ticks" should be physics driven.
         if jumping.is_added() {
-            velocity.y += 150.0;
+            velocity.y += config.jump_vel_init;
         } else {
             if (velocity.y - deaccel_rate < 0.0) || action_state.released(&PlayerAction::Jump) {
                 transitions.push(Jumping::new_transition(Falling));
@@ -500,7 +608,7 @@ fn player_jump(
 
         jumping.current_air_ticks += 1;
 
-        velocity.y = velocity.y.clamp(0., 150.);
+        velocity.y = velocity.y.clamp(0., config.jump_vel_init);
     }
 }
 
@@ -604,9 +712,10 @@ fn player_grounded(
         (With<PlayerGent>, With<Grounded>),
     >,
     time: Res<GameTime>,
+    config: Res<PlayerConfig>,
 ) {
     // in seconds
-    let max_coyote_time = 0.1;
+    let max_coyote_time = config.max_coyote_time;
     for (
         entity,
         ray_cast_info,
@@ -672,11 +781,12 @@ fn player_falling(
         (With<PlayerGent>, With<Falling>),
     >,
     time: Res<GameTime>,
+    config: Res<PlayerConfig>,
 ) {
     for (entity, mut transform, mut velocity, action_state, hits, mut transitions) in
         query.iter_mut()
     {
-        let fall_accel = 2.9;
+        let fall_accel = config.fall_accel;
         let mut falling = true;
         if let Some((hit_entity, toi)) = hits.cast(
             &*spatial_query,
@@ -699,7 +809,10 @@ fn player_falling(
         }
         if falling {
             velocity.y -= fall_accel;
-            velocity.y = velocity.y.clamp(-100., 0.);
+            velocity.y = velocity.y.clamp(
+                -config.max_fall_vel,
+                config.jump_vel_init,
+            );
         }
     }
 }

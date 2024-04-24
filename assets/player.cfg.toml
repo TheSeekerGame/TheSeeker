@@ -1,0 +1,33 @@
+# Note: Setting some of these to negative values *WILL* cause a panic
+
+# The maximum horizontal velocity the player can move at.
+# (in pixels/second)
+max_move_vel = 100.0
+
+# The maximum downward velocity the player can fall at.
+# (in pixels/second)
+max_fall_vel = 100.0
+
+# The initial acceleration applied to the player for the first tick they start moving.
+# (in pixels/second^2)
+move_accel_init = 45.0
+
+# The acceleration applied to the player while they continue moving horizontally.
+# (in pixels/second^2)
+move_accel = 5.0
+
+# How much velocity does the player have at the moment they jump?
+# (in pixels/second)
+jump_vel_init = 150.0
+
+# How fast does the player accelerate downward while holding down the jump button?
+# (in pixels/second^2)
+jump_fall_accel = 2.5
+
+# How fast does the player accelerate downward while in the falling state?
+# (ie: after releasing the jump key)
+# (in pixels/second^2)
+fall_accel = 6.9
+
+# How many seconds does our characters innate hover boots work?
+max_coyote_time = 0.1
