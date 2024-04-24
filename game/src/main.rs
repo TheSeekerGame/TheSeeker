@@ -93,7 +93,7 @@ fn main() {
         crate::parallax::ParallaxPlugin,
         crate::game::GameplayPlugin,
         crate::gamestate::GameStatePlugin,
-        // crate::graphics::GraphicsFxPlugin,
+        crate::graphics::GraphicsFxPlugin,
     ));
 
     #[cfg(feature = "dev")]
