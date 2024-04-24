@@ -306,6 +306,36 @@ the [settings](#settings)) for some portion of the animation.
 
 <details>
   <summary>
+  <code>ReversePlayback</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+action = "ReversePlayback"
+reversed = true # Play backwards
+
+[[script]]
+action = "ReversePlayback"
+reversed = false # Play normally
+
+[[script]]
+action = "ReversePlayback"
+# if `reversed` is omitted,
+# toggles the current direction of playback
+```
+
+Reverses the playback direction.
+
+If the animation is reversed, the frame index will be decremented, instead of
+incremented, as the animation plays. The animation will end when it reaches
+the `frame_min` setting instead of the usual `frame_max`.
+
+</details>
+
+<details>
+  <summary>
   <code>TransformMove</code>
   </summary>
 

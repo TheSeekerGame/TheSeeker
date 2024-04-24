@@ -81,6 +81,12 @@ pub enum SpriteAnimationScriptAction {
         /// Set flip on the Y axis
         flip_y: Option<bool>,
     },
+    /// Reverse Playback
+    ReversePlayback {
+        /// Set a specific direction.
+        /// If omitted, toggles the current direction.
+        reversed: Option<bool>,
+    },
     /// Transform: relative translation
     TransformMove {
         x: Option<Frac>,
