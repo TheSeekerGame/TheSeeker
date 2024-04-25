@@ -5,15 +5,6 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[patch.crates-io]
-# bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_ecs = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_asset = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_xpbd_2d = { git = "https://github.com/TheSeekerGame/bevy_xpbd", branch = "TheSeeker" }
-
 [lib]
 name = "theseeker_engine"
 path = "engine/src/lib.rs"
