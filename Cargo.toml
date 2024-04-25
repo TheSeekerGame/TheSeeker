@@ -23,9 +23,7 @@ name = "theseeker_game"
 path = "game/src/main.rs"
 
 [features]
-dev = [
-    "bevy/file_watcher",
-]
+dev = ["bevy/file_watcher"]
 
 # dev: Enable max optimizations for dependencies, but not for our code
 [profile.dev.package."*"]
@@ -57,37 +55,27 @@ serde_with = "3.6.1"
 thiserror = "1.0.56"
 toml = "0.8.10"
 unic-langid = "0.9.4"
-ran = "2.0.1" #for lighter weight/easier use random noise then using rand
+ran = "2.0.1"            #for lighter weight/easier use random noise then using rand
+
+bevy_egui = "0.27"
+bevy-inspector-egui = "0.24"
 
 [dependencies.serde]
 version = "1.0.196"
-features = [
-    "derive",
-]
+features = ["derive"]
 
 [dependencies.bevy]
 version = "0.13"
 default-features = true
-features = [
-    "wayland",
-    "flac",
-    "jpeg",
-]
+features = ["flac", "jpeg", "wayland"]
 
 [dependencies.bevy_asset_loader]
 version = "0.20"
-features = [
-    "2d",
-    "progress_tracking",
-    "standard_dynamic_assets"
-]
+features = ["2d", "progress_tracking", "standard_dynamic_assets"]
 
 [dependencies.bevy_common_assets]
 version = "0.10"
-features = [
-    "toml",
-    "ron",
-]
+features = ["toml", "ron"]
 
 [dependencies.bevy_ecs_ldtk]
 # version = "0.8"

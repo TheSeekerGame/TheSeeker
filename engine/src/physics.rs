@@ -10,11 +10,15 @@ use std::f32::consts::PI;
 pub const PLAYER: Group = Group::from_bits_truncate(0b0001);
 /// The enemy collision group
 pub const ENEMY: Group = Group::from_bits_truncate(0b0010);
+/// The player attack collision group
+pub const PLAYER_ATTACK: Group = Group::from_bits_truncate(0b0100);
+/// The enemy attack collision group
+pub const ENEMY_ATTACK: Group = Group::from_bits_truncate(0b1000);
 /// The ground collision group
-pub const GROUND: Group = Group::from_bits_truncate(0b0100);
+pub const GROUND: Group = Group::from_bits_truncate(0b10000);
 /// The for when the other two groups don't make sense,
 /// and you just want to detect something
-pub const SENSOR: Group = Group::from_bits_truncate(0b1000);
+pub const SENSOR: Group = Group::from_bits_truncate(0b100000);
 
 /// Objects marked with this and a transform component will be updated in the
 /// collision scene. Parenting is not currently kept in sync; global transforms are used instead.
@@ -189,6 +193,33 @@ impl PhysicsWorld {
         intersections
     }
 
+    pub fn point_project(
+        &self,
+        point: Vec2,
+        interaction: InteractionGroups,
+        //TODO: might want to be able to exclude multiple entities?
+        exclude: Option<Entity>,
+    ) -> Option<(Entity, parry::query::PointProjection)> {
+        let mut filter = QueryFilter::new().groups(interaction);
+        if let Some(exclude) = exclude {
+            if let Some(col_id) = self.id_tracker.get(&exclude) {
+                filter = filter.exclude_collider(*col_id)
+            }
+        }
+        if let Some((collider, point)) = self.query_pipeline.project_point(
+            &self.rb_set,
+            &self.col_set,
+            &into_vec(point).into(),
+            true,
+            filter,
+        ) {
+            let entity: Entity = self.collider2entity(collider)?;
+            Some((entity, point))
+        } else {
+            None
+        }
+    }
+
     /// Small utility function that gets the entity associated with the collider;
     /// panics if entity does not exist.
     pub fn collider2entity(&self, handle: rapier2d::prelude::ColliderHandle) -> Option<Entity> {
@@ -210,7 +241,7 @@ impl PhysicsWorld {
 }
 
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-struct PhysicsSet;
+pub struct PhysicsSet;
 
 /// A manual implementation of rapier to only use the features required by our project
 ///

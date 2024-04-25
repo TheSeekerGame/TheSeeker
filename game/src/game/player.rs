@@ -3,17 +3,17 @@ use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
 use rapier2d::geometry::{Group, InteractionGroups};
 use rapier2d::parry::query::TOIStatus;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
+use theseeker_engine::gent::{Gent, GentPhysicsBundle};
 use theseeker_engine::physics::{
     into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, GROUND, PLAYER,
+    PLAYER_ATTACK,
 };
 use theseeker_engine::{
-    animation::SpriteAnimationBundle,
-    assets::animation::SpriteAnimation,
-    gent::{GentPhysicsBundle, TransformGfxFromGent},
-    script::ScriptPlayer,
+    animation::SpriteAnimationBundle, assets::animation::SpriteAnimation,
+    gent::TransformGfxFromGent, script::ScriptPlayer,
 };
 
-use crate::game::{attack::Health, gentstate::*};
+use crate::game::{attack::*, gentstate::*};
 use crate::prelude::*;
 
 pub struct PlayerPlugin;
@@ -59,6 +59,7 @@ pub enum PlayerStateSet {
     Animation,
 }
 
+//TODO: change to player spawnpoint
 #[derive(Bundle, LdtkEntity, Default)]
 pub struct PlayerBlueprintBundle {
     marker: PlayerBlueprint,
@@ -66,7 +67,8 @@ pub struct PlayerBlueprintBundle {
 
 #[derive(Bundle)]
 pub struct PlayerGentBundle {
-    marker: PlayerGent,
+    player: Player,
+    marker: Gent,
     phys: GentPhysicsBundle,
     coyote_time: CoyoteTime,
 }
@@ -83,9 +85,7 @@ pub struct PlayerGfxBundle {
 pub struct PlayerBlueprint;
 
 #[derive(Component)]
-pub struct PlayerGent {
-    pub e_gfx: Entity,
-}
+pub struct Player;
 
 #[derive(Component)]
 pub struct PlayerGfx {
@@ -108,7 +108,7 @@ fn debug_player_states(
             Ref<Jumping>,
             Ref<Grounded>,
         )>,
-        With<PlayerGent>,
+        With<Player>,
     >,
 ) {
     for states in query.iter() {
@@ -152,7 +152,7 @@ fn debug_player_states(
 }
 
 // fn debug_player(world: &World, query: Query<Entity, With<PlayerGfx>>) {
-fn debug_player(world: &World, query: Query<Entity, With<PlayerGent>>) {
+fn debug_player(world: &World, query: Query<Entity, With<Player>>) {
     for entity in query.iter() {
         let components = world.inspect_entity(entity);
         for component in components.iter() {
@@ -172,14 +172,17 @@ fn setup_player(
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
+            Name::new("Player"),
             PlayerGentBundle {
-                marker: PlayerGent { e_gfx },
+                player: Player,
+                marker: Gent { e_gfx },
                 phys: GentPhysicsBundle {
                     collider: Collider::cuboid(
                         4.0,
                         10.0,
                         InteractionGroups {
                             memberships: PLAYER,
+                            //should be more specific
                             filter: Group::all(),
                         },
                     ),
@@ -191,18 +194,21 @@ fn setup_player(
                         origin: Vec2::new(0.0, 0.0),
                         max_toi: f32::MAX,
                         direction: Direction2d::NEG_Y,
+                        //something seems sus here
                         interaction: InteractionGroups {
                             memberships: PLAYER,
                             filter: GROUND,
                         },
                     },
                     linear_velocity: LinearVelocity(Vec2::ZERO),
+                    // layers: CollisionLayers::new([Layer::Player], [Layer::EnemyAttack]),
                 },
                 coyote_time: Default::default(),
             },
+            Facing::Right,
             Health {
-                current: 100,
-                max: 100,
+                current: 600,
+                max: 600,
             },
             //have to use builder here *i think* because of different types between keycode and
             //axis
@@ -217,11 +223,13 @@ fn setup_player(
                     .insert(PlayerAction::Attack, KeyCode::Enter)
                     .build(),
             },
-            Falling::default(),
+            Falling,
             TransitionQueue::default(),
+            AddQueue::default(),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
+            //marker: Gfxent { e_gent},
             gent2gfx: TransformGfxFromGent {
                 pixel_aligned: false,
                 gent: e_gent,
@@ -243,7 +251,7 @@ impl Plugin for PlayerTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (transition.run_if(any_with_component::<TransitionQueue>),)
-                .chain()
+                // .chain()
                 .in_set(PlayerStateSet::Transition)
                 .after(PlayerStateSet::Behavior)
                 .run_if(in_state(AppState::InGame)),
@@ -279,19 +287,7 @@ impl GenericState for Falling {}
 
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
-pub struct Jumping {
-    current_air_ticks: u32,
-    max_air_ticks: u32,
-}
-
-impl Default for Jumping {
-    fn default() -> Self {
-        Jumping {
-            current_air_ticks: 0,
-            max_air_ticks: 30,
-        }
-    }
-}
+pub struct Jumping;
 impl GentState for Jumping {}
 impl GenericState for Jumping {}
 
@@ -311,10 +307,29 @@ impl Transitionable<Falling> for Grounded {
     type Removals = (Grounded, Idle, Running);
 }
 
-#[derive(Component, Default, Debug)]
+#[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
-pub struct Attacking;
+pub struct Attacking {
+    ticks: u32,
+}
+impl Attacking {
+    const STARTUP: u32 = 1;
+    const MAX: u32 = 5;
+}
 impl GentState for Attacking {}
+
+impl Transitionable<CanAttack> for Attacking {
+    type Removals = (Attacking);
+}
+
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
+pub struct CanAttack;
+impl GentState for CanAttack {}
+
+impl Transitionable<Attacking> for CanAttack {
+    type Removals = (CanAttack);
+}
 
 ///Player behavior systems.
 ///Do stuff here in states and add transitions to other states by pushing
@@ -328,36 +343,24 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                player_idle.run_if(any_matching::<(
-                    With<Idle>,
-                    With<PlayerGent>,
-                )>()),
-                player_run.run_if(any_matching::<(
-                    With<Running>,
-                    With<PlayerGent>,
-                )>()),
-                player_jump.run_if(any_matching::<(
-                    With<Jumping>,
-                    With<PlayerGent>,
-                )>()),
+                player_idle.run_if(any_with_component::<Idle>),
+                add_attack,
+                player_attack.run_if(any_with_component::<Attacking>),
                 player_move,
-                player_falling
-                    .run_if(any_matching::<(
-                        With<Falling>,
-                        With<PlayerGent>,
-                    )>())
-                    .before(player_grounded),
-                player_grounded.run_if(any_matching::<(
-                    With<Grounded>,
-                    With<PlayerGent>,
-                )>()),
+                player_run.run_if(any_with_component::<Running>),
+                player_jump.run_if(any_with_component::<Jumping>),
+                player_grounded.run_if(any_with_component::<Grounded>),
+                player_falling.run_if(any_with_component::<Falling>),
+                //consider a set for all movement/systems modify velocity, then collisions/move
+                //moves based on velocity
                 player_collisions
                     .after(player_move)
                     .after(player_grounded)
                     .after(player_jump)
                     .after(player_falling)
                     .before(TransformPropagate),
-            ),
+            )
+                .in_set(PlayerStateSet::Behavior),
         );
     }
 }
@@ -469,11 +472,7 @@ fn player_idle(
             &ActionState<PlayerAction>,
             &mut TransitionQueue,
         ),
-        (
-            With<Grounded>,
-            With<Idle>,
-            With<PlayerGent>,
-        ),
+        (With<Grounded>, With<Idle>, With<Player>),
     >,
 ) {
     for (action_state, mut transitions) in query.iter_mut() {
@@ -486,24 +485,27 @@ fn player_idle(
             // println!("moving??")
         }
         if direction != 0.0 {
-            transitions.push(Idle::new_transition(Running::default()));
+            transitions.push(Idle::new_transition(Running));
         }
     }
 }
 
 fn player_move(
-    mut q_gent: Query<(
-        &mut LinearVelocity,
-        &ActionState<PlayerAction>,
-        &PlayerGent,
-        Option<&Grounded>,
-    )>,
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
-    //kinda dont want to do flipping here
+    mut q_gent: Query<
+        (
+            &mut LinearVelocity,
+            &ActionState<PlayerAction>,
+            &mut Facing,
+            Option<&Grounded>,
+            &Gent,
+        ),
+        (With<Player>),
+    >,
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for (mut velocity, action_state, gent, grounded) in q_gent.iter_mut() {
+    for (mut velocity, action_state, mut facing, grounded, gent) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
@@ -540,13 +542,13 @@ fn player_move(
         );
 
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
-            if direction > 0.0 {
-                player.set_slot("DirectionRight", true);
-                player.set_slot("DirectionLeft", false);
-            } else if direction < 0.0 {
-                player.set_slot("DirectionRight", false);
-                player.set_slot("DirectionLeft", true);
-            }
+            // if direction > 0.0 {
+            //     player.set_slot("DirectionRight", true);
+            //     player.set_slot("DirectionLeft", false);
+            // } else if direction < 0.0 {
+            //     player.set_slot("DirectionRight", false);
+            //     player.set_slot("DirectionLeft", true);
+            // }
             if velocity.length() > 0.001 {
                 if velocity.x.abs() > velocity.y.abs() {
                     player.set_slot("MovingVertically", false);
@@ -560,6 +562,11 @@ fn player_move(
                 player.set_slot("MovingHorizontally", false);
             }
         }
+        if direction > 0.0 {
+            *facing = Facing::Right;
+        } else if direction < 0.0 {
+            *facing = Facing::Left;
+        }
     }
 }
 
@@ -570,7 +577,7 @@ fn player_run(
             &mut TransitionQueue,
         ),
         (
-            With<PlayerGent>,
+            With<Player>,
             With<Grounded>,
             With<Running>,
         ),
@@ -598,7 +605,7 @@ fn player_jump(
             &mut Jumping,
             &mut TransitionQueue,
         ),
-        With<PlayerGent>,
+        With<Player>,
     >,
     config: Res<PlayerConfig>,
 ) {
@@ -618,8 +625,6 @@ fn player_jump(
             velocity.y -= deaccel_rate;
         }
 
-        jumping.current_air_ticks += 1;
-
         velocity.y = velocity.y.clamp(0., config.jump_vel_init);
     }
 }
@@ -633,7 +638,7 @@ fn player_collisions(
             &mut LinearVelocity,
             &Collider,
         ),
-        (With<PlayerGent>),
+        (With<Player>),
     >,
     time: Res<GameTime>,
 ) {
@@ -647,54 +652,48 @@ fn player_collisions(
         // so the velocity is only stopped in the x direction, but not the y, so without the extra
         // check with the new velocity and position, the y might clip the player through the roof
         // of the corner.
-        loop {
-            //if we are not moving, we can not shapecast in direction of movement
-            if let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
-                if let Some((e, first_hit)) = spatial_query.shape_cast(
-                    pos.translation.xy(),
-                    shape_dir,
-                    &*shape,
-                    linear_velocity.length() / time.hz as f32 + 0.5,
-                    InteractionGroups {
-                        memberships: PLAYER,
-                        filter: GROUND,
-                    },
-                    Some(entity),
-                ) {
-                    if first_hit.status != TOIStatus::Penetrating {
-                        // Applies a very small amount of bounce, as well as sliding to the character
-                        // the bounce helps prevent the player from getting stuck.
-                        let sliding_plane = into_vec2(first_hit.normal1);
+        //if we are not moving, we can not shapecast in direction of movement
+        while let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
+            if let Some((e, first_hit)) = spatial_query.shape_cast(
+                pos.translation.xy(),
+                shape_dir,
+                &*shape,
+                linear_velocity.length() / time.hz as f32 + 0.5,
+                InteractionGroups {
+                    memberships: PLAYER,
+                    filter: GROUND,
+                },
+                Some(entity),
+            ) {
+                if first_hit.status != TOIStatus::Penetrating {
+                    // Applies a very small amount of bounce, as well as sliding to the character
+                    // the bounce helps prevent the player from getting stuck.
+                    let sliding_plane = into_vec2(first_hit.normal1);
 
-                        let bounce_coefficient = 0.05;
-                        let bounce_force = -sliding_plane
-                            * linear_velocity.dot(sliding_plane)
-                            * bounce_coefficient;
+                    let bounce_coefficient = 0.05;
+                    let bounce_force =
+                        -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
 
-                        let projected_velocity = linear_velocity.xy()
-                            - sliding_plane * linear_velocity.xy().dot(sliding_plane);
-                        linear_velocity.0 = projected_velocity + bounce_force;
+                    let projected_velocity = linear_velocity.xy()
+                        - sliding_plane * linear_velocity.xy().dot(sliding_plane);
+                    linear_velocity.0 = projected_velocity + bounce_force;
 
-                        let new_pos =
-                            pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
-                        pos.translation.x = new_pos.x;
-                        pos.translation.y = new_pos.y;
-                    } else if tries > 1 {
-                        // If we tried a few times and still penetrating, just abort the whole movement
-                        // thing entirely. This scenario rarely occurs, so stopping movement is fine.
-                        pos.translation.x = original_pos.x;
-                        pos.translation.y = original_pos.y;
-                        linear_velocity.0 = Vec2::ZERO;
-                        break;
-                    }
-                    tries += 1;
-                } else {
+                    let new_pos = pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
+                    pos.translation.x = new_pos.x;
+                    pos.translation.y = new_pos.y;
+                } else if tries > 1 {
+                    // If we tried a few times and still penetrating, just abort the whole movement
+                    // thing entirely. This scenario rarely occurs, so stopping movement is fine.
+                    pos.translation.x = original_pos.x;
+                    pos.translation.y = original_pos.y;
+                    linear_velocity.0 = Vec2::ZERO;
                     break;
                 }
-                if tries > 5 {
-                    break;
-                }
+                tries += 1;
             } else {
+                break;
+            }
+            if tries > 5 {
                 break;
             }
         }
@@ -703,6 +702,7 @@ fn player_collisions(
             (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
     }
 }
+// }
 
 /// Tries to keep the characters shape caster this far above the ground
 ///
@@ -721,7 +721,7 @@ fn player_grounded(
             &mut TransitionQueue,
             Option<&mut CoyoteTime>,
         ),
-        (With<PlayerGent>, With<Grounded>),
+        (With<Player>, With<Grounded>),
     >,
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
@@ -767,10 +767,7 @@ fn player_grounded(
         //jump continuously if held
         //known issue https://github.com/bevyengine/bevy/issues/6183
         if action_state.just_pressed(&PlayerAction::Jump) {
-            // if action_state.pressed(PlayerAction::Jump) {
-            transitions.push(Grounded::new_transition(
-                Jumping::default(),
-            ))
+            transitions.push(Grounded::new_transition(Jumping))
         } else if is_falling {
             if !in_c_time {
                 transitions.push(Grounded::new_transition(Falling))
@@ -790,7 +787,7 @@ fn player_falling(
             &ShapeCaster,
             &mut TransitionQueue,
         ),
-        (With<PlayerGent>, With<Falling>),
+        (With<Player>, With<Falling>),
     >,
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
@@ -829,6 +826,62 @@ fn player_falling(
     }
 }
 
+fn add_attack(
+    mut query: Query<
+        (
+            &mut TransitionQueue,
+            &ActionState<PlayerAction>,
+        ),
+        (Without<Attacking>, With<Player>),
+    >,
+) {
+    for (mut transitions, action_state) in query.iter_mut() {
+        if action_state.pressed(&PlayerAction::Attack) {
+            transitions.push(CanAttack::new_transition(
+                Attacking::default(),
+            ));
+        }
+    }
+}
+
+fn player_attack(
+    mut query: Query<
+        (
+            Entity,
+            &Facing,
+            &mut Attacking,
+            &mut TransitionQueue,
+        ),
+        (With<Player>),
+    >,
+    mut commands: Commands,
+) {
+    for (entity, facing, mut attacking, mut transitions) in query.iter_mut() {
+        if attacking.ticks == Attacking::STARTUP * 8 {
+            commands
+                .spawn((
+                    TransformBundle::from_transform(Transform::from_xyz(
+                        10. * facing.direction(),
+                        0.,
+                        0.,
+                    )),
+                    Collider::cuboid(
+                        10.,
+                        10.,
+                        InteractionGroups::new(PLAYER_ATTACK, ENEMY),
+                    ),
+                    Attack::new(16),
+                ))
+                .set_parent(entity);
+        }
+        attacking.ticks += 1;
+        if attacking.ticks == Attacking::MAX * 8 {
+            transitions.push(Attacking::new_transition(CanAttack));
+        }
+    }
+    //3 attack chain,
+}
+
 ///play animations here, run after transitions
 struct PlayerAnimationPlugin;
 
@@ -841,6 +894,8 @@ impl Plugin for PlayerAnimationPlugin {
                 player_falling_animation,
                 player_jumping_animation,
                 player_running_animation,
+                player_attacking_animation,
+                sprite_flip,
             )
                 .in_set(PlayerStateSet::Animation)
                 .after(PlayerStateSet::Transition)
@@ -850,7 +905,13 @@ impl Plugin for PlayerAnimationPlugin {
 }
 
 fn player_idle_animation(
-    i_query: Query<&PlayerGent, Added<Idle>>,
+    i_query: Query<
+        &Gent,
+        Or<(
+            (Added<Idle>, Without<Attacking>),
+            (With<Idle>, Added<CanAttack>),
+        )>,
+    >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for gent in i_query.iter() {
@@ -862,7 +923,13 @@ fn player_idle_animation(
 
 //TODO: add FallForward
 fn player_falling_animation(
-    f_query: Query<&PlayerGent, Added<Falling>>,
+    f_query: Query<
+        &Gent,
+        Or<(
+            (Added<Falling>, Without<Attacking>),
+            (With<Falling>, Added<CanAttack>),
+        )>,
+    >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for gent in f_query.iter() {
@@ -873,7 +940,13 @@ fn player_falling_animation(
 }
 
 fn player_jumping_animation(
-    f_query: Query<&PlayerGent, Added<Jumping>>,
+    f_query: Query<
+        &Gent,
+        Or<(
+            (Added<Jumping>, Without<Attacking>),
+            (With<Jumping>, Added<CanAttack>),
+        )>,
+    >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for gent in f_query.iter() {
@@ -884,12 +957,56 @@ fn player_jumping_animation(
 }
 
 fn player_running_animation(
-    r_query: Query<&PlayerGent, Added<Running>>,
+    r_query: Query<
+        &Gent,
+        Or<(
+            (Added<Running>, Without<Attacking>),
+            (With<Running>, Added<CanAttack>),
+        )>,
+    >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for gent in r_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             player.play_key("anim.player.Run")
+        }
+    }
+}
+
+fn player_attacking_animation(
+    r_query: Query<(&Gent, Has<Falling>, Has<Jumping>), Added<Attacking>>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+) {
+    for (gent, is_falling, is_jumping) in r_query.iter() {
+        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            if is_falling || is_jumping {
+                player.play_key("anim.player.SwordAirFrontA")
+            } else {
+                player.play_key("anim.player.SwordFrontA")
+            }
+        }
+    }
+    //have to check if first or 2nd attack, play diff anim
+    //also check for up attack?
+}
+
+fn sprite_flip(
+    query: Query<(&Facing, &Gent)>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+) {
+    for (facing, gent) in query.iter() {
+        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            match facing {
+                Facing::Right => {
+                    //TODO: toggle facing script action
+                    player.set_slot("DirectionRight", true);
+                    player.set_slot("DirectionLeft", false);
+                },
+                Facing::Left => {
+                    player.set_slot("DirectionRight", false);
+                    player.set_slot("DirectionLeft", true);
+                },
+            }
         }
     }
 }

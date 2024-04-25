@@ -1,7 +1,8 @@
 //! Everything to do with the in-game camera(s)
 
+use crate::game::player::Player;
 use crate::graphics::darkness::DarknessSettings;
-use crate::{game::player::PlayerGent, prelude::*};
+use crate::prelude::*;
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use ran::ran_f64_range;
@@ -109,7 +110,7 @@ fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wit
 /// Updates the Camera rig (ie, the camera target) based on where the player is going.
 fn camera_rig_follow_player(
     mut rig: ResMut<CameraRig>,
-    q_player: Query<&Transform, (With<PlayerGent>, Without<MainCamera>)>,
+    q_player: Query<&Transform, (With<Player>, Without<MainCamera>)>,
     // Keeps track if the camera is leading ahead, or behind the player
     mut lead_bckwrd: Local<bool>,
 ) {
