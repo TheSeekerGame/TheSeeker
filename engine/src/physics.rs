@@ -4,7 +4,39 @@ use bevy::transform::TransformSystem::TransformPropagate;
 use rapier2d::na::{Unit, UnitComplex};
 use rapier2d::parry;
 use rapier2d::prelude::*;
+use rapier2d::prelude::Collider as RapierCollider;
 use std::f32::consts::PI;
+
+/// A manual implementation of rapier to only use the features required by our project
+///
+/// It only supports setting colliders in the scene, and making shapecast queries on them.
+pub struct PhysicsPlugin;
+
+impl Plugin for PhysicsPlugin {
+    fn build(&self, app: &mut App) {
+        app.insert_resource(PhysicsWorld::default());
+        app.add_systems(Startup, init_physics_world);
+        app.configure_sets(
+            GameTickUpdate,
+            PhysicsSet.after(TransformPropagate),
+        );
+        app.add_systems(
+            GameTickUpdate,
+            (
+                update_query_pipeline.in_set(PhysicsSet),
+            ),
+        );
+        #[cfg(feature = "dev")]
+        app.init_gizmo_group::<PhsyicsCollidersGizmos>()
+            .add_systems(
+                GameTickUpdate,
+                debug_colliders.after(PhysicsSet),
+            );
+    }
+}
+
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct PhysicsSet;
 
 /// The player collision group
 pub const PLAYER: Group = Group::from_bits_truncate(0b0001);
@@ -26,14 +58,14 @@ pub const SENSOR: Group = Group::from_bits_truncate(0b100000);
 ///
 /// Only colliders that have an easy build wrapper are shown in the collider debug system.
 #[derive(Component)]
-pub struct Collider(pub rapier2d::prelude::Collider);
+pub struct Collider(pub RapierCollider);
 
 impl Collider {
     pub fn cuboid(x_length: f32, y_length: f32, interaction: InteractionGroups) -> Self {
         // Rapiers cuboid is subtely different from xpbd, as rapier is defined by its
         // half extents, and xpbd is by its extents.
         Self(
-            rapier2d::prelude::ColliderBuilder::cuboid(x_length * 0.5, y_length * 0.5)
+            ColliderBuilder::cuboid(x_length * 0.5, y_length * 0.5)
                 .collision_groups(interaction)
                 .build(),
         )
@@ -237,35 +269,6 @@ impl PhysicsWorld {
         } else {
             None
         }
-    }
-}
-
-#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
-pub struct PhysicsSet;
-
-/// A manual implementation of rapier to only use the features required by our project
-///
-/// It only supports setting colliders in the scene, and making shapecast queries on them.
-pub struct PhysicsPlugin;
-
-impl Plugin for PhysicsPlugin {
-    fn build(&self, app: &mut App) {
-        app.insert_resource(PhysicsWorld::default());
-        app.add_systems(Startup, init_physics_world);
-        app.configure_sets(
-            GameTickUpdate,
-            PhysicsSet.after(TransformPropagate),
-        );
-        app.add_systems(
-            GameTickUpdate,
-            update_query_pipeline.in_set(PhysicsSet),
-        );
-        #[cfg(feature = "dev")]
-        app.init_gizmo_group::<PhsyicsCollidersGizmos>()
-            .add_systems(
-                GameTickUpdate,
-                debug_colliders.after(PhysicsSet),
-            );
     }
 }
 
