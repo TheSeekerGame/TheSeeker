@@ -1,4 +1,7 @@
+use crate::assets::animation::SpriteAnimation;
 use crate::prelude::{GameTickUpdate, HashMap, HashSet};
+use crate::script::{ScriptPlayer, ScriptSet};
+use crate::PreloadedAssets;
 use bevy::prelude::*;
 use bevy::transform::TransformSystem::TransformPropagate;
 use rapier2d::na::{Unit, UnitComplex};
@@ -15,6 +18,7 @@ pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(PhysicsWorld::default());
+        app.init_resource::<SpriteColliderMap>();
         app.add_systems(Startup, init_physics_world);
         app.configure_sets(
             GameTickUpdate,
@@ -24,6 +28,9 @@ impl Plugin for PhysicsPlugin {
             GameTickUpdate,
             (
                 update_query_pipeline.in_set(PhysicsSet),
+                update_sprite_colliders
+                    .before(PhysicsSet)
+                    .after(ScriptSet::Run),
             ),
         );
         #[cfg(feature = "dev")]
@@ -51,6 +58,39 @@ pub const GROUND: Group = Group::from_bits_truncate(0b10000);
 /// The for when the other two groups don't make sense,
 /// and you just want to detect something
 pub const SENSOR: Group = Group::from_bits_truncate(0b100000);
+
+#[derive(Resource, Default)]
+pub struct SpriteColliderMap {
+    pub colliders: Vec<Vec<Point<f32>>>,
+    pub map: HashMap<AssetId<Image>, Vec<usize>>,
+}
+
+fn update_sprite_colliders(
+    collider_map: Res<SpriteColliderMap>,
+    mut q_sprite: Query<(
+        &Handle<Image>,
+        &TextureAtlas,
+        &mut Collider,
+    ), (
+        With<ScriptPlayer<SpriteAnimation>>,
+        Or<(
+            Changed<Handle<Image>>,
+            Changed<TextureAtlas>,
+        )>,
+    )>,
+) {
+    for (h_image, atlas, mut collider) in &mut q_sprite {
+        let points_i = collider_map.map.get(&h_image.id())
+            .expect("Sprite image not found in collider map!")
+            [atlas.index];
+        let points = &collider_map.colliders[points_i];
+
+        collider.0 = ColliderBuilder::convex_hull(points)
+            .expect("Cannot build collider")
+            // TODO: collision groups???
+            .build();
+    }
+}
 
 /// Objects marked with this and a transform component will be updated in the
 /// collision scene. Parenting is not currently kept in sync; global transforms are used instead.

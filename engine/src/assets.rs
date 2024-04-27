@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use bevy::asset::{Asset, UntypedAssetId};
 use bevy_common_assets::toml::TomlAssetPlugin;
 
-use crate::prelude::*;
+use crate::{physics::SpriteColliderMap, prelude::*};
 
 pub mod animation;
 pub mod script;
@@ -44,7 +44,11 @@ impl<S: States> Plugin for AssetsPlugin<S> {
         );
         app.add_systems(
             OnExit(self.loading_state.clone()),
-            finalize_preloaded_dynamic_assets,
+            (
+                finalize_preloaded_dynamic_assets,
+                populate_collider_map
+                    .after(finalize_preloaded_dynamic_assets),
+            )
         );
     }
 }
@@ -242,4 +246,59 @@ fn finalize_preloaded_dynamic_assets(world: &mut World) {
     // put them back
     world.insert_resource(dynamic_ass);
     world.insert_resource(preloaded_ass);
+}
+
+fn populate_collider_map(
+    preloaded: Res<PreloadedAssets>,
+    animations: Res<Assets<animation::SpriteAnimation>>,
+    mut images: ResMut<Assets<Image>>,
+    layouts: Res<Assets<TextureAtlasLayout>>,
+    mut collider_map: ResMut<SpriteColliderMap>,
+) {
+    // we only want to process images that are actually used
+    // by animations, so first we need to collect a list of
+    // relevant image assets by going through all loaded
+    // animations and resolving their image and layout asset keys
+    let iter_assets = animations.iter()
+        .filter_map(|(anim_id, anim)| {
+            anim.resolve_image_atlas(&preloaded, preloaded.get_key_for_asset(anim_id))
+        });
+
+    for (h_image, h_layout) in iter_assets {
+        let Some(image) = images.get_mut(&h_image) else {
+            continue;
+        };
+        let Some(layout) = layouts.get(&h_layout) else {
+            continue;
+        };
+
+        let mut collider_ids = vec![];
+        let mut collider_points = vec![];
+
+        for anim_frame_rect in &layout.textures {
+            collider_points.clear();
+
+            // TODO: compute the points of the collider shape
+            // from the image pixels (and modify the image pixels
+            // as necessary to remove the special color).
+            //
+            // Put them in `collider_points` as a Rapier type (not Vec2)
+
+            // collider_points.push(...);
+            // ...
+
+            // As a simple form of deduplication to avoid allocations
+            // (it is likely that consecutive frames in a single
+            // animation might have the same collider points)
+            // check if this frame is the same as the last
+            if collider_map.colliders.last() == Some(&collider_points) {
+                collider_ids.push(collider_map.colliders.len() - 1);
+            } else {
+                let i_new = collider_map.colliders.len();
+                collider_map.colliders.push(collider_points.clone());
+                collider_ids.push(i_new);
+            }
+        }
+        collider_map.map.insert(h_image.id(), collider_ids);
+    }
 }
