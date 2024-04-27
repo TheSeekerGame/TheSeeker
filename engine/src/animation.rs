@@ -284,25 +284,11 @@ impl ScriptAsset for SpriteAnimation {
             .get_mut(entity)
             .expect("Animation entity must have Texture Atlas components");
 
-        *image = if let Some(key) = &self.settings.extended.image_asset_key {
-            preloaded.get_single_asset(key)
-        } else if let Some(key) = builder.asset_key() {
-            let mut key = key.to_owned();
-            key.push_str(".image");
-            preloaded.get_single_asset(&key)
-        } else {
-            panic!("Unknown asset key for Animation Sprite Sheet Image")
-        }.expect("Animation Sprite Sheet Image asset with specified key does not exist");
+        let (h_image, h_layout) = self.resolve_image_atlas(&preloaded, builder.asset_key())
+            .expect("Cannot resolve Animation asset's Image and Layout assets.");
 
-        atlas.layout = if let Some(key) = &self.settings.extended.atlas_asset_key {
-            preloaded.get_single_asset(key)
-        } else if let Some(key) = builder.asset_key() {
-            let mut key = key.to_owned();
-            key.push_str(".atlas");
-            preloaded.get_single_asset(&key)
-        } else {
-            panic!("Unknown asset key for Animation Texture Atlas Layout")
-        }.expect("Animation Texture Atlas Layout asset with specified key does not exist");
+        *image = h_image;
+        atlas.layout = h_layout;
 
         atlas.index = self.settings.extended.frame_start
             .min(self.settings.extended.frame_max)
