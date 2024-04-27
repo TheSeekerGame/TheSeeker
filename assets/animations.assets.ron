@@ -4,10 +4,10 @@
     "anim.player.FallForward": File (
         path: "animations/player/movement/FallForward.anim.toml",
     ),
-    "anim.player.FallForward.atlas": File (
+    "anim.player.FallForward.image": File (
         path: "animations/player/movement/FallForward.png",
     ),
-    "anim.player.FallForward.image": TextureAtlasLayout (
+    "anim.player.FallForward.atlas": TextureAtlasLayout (
         tile_size_x: 96.,
         tile_size_y: 96.,
         rows: 1,
