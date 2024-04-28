@@ -218,6 +218,7 @@ fn setup_player(
                     .build(),
             },
             Falling::default(),
+            WallSlideTime(f32::MAX),
             TransitionQueue::default(),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
@@ -298,8 +299,16 @@ impl GenericState for Jumping {}
 #[derive(Component, Default, Debug)]
 pub struct CoyoteTime(f32);
 
+/// Indicates that sliding is tracked for this entity
 #[derive(Component, Default, Debug)]
-pub struct Sliding(f32);
+pub struct WallSlideTime(f32);
+impl WallSlideTime {
+    /// Player is sliding if f32 value is less then the coyote time
+    /// f32 starts incrementing when the player stops pressing into the wall
+    fn sliding(&self, cfg: &PlayerConfig) -> bool {
+        self.0 < cfg.max_coyote_time
+    }
+}
 
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
@@ -359,11 +368,8 @@ impl Plugin for PlayerBehaviorPlugin {
                     .after(player_grounded)
                     .after(player_jump)
                     .after(player_falling)
-                    .before(TransformPropagate),
-                player_sliding
-                    .before(player_collisions)
-                    .after(player_jump)
-                    .after(player_falling),
+                    .before(TransformPropagate)
+                    .before(PlayerStateSet::Transition),
             ),
         );
     }
@@ -631,16 +637,19 @@ fn player_collisions(
             &mut Transform,
             &mut LinearVelocity,
             &Collider,
+            Option<&mut WallSlideTime>,
         ),
         (With<PlayerGent>),
     >,
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, mut pos, mut linear_velocity, collider) in q_gent.iter_mut() {
+    for (entity, mut pos, mut linear_velocity, collider, slide) in q_gent.iter_mut() {
         let mut shape = collider.0.shared_shape().clone();
         let mut tries = 0;
         let mut original_pos = pos.translation.xy();
+
+        let mut wall_slide = false;
 
         // We loop over the shape cast operation to check if the new trajectory might *also* collide.
         // This can happen in a corner for example, where the first collision is on one wall, and
@@ -678,6 +687,7 @@ fn player_collisions(
                         // against the wall while falling. Ignores x component.
                         let friction_coefficient = config.sliding_friction;
                         let friction_force = if projected_velocity.y < -0.0 {
+                            wall_slide = true;
                             -(projected_velocity.y * friction_coefficient)
                         } else {
                             0.0
@@ -712,6 +722,14 @@ fn player_collisions(
         let z = pos.translation.z;
         pos.translation =
             (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
+        println!("wall-siding: {:?}", slide);
+        if let Some(mut slide) = slide {
+            if wall_slide {
+                slide.0 = 0.0;
+            } else {
+                slide.0 += 1.0 / time.hz as f32;
+            }
+        }
     }
 }
 
@@ -840,23 +858,6 @@ fn player_falling(
     }
 }
 
-/// Handles updating the player animation while they are sliding,
-/// as well as tracking how long they are sliding for.
-///
-/// Note: actual sliding calculation is handled by the collision function
-/// this just increments the time since
-fn player_sliding(
-    mut query: Query<(&ActionState<PlayerAction>, &mut Sliding), (With<PlayerGent>,)>,
-) {
-    for (action_state, mut transitions) in query.iter_mut() {
-        let mut direction: f32 = 0.0;
-        if action_state.pressed(&PlayerAction::Move) {
-            direction = action_state.value(&PlayerAction::Move);
-        }
-
-    }
-}
-
 ///play animations here, run after transitions
 struct PlayerAnimationPlugin;
 
@@ -874,6 +875,46 @@ impl Plugin for PlayerAnimationPlugin {
                 .after(PlayerStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         );
+        app.add_systems(
+            GameTickUpdate,
+            player_sliding_animation
+                .after(player_falling_animation)
+                .in_set(PlayerStateSet::Animation)
+                .run_if(in_state(AppState::InGame)),
+        );
+    }
+}
+
+/// Handles updating the player animation while they are sliding,
+/// as well as tracking how long they are sliding for.
+///
+/// Note: actual sliding calculation is handled by the collision function
+/// this handles animation
+fn player_sliding_animation(
+    mut query: Query<(
+        &PlayerGent,
+        &ActionState<PlayerAction>,
+        &WallSlideTime,
+    )>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    config: Res<PlayerConfig>,
+) {
+    for (gent, action_state, mut wall_slide_time) in query.iter_mut() {
+        let mut direction: f32 = 0.0;
+        if action_state.pressed(&PlayerAction::Move) {
+            direction = action_state.value(&PlayerAction::Move);
+            //println!("{:?}", sliding);
+        }
+        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            player.play_key("anim.player.Idle");
+            if wall_slide_time.sliding(&config) {
+                player.play_key("anim.player.WallSlide");
+                println!("sliding!");
+            } else {
+                player.play_key("anim.player.Fall");
+                println!("not_sliding!");
+            }
+        }
     }
 }
 
@@ -890,13 +931,12 @@ fn player_idle_animation(
 
 //TODO: add FallForward
 fn player_falling_animation(
-    f_query: Query<&PlayerGent, Added<Falling>>,
-    mut gfx_query: Query<(&mut ScriptPlayer<SpriteAnimation>, Option<&Sliding>), With<PlayerGfx>>,
+    f_query: Query<(&PlayerGent), Added<Falling>>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for gent in f_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            if let Some(sliding) gent
-            player.play_key("anim.player.Fall")
+            player.play_key("anim.player.Fall");
         }
     }
 }
