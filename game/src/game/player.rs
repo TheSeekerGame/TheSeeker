@@ -299,18 +299,6 @@ impl GenericState for Jumping {}
 #[derive(Component, Default, Debug)]
 pub struct CoyoteTime(f32);
 
-// Todo: Current issue with this implementation, is WallSlideTime is not a proper "State"
-//  that can be transitioned in and out of. Its more like CoyoteTime.
-//  but there is an animation for it...
-//  The issue with making it a proper state, is it conflicts with the falling state.
-//  "Falling" and "WallSliding" are effectively the same thing from the falling and collision systems pov.
-//  You could make them different, but then how do you track wall slide time?
-//  I guess could just have a WallSlideTime and WallSlideSTate??
-//  Wait actually I should just not bother handling the animation in code. that should be handled
-//  elsewhere--- Nope doesn't work that way. Each state needs to represent an animation...
-//  ugh what a pain; **** animations.
-//  Alright, I think we keep the wallslide time, and just make a WallSlideState that gets
-//  changed depending. Does it have an entire set of code like falling? What about things
 /// Indicates that sliding is tracked for this entity
 #[derive(Component, Default, Debug)]
 pub struct WallSlideTime(f32);
@@ -318,7 +306,7 @@ impl WallSlideTime {
     /// Player is sliding if f32 value is less then the coyote time
     /// f32 starts incrementing when the player stops pressing into the wall
     fn sliding(&self, cfg: &PlayerConfig) -> bool {
-        self.0 < cfg.max_coyote_time
+        self.0 <= cfg.max_coyote_time * 2.0
     }
 }
 
@@ -382,6 +370,7 @@ impl Plugin for PlayerBehaviorPlugin {
                     .before(player_grounded),
                 player_collisions
                     .after(player_move)
+                    .after(player_sliding)
                     .after(player_grounded)
                     .after(player_jump)
                     .after(player_falling)
@@ -667,7 +656,7 @@ fn player_collisions(
         let mut original_pos = pos.translation.xy();
 
         let mut wall_slide = false;
-
+        println!("vel: {}", linear_velocity.xy());
         // We loop over the shape cast operation to check if the new trajectory might *also* collide.
         // This can happen in a corner for example, where the first collision is on one wall, and
         // so the velocity is only stopped in the x direction, but not the y, so without the extra
@@ -709,6 +698,7 @@ fn player_collisions(
                         } else {
                             0.0
                         };
+                        println!("applied y friction: {}", friction_force);
                         let friction_vec = Vec2::new(0.0, friction_force);
 
                         linear_velocity.0 = projected_velocity + friction_vec + bounce_force;
@@ -741,6 +731,7 @@ fn player_collisions(
             (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
         println!("wall-siding: {:?}", slide);
         // Todo: detect if bottom half of player is no longer against the wall and disable sliding
+        //  (because it looks wierd to have the character hanging by their head)
         if let Some(mut slide) = slide {
             if wall_slide {
                 slide.0 = 0.0;
@@ -876,20 +867,20 @@ fn player_falling(
     }
 }
 
-// Todo: make player jump, and remove code not needed.
 fn player_sliding(
     mut query: Query<(
         &PlayerGent,
         &ActionState<PlayerAction>,
         &mut TransitionQueue,
         &mut Transform,
-        &WallSlideTime,
+        &mut WallSlideTime,
         &mut LinearVelocity,
     )>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
+    //mut triggered: Local<bool>,
 ) {
-    for (gent, action_state, mut transitions, mut trsnfrm, wall_slide_time, mut lin_vel) in
+    for (gent, action_state, mut transitions, mut trsnfrm, mut wall_slide_time, mut lin_vel) in
         query.iter_mut()
     {
         let mut direction: f32 = 0.0;
@@ -900,10 +891,15 @@ fn player_sliding(
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             if wall_slide_time.sliding(&config) {
                 if action_state.just_pressed(&PlayerAction::Jump) {
+                    wall_slide_time.0 = f32::MAX;
+                    // Move away from the wall a bit so that friction stops
                     lin_vel.x = -direction * config.move_accel_init;
-                    //trsnfrm.translation.x -= 5.0;
+                    // Give a little boost for the frame that it takes for input to be received
+                    lin_vel.y = config.fall_accel;
+                    println!("jumped");
+                    //trsnfrm.translation.x += -0.05 * direction;
                     // if action_state.pressed(PlayerAction::Jump) {
-                    transitions.push(Grounded::new_transition(
+                    transitions.push(Falling::new_transition(
                         Jumping::default(),
                     ))
                 }
