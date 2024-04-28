@@ -299,6 +299,18 @@ impl GenericState for Jumping {}
 #[derive(Component, Default, Debug)]
 pub struct CoyoteTime(f32);
 
+// Todo: Current issue with this implementation, is WallSlideTime is not a proper "State"
+//  that can be transitioned in and out of. Its more like CoyoteTime.
+//  but there is an animation for it...
+//  The issue with making it a proper state, is it conflicts with the falling state.
+//  "Falling" and "WallSliding" are effectively the same thing from the falling and collision systems pov.
+//  You could make them different, but then how do you track wall slide time?
+//  I guess could just have a WallSlideTime and WallSlideSTate??
+//  Wait actually I should just not bother handling the animation in code. that should be handled
+//  elsewhere--- Nope doesn't work that way. Each state needs to represent an animation...
+//  ugh what a pain; **** animations.
+//  Alright, I think we keep the wallslide time, and just make a WallSlideState that gets
+//  changed depending. Does it have an entire set of code like falling? What about things
 /// Indicates that sliding is tracked for this entity
 #[derive(Component, Default, Debug)]
 pub struct WallSlideTime(f32);
@@ -348,21 +360,26 @@ impl Plugin for PlayerBehaviorPlugin {
                     With<Running>,
                     With<PlayerGent>,
                 )>()),
+                // run before jump to avoid 1 frame latency
+                player_grounded.before(player_jump).run_if(any_matching::<(
+                    With<Grounded>,
+                    With<PlayerGent>,
+                )>()),
+                player_move.before(player_sliding),
+                player_sliding.before(player_jump).run_if(any_matching::<(
+                    With<Falling>,
+                    With<PlayerGent>,
+                )>()),
                 player_jump.run_if(any_matching::<(
                     With<Jumping>,
                     With<PlayerGent>,
                 )>()),
-                player_move,
                 player_falling
                     .run_if(any_matching::<(
                         With<Falling>,
                         With<PlayerGent>,
                     )>())
                     .before(player_grounded),
-                player_grounded.run_if(any_matching::<(
-                    With<Grounded>,
-                    With<PlayerGent>,
-                )>()),
                 player_collisions
                     .after(player_move)
                     .after(player_grounded)
@@ -723,6 +740,7 @@ fn player_collisions(
         pos.translation =
             (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
         println!("wall-siding: {:?}", slide);
+        // Todo: detect if bottom half of player is no longer against the wall and disable sliding
         if let Some(mut slide) = slide {
             if wall_slide {
                 slide.0 = 0.0;
@@ -858,6 +876,42 @@ fn player_falling(
     }
 }
 
+// Todo: make player jump, and remove code not needed.
+fn player_sliding(
+    mut query: Query<(
+        &PlayerGent,
+        &ActionState<PlayerAction>,
+        &mut TransitionQueue,
+        &mut Transform,
+        &WallSlideTime,
+        &mut LinearVelocity,
+    )>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    config: Res<PlayerConfig>,
+) {
+    for (gent, action_state, mut transitions, mut trsnfrm, wall_slide_time, mut lin_vel) in
+        query.iter_mut()
+    {
+        let mut direction: f32 = 0.0;
+        if action_state.pressed(&PlayerAction::Move) {
+            direction = action_state.value(&PlayerAction::Move);
+            //println!("{:?}", sliding);
+        }
+        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            if wall_slide_time.sliding(&config) {
+                if action_state.just_pressed(&PlayerAction::Jump) {
+                    lin_vel.x = -direction * config.move_accel_init;
+                    //trsnfrm.translation.x -= 5.0;
+                    // if action_state.pressed(PlayerAction::Jump) {
+                    transitions.push(Grounded::new_transition(
+                        Jumping::default(),
+                    ))
+                }
+            }
+        }
+    }
+}
+
 ///play animations here, run after transitions
 struct PlayerAnimationPlugin;
 
@@ -875,46 +929,6 @@ impl Plugin for PlayerAnimationPlugin {
                 .after(PlayerStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         );
-        app.add_systems(
-            GameTickUpdate,
-            player_sliding_animation
-                .after(player_falling_animation)
-                .in_set(PlayerStateSet::Animation)
-                .run_if(in_state(AppState::InGame)),
-        );
-    }
-}
-
-/// Handles updating the player animation while they are sliding,
-/// as well as tracking how long they are sliding for.
-///
-/// Note: actual sliding calculation is handled by the collision function
-/// this handles animation
-fn player_sliding_animation(
-    mut query: Query<(
-        &PlayerGent,
-        &ActionState<PlayerAction>,
-        &WallSlideTime,
-    )>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-    config: Res<PlayerConfig>,
-) {
-    for (gent, action_state, mut wall_slide_time) in query.iter_mut() {
-        let mut direction: f32 = 0.0;
-        if action_state.pressed(&PlayerAction::Move) {
-            direction = action_state.value(&PlayerAction::Move);
-            //println!("{:?}", sliding);
-        }
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key("anim.player.Idle");
-            if wall_slide_time.sliding(&config) {
-                player.play_key("anim.player.WallSlide");
-                println!("sliding!");
-            } else {
-                player.play_key("anim.player.Fall");
-                println!("not_sliding!");
-            }
-        }
     }
 }
 
@@ -931,12 +945,25 @@ fn player_idle_animation(
 
 //TODO: add FallForward
 fn player_falling_animation(
-    f_query: Query<(&PlayerGent), Added<Falling>>,
+    f_query: Query<(&PlayerGent, Option<&WallSlideTime>), With<Falling>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    config: Res<PlayerConfig>,
 ) {
-    for gent in f_query.iter() {
+    for (gent, sliding) in f_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key("anim.player.Fall");
+            println!("{:?}", sliding);
+            if let Some(sliding) = sliding {
+                if sliding.sliding(&config) {
+                    player.play_key("anim.player.WallSlide");
+                    println!("sliding!");
+                } else {
+                    player.play_key("anim.player.Fall");
+                    println!("not_sliding!");
+                }
+            } else {
+                player.play_key("anim.player.Fall");
+                println!("not_sliding!");
+            }
         }
     }
 }
