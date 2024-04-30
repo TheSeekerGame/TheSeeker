@@ -61,10 +61,10 @@ fn spawn_mainmenu(
             NodeBundle {
                 style: Style {
                     position_type: PositionType::Absolute,
-                    left: Val::Px(0.),
+                    left: Val::Px(150.),
                     right: Val::Px(0.),
                     top: Val::Px(0.),
-                    bottom: Val::Px(0.),
+                    bottom: Val::Px(355.),
                     flex_direction: FlexDirection::Column,
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::SpaceEvenly,

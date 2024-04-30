@@ -3,14 +3,102 @@ time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
 frame_min = 0
-frame_max = 1
+frame_max = 11
 frame_start = 0
 
-# LOOP the 2nd frame, so animation keeps playing or flip doesnt work except on frame 0
+
+# INITIALIZE JUMP STRAIGHT
+[[script]]
+run_on_playback_control = "Start"
+forbid_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 0
+
+#SWITCH FROM FORWARD TO STRAIGHT
+[[script]]
+run_at_frame = 6
+forbid_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 0
+[[script]]
+run_at_frame = 7
+forbid_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 1
+[[script]]
+run_at_frame = 8
+forbid_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 2
+[[script]]
+run_at_frame = 9
+forbid_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 3
+[[script]]
+run_at_frame = 10
+forbid_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 4
+[[script]]
+run_at_frame = 11
+forbid_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 5
+
+# LOOP JUMP STRAIGHT
+[[script]]
+run_at_frame = 5
+action = "SetFrameNext"
+frame_index = 2
+
+
+
+# INITIALIZE JUMP FORWARD
+[[script]]
+run_on_playback_control = "Start"
+require_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 6
+
+#SWITCH FROM STRAIGHT TO FORWARD
+[[script]]
+run_at_frame = 0
+require_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 6
 [[script]]
 run_at_frame = 1
+require_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 7
+[[script]]
+run_at_frame = 2
+require_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 8
+[[script]]
+run_at_frame = 3
+require_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 9
+[[script]]
+run_at_frame = 4
+require_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 10
+[[script]]
+run_at_frame = 5
+require_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 11
+
+# LOOP JUMP FORWARD
+[[script]]
+run_at_frame = 11
 action = "SetFrameNext"
-frame_index = 1
+frame_index = 8
+
 
 # Support left/right flipping
 [[script]]

@@ -185,7 +185,7 @@ pub(crate) fn update_camera_rig(
         return;
     };
 
-    let speed = 3.34;
+    let speed = 2.34;
 
     let new_xy = rig.camera.lerp(rig.target, time.delta_seconds() * speed);
 
