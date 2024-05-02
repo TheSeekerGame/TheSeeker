@@ -656,7 +656,6 @@ fn player_collisions(
         let mut original_pos = pos.translation.xy();
 
         let mut wall_slide = false;
-        println!("vel: {}", linear_velocity.xy());
         let dir = linear_velocity.x.signum();
         // We loop over the shape cast operation to check if the new trajectory might *also* collide.
         // This can happen in a corner for example, where the first collision is on one wall, and
@@ -714,7 +713,6 @@ fn player_collisions(
                         } else {
                             0.0
                         };
-                        println!("applied y friction: {}", friction_force);
                         let friction_vec = Vec2::new(0.0, friction_force);
 
                         linear_velocity.0 = projected_velocity + friction_vec + bounce_force;
@@ -892,7 +890,6 @@ fn player_sliding(
     )>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
-    //mut triggered: Local<bool>,
 ) {
     for (gent, action_state, mut transitions, mut trsnfrm, mut wall_slide_time, mut lin_vel) in
         query.iter_mut()
@@ -900,7 +897,6 @@ fn player_sliding(
         let mut direction: f32 = 0.0;
         if action_state.pressed(&PlayerAction::Move) {
             direction = action_state.value(&PlayerAction::Move);
-            //println!("{:?}", sliding);
         }
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             if wall_slide_time.sliding(&config) {
@@ -910,9 +906,6 @@ fn player_sliding(
                     lin_vel.x = -direction * config.move_accel_init;
                     // Give a little boost for the frame that it takes for input to be received
                     lin_vel.y = config.fall_accel;
-                    println!("jumped");
-                    //trsnfrm.translation.x += -0.05 * direction;
-                    // if action_state.pressed(PlayerAction::Jump) {
                     transitions.push(Falling::new_transition(
                         Jumping::default(),
                     ))
@@ -961,18 +954,14 @@ fn player_falling_animation(
 ) {
     for (gent, sliding) in f_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            println!("{:?}", sliding);
             if let Some(sliding) = sliding {
                 if sliding.sliding(&config) {
                     player.play_key("anim.player.WallSlide");
-                    println!("sliding!");
                 } else {
                     player.play_key("anim.player.Fall");
-                    println!("not_sliding!");
                 }
             } else {
                 player.play_key("anim.player.Fall");
-                println!("not_sliding!");
             }
         }
     }
