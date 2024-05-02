@@ -25,7 +25,9 @@ pub struct SpriteAnimationTracker {
     frame_actions: HashMap<u32, Vec<ActionId>>,
     framequant_actions: Vec<(Quant, ActionId)>,
     reversed: bool,
-    next_frame: u32,
+    next_frame: Option<u32>,
+    frame_min: u32,
+    frame_max: u32,
     ticks_per_frame: u32,
     ticks_remain: u32,
     bookmarks: HashMap<String, u32>,
@@ -51,6 +53,24 @@ impl SpriteAnimationTracker {
             FrameIndexOrBookmark::Index(i) => *i + bm_offset,
             FrameIndexOrBookmark::Bookmark(bm) => self.resolve_bookmark(Some(bm)),
         }
+    }
+    fn set_next_frame(&mut self, index: u32) {
+        if index < self.frame_min || index > self.frame_max {
+            self.next_frame = None;
+        } else {
+            self.next_frame = Some(index);
+        }
+    }
+    fn set_auto_next_frame(&mut self, current: u32) {
+        self.next_frame = if self.reversed {
+            if current > self.frame_min {
+                Some(current - 1)
+            } else { None }
+        } else {
+            if current < self.frame_max {
+                Some(current + 1)
+            } else { None }
+        };
     }
 }
 
@@ -147,8 +167,7 @@ impl ScriptAction for SpriteAnimationScriptAction {
                     to_frame_bookmark.as_ref()
                         .or(actionparams.frame_bookmark.as_ref())
                 );
-                let index = frame_index.unwrap_or(0);
-                tracker.next_frame = index + bm_offset;
+                tracker.set_next_frame(frame_index.unwrap_or(0) + bm_offset);
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetFrameNow { to_frame_bookmark, frame_index } => {
@@ -156,8 +175,9 @@ impl ScriptAction for SpriteAnimationScriptAction {
                     to_frame_bookmark.as_ref()
                         .or(actionparams.frame_bookmark.as_ref())
                 );
-                let index = frame_index.unwrap_or(0);
-                atlas.index = (index + bm_offset) as usize;
+                let index = frame_index.unwrap_or(0) + bm_offset;
+                atlas.index = index as usize;
+                tracker.set_auto_next_frame(index);
                 ScriptUpdateResult::Loop
             },
             SpriteAnimationScriptAction::SetTicksPerFrame { ticks_per_frame } => {
@@ -186,19 +206,11 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 match (tracker.reversed, reversed) {
                     (false, true) => {
                         tracker.reversed = true;
-                        if tracker.next_frame as usize == atlas.index + 1 {
-                            // prevent overflow
-                            if atlas.index == 0 {
-                                return ScriptUpdateResult::Finished;
-                            }
-                            tracker.next_frame -= 2;
-                        }
+                        tracker.set_auto_next_frame(atlas.index as u32);
                     }
                     (true, false) => {
                         tracker.reversed = false;
-                        if tracker.next_frame as usize + 1 == atlas.index {
-                            tracker.next_frame += 2;
-                        }
+                        tracker.set_auto_next_frame(atlas.index as u32);
                     }
                     _ => {}
                 }
@@ -265,7 +277,9 @@ impl ScriptTracker for SpriteAnimationTracker {
     ) {
         self.ticks_per_frame = settings.ticks_per_frame;
         self.ticks_remain = 0;
-        self.next_frame = settings.frame_start;
+        self.next_frame = Some(settings.frame_start);
+        self.frame_min = settings.frame_min;
+        self.frame_max = settings.frame_max;
         self.reversed = settings.play_reversed;
 
         let mut atlas = q
@@ -324,7 +338,7 @@ impl ScriptTracker for SpriteAnimationTracker {
     fn update<'w>(
         &mut self,
         entity: Entity,
-        settings: &Self::Settings,
+        _settings: &Self::Settings,
         (q,): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult {
@@ -332,47 +346,21 @@ impl ScriptTracker for SpriteAnimationTracker {
             .get_mut(entity)
             .expect("Animation entity must have TextureAtlasSprite component");
 
-        // if our sprite index was changed externally, respond to that by
-        // running any frame actions and queueing up the next frame appropriately
-        if atlas.is_changed() && !atlas.is_added() {
-            if self.reversed {
-                // prevent overflow
-                if atlas.index == 0 {
-                    return ScriptUpdateResult::Finished;
-                }
-                self.next_frame = atlas.index as u32 - 1;
-            } else {
-                self.next_frame = atlas.index as u32 + 1;
-            }
-            if let Some(actions) = self.frame_actions.get(&(atlas.index as u32)) {
-                queue.extend_from_slice(&actions);
-            }
-        }
-
-        if self.next_frame > settings.frame_max || self.next_frame < settings.frame_min {
-            return ScriptUpdateResult::Finished;
-        }
-
         if self.ticks_remain == 0 {
-            if let Some(actions) = self.frame_actions.get(&self.next_frame) {
+            let Some(next_frame) = self.next_frame else {
+                return ScriptUpdateResult::Finished;
+            };
+            if let Some(actions) = self.frame_actions.get(&next_frame) {
                 queue.extend_from_slice(&actions);
             }
             for (quant, action_id) in &self.framequant_actions {
-                if quant.check(self.next_frame as i64) {
+                if quant.check(next_frame as i64) {
                     queue.push(*action_id);
                 }
             }
-            atlas.index = self.next_frame as usize;
+            atlas.index = next_frame as usize;
             self.ticks_remain = self.ticks_per_frame;
-            if self.reversed {
-                // prevent overflow
-                if self.next_frame == 0 {
-                    return ScriptUpdateResult::Finished;
-                }
-                self.next_frame -= 1;
-            } else {
-                self.next_frame += 1;
-            }
+            self.set_auto_next_frame(next_frame);
         }
 
         self.ticks_remain -= 1;
