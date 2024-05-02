@@ -19,20 +19,20 @@ pub struct ScriptBundle {
 
 #[derive(Default)]
 pub struct CommonScriptTracker {
+    tick_actions: Vec<(u64, ActionId)>,
+    time_actions: Vec<(Duration, ActionId)>,
+    tickquant_actions: Vec<(TickQuant, ActionId)>,
+    slot_enable_actions: HashMap<String, Vec<ActionId>>,
+    slot_disable_actions: HashMap<String, Vec<ActionId>>,
+    start_actions: Vec<ActionId>,
+    stop_actions: Vec<ActionId>,
     start_tick: u64,
     next_tick_id: usize,
-    tick: Vec<(u64, ActionId)>,
-    tickquant: Vec<(TickQuant, ActionId)>,
     start_time: Duration,
     next_time_id: usize,
-    time: Vec<(Duration, ActionId)>,
-    slot_enable: HashMap<String, Vec<ActionId>>,
-    slot_disable: HashMap<String, Vec<ActionId>>,
     slots_enabled: HashSet<String>,
     q_extra: Vec<ActionId>,
     q_delayed: Vec<(u64, ActionId)>,
-    q_start: Vec<ActionId>,
-    q_stop: Vec<ActionId>,
     old_key: Option<String>,
 }
 
@@ -110,46 +110,46 @@ impl ScriptTracker for CommonScriptTracker {
     ) {
         match run_if {
             CommonScriptRunIf::Tick(tick) => {
-                self.tick.push((*tick, action_id));
+                self.tick_actions.push((*tick, action_id));
             },
             CommonScriptRunIf::TickQuant(quant) => {
-                self.tickquant.push((*quant, action_id));
+                self.tickquant_actions.push((*quant, action_id));
             },
             CommonScriptRunIf::Millis(millis) => {
-                self.time.push((
+                self.time_actions.push((
                     Duration::from_millis(*millis),
                     action_id,
                 ));
             },
             CommonScriptRunIf::Time(timespec) => {
-                self.time.push((Duration::from(*timespec), action_id));
+                self.time_actions.push((Duration::from(*timespec), action_id));
             },
             CommonScriptRunIf::SlotEnable(slot) => {
-                if let Some(entry) = self.slot_enable.get_mut(slot.as_str()) {
+                if let Some(entry) = self.slot_enable_actions.get_mut(slot.as_str()) {
                     entry.push(action_id);
                 } else {
-                    self.slot_enable.insert(slot.clone(), vec![action_id]);
+                    self.slot_enable_actions.insert(slot.clone(), vec![action_id]);
                 }
             }
             CommonScriptRunIf::SlotDisable(slot) => {
-                if let Some(entry) = self.slot_disable.get_mut(slot.as_str()) {
+                if let Some(entry) = self.slot_disable_actions.get_mut(slot.as_str()) {
                     entry.push(action_id);
                 } else {
-                    self.slot_disable.insert(slot.clone(), vec![action_id]);
+                    self.slot_disable_actions.insert(slot.clone(), vec![action_id]);
                 }
             }
             CommonScriptRunIf::PlaybackControl(PlaybackControl::Start) => {
-                self.q_start.push(action_id);
+                self.start_actions.push(action_id);
             }
             CommonScriptRunIf::PlaybackControl(PlaybackControl::Stop) => {
-                self.q_stop.push(action_id);
+                self.stop_actions.push(action_id);
             }
         }
     }
 
     fn finalize(&mut self) {
-        self.tick.sort_unstable_by_key(|(tick, _)| *tick);
-        self.time.sort_unstable_by_key(|(duration, _)| *duration);
+        self.tick_actions.sort_by_key(|(tick, _)| *tick);
+        self.time_actions.sort_by_key(|(duration, _)| *duration);
     }
 
     fn update<'w>(
@@ -169,8 +169,8 @@ impl ScriptTracker for CommonScriptTracker {
         }
 
         // check any time actions
-        while self.next_time_id < self.time.len() {
-            let next = &self.time[self.next_time_id];
+        while self.next_time_id < self.time_actions.len() {
+            let next = &self.time_actions[self.next_time_id];
             if time.elapsed() - self.start_time > next.0 {
                 queue.push(next.1);
                 self.next_time_id += 1;
@@ -179,8 +179,8 @@ impl ScriptTracker for CommonScriptTracker {
             }
         }
         // check any tick actions
-        while self.next_tick_id < self.tick.len() {
-            let next = &self.tick[self.next_tick_id];
+        while self.next_tick_id < self.tick_actions.len() {
+            let next = &self.tick_actions[self.next_tick_id];
             if game_time.tick() - self.start_tick > next.0 {
                 queue.push(next.1);
                 self.next_tick_id += 1;
@@ -189,14 +189,14 @@ impl ScriptTracker for CommonScriptTracker {
             }
         }
         // check any tickquant actions
-        for (quant, action_id) in &self.tickquant {
+        for (quant, action_id) in &self.tickquant_actions {
             if quant.check(game_time.tick()) {
                 queue.push(*action_id);
             }
         }
-        if self.next_time_id >= self.time.len()
-            && self.next_tick_id >= self.tick.len()
-            && self.tickquant.is_empty()
+        if self.next_time_id >= self.time_actions.len()
+            && self.next_tick_id >= self.tick_actions.len()
+            && self.tickquant_actions.is_empty()
         {
             ScriptUpdateResult::Finished
         } else {
@@ -219,7 +219,7 @@ impl ScriptTracker for CommonScriptTracker {
         _param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) {
-        queue.append(&mut self.q_start);
+        queue.append(&mut self.start_actions);
     }
 
     fn do_stop<'w>(
@@ -229,21 +229,21 @@ impl ScriptTracker for CommonScriptTracker {
         _param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) {
-        queue.append(&mut self.q_stop);
+        queue.append(&mut self.stop_actions);
     }
 
     fn set_slot(&mut self, slot: &str, state: bool) {
         if state {
             if !self.slots_enabled.contains(slot) {
                 self.slots_enabled.insert(slot.to_owned());
-                if let Some(actions) = self.slot_enable.get(slot) {
+                if let Some(actions) = self.slot_enable_actions.get(slot) {
                     self.q_extra.extend_from_slice(&actions);
                 }
             }
         } else {
             if self.slots_enabled.contains(slot) {
                 self.slots_enabled.remove(slot);
-                if let Some(actions) = self.slot_disable.get(slot) {
+                if let Some(actions) = self.slot_disable_actions.get(slot) {
                     self.q_extra.extend_from_slice(&actions);
                 }
             }
@@ -256,7 +256,7 @@ impl ScriptTracker for CommonScriptTracker {
 
     fn take_slots(&mut self) -> HashSet<String> {
         for slot in self.slots_enabled.iter() {
-            if let Some(actions) = self.slot_disable.get(slot) {
+            if let Some(actions) = self.slot_disable_actions.get(slot) {
                 self.q_extra.extend_from_slice(&actions);
             }
         }
@@ -265,7 +265,7 @@ impl ScriptTracker for CommonScriptTracker {
 
     fn clear_slots(&mut self) {
         for slot in self.slots_enabled.iter() {
-            if let Some(actions) = self.slot_disable.get(slot) {
+            if let Some(actions) = self.slot_disable_actions.get(slot) {
                 self.q_extra.extend_from_slice(&actions);
             }
         }
