@@ -52,7 +52,49 @@ impl ScriptRunIf for SpriteAnimationScriptRunIf {
 
 impl ScriptActionParams for SpriteAnimationScriptParams {
     type Tracker = SpriteAnimationTracker;
-    type ShouldRunParam = ();
+    type ShouldRunParam = (
+        SQuery<(
+            &'static TextureAtlas,
+        )>,
+    );
+
+    fn should_run<'w>(
+        &self,
+        entity: Entity,
+        tracker: &mut Self::Tracker,
+        _action_id: ActionId,
+        (q_self,): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+    ) -> Result<(), ScriptUpdateResult> {
+        let bm_offset = tracker.resolve_bookmark(
+            self.frame_bookmark.as_ref().map(|x| x.as_str())
+        );
+        let get_index = |i_or_bm: &FrameIndexOrBookmark| match i_or_bm {
+            FrameIndexOrBookmark::Index(i) => *i + bm_offset,
+            FrameIndexOrBookmark::Bookmark(bm) => tracker.resolve_bookmark(Some(&bm)),
+        };
+        let current_index = q_self.get(entity).unwrap().0.index as u32;
+        if let Some(lt) = &self.if_frame_lt {
+            if !(current_index < get_index(lt)) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(le) = &self.if_frame_le {
+            if !(current_index <= get_index(le)) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(gt) = &self.if_frame_gt {
+            if !(current_index > get_index(gt)) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(ge) = &self.if_frame_ge {
+            if !(current_index >= get_index(ge)) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        Ok(())
+    }
 }
 
 impl ScriptAction for SpriteAnimationScriptAction {

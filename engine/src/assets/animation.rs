@@ -45,6 +45,10 @@ pub struct SpriteAnimationSettings {
 #[derive(Serialize, Deserialize)]
 pub struct SpriteAnimationScriptParams {
     pub frame_bookmark: Option<String>,
+    pub if_frame_lt: Option<FrameIndexOrBookmark>,
+    pub if_frame_le: Option<FrameIndexOrBookmark>,
+    pub if_frame_gt: Option<FrameIndexOrBookmark>,
+    pub if_frame_ge: Option<FrameIndexOrBookmark>,
 }
 
 #[derive(Debug, Clone)]
