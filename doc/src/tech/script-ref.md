@@ -5,9 +5,9 @@ This page describes the syntax / file format for [Script Assets](./script.md).
 ## Custom Configs
 
 A script file can have an optional `[config]` section, where you can put any
-custom values (`f32` floats) you want to access from Rust while the script
-is running. This is useful if you want to make some custom gameplay code be
-configurable via the asset files, instead of hardcoding values in Rust.
+custom values you want to access from Rust while the script is running. This
+is useful if you want to make some custom gameplay code be configurable via
+the asset files, instead of hardcoding values in Rust.
 
 Example:
 
@@ -16,6 +16,8 @@ Example:
 jump_height = 7.0
 collision_damage = 4.0
 ```
+
+The values can be floats, integers, or strings.
 
 ## Settings
 
@@ -91,7 +93,8 @@ Every `[[script]]` section *must* contain:
 
  - a *trigger condition* to determine *when* to perform the action
  - an `action` field to specify the kind of action to perform
- - any additional parameters as required by the action, depending on the action kind
+ - any additional optional parameters to modify/control how it runs
+ - any additional parameters as appropriate for the action to perform
 
 ## Slots
 
@@ -133,8 +136,7 @@ The trigger condition is a mandatory part of every `[[script]]` section. It
 determines when to run the action.
 
 Multiple trigger conditions are currently not supported/allowed. There must be
-exactly one per `[[script]]` section. If you want to perform the same action
-at different times, just create multiple sections with the respective triggers.
+exactly one per `[[script]]` section.
 
 The available trigger conditions are:
 
@@ -210,9 +212,13 @@ Example:
 [[script]]
 run_at_tick = 96
 action = "..."
+
+[[script]]
+run_at_tick = [12, 16, 18]
+action = "..."
 ```
 
-Run the action once, on the given tick number.
+Run the action on the given tick number(s).
 
 Tick numbers count from the start of the script. May be affected by script settings.
 
@@ -256,9 +262,15 @@ Example:
 [[script]]
 run_at_millis = 250
 action = "..."
+
+[[script]]
+run_at_millis = [100, 200, 300]
+action = "..."
 ```
 
-Run the action once, after the given number of milliseconds have elapsed.
+Run the action when the given number of milliseconds have elapsed.
+
+If you specify multiple values, the action will be triggered at each one of them.
 
 Time is counted from the start of the script. Affected by the `time_base` setting.
 
@@ -275,9 +287,15 @@ Example:
 [[script]]
 run_at_time = "1:13:17.315"
 action = "..."
+
+[[script]]
+run_at_time = ["1:00", "2:00", "7:00"]
+action = "..."
 ```
 
-Run the action once, after the given amount of time has elapsed.
+Run the action when the given amount of time has elapsed.
+
+If you specify multiple values, the action will be triggered at each one of them.
 
 Time is counted from the start of the script. Affected by the `time_base` setting.
 
@@ -452,6 +470,98 @@ action = "..."
 
 Checks the values of the specified slots and does not perform the action if
 any of them is `true`.
+
+</details>
+
+<details>
+  <summary>
+  <code>if_runcount_lt</code>/<code>if_runcount_le</code>/<code>if_runcount_gt</code>/<code>if_runcount_ge</code>
+  </summary>
+
+Example:
+
+```toml
+# Do something at the start when the script starts playing,
+# but only for the first 3 times it runs
+[[script]]
+run_on_playback_control = "Start"
+if_runcount_le = 3
+action = "..."
+
+# Do something every 5+1 ticks, but only
+# after the script has been run more than twice
+[[script]]
+run_every_n_ticks = "5+1"
+if_runcount_gt = 2
+action = "..."
+```
+
+Only run the action if the current runcount is:
+
+ - less than (lt)
+ - less than or equal to (le)
+ - greater than (gt)
+ - greater than or equal to (ge)
+
+the specified value.
+
+</details>
+
+<details>
+  <summary>
+  <code>if_runcount_is</code>
+  </summary>
+
+Example:
+
+```toml
+# Do something as soon as the "attack" slot is enabled,
+# but only if the script is run for the first time
+[[script]]
+run_on_slot_enable = "attack"
+if_runcount_is = 0
+action = "..."
+
+# Do something when the script starts, but
+# only on the third, seventh, and ninth time it runs.
+[[script]]
+run_on_playback_control = "Start"
+if_runcount_is = [ 3, 7, 9 ]
+action = "..."
+```
+
+Only run the action if the current runcount is equal to any of the specified
+values.
+
+</details>
+
+<details>
+  <summary>
+  <code>if_runcount_quant</code>
+  </summary>
+
+Example:
+
+```toml
+# Do something when the script starts,
+# but only every fifth run
+[[script]]
+run_on_playback_control = "Start"
+if_runcount_quant = "5"
+action = "..."
+
+# Do something as soon as the "attack" slot is enabled,
+# but only on runs 2, 7, 12, 17, ...
+[[script]]
+run_on_slot_enable = "attack"
+if_runcount_quant = "5+2"
+action = "..."
+```
+
+Only run the action if the current runcount matches a "quant" pattern
+(this is the same syntax as for `run_every_n_ticks`, etc.).
+
+This allows you to do things "every N runcounts".
 
 </details>
 
