@@ -51,6 +51,7 @@ pub struct SpriteAnimationScriptParams {
     pub if_frame_le: Option<FrameIndexOrBookmark>,
     pub if_frame_gt: Option<FrameIndexOrBookmark>,
     pub if_frame_ge: Option<FrameIndexOrBookmark>,
+    pub if_frame_is: Option<FrameOrMany>,
     pub if_playing_reversed: Option<bool>,
 }
 
@@ -58,9 +59,9 @@ pub struct SpriteAnimationScriptParams {
 #[derive(Serialize, Deserialize)]
 pub enum SpriteAnimationScriptRunIf {
     #[serde(rename = "run_at_frame")]
-    Frame(FrameIndexOrBookmark),
-    #[serde(rename = "run_at_frames")]
-    Frames(Vec<FrameIndexOrBookmark>),
+    Frame(FrameOrMany),
+    #[serde(rename = "run_every_n_frames")]
+    FrameQuant(Quant),
 }
 
 /// The various actions that can be performed from an animation script
@@ -131,6 +132,14 @@ pub enum SpriteAnimationScriptAction {
 pub enum FrameIndexOrBookmark {
     Index(u32),
     Bookmark(String),
+}
+
+#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum FrameOrMany {
+    Single(FrameIndexOrBookmark),
+    Many(Vec<FrameIndexOrBookmark>),
 }
 
 impl SpriteAnimation {

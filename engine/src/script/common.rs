@@ -21,7 +21,7 @@ pub struct ScriptBundle {
 pub struct CommonScriptTracker {
     tick_actions: Vec<(u64, ActionId)>,
     time_actions: Vec<(Duration, ActionId)>,
-    tickquant_actions: Vec<(TickQuant, ActionId)>,
+    tickquant_actions: Vec<(Quant, ActionId)>,
     slot_enable_actions: HashMap<String, Vec<ActionId>>,
     slot_disable_actions: HashMap<String, Vec<ActionId>>,
     start_actions: Vec<ActionId>,
@@ -92,7 +92,7 @@ impl ScriptTracker for CommonScriptTracker {
             },
         }
         if let Some(ScriptTickQuant(quant)) = tick_quant {
-            self.start_tick = quant.apply(self.start_tick);
+            self.start_tick = quant.apply(self.start_tick as i64) as u64;
         }
         self.old_key = metadata.key_previous.clone();
     }
@@ -190,7 +190,7 @@ impl ScriptTracker for CommonScriptTracker {
         }
         // check any tickquant actions
         for (quant, action_id) in &self.tickquant_actions {
-            if quant.check(game_time.tick()) {
+            if quant.check(game_time.tick() as i64) {
                 queue.push(*action_id);
             }
         }

@@ -54,7 +54,7 @@ pub struct ScriptConfig(pub HashMap<String, DynamicConfigValue>);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[derive(Component, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct ScriptTickQuant(pub TickQuant);
+pub struct ScriptTickQuant(pub Quant);
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
@@ -89,7 +89,7 @@ pub enum CommonScriptRunIf {
     #[serde(rename = "run_at_tick")]
     Tick(u64),
     #[serde(rename = "run_every_n_ticks")]
-    TickQuant(TickQuant),
+    TickQuant(Quant),
     #[serde(rename = "run_at_time")]
     Time(TimeSpec),
     #[serde(rename = "run_at_millis")]

@@ -250,71 +250,70 @@ impl fmt::Display for TimeSpec {
     }
 }
 
-/// Special value to indicate that something should happen "every N ticks"
+/// Special value to indicate that something should happen periodically.
+///
+/// ("every N ticks", "every N frames", etc.)
 ///
 /// This can be parsed from a string
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[derive(SerializeDisplay, DeserializeFromStr)]
-pub struct TickQuant {
-    /// Do the thing every Nth tick ...
-    pub n: u32,
-    /// ... offsetted by this many ticks
+pub struct Quant {
+    /// Do the thing every Nth time ...
+    pub n: u64,
+    /// ... offsetted by this many
     /// (use this to do things "on the off-beat", in musical terms)
-    pub offset: u32,
+    pub offset: i64,
 }
 
-impl TickQuant {
-    /// Quantize a tick value
+impl Quant {
+    /// Quantize a value
     ///
-    /// Takes the raw tick value and returns the last value according
+    /// Takes the raw value and returns the last value according
     /// to the quantization parameters.
-    pub fn apply(self, tick: u64) -> u64 {
-        let tick = tick + self.offset as u64;
-        let rem = tick % self.n as u64;
-        tick - rem
+    pub fn apply(self, value: i64) -> i64 {
+        let rem = (value - self.offset) % self.n as i64;
+        value - rem
     }
 
     /// Get a value in these units
-    pub fn convert(self, tick: u64) -> u64 {
-        let tick = tick + self.offset as u64;
-        tick / self.n as u64
+    pub fn convert(self, value: i64) -> i64 {
+        (value - self.offset) / self.n as i64
     }
 
-    /// Check if a tick number matches
-    pub fn check(self, tick: u64) -> bool {
-        (tick + self.offset as u64) % self.n as u64 == 0
+    /// Check if a value matches
+    pub fn check(self, value: i64) -> bool {
+        (value - self.offset) % self.n as i64 == 0
     }
 }
 
-impl fmt::Display for TickQuant {
+impl fmt::Display for Quant {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        if self.offset != 0 {
+        if self.offset > 0 {
             write!(f, "{}+{}", self.n, self.offset)
+        } else if self.offset < 0 {
+            write!(f, "{}-{}", self.n, self.offset)
         } else {
             write!(f, "{}", self.n)
         }
     }
 }
 
-impl FromStr for TickQuant {
+impl FromStr for Quant {
     type Err = ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut r = TickQuant { n: 0, offset: 0 };
+        let mut r = Quant { n: 0, offset: 0 };
 
-        // look for a "+" sign
+        // look for a + or - sign
         // if there is none, then we expect an integer to use for `n`
         // if there is one, we expect integers on either side to use for `n`+`offset`
-        let mut parts_iter = s.split('+');
-
-        if let Some(part0) = parts_iter.next() {
+        if let Some(i) = s.find(&['+', '-']) {
+            let part0 = &s[..i];
+            let part1 = &s[i..];
             r.n = part0.trim().parse()?;
+            r.offset = part1.trim().parse()?;
         } else {
             r.n = s.trim().parse()?;
-        }
-
-        if let Some(part1) = parts_iter.next() {
-            r.offset = part1.trim().parse()?;
         }
 
         Ok(r)
@@ -323,35 +322,35 @@ impl FromStr for TickQuant {
 
 #[cfg(test)]
 mod test {
-    use super::{TickQuant, TimeSpec};
+    use super::{Quant, TimeSpec};
     #[test]
     fn display_framequant() {
-        let x = TickQuant { n: 0, offset: 0 };
+        let x = Quant { n: 0, offset: 0 };
         assert_eq!(x.to_string(), "0");
-        let x = TickQuant { n: 3, offset: 0 };
+        let x = Quant { n: 3, offset: 0 };
         assert_eq!(x.to_string(), "3");
-        let x = TickQuant { n: 0, offset: 4 };
+        let x = Quant { n: 0, offset: 4 };
         assert_eq!(x.to_string(), "0+4");
-        let x = TickQuant { n: 8, offset: 2 };
+        let x = Quant { n: 8, offset: 2 };
         assert_eq!(x.to_string(), "8+2");
     }
     #[test]
     fn parse_framequant() {
-        let x = "13".parse::<TickQuant>();
-        assert_eq!(x, Ok(TickQuant { n: 13, offset: 0 }));
-        let x = "  2\n".parse::<TickQuant>();
-        assert_eq!(x, Ok(TickQuant { n: 2, offset: 0 }));
-        let x = "3+1".parse::<TickQuant>();
-        assert_eq!(x, Ok(TickQuant { n: 3, offset: 1 }));
-        let x = " 6 + 2  ".parse::<TickQuant>();
-        assert_eq!(x, Ok(TickQuant { n: 6, offset: 2 }));
-        let x = "garbage".parse::<TickQuant>();
+        let x = "13".parse::<Quant>();
+        assert_eq!(x, Ok(Quant { n: 13, offset: 0 }));
+        let x = "  2\n".parse::<Quant>();
+        assert_eq!(x, Ok(Quant { n: 2, offset: 0 }));
+        let x = "3+1".parse::<Quant>();
+        assert_eq!(x, Ok(Quant { n: 3, offset: 1 }));
+        let x = " 6 + 2  ".parse::<Quant>();
+        assert_eq!(x, Ok(Quant { n: 6, offset: 2 }));
+        let x = "garbage".parse::<Quant>();
         assert!(x.is_err());
-        let x = " 4+garbage".parse::<TickQuant>();
+        let x = " 4+garbage".parse::<Quant>();
         assert!(x.is_err());
-        let x = "garbage + 4".parse::<TickQuant>();
+        let x = "garbage + 4".parse::<Quant>();
         assert!(x.is_err());
-        let x = "gar + bage".parse::<TickQuant>();
+        let x = "gar + bage".parse::<Quant>();
         assert!(x.is_err());
     }
     #[test]

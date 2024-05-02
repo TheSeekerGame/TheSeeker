@@ -22,16 +22,17 @@ pub struct SpriteAnimationBundle {
 
 #[derive(Default)]
 pub struct SpriteAnimationTracker {
+    frame_actions: HashMap<u32, Vec<ActionId>>,
+    framequant_actions: Vec<(Quant, ActionId)>,
     reversed: bool,
     next_frame: u32,
     ticks_per_frame: u32,
     ticks_remain: u32,
-    frame_actions: HashMap<u32, Vec<ActionId>>,
     bookmarks: HashMap<String, u32>,
 }
 
 impl SpriteAnimationTracker {
-    fn resolve_bookmark(&self, bm: Option<&str>) -> u32 {
+    fn resolve_bookmark(&self, bm: Option<&String>) -> u32 {
         let Some(bm) = bm else {
             return 0;
         };
@@ -42,6 +43,13 @@ impl SpriteAnimationTracker {
                 warn!("Script bookmark {:?} is undefined!", bm);
             }
             0
+        }
+    }
+    fn resolve_frame(&self, bm: Option<&String>, frame: &FrameIndexOrBookmark) -> u32 {
+        let bm_offset = self.resolve_bookmark(bm);
+        match frame {
+            FrameIndexOrBookmark::Index(i) => *i + bm_offset,
+            FrameIndexOrBookmark::Bookmark(bm) => self.resolve_bookmark(Some(bm)),
         }
     }
 }
@@ -65,32 +73,41 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
         _action_id: ActionId,
         (q_self,): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
     ) -> Result<(), ScriptUpdateResult> {
-        let bm_offset = tracker.resolve_bookmark(
-            self.frame_bookmark.as_ref().map(|x| x.as_str())
-        );
-        let get_index = |i_or_bm: &FrameIndexOrBookmark| match i_or_bm {
-            FrameIndexOrBookmark::Index(i) => *i + bm_offset,
-            FrameIndexOrBookmark::Bookmark(bm) => tracker.resolve_bookmark(Some(&bm)),
-        };
         let current_index = q_self.get(entity).unwrap().0.index as u32;
         if let Some(lt) = &self.if_frame_lt {
-            if !(current_index < get_index(lt)) {
+            if !(current_index < tracker.resolve_frame(self.frame_bookmark.as_ref(), lt)) {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
         if let Some(le) = &self.if_frame_le {
-            if !(current_index <= get_index(le)) {
+            if !(current_index <= tracker.resolve_frame(self.frame_bookmark.as_ref(), le)) {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
         if let Some(gt) = &self.if_frame_gt {
-            if !(current_index > get_index(gt)) {
+            if !(current_index > tracker.resolve_frame(self.frame_bookmark.as_ref(), gt)) {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
         if let Some(ge) = &self.if_frame_ge {
-            if !(current_index >= get_index(ge)) {
+            if !(current_index >= tracker.resolve_frame(self.frame_bookmark.as_ref(), ge)) {
                 return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(f) = &self.if_frame_is {
+            match f {
+                FrameOrMany::Single(f) => {
+                    if current_index != tracker.resolve_frame(self.frame_bookmark.as_ref(), f) {
+                        return Err(ScriptUpdateResult::NormalRun);
+                    }
+                }
+                FrameOrMany::Many(f) => {
+                    for f in f.iter() {
+                        if current_index != tracker.resolve_frame(self.frame_bookmark.as_ref(), f) {
+                            return Err(ScriptUpdateResult::NormalRun);
+                        }
+                    }
+                }
             }
         }
         if let Some(reversed) = self.if_playing_reversed {
@@ -129,7 +146,6 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 let bm_offset = tracker.resolve_bookmark(
                     to_frame_bookmark.as_ref()
                         .or(actionparams.frame_bookmark.as_ref())
-                        .map(|x| x.as_str())
                 );
                 let index = frame_index.unwrap_or(0);
                 tracker.next_frame = index + bm_offset;
@@ -139,7 +155,6 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 let bm_offset = tracker.resolve_bookmark(
                     to_frame_bookmark.as_ref()
                         .or(actionparams.frame_bookmark.as_ref())
-                        .map(|x| x.as_str())
                 );
                 let index = frame_index.unwrap_or(0);
                 atlas.index = (index + bm_offset) as usize;
@@ -273,33 +288,35 @@ impl ScriptTracker for SpriteAnimationTracker {
         params: &Self::ActionParams,
         action_id: ActionId,
     ) {
-        let bm_offset = self.resolve_bookmark(
-            params.frame_bookmark.as_ref().map(|x| x.as_str())
-        );
+        let bm = params.frame_bookmark.as_ref();
         match run_if {
             SpriteAnimationScriptRunIf::Frame(frame) => {
-                let index = match frame {
-                    FrameIndexOrBookmark::Index(i) => *i + bm_offset,
-                    FrameIndexOrBookmark::Bookmark(bm) => self.resolve_bookmark(Some(&bm)),
-                };
-                if let Some(e) = self.frame_actions.get_mut(&index) {
-                    e.push(action_id);
-                } else {
-                    self.frame_actions.insert(index, vec![action_id]);
-                }
-            },
-            SpriteAnimationScriptRunIf::Frames(frames) => {
-                for frame in frames.iter() {
-                    let index = match frame {
-                        FrameIndexOrBookmark::Index(i) => *i + bm_offset,
-                        FrameIndexOrBookmark::Bookmark(bm) => self.resolve_bookmark(Some(&bm)),
-                    };
-                    if let Some(e) = self.frame_actions.get_mut(&index) {
+                let mut actions = std::mem::take(&mut self.frame_actions);
+                let mut add_action = |index| {
+                    if let Some(e) = actions.get_mut(&index) {
                         e.push(action_id);
                     } else {
-                        self.frame_actions.insert(index, vec![action_id]);
+                        actions.insert(index, vec![action_id]);
                     }
-                }
+                };
+                match frame {
+                    FrameOrMany::Single(frame) => {
+                        add_action(self.resolve_frame(bm, frame));
+                    }
+                    FrameOrMany::Many(frames) => {
+                        for frame in frames.iter() {
+                            add_action(self.resolve_frame(bm, frame));
+                        }
+                    }
+                };
+                self.frame_actions = actions;
+            },
+            SpriteAnimationScriptRunIf::FrameQuant(quant) => {
+                // adjust based on bookmark
+                let bm_offset = self.resolve_bookmark(bm);
+                let mut quant = *quant;
+                quant.offset += bm_offset as i64;
+                self.framequant_actions.push((quant, action_id));
             }
         }
     }
@@ -339,6 +356,11 @@ impl ScriptTracker for SpriteAnimationTracker {
         if self.ticks_remain == 0 {
             if let Some(actions) = self.frame_actions.get(&self.next_frame) {
                 queue.extend_from_slice(&actions);
+            }
+            for (quant, action_id) in &self.framequant_actions {
+                if quant.check(self.next_frame as i64) {
+                    queue.push(*action_id);
+                }
             }
             atlas.index = self.next_frame as usize;
             self.ticks_remain = self.ticks_per_frame;
