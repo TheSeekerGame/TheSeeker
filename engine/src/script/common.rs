@@ -57,6 +57,7 @@ impl ScriptTracker for CommonScriptTracker {
     type RunIf = CommonScriptRunIf;
     type Settings = CommonScriptSettings;
     type UpdateParam = (SRes<Time>, SRes<GameTime>);
+    type ActionParams = CommonScriptParams;
 
     fn init<'w>(
         &mut self,
@@ -101,7 +102,12 @@ impl ScriptTracker for CommonScriptTracker {
         self.start_time = other.start_time;
     }
 
-    fn track_action(&mut self, run_if: &Self::RunIf, action_id: ActionId) {
+    fn track_action(
+        &mut self,
+        run_if: &Self::RunIf,
+        _params: &Self::ActionParams,
+        action_id: ActionId,
+    ) {
         match run_if {
             CommonScriptRunIf::Tick(tick) => {
                 self.tick.push((*tick, action_id));
@@ -389,8 +395,8 @@ impl ScriptAction for CommonScriptAction {
 
 #[derive(Default)]
 pub struct ExtendedScriptTracker<T: ScriptTracker> {
-    extended: T,
-    common: CommonScriptTracker,
+    pub extended: T,
+    pub common: CommonScriptTracker,
 }
 
 impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
@@ -404,6 +410,7 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         T::UpdateParam,
         <<CommonScriptRunIf as ScriptRunIf>::Tracker as ScriptTracker>::UpdateParam,
     );
+    type ActionParams = ExtendedScriptParams<T::ActionParams>;
 
     fn init<'w>(
         &mut self,
@@ -421,13 +428,13 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         self.common.transfer_progress(&other.common);
     }
 
-    fn track_action(&mut self, run_if: &Self::RunIf, action_id: ActionId) {
+    fn track_action(&mut self, run_if: &Self::RunIf, params: &Self::ActionParams, action_id: ActionId) {
         match run_if {
             ExtendedScriptRunIf::Extended(run_if) => {
-                self.extended.track_action(run_if, action_id);
+                self.extended.track_action(run_if, &params.extended, action_id);
             },
             ExtendedScriptRunIf::Common(run_if) => {
-                self.common.track_action(run_if, action_id);
+                self.common.track_action(run_if, &params.common, action_id);
             },
         }
     }

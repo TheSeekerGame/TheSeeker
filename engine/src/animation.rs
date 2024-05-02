@@ -163,6 +163,7 @@ impl ScriptTracker for SpriteAnimationTracker {
     type RunIf = SpriteAnimationScriptRunIf;
     type Settings = SpriteAnimationSettings;
     type UpdateParam = (SQuery<&'static mut TextureAtlas>,);
+    type ActionParams = SpriteAnimationScriptParams;
 
     fn init<'w>(
         &mut self,
@@ -189,7 +190,12 @@ impl ScriptTracker for SpriteAnimationTracker {
         // nothing really needs to be done here
     }
 
-    fn track_action(&mut self, run_if: &Self::RunIf, action_id: ActionId) {
+    fn track_action(
+        &mut self,
+        run_if: &Self::RunIf,
+        _params: &Self::ActionParams,
+        action_id: ActionId,
+    ) {
         match run_if {
             SpriteAnimationScriptRunIf::Frame(frame) => {
                 self.frame_actions.insert(*frame, action_id);

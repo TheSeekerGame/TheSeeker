@@ -78,7 +78,7 @@ pub trait ScriptAsset: Asset + Sized + Send + Sync + 'static {
     type RunIf: ScriptRunIf<Tracker = Self::Tracker>;
     type Action: ScriptAction<Tracker = Self::Tracker, ActionParams = Self::ActionParams>;
     type ActionParams: ScriptActionParams<Tracker = Self::Tracker>;
-    type Tracker: ScriptTracker<RunIf = Self::RunIf, Settings = Self::Settings>;
+    type Tracker: ScriptTracker<RunIf = Self::RunIf, Settings = Self::Settings, ActionParams = Self::ActionParams>;
     type BuildParam: SystemParam + 'static;
 
     fn build<'w>(
@@ -96,6 +96,7 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
     type Settings: Sized + Send + Sync + 'static;
     type InitParam: SystemParam + 'static;
     type UpdateParam: SystemParam + 'static;
+    type ActionParams: ScriptActionParams<Tracker = Self>;
 
     fn init<'w>(
         &mut self,
@@ -105,7 +106,12 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         param: &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
     );
     fn transfer_progress(&mut self, other: &Self);
-    fn track_action(&mut self, run_if: &Self::RunIf, action_id: ActionId);
+    fn track_action(
+        &mut self,
+        run_if: &Self::RunIf,
+        params: &Self::ActionParams,
+        action_id: ActionId,
+    );
     fn finalize(&mut self);
     fn update<'w>(
         &mut self,
@@ -243,7 +249,18 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
     ) -> Self {
         let action_id = self.runtime.actions.len();
         self.runtime.actions.push((params.clone(), action.clone()));
-        self.runtime.tracker.track_action(run_if, action_id);
+        self.runtime.tracker.track_action(run_if, params, action_id);
+        self
+    }
+
+    pub fn tracker(&self) -> &T::Tracker {
+        &self.runtime.tracker
+    }
+    pub fn tracker_mut(&mut self) -> &mut T::Tracker {
+        &mut self.runtime.tracker
+    }
+    pub fn tracker_do(mut self, f: impl FnOnce(&mut T::Tracker)) -> Self {
+        f(self.tracker_mut());
         self
     }
 
