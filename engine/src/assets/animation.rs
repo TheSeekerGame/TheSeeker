@@ -16,6 +16,9 @@ pub struct SpriteAnimation {
     pub config: ScriptConfig,
     /// General animation parameters
     pub settings: ExtendedScriptSettings<SpriteAnimationSettings>,
+    /// Optional frame bookmarks to help during scripting
+    #[serde(default)]
+    pub frame_bookmarks: HashMap<String, u32>,
     /// Optional "script": list of actions to perform during playback
     #[serde(default)]
     pub script: Vec<
@@ -36,17 +39,29 @@ pub struct SpriteAnimationSettings {
     pub frame_start: u32,
     pub frame_min: u32,
     pub frame_max: u32,
+    #[serde(default)]
+    pub play_reversed: bool,
 }
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
-pub struct SpriteAnimationScriptParams {}
+pub struct SpriteAnimationScriptParams {
+    pub frame_bookmark: Option<String>,
+    pub if_frame_lt: Option<FrameIndexOrBookmark>,
+    pub if_frame_le: Option<FrameIndexOrBookmark>,
+    pub if_frame_gt: Option<FrameIndexOrBookmark>,
+    pub if_frame_ge: Option<FrameIndexOrBookmark>,
+    pub if_frame_is: Option<OneOrMany<FrameIndexOrBookmark>>,
+    pub if_playing_reversed: Option<bool>,
+}
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
 pub enum SpriteAnimationScriptRunIf {
     #[serde(rename = "run_at_frame")]
-    Frame(u32),
+    Frame(OneOrMany<FrameIndexOrBookmark>),
+    #[serde(rename = "run_every_n_frames")]
+    FrameQuant(Quant),
 }
 
 /// The various actions that can be performed from an animation script
@@ -61,13 +76,17 @@ pub enum SpriteAnimationScriptAction {
     },
     /// Immediately change to the given frame, without waiting for `ticks_per_frame`
     SetFrameNow {
+        /// Use this bookmark
+        to_frame_bookmark: Option<String>,
         /// The frame index
-        frame_index: u32,
+        frame_index: Option<u32>,
     },
     /// Change the next frame to be displayed, after `ticks_per_frame` elapses.
     SetFrameNext {
+        /// Use this bookmark
+        to_frame_bookmark: Option<String>,
         /// The frame index
-        frame_index: u32,
+        frame_index: Option<u32>,
     },
     /// Set sprite colorization
     SetSpriteColor {
@@ -107,6 +126,14 @@ pub enum SpriteAnimationScriptAction {
     TransformSetScale { x: Frac, y: Frac },
 }
 
+#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum FrameIndexOrBookmark {
+    Index(u32),
+    Bookmark(String),
+}
+
 impl SpriteAnimation {
     pub fn resolve_image_atlas(
         &self,
@@ -129,8 +156,6 @@ impl SpriteAnimation {
             default_layout_key.push_str(".atlas");
             &default_layout_key
         };
-        dbg!(image_key);
-        dbg!(layout_key);
         Some((
             preloaded.get_single_asset(image_key)?,
             preloaded.get_single_asset(layout_key)?,

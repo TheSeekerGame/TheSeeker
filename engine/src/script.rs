@@ -54,6 +54,7 @@ pub trait ScriptAppExt {
 impl ScriptAppExt for App {
     fn add_script_runtime<T: ScriptAsset>(&mut self) -> &mut Self {
         self.init_resource::<ScriptActionQueue<T>>();
+        self.init_resource::<ScriptRunCounts<T>>();
         self.add_systems(
             GameTickUpdate,
             (
@@ -69,6 +70,7 @@ impl ScriptAppExt for App {
 pub struct ScriptMetadata {
     pub key: Option<String>,
     pub key_previous: Option<String>,
+    pub runcount: u32,
 }
 
 pub type ActionId = usize;
@@ -78,7 +80,7 @@ pub trait ScriptAsset: Asset + Sized + Send + Sync + 'static {
     type RunIf: ScriptRunIf<Tracker = Self::Tracker>;
     type Action: ScriptAction<Tracker = Self::Tracker, ActionParams = Self::ActionParams>;
     type ActionParams: ScriptActionParams<Tracker = Self::Tracker>;
-    type Tracker: ScriptTracker<RunIf = Self::RunIf, Settings = Self::Settings>;
+    type Tracker: ScriptTracker<RunIf = Self::RunIf, Settings = Self::Settings, ActionParams = Self::ActionParams>;
     type BuildParam: SystemParam + 'static;
 
     fn build<'w>(
@@ -96,6 +98,7 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
     type Settings: Sized + Send + Sync + 'static;
     type InitParam: SystemParam + 'static;
     type UpdateParam: SystemParam + 'static;
+    type ActionParams: ScriptActionParams<Tracker = Self>;
 
     fn init<'w>(
         &mut self,
@@ -105,7 +108,12 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         param: &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
     );
     fn transfer_progress(&mut self, other: &Self);
-    fn track_action(&mut self, run_if: &Self::RunIf, action_id: ActionId);
+    fn track_action(
+        &mut self,
+        run_if: &Self::RunIf,
+        params: &Self::ActionParams,
+        action_id: ActionId,
+    );
     fn finalize(&mut self);
     fn update<'w>(
         &mut self,
@@ -164,6 +172,7 @@ pub trait ScriptActionParams: Clone + Send + Sync + 'static {
 
     fn should_run<'w>(
         &self,
+        _entity: Entity,
         _tracker: &mut Self::Tracker,
         _action_id: ActionId,
         _param: &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
@@ -192,6 +201,19 @@ impl ScriptUpdateResult {
 
     pub fn is_end(self) -> bool {
         self == ScriptUpdateResult::Finished || self == ScriptUpdateResult::Terminated
+    }
+}
+
+#[derive(Resource)]
+pub struct ScriptRunCounts<T: ScriptAsset> {
+    counts: HashMap<AssetId<T>, u32>,
+}
+
+impl<T: ScriptAsset> Default for ScriptRunCounts<T> {
+    fn default() -> Self {
+        Self {
+            counts: Default::default(),
+        }
     }
 }
 
@@ -243,7 +265,18 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
     ) -> Self {
         let action_id = self.runtime.actions.len();
         self.runtime.actions.push((params.clone(), action.clone()));
-        self.runtime.tracker.track_action(run_if, action_id);
+        self.runtime.tracker.track_action(run_if, params, action_id);
+        self
+    }
+
+    pub fn tracker(&self) -> &T::Tracker {
+        &self.runtime.tracker
+    }
+    pub fn tracker_mut(&mut self) -> &mut T::Tracker {
+        &mut self.runtime.tracker
+    }
+    pub fn tracker_do(mut self, f: impl FnOnce(&mut T::Tracker)) -> Self {
+        f(self.tracker_mut());
         self
     }
 
@@ -293,11 +326,14 @@ fn script_changeover_system<T: ScriptAsset>(
                 continue;
             }
         };
+        // Need to sort to ensure actions run in the order they were
+        // originally defined in the script asset.
+        action_queue.0.sort_unstable();
         for action_id in action_queue.0.drain(..) {
             let action = &script_rt.actions[action_id];
             {
                 let mut shouldrun_param = params.p2().into_inner();
-                action.0.should_run(&mut script_rt.tracker, action_id, &mut shouldrun_param)
+                action.0.should_run(e, &mut script_rt.tracker, action_id, &mut shouldrun_param)
             }.err().unwrap_or_else(|| {
                 let mut action_param = params.p1().into_inner();
                 script_rt.actions[action_id].1.run(
@@ -388,15 +424,14 @@ fn script_driver_system<T: ScriptAsset>(
                 if action_queue.0.is_empty() {
                     break;
                 }
-                // trace!(
-                //     "Script actions to run: {}",
-                //     action_queue.len(),
-                // );
+                // Need to sort to ensure actions run in the order they were
+                // originally defined in the script asset.
+                action_queue.0.sort_unstable();
                 for action_id in action_queue.0.drain(..) {
                     let action = &script_rt.actions[action_id];
                     let r = {
                         let mut shouldrun_param = params.p2().into_inner();
-                        action.0.should_run(&mut script_rt.tracker, action_id, &mut shouldrun_param)
+                        action.0.should_run(e, &mut script_rt.tracker, action_id, &mut shouldrun_param)
                     }.err().unwrap_or_else(|| {
                         let mut action_param = params.p1().into_inner();
                         script_rt.actions[action_id].1.run(
@@ -435,6 +470,7 @@ fn script_driver_system<T: ScriptAsset>(
 fn script_init_system<T: ScriptAsset>(
     preloaded: Res<PreloadedAssets>,
     ass_script: Res<Assets<T>>,
+    mut runcounts: ResMut<ScriptRunCounts<T>>,
     mut q_script: Query<(Entity, &mut ScriptPlayer<T>)>,
     mut params: ParamSet<(
         StaticSystemParam<<T::Tracker as ScriptTracker>::InitParam>,
@@ -443,6 +479,7 @@ fn script_init_system<T: ScriptAsset>(
 ) {
     for (e, mut player) in &mut q_script {
         let mut metadata = ScriptMetadata {
+            runcount: 0,
             key: None,
             key_previous: match &player.state {
                 | ScriptPlayerState::ChangingHandle { old_runtime, .. }
@@ -463,6 +500,14 @@ fn script_init_system<T: ScriptAsset>(
                 }
             },
             _ => continue,
+        };
+        metadata.runcount = if let Some(count) = runcounts.counts.get_mut(&handle.id()) {
+            let r = *count;
+            *count += 1;
+            r
+        } else {
+            runcounts.counts.insert(handle.id(), 1);
+            0
         };
         if let Some(script) = ass_script.get(&handle) {
             let settings = script.into_settings();

@@ -8,6 +8,9 @@ it should be played.
 Animations are actually based on [scripts](./script.md). They support everything
 that scripts can do + additional features tailored for animation use cases.
 
+When using the Scriptable Animation System, *please do not* modify the Bevy
+Texture Atlas Index value directly from Rust, outside of it!
+
 [See here for a reference on the syntax/format.](./anim-ref.md)
 
 ## Art Assets
