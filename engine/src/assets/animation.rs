@@ -52,6 +52,8 @@ pub struct SpriteAnimationScriptParams {
 pub enum SpriteAnimationScriptRunIf {
     #[serde(rename = "run_at_frame")]
     Frame(FrameIndexOrBookmark),
+    #[serde(rename = "run_at_frames")]
+    Frames(Vec<FrameIndexOrBookmark>),
 }
 
 /// The various actions that can be performed from an animation script

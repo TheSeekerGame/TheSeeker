@@ -240,6 +240,19 @@ impl ScriptTracker for SpriteAnimationTracker {
                     self.frame_actions.insert(index, vec![action_id]);
                 }
             },
+            SpriteAnimationScriptRunIf::Frames(frames) => {
+                for frame in frames.iter() {
+                    let index = match frame {
+                        FrameIndexOrBookmark::Index(i) => *i + bm_offset,
+                        FrameIndexOrBookmark::Bookmark(bm) => self.resolve_bookmark(Some(&bm)),
+                    };
+                    if let Some(e) = self.frame_actions.get_mut(&index) {
+                        e.push(action_id);
+                    } else {
+                        self.frame_actions.insert(index, vec![action_id]);
+                    }
+                }
+            }
         }
     }
 
