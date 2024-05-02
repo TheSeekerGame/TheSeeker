@@ -223,7 +223,7 @@ fn setup_player(
                     .insert(PlayerAction::Attack, KeyCode::Enter)
                     .build(),
             },
-            Falling::default(),
+            Falling,
             WallSlideTime(f32::MAX),
             TransitionQueue::default(),
             AddQueue::default(),
