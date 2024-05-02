@@ -26,7 +26,7 @@ pub struct SpriteAnimationTracker {
     next_frame: u32,
     ticks_per_frame: u32,
     ticks_remain: u32,
-    frame_actions: HashMap<u32, ActionId>,
+    frame_actions: HashMap<u32, Vec<ActionId>>,
     bookmarks: HashMap<String, u32>,
 }
 
@@ -234,7 +234,11 @@ impl ScriptTracker for SpriteAnimationTracker {
                     FrameIndexOrBookmark::Index(i) => *i + bm_offset,
                     FrameIndexOrBookmark::Bookmark(bm) => self.resolve_bookmark(Some(&bm)),
                 };
-                self.frame_actions.insert(index, action_id);
+                if let Some(e) = self.frame_actions.get_mut(&index) {
+                    e.push(action_id);
+                } else {
+                    self.frame_actions.insert(index, vec![action_id]);
+                }
             },
         }
     }
@@ -262,8 +266,8 @@ impl ScriptTracker for SpriteAnimationTracker {
             } else {
                 self.next_frame = atlas.index as u32 + 1;
             }
-            if let Some(action_id) = self.frame_actions.get(&(atlas.index as u32)) {
-                queue.push(*action_id);
+            if let Some(actions) = self.frame_actions.get(&(atlas.index as u32)) {
+                queue.extend_from_slice(&actions);
             }
         }
 
@@ -272,8 +276,8 @@ impl ScriptTracker for SpriteAnimationTracker {
         }
 
         if self.ticks_remain == 0 {
-            if let Some(action_id) = self.frame_actions.get(&self.next_frame) {
-                queue.push(*action_id);
+            if let Some(actions) = self.frame_actions.get(&self.next_frame) {
+                queue.extend_from_slice(&actions);
             }
             atlas.index = self.next_frame as usize;
             self.ticks_remain = self.ticks_per_frame;
