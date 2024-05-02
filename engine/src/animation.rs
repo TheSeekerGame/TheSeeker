@@ -93,6 +93,11 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
+        if let Some(reversed) = self.if_playing_reversed {
+            if reversed != tracker.reversed {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
         Ok(())
     }
 }
@@ -246,6 +251,7 @@ impl ScriptTracker for SpriteAnimationTracker {
         self.ticks_per_frame = settings.ticks_per_frame;
         self.ticks_remain = 0;
         self.next_frame = settings.frame_start;
+        self.reversed = settings.play_reversed;
 
         let mut atlas = q
             .get_mut(entity)

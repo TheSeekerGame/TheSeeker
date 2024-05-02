@@ -39,6 +39,8 @@ pub struct SpriteAnimationSettings {
     pub frame_start: u32,
     pub frame_min: u32,
     pub frame_max: u32,
+    #[serde(default)]
+    pub play_reversed: bool,
 }
 
 #[derive(Debug, Clone)]
@@ -49,6 +51,7 @@ pub struct SpriteAnimationScriptParams {
     pub if_frame_le: Option<FrameIndexOrBookmark>,
     pub if_frame_gt: Option<FrameIndexOrBookmark>,
     pub if_frame_ge: Option<FrameIndexOrBookmark>,
+    pub if_playing_reversed: Option<bool>,
 }
 
 #[derive(Debug, Clone)]
