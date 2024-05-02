@@ -1,7 +1,9 @@
 use crate::gamestate::{pause, unpause};
 use crate::prelude::*;
 use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+use bevy_inspector_egui::quick::WorldInspectorPlugin;
 
+use crate::stepping_egui::SteppingEguiPlugin;
 pub struct DevPlugin;
 
 impl Plugin for DevPlugin {
@@ -24,6 +26,9 @@ impl Plugin for DevPlugin {
         app.add_plugins((
             FrameTimeDiagnosticsPlugin,
             LogDiagnosticsPlugin::default(),
+            // FilterQueryInspectorPlugin::<(With<Enemy>)>::default(),
+            // WorldInspectorPlugin::new(),
+            SteppingEguiPlugin::default().add_schedule(GameTickUpdate),
         ));
     }
 }

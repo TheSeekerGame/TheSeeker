@@ -1,5 +1,5 @@
 use crate::camera::MainCamera;
-use crate::game::player::PlayerGent;
+use crate::game::player::Player;
 use crate::parallax::Parallax;
 use bevy::core_pipeline::core_2d;
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
@@ -156,8 +156,8 @@ pub struct DarknessSettings {
 fn darkness_dynamics(
     mut settings: Query<&mut DarknessSettings>,
     time: Res<Time>,
-    camera: Query<&Transform, (With<MainCamera>, Without<PlayerGent>)>,
-    player: Query<&Transform, (With<PlayerGent>, Without<MainCamera>)>,
+    camera: Query<&Transform, (With<MainCamera>, Without<Player>)>,
+    player: Query<&Transform, (With<Player>, Without<MainCamera>)>,
 ) {
     let mut offest = Vec2::new(0.0, 0.0);
     // make sure the lantern is centered on the player even if the camera isn't

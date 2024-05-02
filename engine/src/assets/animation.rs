@@ -81,6 +81,12 @@ pub enum SpriteAnimationScriptAction {
         /// Set flip on the Y axis
         flip_y: Option<bool>,
     },
+    /// Reverse Playback
+    ReversePlayback {
+        /// Set a specific direction.
+        /// If omitted, toggles the current direction.
+        reversed: Option<bool>,
+    },
     /// Transform: relative translation
     TransformMove {
         x: Option<Frac>,
@@ -99,4 +105,35 @@ pub enum SpriteAnimationScriptAction {
     TransformSetRotationDegrees { degrees: Frac },
     /// Transform: set scale
     TransformSetScale { x: Frac, y: Frac },
+}
+
+impl SpriteAnimation {
+    pub fn resolve_image_atlas(
+        &self,
+        preloaded: &PreloadedAssets,
+        anim_key: Option<&str>,
+    ) -> Option<(Handle<Image>, Handle<TextureAtlasLayout>)> {
+        let mut default_image_key;
+        let image_key = if let Some(key) = &self.settings.extended.image_asset_key {
+            key
+        } else {
+            default_image_key = anim_key?.to_owned();
+            default_image_key.push_str(".image");
+            &default_image_key
+        };
+        let mut default_layout_key;
+        let layout_key = if let Some(key) = &self.settings.extended.atlas_asset_key {
+            key
+        } else {
+            default_layout_key = anim_key?.to_owned();
+            default_layout_key.push_str(".atlas");
+            &default_layout_key
+        };
+        dbg!(image_key);
+        dbg!(layout_key);
+        Some((
+            preloaded.get_single_asset(image_key)?,
+            preloaded.get_single_asset(layout_key)?,
+        ))
+    }
 }

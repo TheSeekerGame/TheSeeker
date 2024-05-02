@@ -18,6 +18,7 @@ mod game;
 mod gamestate;
 mod level;
 mod locale;
+mod stepping_egui;
 
 mod screens {
     pub mod loading;

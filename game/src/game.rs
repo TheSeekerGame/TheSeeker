@@ -4,7 +4,7 @@
 
 use crate::prelude::*;
 
-use self::enemy::EnemyBlueprintBundle;
+use self::enemy::{EnemyBlueprintBundle, EnemySpawnerBundle};
 use self::player::PlayerBlueprintBundle;
 
 pub mod enemy;
@@ -23,6 +23,7 @@ impl Plugin for GameplayPlugin {
         app.register_ldtk_int_cell::<wall::WallBundle>(17);
         app.register_ldtk_entity::<PlayerBlueprintBundle>("Player");
         app.register_ldtk_entity::<EnemyBlueprintBundle>("Enemy");
+        app.register_ldtk_entity::<EnemySpawnerBundle>("EnemySpawner");
 
         // Add the plugins for each game mechanic
         app.add_plugins((

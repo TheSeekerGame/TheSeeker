@@ -22,6 +22,7 @@ pub struct SpriteAnimationBundle {
 
 #[derive(Default)]
 pub struct SpriteAnimationTracker {
+    reversed: bool,
     next_frame: u32,
     ticks_per_frame: u32,
     ticks_remain: u32,
@@ -86,6 +87,32 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 }
                 ScriptUpdateResult::NormalRun
             },
+            SpriteAnimationScriptAction::ReversePlayback { reversed } => {
+                let reversed = reversed.unwrap_or(!tracker.reversed);
+                // On normal (contiguous) playback, adjust the next frame.
+                // Otherwise (say if the script wants to jump around
+                // using a SetFrameNext), do not touch it.
+                match (tracker.reversed, reversed) {
+                    (false, true) => {
+                        tracker.reversed = true;
+                        if tracker.next_frame as usize == atlas.index + 1 {
+                            // prevent overflow
+                            if atlas.index == 0 {
+                                return ScriptUpdateResult::Finished;
+                            }
+                            tracker.next_frame -= 2;
+                        }
+                    }
+                    (true, false) => {
+                        tracker.reversed = false;
+                        if tracker.next_frame as usize + 1 == atlas.index {
+                            tracker.next_frame += 2;
+                        }
+                    }
+                    _ => {}
+                }
+                ScriptUpdateResult::NormalRun
+            },
             SpriteAnimationScriptAction::TransformMove { x, y, z } => {
                 if let Some(x) = x {
                     xf.translation.x += f32::from(*x);
@@ -132,21 +159,26 @@ impl ScriptAction for SpriteAnimationScriptAction {
 }
 
 impl ScriptTracker for SpriteAnimationTracker {
-    type InitParam = ();
+    type InitParam = (SQuery<&'static mut TextureAtlas>,);
     type RunIf = SpriteAnimationScriptRunIf;
     type Settings = SpriteAnimationSettings;
     type UpdateParam = (SQuery<&'static mut TextureAtlas>,);
 
     fn init<'w>(
         &mut self,
-        _entity: Entity,
+        entity: Entity,
         settings: &Self::Settings,
         _metadata: &ScriptMetadata,
-        _param: &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
+        (q,): &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
     ) {
         self.ticks_per_frame = settings.ticks_per_frame;
         self.ticks_remain = 0;
         self.next_frame = settings.frame_start;
+
+        let mut atlas = q
+            .get_mut(entity)
+            .expect("Animation entity must have TextureAtlasSprite component");
+        atlas.index = settings.frame_start as usize;
     }
 
     fn transfer_progress(&mut self, other: &Self) {
@@ -179,7 +211,15 @@ impl ScriptTracker for SpriteAnimationTracker {
         // if our sprite index was changed externally, respond to that by
         // running any frame actions and queueing up the next frame appropriately
         if atlas.is_changed() && !atlas.is_added() {
-            self.next_frame = atlas.index as u32 + 1;
+            if self.reversed {
+                // prevent overflow
+                if atlas.index == 0 {
+                    return ScriptUpdateResult::Finished;
+                }
+                self.next_frame = atlas.index as u32 - 1;
+            } else {
+                self.next_frame = atlas.index as u32 + 1;
+            }
             if let Some(action_id) = self.frame_actions.get(&(atlas.index as u32)) {
                 queue.push(*action_id);
             }
@@ -194,8 +234,16 @@ impl ScriptTracker for SpriteAnimationTracker {
                 queue.push(*action_id);
             }
             atlas.index = self.next_frame as usize;
-            self.next_frame += 1;
             self.ticks_remain = self.ticks_per_frame;
+            if self.reversed {
+                // prevent overflow
+                if self.next_frame == 0 {
+                    return ScriptUpdateResult::Finished;
+                }
+                self.next_frame -= 1;
+            } else {
+                self.next_frame += 1;
+            }
         }
 
         self.ticks_remain -= 1;
@@ -236,25 +284,11 @@ impl ScriptAsset for SpriteAnimation {
             .get_mut(entity)
             .expect("Animation entity must have Texture Atlas components");
 
-        *image = if let Some(key) = &self.settings.extended.image_asset_key {
-            preloaded.get_single_asset(key)
-        } else if let Some(key) = builder.asset_key() {
-            let mut key = key.to_owned();
-            key.push_str(".image");
-            preloaded.get_single_asset(&key)
-        } else {
-            panic!("Unknown asset key for Animation Sprite Sheet Image")
-        }.expect("Animation Sprite Sheet Image asset with specified key does not exist");
+        let (h_image, h_layout) = self.resolve_image_atlas(&preloaded, builder.asset_key())
+            .expect("Cannot resolve Animation asset's Image and Layout assets.");
 
-        atlas.layout = if let Some(key) = &self.settings.extended.atlas_asset_key {
-            preloaded.get_single_asset(key)
-        } else if let Some(key) = builder.asset_key() {
-            let mut key = key.to_owned();
-            key.push_str(".atlas");
-            preloaded.get_single_asset(&key)
-        } else {
-            panic!("Unknown asset key for Animation Texture Atlas Layout")
-        }.expect("Animation Texture Atlas Layout asset with specified key does not exist");
+        *image = h_image;
+        atlas.layout = h_layout;
 
         atlas.index = self.settings.extended.frame_start
             .min(self.settings.extended.frame_max)

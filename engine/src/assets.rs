@@ -1,6 +1,6 @@
 use std::marker::PhantomData;
 
-use bevy::asset::Asset;
+use bevy::asset::{Asset, UntypedAssetId};
 use bevy_common_assets::toml::TomlAssetPlugin;
 
 use crate::prelude::*;
@@ -110,6 +110,7 @@ pub fn resolve_asset_keys<T: Asset>(
 pub struct PreloadedAssets {
     handles: HashSet<UntypedHandle>,
     map: HashMap<String, Option<DynamicAssetType>>,
+    map_reverse: HashMap<UntypedAssetId, String>,
 }
 
 impl PreloadedAssets {
@@ -130,6 +131,15 @@ impl PreloadedAssets {
         None
     }
 
+    pub fn get_single_assetid<T: Asset>(&self, key: &str) -> Option<AssetId<T>> {
+        if let Some(d) = self.get_asset(key) {
+            if let DynamicAssetType::Single(handle) = d {
+                return Some(handle.id().typed::<T>());
+            }
+        }
+        None
+    }
+
     pub fn get_multi_asset<T: Asset>(&self, key: &str) -> Option<&[UntypedHandle]> {
         if let Some(d) = self.get_asset(key) {
             if let DynamicAssetType::Collection(handles) = d {
@@ -137,6 +147,11 @@ impl PreloadedAssets {
             }
         }
         None
+    }
+
+    pub fn get_key_for_asset(&self, assid: impl Into<UntypedAssetId>) -> Option<&str> {
+        let assid = assid.into();
+        self.map_reverse.get(&assid).map(|x| x.as_str())
     }
 }
 
@@ -196,8 +211,18 @@ fn finalize_preloaded_dynamic_assets(world: &mut World) {
     for (key, entry) in preloaded_ass.map.iter_mut() {
         if let Some(dynass) = dynamic_ass.get_asset(key.as_str()) {
             match dynass.build(world) {
-                Ok(handles) => {
-                    *entry = Some(handles);
+                Ok(dat) => {
+                    match &dat {
+                        DynamicAssetType::Single(handle) => {
+                            preloaded_ass.map_reverse.insert(handle.id(), key.clone());
+                        }
+                        DynamicAssetType::Collection(handles) => {
+                            for handle in handles {
+                                preloaded_ass.map_reverse.insert(handle.id(), key.clone());
+                            }
+                        }
+                    }
+                    *entry = Some(dat);
                 },
                 Err(e) => {
                     error!(

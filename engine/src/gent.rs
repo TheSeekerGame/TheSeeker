@@ -12,11 +12,17 @@ impl Plugin for GentPlugin {
     }
 }
 
+//todo move to physics
 #[derive(Bundle)]
 pub struct GentPhysicsBundle {
     pub collider: Collider,
     pub shapecast: ShapeCaster,
     pub linear_velocity: LinearVelocity,
+}
+
+#[derive(Component)]
+pub struct Gent {
+    pub e_gfx: Entity,
 }
 
 #[derive(Component)]

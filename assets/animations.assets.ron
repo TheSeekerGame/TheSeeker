@@ -4,10 +4,10 @@
     "anim.player.FallForward": File (
         path: "animations/player/movement/FallForward.anim.toml",
     ),
-    "anim.player.FallForward.atlas": File (
+    "anim.player.FallForward.image": File (
         path: "animations/player/movement/FallForward.png",
     ),
-    "anim.player.FallForward.image": TextureAtlasLayout (
+    "anim.player.FallForward.atlas": TextureAtlasLayout (
         tile_size_x: 96.,
         tile_size_y: 96.,
         rows: 1,
@@ -396,5 +396,41 @@
         tile_size_y: 90.,
         rows: 1,
         columns: 11,
+    ),
+    "anim.spider.DefensiveAttack": File (
+        path: "animations/spider/DefensiveAttack.anim.toml",
+    ),
+    "anim.spider.DefensiveAttack.image": File (
+        path: "animations/spider/DefensiveAttack.png",
+    ),
+    "anim.spider.DefensiveAttack.atlas": TextureAtlasLayout (
+        tile_size_x: 90.,
+        tile_size_y: 90.,
+        rows: 1,
+        columns: 11,
+    ),
+    "anim.spider.Defense": File (
+        path: "animations/spider/Defense.anim.toml",
+    ),
+    "anim.spider.Defense.image": File (
+        path: "animations/spider/Defence.png",
+    ),
+    "anim.spider.Defense.atlas": TextureAtlasLayout (
+        tile_size_x: 90.,
+        tile_size_y: 90.,
+        rows: 1,
+        columns: 5,
+    ),
+    "anim.spider.Retreat": File (
+        path: "animations/spider/Retreat.anim.toml",
+    ),
+    "anim.spider.Retreat.image": File (
+        path: "animations/spider/Retreat.png",
+    ),
+    "anim.spider.Retreat.atlas": TextureAtlasLayout (
+        tile_size_x: 90.,
+        tile_size_y: 90.,
+        rows: 1,
+        columns: 10,
     ),
 })
