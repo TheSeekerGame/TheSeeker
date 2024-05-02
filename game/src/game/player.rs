@@ -363,9 +363,9 @@ impl Plugin for PlayerBehaviorPlugin {
                 player_jump.run_if(any_with_component::<Jumping>),
                 player_grounded.run_if(any_with_component::<Grounded>),
                 player_falling.run_if(any_with_component::<Falling>),
-                player_sliding.before(player_jump).run_if(any_matching::<(
-                    With<Falling>,
-                )>()),
+                player_sliding
+                    .before(player_jump)
+                    .run_if(any_matching::<(With<Falling>,)>()),
                 //consider a set for all movement/systems modify velocity, then collisions/move
                 //moves based on velocity
                 player_collisions
@@ -524,8 +524,6 @@ fn player_move(
         ),
         (With<Player>),
     >,
-    time: Res<GameTime>,
-    config: Res<PlayerConfig>,
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for (mut velocity, action_state, mut facing, grounded, gent) in q_gent.iter_mut() {
@@ -647,8 +645,6 @@ fn player_jump(
             velocity.y -= deaccel_rate;
         }
 
-        jumping.current_air_ticks += 1;
-
         velocity.y = velocity.y.clamp(0., config.jump_vel_init);
     }
 }
@@ -702,36 +698,36 @@ fn player_collisions(
                     let bounce_force =
                         -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
 
-                        let projected_velocity = linear_velocity.xy()
-                            - sliding_plane * linear_velocity.xy().dot(sliding_plane);
+                    let projected_velocity = linear_velocity.xy()
+                        - sliding_plane * linear_velocity.xy().dot(sliding_plane);
 
-                        // Applies downward friction only when player tries to push
-                        // against the wall while falling. Ignores x component.
-                        let friction_coefficient = config.sliding_friction;
-                        let friction_force = if projected_velocity.y < -0.0 {
-                            // make sure at least 1/2 of player is against the wall
-                            // (because it looks wierd to have the character hanging by their head)
-                            if let Some((e, first_hit)) = spatial_query.ray_cast(
-                                pos.translation.xy(),
-                                Vec2::new(dir, 0.0),
-                                shape.as_cuboid().unwrap().half_extents.x + 0.1,
-                                InteractionGroups {
-                                    memberships: PLAYER,
-                                    filter: GROUND,
-                                },
-                                Some(entity),
-                            ) {
-                                wall_slide = true;
-                                -(projected_velocity.y * friction_coefficient)
-                            } else {
-                                0.0
-                            }
+                    // Applies downward friction only when player tries to push
+                    // against the wall while falling. Ignores x component.
+                    let friction_coefficient = config.sliding_friction;
+                    let friction_force = if projected_velocity.y < -0.0 {
+                        // make sure at least 1/2 of player is against the wall
+                        // (because it looks wierd to have the character hanging by their head)
+                        if let Some((e, first_hit)) = spatial_query.ray_cast(
+                            pos.translation.xy(),
+                            Vec2::new(dir, 0.0),
+                            shape.as_cuboid().unwrap().half_extents.x + 0.1,
+                            InteractionGroups {
+                                memberships: PLAYER,
+                                filter: GROUND,
+                            },
+                            Some(entity),
+                        ) {
+                            wall_slide = true;
+                            -(projected_velocity.y * friction_coefficient)
                         } else {
                             0.0
-                        };
-                        let friction_vec = Vec2::new(0.0, friction_force);
+                        }
+                    } else {
+                        0.0
+                    };
+                    let friction_vec = Vec2::new(0.0, friction_force);
 
-                        linear_velocity.0 = projected_velocity + friction_vec + bounce_force;
+                    linear_velocity.0 = projected_velocity + friction_vec + bounce_force;
 
                     let new_pos = pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
                     pos.translation.x = new_pos.x;
@@ -890,7 +886,7 @@ fn player_falling(
 
 fn player_sliding(
     mut query: Query<(
-        &PlayerGent,
+        &Gent,
         &ActionState<PlayerAction>,
         &mut TransitionQueue,
         &mut Transform,
@@ -915,9 +911,7 @@ fn player_sliding(
                     lin_vel.x = -direction * config.move_accel_init;
                     // Give a little boost for the frame that it takes for input to be received
                     lin_vel.y = config.fall_accel;
-                    transitions.push(Falling::new_transition(
-                        Jumping::default(),
-                    ))
+                    transitions.push(Falling::new_transition(Jumping))
                 }
             }
         }
@@ -1022,9 +1016,9 @@ fn player_idle_animation(
 //TODO: add FallForward
 fn player_falling_animation(
     f_query: Query<
-        &Gent,
+        (&Gent, Option<&WallSlideTime>),
         Or<(
-            (Added<Falling>, Without<Attacking>),
+            (With<Falling>, Without<Attacking>),
             (With<Falling>, Added<CanAttack>),
         )>,
     >,
