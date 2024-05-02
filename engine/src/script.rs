@@ -170,6 +170,7 @@ pub trait ScriptActionParams: Clone + Send + Sync + 'static {
 
     fn should_run<'w>(
         &self,
+        _entity: Entity,
         _tracker: &mut Self::Tracker,
         _action_id: ActionId,
         _param: &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
@@ -314,7 +315,7 @@ fn script_changeover_system<T: ScriptAsset>(
             let action = &script_rt.actions[action_id];
             {
                 let mut shouldrun_param = params.p2().into_inner();
-                action.0.should_run(&mut script_rt.tracker, action_id, &mut shouldrun_param)
+                action.0.should_run(e, &mut script_rt.tracker, action_id, &mut shouldrun_param)
             }.err().unwrap_or_else(|| {
                 let mut action_param = params.p1().into_inner();
                 script_rt.actions[action_id].1.run(
@@ -413,7 +414,7 @@ fn script_driver_system<T: ScriptAsset>(
                     let action = &script_rt.actions[action_id];
                     let r = {
                         let mut shouldrun_param = params.p2().into_inner();
-                        action.0.should_run(&mut script_rt.tracker, action_id, &mut shouldrun_param)
+                        action.0.should_run(e, &mut script_rt.tracker, action_id, &mut shouldrun_param)
                     }.err().unwrap_or_else(|| {
                         let mut action_param = params.p1().into_inner();
                         script_rt.actions[action_id].1.run(

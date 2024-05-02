@@ -283,6 +283,7 @@ impl ScriptActionParams for CommonScriptParams {
 
     fn should_run<'w>(
         &self,
+        _entity: Entity,
         tracker: &mut Self::Tracker,
         action_id: ActionId,
         (_time, game_time): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
@@ -538,14 +539,15 @@ impl<T: ScriptActionParams> ScriptActionParams for ExtendedScriptParams<T> {
     );
     fn should_run<'w>(
         &self,
+        entity: Entity,
         tracker: &mut Self::Tracker,
         action_id: ActionId,
         (param_ext, param_common): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
     ) -> Result<(), ScriptUpdateResult> {
-        if let Err(r) = self.extended.should_run(&mut tracker.extended, action_id, param_ext) {
+        if let Err(r) = self.extended.should_run(entity, &mut tracker.extended, action_id, param_ext) {
             Err(r)
         } else {
-            self.common.should_run(&mut tracker.common, action_id, param_common)
+            self.common.should_run(entity, &mut tracker.common, action_id, param_common)
         }
     }
 }
