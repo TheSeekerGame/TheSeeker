@@ -311,6 +311,9 @@ fn script_changeover_system<T: ScriptAsset>(
                 continue;
             }
         };
+        // Need to sort to ensure actions run in the order they were
+        // originally defined in the script asset.
+        action_queue.0.sort_unstable();
         for action_id in action_queue.0.drain(..) {
             let action = &script_rt.actions[action_id];
             {
@@ -406,10 +409,9 @@ fn script_driver_system<T: ScriptAsset>(
                 if action_queue.0.is_empty() {
                     break;
                 }
-                // trace!(
-                //     "Script actions to run: {}",
-                //     action_queue.len(),
-                // );
+                // Need to sort to ensure actions run in the order they were
+                // originally defined in the script asset.
+                action_queue.0.sort_unstable();
                 for action_id in action_queue.0.drain(..) {
                     let action = &script_rt.actions[action_id];
                     let r = {
