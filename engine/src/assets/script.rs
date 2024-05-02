@@ -87,13 +87,13 @@ pub struct CommonScriptParams {
 #[derive(Serialize, Deserialize)]
 pub enum CommonScriptRunIf {
     #[serde(rename = "run_at_tick")]
-    Tick(u64),
+    Tick(OneOrMany<u64>),
     #[serde(rename = "run_every_n_ticks")]
     TickQuant(Quant),
     #[serde(rename = "run_at_time")]
-    Time(TimeSpec),
+    Time(OneOrMany<TimeSpec>),
     #[serde(rename = "run_at_millis")]
-    Millis(u64),
+    Millis(OneOrMany<u64>),
     #[serde(rename = "run_on_slot_enable")]
     SlotEnable(String),
     #[serde(rename = "run_on_slot_disable")]

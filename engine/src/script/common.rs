@@ -2,6 +2,7 @@ use bevy::ecs::system::lifetimeless::*;
 
 use super::*;
 use crate::assets::script::*;
+use crate::data::OneOrMany;
 use crate::script::label::EntityLabels;
 
 pub struct CommonScriptPlugin;
@@ -110,19 +111,49 @@ impl ScriptTracker for CommonScriptTracker {
     ) {
         match run_if {
             CommonScriptRunIf::Tick(tick) => {
-                self.tick_actions.push((*tick, action_id));
+                match tick {
+                    OneOrMany::Single(tick) => {
+                        self.tick_actions.push((*tick, action_id));
+                    }
+                    OneOrMany::Many(ticks) => {
+                        for tick in ticks.iter() {
+                            self.tick_actions.push((*tick, action_id));
+                        }
+                    }
+                }
             },
             CommonScriptRunIf::TickQuant(quant) => {
                 self.tickquant_actions.push((*quant, action_id));
             },
             CommonScriptRunIf::Millis(millis) => {
-                self.time_actions.push((
-                    Duration::from_millis(*millis),
-                    action_id,
-                ));
+                match millis {
+                    OneOrMany::Single(millis) => {
+                        self.time_actions.push((
+                            Duration::from_millis(*millis),
+                            action_id,
+                        ));
+                    }
+                    OneOrMany::Many(millis) => {
+                        for millis in millis.iter() {
+                            self.time_actions.push((
+                                Duration::from_millis(*millis),
+                                action_id,
+                            ));
+                        }
+                    }
+                }
             },
             CommonScriptRunIf::Time(timespec) => {
-                self.time_actions.push((Duration::from(*timespec), action_id));
+                match timespec {
+                    OneOrMany::Single(timespec) => {
+                        self.time_actions.push((Duration::from(*timespec), action_id));
+                    }
+                    OneOrMany::Many(timespecs) => {
+                        for timespec in timespecs.iter() {
+                            self.time_actions.push((Duration::from(*timespec), action_id));
+                        }
+                    }
+                }
             },
             CommonScriptRunIf::SlotEnable(slot) => {
                 if let Some(entry) = self.slot_enable_actions.get_mut(slot.as_str()) {
