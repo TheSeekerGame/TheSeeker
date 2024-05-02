@@ -320,6 +320,14 @@ impl FromStr for Quant {
     }
 }
 
+#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum OneOrMany<T> {
+    Single(T),
+    Many(Vec<T>),
+}
+
 #[cfg(test)]
 mod test {
     use super::{Quant, TimeSpec};

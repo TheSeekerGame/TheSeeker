@@ -3,6 +3,7 @@ use bevy::ecs::system::SystemParam;
 
 use crate::assets::animation::*;
 use crate::assets::script::*;
+use crate::data::OneOrMany;
 use crate::prelude::*;
 use crate::script::common::ExtendedScriptTracker;
 use crate::script::*;
@@ -116,12 +117,12 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
         }
         if let Some(f) = &self.if_frame_is {
             match f {
-                FrameOrMany::Single(f) => {
+                OneOrMany::Single(f) => {
                     if current_index != tracker.resolve_frame(self.frame_bookmark.as_ref(), f) {
                         return Err(ScriptUpdateResult::NormalRun);
                     }
                 }
-                FrameOrMany::Many(f) => {
+                OneOrMany::Many(f) => {
                     for f in f.iter() {
                         if current_index != tracker.resolve_frame(self.frame_bookmark.as_ref(), f) {
                             return Err(ScriptUpdateResult::NormalRun);
@@ -314,10 +315,10 @@ impl ScriptTracker for SpriteAnimationTracker {
                     }
                 };
                 match frame {
-                    FrameOrMany::Single(frame) => {
+                    OneOrMany::Single(frame) => {
                         add_action(self.resolve_frame(bm, frame));
                     }
-                    FrameOrMany::Many(frames) => {
+                    OneOrMany::Many(frames) => {
                         for frame in frames.iter() {
                             add_action(self.resolve_frame(bm, frame));
                         }
