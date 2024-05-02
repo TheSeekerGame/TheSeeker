@@ -294,7 +294,7 @@ Examples:
 
 </details>
 
-## Common Parameters (Modifiers)
+## Common Parameters
 
 These are additional parameters that can be specified regardless of the action.
 
