@@ -81,6 +81,12 @@ pub struct CommonScriptParams {
     pub forbid_slots_all: Vec<String>,
     #[serde(default)]
     pub forbid_slots_any: Vec<String>,
+    pub if_runcount_is: Option<OneOrMany<u32>>,
+    pub if_runcount_lt: Option<u32>,
+    pub if_runcount_le: Option<u32>,
+    pub if_runcount_gt: Option<u32>,
+    pub if_runcount_ge: Option<u32>,
+    pub if_runcount_quant: Option<Quant>,
 }
 
 #[derive(Debug, Clone)]

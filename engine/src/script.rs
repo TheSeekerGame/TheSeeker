@@ -54,6 +54,7 @@ pub trait ScriptAppExt {
 impl ScriptAppExt for App {
     fn add_script_runtime<T: ScriptAsset>(&mut self) -> &mut Self {
         self.init_resource::<ScriptActionQueue<T>>();
+        self.init_resource::<ScriptRunCounts<T>>();
         self.add_systems(
             GameTickUpdate,
             (
@@ -69,6 +70,7 @@ impl ScriptAppExt for App {
 pub struct ScriptMetadata {
     pub key: Option<String>,
     pub key_previous: Option<String>,
+    pub runcount: u32,
 }
 
 pub type ActionId = usize;
@@ -199,6 +201,19 @@ impl ScriptUpdateResult {
 
     pub fn is_end(self) -> bool {
         self == ScriptUpdateResult::Finished || self == ScriptUpdateResult::Terminated
+    }
+}
+
+#[derive(Resource)]
+pub struct ScriptRunCounts<T: ScriptAsset> {
+    counts: HashMap<AssetId<T>, u32>,
+}
+
+impl<T: ScriptAsset> Default for ScriptRunCounts<T> {
+    fn default() -> Self {
+        Self {
+            counts: Default::default(),
+        }
     }
 }
 
@@ -455,6 +470,7 @@ fn script_driver_system<T: ScriptAsset>(
 fn script_init_system<T: ScriptAsset>(
     preloaded: Res<PreloadedAssets>,
     ass_script: Res<Assets<T>>,
+    mut runcounts: ResMut<ScriptRunCounts<T>>,
     mut q_script: Query<(Entity, &mut ScriptPlayer<T>)>,
     mut params: ParamSet<(
         StaticSystemParam<<T::Tracker as ScriptTracker>::InitParam>,
@@ -463,6 +479,7 @@ fn script_init_system<T: ScriptAsset>(
 ) {
     for (e, mut player) in &mut q_script {
         let mut metadata = ScriptMetadata {
+            runcount: 0,
             key: None,
             key_previous: match &player.state {
                 | ScriptPlayerState::ChangingHandle { old_runtime, .. }
@@ -483,6 +500,14 @@ fn script_init_system<T: ScriptAsset>(
                 }
             },
             _ => continue,
+        };
+        metadata.runcount = if let Some(count) = runcounts.counts.get_mut(&handle.id()) {
+            let r = *count;
+            *count += 1;
+            r
+        } else {
+            runcounts.counts.insert(handle.id(), 1);
+            0
         };
         if let Some(script) = ass_script.get(&handle) {
             let settings = script.into_settings();

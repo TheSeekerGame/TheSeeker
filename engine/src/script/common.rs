@@ -35,6 +35,7 @@ pub struct CommonScriptTracker {
     q_extra: Vec<ActionId>,
     q_delayed: Vec<(u64, ActionId)>,
     old_key: Option<String>,
+    runcount: u32,
 }
 
 impl CommonScriptTracker {
@@ -96,6 +97,7 @@ impl ScriptTracker for CommonScriptTracker {
             self.start_tick = quant.apply(self.start_tick as i64) as u64;
         }
         self.old_key = metadata.key_previous.clone();
+        self.runcount = metadata.runcount;
     }
 
     fn transfer_progress(&mut self, other: &Self) {
@@ -326,6 +328,40 @@ impl ScriptActionParams for CommonScriptParams {
         } else if let Some(delay_ticks) = self.delay_ticks {
             tracker.q_delayed.push((game_time.tick() + delay_ticks as u64, action_id));
             return Err(ScriptUpdateResult::NormalRun);
+        }
+        if let Some(lt) = self.if_runcount_lt {
+            if !(tracker.runcount < lt) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(le) = self.if_runcount_le {
+            if !(tracker.runcount <= le) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(gt) = self.if_runcount_gt {
+            if !(tracker.runcount > gt) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(ge) = self.if_runcount_ge {
+            if !(tracker.runcount >= ge) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(quant) = self.if_runcount_quant {
+            if !quant.check(tracker.runcount as i64) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(eq) = &self.if_runcount_is {
+            let b = match eq {
+                OneOrMany::Single(x) => *x == tracker.runcount,
+                OneOrMany::Many(x) => x.iter().any(|x| *x == tracker.runcount),
+            };
+            if !b {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
         }
         match (&self.if_previous_script_key, &tracker.old_key) {
             (None, _) => {}
