@@ -27,6 +27,23 @@ pub struct SpriteAnimationTracker {
     ticks_per_frame: u32,
     ticks_remain: u32,
     frame_actions: HashMap<u32, ActionId>,
+    bookmarks: HashMap<String, u32>,
+}
+
+impl SpriteAnimationTracker {
+    fn resolve_bookmark(&self, bm: Option<&str>) -> u32 {
+        let Some(bm) = bm else {
+            return 0;
+        };
+        if let Some(i) = self.bookmarks.get(bm) {
+            *i
+        } else {
+            if cfg!(feature = "dev") {
+                warn!("Script bookmark {:?} is undefined!", bm);
+            }
+            0
+        }
+    }
 }
 
 impl ScriptRunIf for SpriteAnimationScriptRunIf {
@@ -52,7 +69,7 @@ impl ScriptAction for SpriteAnimationScriptAction {
     fn run<'w>(
         &self,
         entity: Entity,
-        _actionparams: &Self::ActionParams,
+        actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
         (q,): &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult {
@@ -62,11 +79,17 @@ impl ScriptAction for SpriteAnimationScriptAction {
 
         match self {
             SpriteAnimationScriptAction::SetFrameNext { frame_index } => {
-                tracker.next_frame = *frame_index;
+                let bm_offset = tracker.resolve_bookmark(
+                    actionparams.frame_bookmark.as_ref().map(|x| x.as_str())
+                );
+                tracker.next_frame = *frame_index + bm_offset;
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetFrameNow { frame_index } => {
-                atlas.index = *frame_index as usize;
+                let bm_offset = tracker.resolve_bookmark(
+                    actionparams.frame_bookmark.as_ref().map(|x| x.as_str())
+                );
+                atlas.index = (*frame_index + bm_offset) as usize;
                 ScriptUpdateResult::Loop
             },
             SpriteAnimationScriptAction::SetTicksPerFrame { ticks_per_frame } => {
@@ -193,12 +216,15 @@ impl ScriptTracker for SpriteAnimationTracker {
     fn track_action(
         &mut self,
         run_if: &Self::RunIf,
-        _params: &Self::ActionParams,
+        params: &Self::ActionParams,
         action_id: ActionId,
     ) {
+        let bm_offset = self.resolve_bookmark(
+            params.frame_bookmark.as_ref().map(|x| x.as_str())
+        );
         match run_if {
             SpriteAnimationScriptRunIf::Frame(frame) => {
-                self.frame_actions.insert(*frame, action_id);
+                self.frame_actions.insert(*frame + bm_offset, action_id);
             },
         }
     }
@@ -302,6 +328,7 @@ impl ScriptAsset for SpriteAnimation {
             as usize;
 
         builder.replace_config(&self.config);
+        builder.tracker_mut().extended.bookmarks = self.frame_bookmarks.clone();
         for action in self.script.iter() {
             builder = builder.add_action(
                 &action.run_if,

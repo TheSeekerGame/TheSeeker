@@ -16,6 +16,9 @@ pub struct SpriteAnimation {
     pub config: ScriptConfig,
     /// General animation parameters
     pub settings: ExtendedScriptSettings<SpriteAnimationSettings>,
+    /// Optional frame bookmarks to help during scripting
+    #[serde(default)]
+    pub frame_bookmarks: HashMap<String, u32>,
     /// Optional "script": list of actions to perform during playback
     #[serde(default)]
     pub script: Vec<
@@ -40,7 +43,9 @@ pub struct SpriteAnimationSettings {
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
-pub struct SpriteAnimationScriptParams {}
+pub struct SpriteAnimationScriptParams {
+    pub frame_bookmark: Option<String>,
+}
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
