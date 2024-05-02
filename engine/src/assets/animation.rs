@@ -51,7 +51,7 @@ pub struct SpriteAnimationScriptParams {
 #[derive(Serialize, Deserialize)]
 pub enum SpriteAnimationScriptRunIf {
     #[serde(rename = "run_at_frame")]
-    Frame(u32),
+    Frame(FrameIndexOrBookmark),
 }
 
 /// The various actions that can be performed from an animation script
@@ -66,13 +66,17 @@ pub enum SpriteAnimationScriptAction {
     },
     /// Immediately change to the given frame, without waiting for `ticks_per_frame`
     SetFrameNow {
+        /// Use this bookmark
+        to_frame_bookmark: Option<String>,
         /// The frame index
-        frame_index: u32,
+        frame_index: Option<u32>,
     },
     /// Change the next frame to be displayed, after `ticks_per_frame` elapses.
     SetFrameNext {
+        /// Use this bookmark
+        to_frame_bookmark: Option<String>,
         /// The frame index
-        frame_index: u32,
+        frame_index: Option<u32>,
     },
     /// Set sprite colorization
     SetSpriteColor {
@@ -112,6 +116,14 @@ pub enum SpriteAnimationScriptAction {
     TransformSetScale { x: Frac, y: Frac },
 }
 
+#[derive(Debug, Clone)]
+#[derive(Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum FrameIndexOrBookmark {
+    Index(u32),
+    Bookmark(String),
+}
+
 impl SpriteAnimation {
     pub fn resolve_image_atlas(
         &self,
@@ -134,8 +146,6 @@ impl SpriteAnimation {
             default_layout_key.push_str(".atlas");
             &default_layout_key
         };
-        dbg!(image_key);
-        dbg!(layout_key);
         Some((
             preloaded.get_single_asset(image_key)?,
             preloaded.get_single_asset(layout_key)?,

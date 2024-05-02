@@ -78,18 +78,24 @@ impl ScriptAction for SpriteAnimationScriptAction {
             .expect("Entity is missing sprite animation components!");
 
         match self {
-            SpriteAnimationScriptAction::SetFrameNext { frame_index } => {
+            SpriteAnimationScriptAction::SetFrameNext { to_frame_bookmark, frame_index } => {
                 let bm_offset = tracker.resolve_bookmark(
-                    actionparams.frame_bookmark.as_ref().map(|x| x.as_str())
+                    to_frame_bookmark.as_ref()
+                        .or(actionparams.frame_bookmark.as_ref())
+                        .map(|x| x.as_str())
                 );
-                tracker.next_frame = *frame_index + bm_offset;
+                let index = frame_index.unwrap_or(0);
+                tracker.next_frame = index + bm_offset;
                 ScriptUpdateResult::NormalRun
             },
-            SpriteAnimationScriptAction::SetFrameNow { frame_index } => {
+            SpriteAnimationScriptAction::SetFrameNow { to_frame_bookmark, frame_index } => {
                 let bm_offset = tracker.resolve_bookmark(
-                    actionparams.frame_bookmark.as_ref().map(|x| x.as_str())
+                    to_frame_bookmark.as_ref()
+                        .or(actionparams.frame_bookmark.as_ref())
+                        .map(|x| x.as_str())
                 );
-                atlas.index = (*frame_index + bm_offset) as usize;
+                let index = frame_index.unwrap_or(0);
+                atlas.index = (index + bm_offset) as usize;
                 ScriptUpdateResult::Loop
             },
             SpriteAnimationScriptAction::SetTicksPerFrame { ticks_per_frame } => {
@@ -224,7 +230,11 @@ impl ScriptTracker for SpriteAnimationTracker {
         );
         match run_if {
             SpriteAnimationScriptRunIf::Frame(frame) => {
-                self.frame_actions.insert(*frame + bm_offset, action_id);
+                let index = match frame {
+                    FrameIndexOrBookmark::Index(i) => *i + bm_offset,
+                    FrameIndexOrBookmark::Bookmark(bm) => self.resolve_bookmark(Some(&bm)),
+                };
+                self.frame_actions.insert(index, action_id);
             },
         }
     }
