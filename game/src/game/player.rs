@@ -657,6 +657,7 @@ fn player_collisions(
 
         let mut wall_slide = false;
         println!("vel: {}", linear_velocity.xy());
+        let dir = linear_velocity.x.signum();
         // We loop over the shape cast operation to check if the new trajectory might *also* collide.
         // This can happen in a corner for example, where the first collision is on one wall, and
         // so the velocity is only stopped in the x direction, but not the y, so without the extra
@@ -693,8 +694,23 @@ fn player_collisions(
                         // against the wall while falling. Ignores x component.
                         let friction_coefficient = config.sliding_friction;
                         let friction_force = if projected_velocity.y < -0.0 {
-                            wall_slide = true;
-                            -(projected_velocity.y * friction_coefficient)
+                            // make sure at least 1/2 of player is against the wall
+                            // (because it looks wierd to have the character hanging by their head)
+                            if let Some((e, first_hit)) = spatial_query.ray_cast(
+                                pos.translation.xy(),
+                                Vec2::new(dir, 0.0),
+                                shape.as_cuboid().unwrap().half_extents.x + 0.1,
+                                InteractionGroups {
+                                    memberships: PLAYER,
+                                    filter: GROUND,
+                                },
+                                Some(entity),
+                            ) {
+                                wall_slide = true;
+                                -(projected_velocity.y * friction_coefficient)
+                            } else {
+                                0.0
+                            }
                         } else {
                             0.0
                         };
@@ -729,9 +745,7 @@ fn player_collisions(
         let z = pos.translation.z;
         pos.translation =
             (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
-        println!("wall-siding: {:?}", slide);
-        // Todo: detect if bottom half of player is no longer against the wall and disable sliding
-        //  (because it looks wierd to have the character hanging by their head)
+
         if let Some(mut slide) = slide {
             if wall_slide {
                 slide.0 = 0.0;
