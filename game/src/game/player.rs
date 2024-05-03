@@ -1045,38 +1045,22 @@ fn player_falling_animation(
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
-    mut playing_wall_slide: Local<bool>,
-    mut playing_falling: Local<bool>,
 ) {
     for (gent, sliding) in f_query.iter() {
-        println!("gent found");
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            println!(
-                "anim found: {:?}, {:?}, ",
-                playing_wall_slide, playing_falling
-            );
             if let Some(sliding) = sliding {
                 if sliding.sliding(&config) {
-                    if !*playing_wall_slide {
-                        println!("playing wallslide anim");
+                    if player.current_key().unwrap_or("") != "anim.player.WallSlide" {
                         player.play_key("anim.player.WallSlide");
-                        *playing_wall_slide = true;
-                        *playing_falling = false;
                     }
                 } else {
-                    if !*playing_falling {
-                        println!("playing falling anim");
+                    if player.current_key().unwrap_or("") != "anim.player.Fall" {
                         player.play_key("anim.player.Fall");
-                        *playing_falling = true;
-                        *playing_wall_slide = false;
                     }
                 }
             } else {
-                if !*playing_falling {
-                    println!("playing falling anim");
+                if player.current_key().unwrap_or("") != "anim.player.Fall" {
                     player.play_key("anim.player.Fall");
-                    *playing_falling = true;
-                    *playing_wall_slide = false;
                 }
             }
         }
