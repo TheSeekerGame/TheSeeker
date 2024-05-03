@@ -216,11 +216,18 @@ fn setup_player(
                 action_state: ActionState::default(),
                 input_map: InputMap::default()
                     .insert(PlayerAction::Jump, KeyCode::Space)
+                    .insert(PlayerAction::Jump, KeyCode::KeyW)
+                    .insert(PlayerAction::Jump, KeyCode::ArrowUp)
                     .insert(
                         PlayerAction::Move,
                         VirtualAxis::from_keys(KeyCode::KeyA, KeyCode::KeyD),
                     )
+                    .insert(
+                        PlayerAction::Move,
+                        VirtualAxis::from_keys(KeyCode::ArrowLeft, KeyCode::ArrowRight),
+                    )
                     .insert(PlayerAction::Attack, KeyCode::Enter)
+                    .insert(PlayerAction::Attack, KeyCode::KeyJ)
                     .build(),
             },
             Falling,
@@ -561,6 +568,17 @@ fn player_move(
                 player.set_slot("MovingVertically", false);
                 player.set_slot("MovingHorizontally", false);
             }
+            
+            if velocity.y > 0.001 {
+                player.set_slot("MovingUp", true);
+            } else {
+                player.set_slot("MovingUp", false);
+            }
+            if velocity.y < -0.001 {
+                player.set_slot("MovingDown", true);
+            } else {
+                player.set_slot("MovingDown", false);
+            }
         }
         if direction > 0.0 {
             *facing = Facing::Right;
@@ -817,6 +835,9 @@ fn player_falling(
             }
         }
         if falling {
+            if velocity.y > 0.0 {
+                velocity.y = velocity.y / 1.2;
+            }
             velocity.y -= fall_accel;
             velocity.y = velocity.y.clamp(
                 -config.max_fall_vel,
@@ -974,15 +995,17 @@ fn player_running_animation(
 }
 
 fn player_attacking_animation(
-    r_query: Query<(&Gent, Has<Falling>, Has<Jumping>), Added<Attacking>>,
+    r_query: Query<(&Gent, Has<Falling>, Has<Jumping>, Has<Running>), Added<Attacking>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for (gent, is_falling, is_jumping) in r_query.iter() {
+    for (gent, is_falling, is_jumping, is_running) in r_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             if is_falling || is_jumping {
-                player.play_key("anim.player.SwordAirFrontA")
+                player.play_key("anim.player.SwordBasicAir")
+            } else if is_running {
+                player.play_key("anim.player.SwordBasicRun")
             } else {
-                player.play_key("anim.player.SwordFrontA")
+                player.play_key("anim.player.SwordBasicIdle")
             }
         }
     }
@@ -993,20 +1016,33 @@ fn player_attacking_animation(
 fn sprite_flip(
     query: Query<(&Facing, &Gent)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    mut current_direction: Local<bool>,
+    mut old_direction: Local<bool>,
 ) {
     for (facing, gent) in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            *old_direction = *current_direction;
             match facing {
                 Facing::Right => {
                     //TODO: toggle facing script action
                     player.set_slot("DirectionRight", true);
                     player.set_slot("DirectionLeft", false);
+                    *current_direction = true;   
                 },
                 Facing::Left => {
                     player.set_slot("DirectionRight", false);
                     player.set_slot("DirectionLeft", true);
+                    *current_direction = false;
                 },
             }
+            
+            // lazy change detection cause I can't be asked to learn proper bevy way lel ~c12
+            if *old_direction != *current_direction {
+                player.set_slot("DirectionChanged", true);
+            } else {
+                player.set_slot("DirectionChanged", false);
+            }
+        
         }
     }
 }
