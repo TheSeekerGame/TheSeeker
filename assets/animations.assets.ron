@@ -1,7 +1,6 @@
 // This file is for ANIMATIONS; i.e any sprite-based animated assets
 // based on our custom animation system.
 ({
-    
     "anim.player.Fall": File (
         path: "animations/player/movement/Fall.anim.toml",
     ),

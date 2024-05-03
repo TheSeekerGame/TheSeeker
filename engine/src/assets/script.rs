@@ -54,7 +54,7 @@ pub struct ScriptConfig(pub HashMap<String, DynamicConfigValue>);
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 #[derive(Component, Serialize, Deserialize)]
 #[serde(transparent)]
-pub struct ScriptTickQuant(pub TickQuant);
+pub struct ScriptTickQuant(pub Quant);
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
@@ -81,19 +81,25 @@ pub struct CommonScriptParams {
     pub forbid_slots_all: Vec<String>,
     #[serde(default)]
     pub forbid_slots_any: Vec<String>,
+    pub if_runcount_is: Option<OneOrMany<u32>>,
+    pub if_runcount_lt: Option<u32>,
+    pub if_runcount_le: Option<u32>,
+    pub if_runcount_gt: Option<u32>,
+    pub if_runcount_ge: Option<u32>,
+    pub if_runcount_quant: Option<Quant>,
 }
 
 #[derive(Debug, Clone)]
 #[derive(Serialize, Deserialize)]
 pub enum CommonScriptRunIf {
     #[serde(rename = "run_at_tick")]
-    Tick(u64),
+    Tick(OneOrMany<u64>),
     #[serde(rename = "run_every_n_ticks")]
-    TickQuant(TickQuant),
+    TickQuant(Quant),
     #[serde(rename = "run_at_time")]
-    Time(TimeSpec),
+    Time(OneOrMany<TimeSpec>),
     #[serde(rename = "run_at_millis")]
-    Millis(u64),
+    Millis(OneOrMany<u64>),
     #[serde(rename = "run_on_slot_enable")]
     SlotEnable(String),
     #[serde(rename = "run_on_slot_disable")]

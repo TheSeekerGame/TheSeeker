@@ -170,6 +170,6 @@ pub fn run_gametickupdate_schedule(world: &mut World) {
 }
 
 /// Run condition to run something "every N ticks"
-pub fn at_tick_multiples(quant: TickQuant) -> impl FnMut(Res<GameTime>) -> bool {
+pub fn at_tick_multiples(quant: Quant) -> impl FnMut(Res<GameTime>) -> bool {
     move |gametime: Res<GameTime>| (gametime.tick() + quant.offset as u64) % quant.n as u64 == 0
 }
