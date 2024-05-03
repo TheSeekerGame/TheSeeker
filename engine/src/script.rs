@@ -774,4 +774,20 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
             _ => { None }
         }
     }
+    /// Get the asset key of the script that is currently playing, if known.
+    ///
+    /// Note: since it is possible to play assets using handles, the key
+    /// might not be known/available, even if something is currently playing.
+    pub fn current_key(&self) -> Option<&str> {
+        match &self.state {
+            ScriptPlayerState::Stopped => None,
+            ScriptPlayerState::PrePlayHandle { .. } => None,
+            ScriptPlayerState::PrePlayKey { key, .. } => Some(&key),
+            ScriptPlayerState::Starting { runtime } => runtime.key.as_ref().map(|x| x.as_str()),
+            ScriptPlayerState::Playing { runtime } => runtime.key.as_ref().map(|x| x.as_str()),
+            ScriptPlayerState::Stopping { runtime } => runtime.key.as_ref().map(|x| x.as_str()),
+            ScriptPlayerState::ChangingHandle { .. } => None,
+            ScriptPlayerState::ChangingKey { key, .. } => Some(&key),
+        }
+    }
 }
