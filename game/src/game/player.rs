@@ -588,7 +588,7 @@ fn player_move(
                 player.set_slot("MovingVertically", false);
                 player.set_slot("MovingHorizontally", false);
             }
-            
+
             if velocity.y > 0.001 {
                 player.set_slot("MovingUp", true);
             } else {
@@ -1045,17 +1045,39 @@ fn player_falling_animation(
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
+    mut playing_wall_slide: Local<bool>,
+    mut playing_falling: Local<bool>,
 ) {
     for (gent, sliding) in f_query.iter() {
+        println!("gent found");
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            println!(
+                "anim found: {:?}, {:?}, ",
+                playing_wall_slide, playing_falling
+            );
             if let Some(sliding) = sliding {
                 if sliding.sliding(&config) {
-                    player.play_key("anim.player.WallSlide");
+                    if !*playing_wall_slide {
+                        println!("playing wallslide anim");
+                        player.play_key("anim.player.WallSlide");
+                        *playing_wall_slide = true;
+                        *playing_falling = false;
+                    }
                 } else {
-                    player.play_key("anim.player.Fall");
+                    if !*playing_falling {
+                        println!("playing falling anim");
+                        player.play_key("anim.player.Fall");
+                        *playing_falling = true;
+                        *playing_wall_slide = false;
+                    }
                 }
             } else {
-                player.play_key("anim.player.Fall");
+                if !*playing_falling {
+                    println!("playing falling anim");
+                    player.play_key("anim.player.Fall");
+                    *playing_falling = true;
+                    *playing_wall_slide = false;
+                }
             }
         }
     }
@@ -1096,7 +1118,15 @@ fn player_running_animation(
 }
 
 fn player_attacking_animation(
-    r_query: Query<(&Gent, Has<Falling>, Has<Jumping>, Has<Running>), Added<Attacking>>,
+    r_query: Query<
+        (
+            &Gent,
+            Has<Falling>,
+            Has<Jumping>,
+            Has<Running>,
+        ),
+        Added<Attacking>,
+    >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for (gent, is_falling, is_jumping, is_running) in r_query.iter() {
@@ -1128,7 +1158,7 @@ fn sprite_flip(
                     //TODO: toggle facing script action
                     player.set_slot("DirectionRight", true);
                     player.set_slot("DirectionLeft", false);
-                    *current_direction = true;   
+                    *current_direction = true;
                 },
                 Facing::Left => {
                     player.set_slot("DirectionRight", false);
@@ -1136,14 +1166,13 @@ fn sprite_flip(
                     *current_direction = false;
                 },
             }
-            
+
             // lazy change detection cause I can't be asked to learn proper bevy way lel ~c12
             if *old_direction != *current_direction {
                 player.set_slot("DirectionChanged", true);
             } else {
                 player.set_slot("DirectionChanged", false);
             }
-        
         }
     }
 }
