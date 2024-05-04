@@ -168,9 +168,9 @@ fn darkness_dynamics(
     };
 
     for mut setting in &mut settings {
-        let seconds_per_day_cycle = 30.0;
+        let seconds_per_day_cycle = 300000.0;
 
-        let mut intensity = (time.elapsed_seconds() * PI / seconds_per_day_cycle).sin();
+        let mut intensity = 1.0;
         // remaps sines normal output to the 0-1 range
         let intensity = intensity * 0.5 + 0.5;
 

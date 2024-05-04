@@ -216,14 +216,22 @@ fn setup_player(
                 action_state: ActionState::default(),
                 input_map: InputMap::default()
                     .insert(PlayerAction::Jump, KeyCode::Space)
+                    .insert(PlayerAction::Jump, KeyCode::KeyW)
+                    .insert(PlayerAction::Jump, KeyCode::ArrowUp)
                     .insert(
                         PlayerAction::Move,
                         VirtualAxis::from_keys(KeyCode::KeyA, KeyCode::KeyD),
                     )
+                    .insert(
+                        PlayerAction::Move,
+                        VirtualAxis::from_keys(KeyCode::ArrowLeft, KeyCode::ArrowRight),
+                    )
                     .insert(PlayerAction::Attack, KeyCode::Enter)
+                    .insert(PlayerAction::Attack, KeyCode::KeyJ)
                     .build(),
             },
             Falling,
+            WallSlideTime(f32::MAX),
             TransitionQueue::default(),
             AddQueue::default(),
         ));
@@ -294,6 +302,17 @@ impl GenericState for Jumping {}
 #[derive(Component, Default, Debug)]
 pub struct CoyoteTime(f32);
 
+/// Indicates that sliding is tracked for this entity
+#[derive(Component, Default, Debug)]
+pub struct WallSlideTime(f32);
+impl WallSlideTime {
+    /// Player is sliding if f32 value is less then the coyote time
+    /// f32 starts incrementing when the player stops pressing into the wall
+    fn sliding(&self, cfg: &PlayerConfig) -> bool {
+        self.0 <= cfg.max_coyote_time * 2.0
+    }
+}
+
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
@@ -351,10 +370,14 @@ impl Plugin for PlayerBehaviorPlugin {
                 player_jump.run_if(any_with_component::<Jumping>),
                 player_grounded.run_if(any_with_component::<Grounded>),
                 player_falling.run_if(any_with_component::<Falling>),
+                player_sliding
+                    .before(player_jump)
+                    .run_if(any_matching::<(With<Falling>,)>()),
                 //consider a set for all movement/systems modify velocity, then collisions/move
                 //moves based on velocity
                 player_collisions
                     .after(player_move)
+                    .after(player_sliding)
                     .after(player_grounded)
                     .after(player_jump)
                     .after(player_falling)
@@ -405,6 +428,10 @@ pub struct PlayerConfig {
 
     /// How many seconds does our characters innate hover boots work?
     max_coyote_time: f32,
+
+    /// Onlly applies in the downward y direction while the player is falling
+    /// and trying to walk into the wall
+    sliding_friction: f32,
 }
 
 fn load_player_config(
@@ -460,6 +487,7 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "jump_fall_accel", |val| config.jump_fall_accel = val);
     update_field(&mut errors, &cfg.0, "fall_accel", |val| config.fall_accel = val);
     update_field(&mut errors, &cfg.0, "max_coyote_time", |val| config.max_coyote_time = val);
+    update_field(&mut errors, &cfg.0, "sliding_friction", |val| config.sliding_friction = val);
 
    for error in errors{
        warn!("failed to load player cfg value: {}", error);
@@ -516,11 +544,10 @@ fn player_move(
         // Todo: Have this value be determined by tile type at some point?
         let ground_friction = 0.7;
 
+        direction = action_state.value(&PlayerAction::Move);
         let new_vel = if action_state.just_pressed(&PlayerAction::Move) {
-            direction = action_state.value(&PlayerAction::Move);
             velocity.x + accel * direction * ground_friction
         } else if action_state.pressed(&PlayerAction::Move) {
-            direction = action_state.value(&PlayerAction::Move);
             velocity.x + initial_accel * direction * ground_friction
         } else {
             // de-acceleration profile
@@ -560,6 +587,17 @@ fn player_move(
             } else {
                 player.set_slot("MovingVertically", false);
                 player.set_slot("MovingHorizontally", false);
+            }
+
+            if velocity.y > 0.001 {
+                player.set_slot("MovingUp", true);
+            } else {
+                player.set_slot("MovingUp", false);
+            }
+            if velocity.y < -0.001 {
+                player.set_slot("MovingDown", true);
+            } else {
+                player.set_slot("MovingDown", false);
             }
         }
         if direction > 0.0 {
@@ -637,16 +675,20 @@ fn player_collisions(
             &mut Transform,
             &mut LinearVelocity,
             &Collider,
+            Option<&mut WallSlideTime>,
         ),
         (With<Player>),
     >,
     time: Res<GameTime>,
+    config: Res<PlayerConfig>,
 ) {
-    for (entity, mut pos, mut linear_velocity, collider) in q_gent.iter_mut() {
+    for (entity, mut pos, mut linear_velocity, collider, slide) in q_gent.iter_mut() {
         let mut shape = collider.0.shared_shape().clone();
         let mut tries = 0;
         let mut original_pos = pos.translation.xy();
 
+        let mut wall_slide = false;
+        let dir = linear_velocity.x.signum();
         // We loop over the shape cast operation to check if the new trajectory might *also* collide.
         // This can happen in a corner for example, where the first collision is on one wall, and
         // so the velocity is only stopped in the x direction, but not the y, so without the extra
@@ -676,7 +718,34 @@ fn player_collisions(
 
                     let projected_velocity = linear_velocity.xy()
                         - sliding_plane * linear_velocity.xy().dot(sliding_plane);
-                    linear_velocity.0 = projected_velocity + bounce_force;
+
+                    // Applies downward friction only when player tries to push
+                    // against the wall while falling. Ignores x component.
+                    let friction_coefficient = config.sliding_friction;
+                    let friction_force = if projected_velocity.y < -0.0 {
+                        // make sure at least 1/2 of player is against the wall
+                        // (because it looks wierd to have the character hanging by their head)
+                        if let Some((e, first_hit)) = spatial_query.ray_cast(
+                            pos.translation.xy(),
+                            Vec2::new(dir, 0.0),
+                            shape.as_cuboid().unwrap().half_extents.x + 0.1,
+                            InteractionGroups {
+                                memberships: PLAYER,
+                                filter: GROUND,
+                            },
+                            Some(entity),
+                        ) {
+                            wall_slide = true;
+                            -(projected_velocity.y * friction_coefficient)
+                        } else {
+                            0.0
+                        }
+                    } else {
+                        0.0
+                    };
+                    let friction_vec = Vec2::new(0.0, friction_force);
+
+                    linear_velocity.0 = projected_velocity + friction_vec + bounce_force;
 
                     let new_pos = pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
                     pos.translation.x = new_pos.x;
@@ -700,9 +769,16 @@ fn player_collisions(
         let z = pos.translation.z;
         pos.translation =
             (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
+
+        if let Some(mut slide) = slide {
+            if wall_slide {
+                slide.0 = 0.0;
+            } else {
+                slide.0 += 1.0 / time.hz as f32;
+            }
+        }
     }
 }
-// }
 
 /// Tries to keep the characters shape caster this far above the ground
 ///
@@ -817,11 +893,48 @@ fn player_falling(
             }
         }
         if falling {
+            if velocity.y > 0.0 {
+                velocity.y = velocity.y / 1.2;
+            }
             velocity.y -= fall_accel;
             velocity.y = velocity.y.clamp(
                 -config.max_fall_vel,
                 config.jump_vel_init,
             );
+        }
+    }
+}
+
+fn player_sliding(
+    mut query: Query<(
+        &Gent,
+        &ActionState<PlayerAction>,
+        &mut TransitionQueue,
+        &mut Transform,
+        &mut WallSlideTime,
+        &mut LinearVelocity,
+    )>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    config: Res<PlayerConfig>,
+) {
+    for (gent, action_state, mut transitions, mut trsnfrm, mut wall_slide_time, mut lin_vel) in
+        query.iter_mut()
+    {
+        let mut direction: f32 = 0.0;
+        if action_state.pressed(&PlayerAction::Move) {
+            direction = action_state.value(&PlayerAction::Move);
+        }
+        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            if wall_slide_time.sliding(&config) {
+                if action_state.just_pressed(&PlayerAction::Jump) {
+                    wall_slide_time.0 = f32::MAX;
+                    // Move away from the wall a bit so that friction stops
+                    lin_vel.x = -direction * config.move_accel_init;
+                    // Give a little boost for the frame that it takes for input to be received
+                    lin_vel.y = config.fall_accel;
+                    transitions.push(Falling::new_transition(Jumping))
+                }
+            }
         }
     }
 }
@@ -924,17 +1037,32 @@ fn player_idle_animation(
 //TODO: add FallForward
 fn player_falling_animation(
     f_query: Query<
-        &Gent,
+        (&Gent, Option<&WallSlideTime>),
         Or<(
-            (Added<Falling>, Without<Attacking>),
+            (With<Falling>, Without<Attacking>),
             (With<Falling>, Added<CanAttack>),
         )>,
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    config: Res<PlayerConfig>,
 ) {
-    for gent in f_query.iter() {
+    for (gent, sliding) in f_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key("anim.player.Fall")
+            if let Some(sliding) = sliding {
+                if sliding.sliding(&config) {
+                    if player.current_key().unwrap_or("") != "anim.player.WallSlide" {
+                        player.play_key("anim.player.WallSlide");
+                    }
+                } else {
+                    if player.current_key().unwrap_or("") != "anim.player.Fall" {
+                        player.play_key("anim.player.Fall");
+                    }
+                }
+            } else {
+                if player.current_key().unwrap_or("") != "anim.player.Fall" {
+                    player.play_key("anim.player.Fall");
+                }
+            }
         }
     }
 }
@@ -974,15 +1102,25 @@ fn player_running_animation(
 }
 
 fn player_attacking_animation(
-    r_query: Query<(&Gent, Has<Falling>, Has<Jumping>), Added<Attacking>>,
+    r_query: Query<
+        (
+            &Gent,
+            Has<Falling>,
+            Has<Jumping>,
+            Has<Running>,
+        ),
+        Added<Attacking>,
+    >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for (gent, is_falling, is_jumping) in r_query.iter() {
+    for (gent, is_falling, is_jumping, is_running) in r_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             if is_falling || is_jumping {
-                player.play_key("anim.player.SwordAirFrontA")
+                player.play_key("anim.player.SwordBasicAir")
+            } else if is_running {
+                player.play_key("anim.player.SwordBasicRun")
             } else {
-                player.play_key("anim.player.SwordFrontA")
+                player.play_key("anim.player.SwordBasicIdle")
             }
         }
     }
@@ -993,19 +1131,31 @@ fn player_attacking_animation(
 fn sprite_flip(
     query: Query<(&Facing, &Gent)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    mut current_direction: Local<bool>,
+    mut old_direction: Local<bool>,
 ) {
     for (facing, gent) in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            *old_direction = *current_direction;
             match facing {
                 Facing::Right => {
                     //TODO: toggle facing script action
                     player.set_slot("DirectionRight", true);
                     player.set_slot("DirectionLeft", false);
+                    *current_direction = true;
                 },
                 Facing::Left => {
                     player.set_slot("DirectionRight", false);
                     player.set_slot("DirectionLeft", true);
+                    *current_direction = false;
                 },
+            }
+
+            // lazy change detection cause I can't be asked to learn proper bevy way lel ~c12
+            if *old_direction != *current_direction {
+                player.set_slot("DirectionChanged", true);
+            } else {
+                player.set_slot("DirectionChanged", false);
             }
         }
     }

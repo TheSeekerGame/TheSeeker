@@ -19,7 +19,7 @@ pub mod prelude {
 
     pub use crate::assets::{AssetKey, AssetsSet, PreloadedAssets};
     pub use crate::condition::*;
-    pub use crate::data::TickQuant;
+    pub use crate::data::Quant;
     pub use crate::time::{
         at_tick_multiples, GameTickEventClearSet, GameTickSet, GameTickUpdate, GameTime,
         GameTimeAppExt,

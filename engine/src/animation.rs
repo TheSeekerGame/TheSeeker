@@ -3,6 +3,7 @@ use bevy::ecs::system::SystemParam;
 
 use crate::assets::animation::*;
 use crate::assets::script::*;
+use crate::data::OneOrMany;
 use crate::prelude::*;
 use crate::script::common::ExtendedScriptTracker;
 use crate::script::*;
@@ -22,11 +23,56 @@ pub struct SpriteAnimationBundle {
 
 #[derive(Default)]
 pub struct SpriteAnimationTracker {
+    frame_actions: HashMap<u32, Vec<ActionId>>,
+    framequant_actions: Vec<(Quant, ActionId)>,
     reversed: bool,
-    next_frame: u32,
+    next_frame: Option<u32>,
+    frame_min: u32,
+    frame_max: u32,
     ticks_per_frame: u32,
     ticks_remain: u32,
-    frame_actions: HashMap<u32, ActionId>,
+    bookmarks: HashMap<String, u32>,
+}
+
+impl SpriteAnimationTracker {
+    fn resolve_bookmark(&self, bm: Option<&String>) -> u32 {
+        let Some(bm) = bm else {
+            return 0;
+        };
+        if let Some(i) = self.bookmarks.get(bm) {
+            *i
+        } else {
+            if cfg!(feature = "dev") {
+                warn!("Script bookmark {:?} is undefined!", bm);
+            }
+            0
+        }
+    }
+    fn resolve_frame(&self, bm: Option<&String>, frame: &FrameIndexOrBookmark) -> u32 {
+        let bm_offset = self.resolve_bookmark(bm);
+        match frame {
+            FrameIndexOrBookmark::Index(i) => *i + bm_offset,
+            FrameIndexOrBookmark::Bookmark(bm) => self.resolve_bookmark(Some(bm)),
+        }
+    }
+    fn set_next_frame(&mut self, index: u32) {
+        if index < self.frame_min || index > self.frame_max {
+            self.next_frame = None;
+        } else {
+            self.next_frame = Some(index);
+        }
+    }
+    fn set_auto_next_frame(&mut self, current: u32) {
+        self.next_frame = if self.reversed {
+            if current > self.frame_min {
+                Some(current - 1)
+            } else { None }
+        } else {
+            if current < self.frame_max {
+                Some(current + 1)
+            } else { None }
+        };
+    }
 }
 
 impl ScriptRunIf for SpriteAnimationScriptRunIf {
@@ -35,7 +81,63 @@ impl ScriptRunIf for SpriteAnimationScriptRunIf {
 
 impl ScriptActionParams for SpriteAnimationScriptParams {
     type Tracker = SpriteAnimationTracker;
-    type ShouldRunParam = ();
+    type ShouldRunParam = (
+        SQuery<(
+            &'static TextureAtlas,
+        )>,
+    );
+
+    fn should_run<'w>(
+        &self,
+        entity: Entity,
+        tracker: &mut Self::Tracker,
+        _action_id: ActionId,
+        (q_self,): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+    ) -> Result<(), ScriptUpdateResult> {
+        let current_index = q_self.get(entity).unwrap().0.index as u32;
+        if let Some(lt) = &self.if_frame_lt {
+            if !(current_index < tracker.resolve_frame(self.frame_bookmark.as_ref(), lt)) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(le) = &self.if_frame_le {
+            if !(current_index <= tracker.resolve_frame(self.frame_bookmark.as_ref(), le)) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(gt) = &self.if_frame_gt {
+            if !(current_index > tracker.resolve_frame(self.frame_bookmark.as_ref(), gt)) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(ge) = &self.if_frame_ge {
+            if !(current_index >= tracker.resolve_frame(self.frame_bookmark.as_ref(), ge)) {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        if let Some(f) = &self.if_frame_is {
+            match f {
+                OneOrMany::Single(f) => {
+                    if current_index != tracker.resolve_frame(self.frame_bookmark.as_ref(), f) {
+                        return Err(ScriptUpdateResult::NormalRun);
+                    }
+                }
+                OneOrMany::Many(f) => {
+                    for f in f.iter() {
+                        if current_index != tracker.resolve_frame(self.frame_bookmark.as_ref(), f) {
+                            return Err(ScriptUpdateResult::NormalRun);
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(reversed) = self.if_playing_reversed {
+            if reversed != tracker.reversed {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
+        Ok(())
+    }
 }
 
 impl ScriptAction for SpriteAnimationScriptAction {
@@ -52,7 +154,7 @@ impl ScriptAction for SpriteAnimationScriptAction {
     fn run<'w>(
         &self,
         entity: Entity,
-        _actionparams: &Self::ActionParams,
+        actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
         (q,): &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult {
@@ -61,12 +163,22 @@ impl ScriptAction for SpriteAnimationScriptAction {
             .expect("Entity is missing sprite animation components!");
 
         match self {
-            SpriteAnimationScriptAction::SetFrameNext { frame_index } => {
-                tracker.next_frame = *frame_index;
+            SpriteAnimationScriptAction::SetFrameNext { to_frame_bookmark, frame_index } => {
+                let bm_offset = tracker.resolve_bookmark(
+                    to_frame_bookmark.as_ref()
+                        .or(actionparams.frame_bookmark.as_ref())
+                );
+                tracker.set_next_frame(frame_index.unwrap_or(0) + bm_offset);
                 ScriptUpdateResult::NormalRun
             },
-            SpriteAnimationScriptAction::SetFrameNow { frame_index } => {
-                atlas.index = *frame_index as usize;
+            SpriteAnimationScriptAction::SetFrameNow { to_frame_bookmark, frame_index } => {
+                let bm_offset = tracker.resolve_bookmark(
+                    to_frame_bookmark.as_ref()
+                        .or(actionparams.frame_bookmark.as_ref())
+                );
+                let index = frame_index.unwrap_or(0) + bm_offset;
+                atlas.index = index as usize;
+                tracker.set_auto_next_frame(index);
                 ScriptUpdateResult::Loop
             },
             SpriteAnimationScriptAction::SetTicksPerFrame { ticks_per_frame } => {
@@ -95,19 +207,11 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 match (tracker.reversed, reversed) {
                     (false, true) => {
                         tracker.reversed = true;
-                        if tracker.next_frame as usize == atlas.index + 1 {
-                            // prevent overflow
-                            if atlas.index == 0 {
-                                return ScriptUpdateResult::Finished;
-                            }
-                            tracker.next_frame -= 2;
-                        }
+                        tracker.set_auto_next_frame(atlas.index as u32);
                     }
                     (true, false) => {
                         tracker.reversed = false;
-                        if tracker.next_frame as usize + 1 == atlas.index {
-                            tracker.next_frame += 2;
-                        }
+                        tracker.set_auto_next_frame(atlas.index as u32);
                     }
                     _ => {}
                 }
@@ -163,6 +267,7 @@ impl ScriptTracker for SpriteAnimationTracker {
     type RunIf = SpriteAnimationScriptRunIf;
     type Settings = SpriteAnimationSettings;
     type UpdateParam = (SQuery<&'static mut TextureAtlas>,);
+    type ActionParams = SpriteAnimationScriptParams;
 
     fn init<'w>(
         &mut self,
@@ -173,7 +278,10 @@ impl ScriptTracker for SpriteAnimationTracker {
     ) {
         self.ticks_per_frame = settings.ticks_per_frame;
         self.ticks_remain = 0;
-        self.next_frame = settings.frame_start;
+        self.next_frame = Some(settings.frame_start);
+        self.frame_min = settings.frame_min;
+        self.frame_max = settings.frame_max;
+        self.reversed = settings.play_reversed;
 
         let mut atlas = q
             .get_mut(entity)
@@ -189,18 +297,49 @@ impl ScriptTracker for SpriteAnimationTracker {
         // nothing really needs to be done here
     }
 
-    fn track_action(&mut self, run_if: &Self::RunIf, action_id: ActionId) {
+    fn track_action(
+        &mut self,
+        run_if: &Self::RunIf,
+        params: &Self::ActionParams,
+        action_id: ActionId,
+    ) {
+        let bm = params.frame_bookmark.as_ref();
         match run_if {
             SpriteAnimationScriptRunIf::Frame(frame) => {
-                self.frame_actions.insert(*frame, action_id);
+                let mut actions = std::mem::take(&mut self.frame_actions);
+                let mut add_action = |index| {
+                    if let Some(e) = actions.get_mut(&index) {
+                        e.push(action_id);
+                    } else {
+                        actions.insert(index, vec![action_id]);
+                    }
+                };
+                match frame {
+                    OneOrMany::Single(frame) => {
+                        add_action(self.resolve_frame(bm, frame));
+                    }
+                    OneOrMany::Many(frames) => {
+                        for frame in frames.iter() {
+                            add_action(self.resolve_frame(bm, frame));
+                        }
+                    }
+                };
+                self.frame_actions = actions;
             },
+            SpriteAnimationScriptRunIf::FrameQuant(quant) => {
+                // adjust based on bookmark
+                let bm_offset = self.resolve_bookmark(bm);
+                let mut quant = *quant;
+                quant.offset += bm_offset as i64;
+                self.framequant_actions.push((quant, action_id));
+            }
         }
     }
 
     fn update<'w>(
         &mut self,
         entity: Entity,
-        settings: &Self::Settings,
+        _settings: &Self::Settings,
         (q,): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
         queue: &mut Vec<ActionId>,
     ) -> ScriptUpdateResult {
@@ -208,42 +347,21 @@ impl ScriptTracker for SpriteAnimationTracker {
             .get_mut(entity)
             .expect("Animation entity must have TextureAtlasSprite component");
 
-        // if our sprite index was changed externally, respond to that by
-        // running any frame actions and queueing up the next frame appropriately
-        if atlas.is_changed() && !atlas.is_added() {
-            if self.reversed {
-                // prevent overflow
-                if atlas.index == 0 {
-                    return ScriptUpdateResult::Finished;
-                }
-                self.next_frame = atlas.index as u32 - 1;
-            } else {
-                self.next_frame = atlas.index as u32 + 1;
-            }
-            if let Some(action_id) = self.frame_actions.get(&(atlas.index as u32)) {
-                queue.push(*action_id);
-            }
-        }
-
-        if self.next_frame > settings.frame_max || self.next_frame < settings.frame_min {
-            return ScriptUpdateResult::Finished;
-        }
-
         if self.ticks_remain == 0 {
-            if let Some(action_id) = self.frame_actions.get(&self.next_frame) {
-                queue.push(*action_id);
+            let Some(next_frame) = self.next_frame else {
+                return ScriptUpdateResult::Finished;
+            };
+            if let Some(actions) = self.frame_actions.get(&next_frame) {
+                queue.extend_from_slice(&actions);
             }
-            atlas.index = self.next_frame as usize;
-            self.ticks_remain = self.ticks_per_frame;
-            if self.reversed {
-                // prevent overflow
-                if self.next_frame == 0 {
-                    return ScriptUpdateResult::Finished;
+            for (quant, action_id) in &self.framequant_actions {
+                if quant.check(next_frame as i64) {
+                    queue.push(*action_id);
                 }
-                self.next_frame -= 1;
-            } else {
-                self.next_frame += 1;
             }
+            atlas.index = next_frame as usize;
+            self.ticks_remain = self.ticks_per_frame;
+            self.set_auto_next_frame(next_frame);
         }
 
         self.ticks_remain -= 1;
@@ -296,6 +414,7 @@ impl ScriptAsset for SpriteAnimation {
             as usize;
 
         builder.replace_config(&self.config);
+        builder.tracker_mut().extended.bookmarks = self.frame_bookmarks.clone();
         for action in self.script.iter() {
             builder = builder.add_action(
                 &action.run_if,

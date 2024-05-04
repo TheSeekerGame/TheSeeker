@@ -3,30 +3,30 @@ time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
 frame_min = 0
-frame_max = 19
+frame_max = 23
 frame_start = 0
 
 # LOOP (left)
 [[script]]
-run_at_frame = 9
+run_at_frame = 11
 action = "SetFrameNext"
-frame_index = 0
+frame_index = 2
 
 # LOOP (right)
 [[script]]
-run_at_frame = 19
+run_at_frame = 23
 action = "SetFrameNext"
-frame_index = 10
+frame_index = 14
 
 # Support left/right
 [[script]]
 run_on_slot_enable = "DirectionLeft"
 action = "SetFrameNow"
-frame_index = 0
+frame_index = 2
 [[script]]
 run_on_slot_enable = "DirectionRight"
 action = "SetFrameNow"
-frame_index = 10
+frame_index = 14
 
 # needed for expected flip behavior
 [[script]]

@@ -3,7 +3,7 @@ time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
 frame_min = 0
-frame_max = 4
+frame_max = 19
 frame_start = 0
 
 # Support left/right flipping
