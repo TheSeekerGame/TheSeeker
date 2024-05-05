@@ -18,7 +18,7 @@ pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(PhysicsWorld::default());
-        app.init_resource::<SpriteColliderMap>();
+        app.init_resource::<SpriteShapeMap>();
         app.add_systems(Startup, init_physics_world);
         app.configure_sets(
             GameTickUpdate,
@@ -60,13 +60,13 @@ pub const GROUND: Group = Group::from_bits_truncate(0b10000);
 pub const SENSOR: Group = Group::from_bits_truncate(0b100000);
 
 #[derive(Resource, Default)]
-pub struct SpriteColliderMap {
-    pub colliders: Vec<Vec<Point<f32>>>,
+pub struct SpriteShapeMap {
+    pub shapes: Vec<SharedShape>,
     pub map: HashMap<AssetId<Image>, Vec<usize>>,
 }
 
 fn update_sprite_colliders(
-    collider_map: Res<SpriteColliderMap>,
+    shape_map: Res<SpriteShapeMap>,
     mut q_sprite: Query<
         (
             &Handle<Image>,
@@ -83,16 +83,14 @@ fn update_sprite_colliders(
     >,
 ) {
     for (h_image, atlas, mut collider) in &mut q_sprite {
-        let points_i = collider_map
+        let shapes_i = shape_map
             .map
             .get(&h_image.id())
             .expect("Sprite image not found in collider map!")[atlas.index];
-        let points = &collider_map.colliders[points_i];
+        let convex_hull = &shape_map.shapes[shapes_i];
 
-        collider.0 = ColliderBuilder::convex_hull(points)
-            .expect("Cannot build collider")
-            // TODO: collision groups???
-            .build();
+        println!("replacing collider!");
+        collider.0.set_shape(convex_hull.clone());
     }
 }
 
@@ -439,6 +437,22 @@ pub fn debug_colliders(
                 half_extents * 2.0,
                 Color::GREEN,
             );
+        }
+        if let Some(convex) = collider.shared_shape().as_convex_polygon() {
+            let points = convex.points();
+            let num_points = points.len();
+
+            for i in 0..num_points {
+                let start = points[i];
+                // modulo wraps around the first point when we get to the end
+                let end = points[(i + 1) % num_points];
+
+                collider_gizmos.line_2d(
+                    Vec2::new(start.x, start.y),
+                    Vec2::new(end.x, end.y),
+                    Color::GREEN,
+                );
+            }
         }
     }
 }

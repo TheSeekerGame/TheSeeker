@@ -5,9 +5,10 @@ use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 
 use bevy_common_assets::toml::TomlAssetPlugin;
+use rapier2d::geometry::SharedShape;
 use rapier2d::prelude::Point;
 
-use crate::{physics::SpriteColliderMap, prelude::*};
+use crate::{physics::SpriteShapeMap, prelude::*};
 
 pub mod animation;
 pub mod config;
@@ -257,7 +258,7 @@ fn populate_collider_map(
     animations: Res<Assets<animation::SpriteAnimation>>,
     mut images: ResMut<Assets<Image>>,
     layouts: Res<Assets<TextureAtlasLayout>>,
-    mut collider_map: ResMut<SpriteColliderMap>,
+    mut collider_map: ResMut<SpriteShapeMap>,
 ) {
     // we only want to process images that are actually used
     // by animations, so first we need to collect a list of
@@ -313,26 +314,26 @@ fn populate_collider_map(
                     }
                 }
             }
-
-            // TODO: compute the points of the collider shape
-            // from the image pixels (and modify the image pixels
-            // as necessary to remove the special color).
-            //
-            // Put them in `collider_points` as a Rapier type (not Vec2)
-
-            // collider_points.push(...);
-            // ...
+            let shape =
+                SharedShape::convex_hull(&*collider_points).expect("Cannot build convex hull");
 
             // As a simple form of deduplication to avoid allocations
             // (it is likely that consecutive frames in a single
             // animation might have the same collider points)
             // check if this frame is the same as the last
-            println!("found pixels: {collider_points:?}");
-            if collider_map.colliders.last() == Some(&collider_points) {
-                collider_ids.push(collider_map.colliders.len() - 1);
+            if collider_map
+                .shapes
+                .last()
+                .unwrap()
+                .as_convex_polygon()
+                .unwrap()
+                .points()
+                == &collider_points
+            {
+                collider_ids.push(collider_map.shapes.len() - 1);
             } else {
-                let i_new = collider_map.colliders.len();
-                collider_map.colliders.push(collider_points.clone());
+                let i_new = collider_map.shapes.len();
+                collider_map.shapes.push(shape);
                 collider_ids.push(i_new);
             }
         }
