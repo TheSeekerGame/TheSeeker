@@ -6,8 +6,8 @@ use bevy::prelude::*;
 use bevy::transform::TransformSystem::TransformPropagate;
 use rapier2d::na::{Unit, UnitComplex};
 use rapier2d::parry;
-use rapier2d::prelude::*;
 use rapier2d::prelude::Collider as RapierCollider;
+use rapier2d::prelude::*;
 use std::f32::consts::PI;
 
 /// A manual implementation of rapier to only use the features required by our project
@@ -27,10 +27,10 @@ impl Plugin for PhysicsPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                update_query_pipeline.in_set(PhysicsSet),
                 update_sprite_colliders
                     .before(PhysicsSet)
                     .after(ScriptSet::Run),
+                update_query_pipeline.in_set(PhysicsSet),
             ),
         );
         #[cfg(feature = "dev")]
@@ -67,22 +67,26 @@ pub struct SpriteColliderMap {
 
 fn update_sprite_colliders(
     collider_map: Res<SpriteColliderMap>,
-    mut q_sprite: Query<(
-        &Handle<Image>,
-        &TextureAtlas,
-        &mut Collider,
-    ), (
-        With<ScriptPlayer<SpriteAnimation>>,
-        Or<(
-            Changed<Handle<Image>>,
-            Changed<TextureAtlas>,
-        )>,
-    )>,
+    mut q_sprite: Query<
+        (
+            &Handle<Image>,
+            &TextureAtlas,
+            &mut Collider,
+        ),
+        (
+            With<ScriptPlayer<SpriteAnimation>>,
+            Or<(
+                Changed<Handle<Image>>,
+                Changed<TextureAtlas>,
+            )>,
+        ),
+    >,
 ) {
     for (h_image, atlas, mut collider) in &mut q_sprite {
-        let points_i = collider_map.map.get(&h_image.id())
-            .expect("Sprite image not found in collider map!")
-            [atlas.index];
+        let points_i = collider_map
+            .map
+            .get(&h_image.id())
+            .expect("Sprite image not found in collider map!")[atlas.index];
         let points = &collider_map.colliders[points_i];
 
         collider.0 = ColliderBuilder::convex_hull(points)

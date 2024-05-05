@@ -1,13 +1,17 @@
 use std::marker::PhantomData;
 
 use bevy::asset::{Asset, UntypedAssetId};
+use bevy::prelude::*;
+use bevy::render::render_resource::TextureFormat;
+
 use bevy_common_assets::toml::TomlAssetPlugin;
+use rapier2d::prelude::Point;
 
 use crate::{physics::SpriteColliderMap, prelude::*};
 
 pub mod animation;
-pub mod script;
 pub mod config;
+pub mod script;
 
 pub struct AssetsPlugin<S: States> {
     pub loading_state: S,
@@ -28,7 +32,8 @@ impl<S: States> Plugin for AssetsPlugin<S> {
             (
                 resolve_asset_keys::<self::script::Script>,
                 resolve_asset_keys::<self::animation::SpriteAnimation>,
-            ).in_set(AssetsSet::ResolveKeys),
+            )
+                .in_set(AssetsSet::ResolveKeys),
         );
 
         // asset preloading
@@ -46,9 +51,8 @@ impl<S: States> Plugin for AssetsPlugin<S> {
             OnExit(self.loading_state.clone()),
             (
                 finalize_preloaded_dynamic_assets,
-                populate_collider_map
-                    .after(finalize_preloaded_dynamic_assets),
-            )
+                populate_collider_map.after(finalize_preloaded_dynamic_assets),
+            ),
         );
     }
 }
@@ -219,12 +223,12 @@ fn finalize_preloaded_dynamic_assets(world: &mut World) {
                     match &dat {
                         DynamicAssetType::Single(handle) => {
                             preloaded_ass.map_reverse.insert(handle.id(), key.clone());
-                        }
+                        },
                         DynamicAssetType::Collection(handles) => {
                             for handle in handles {
                                 preloaded_ass.map_reverse.insert(handle.id(), key.clone());
                             }
-                        }
+                        },
                     }
                     *entry = Some(dat);
                 },
@@ -259,13 +263,15 @@ fn populate_collider_map(
     // by animations, so first we need to collect a list of
     // relevant image assets by going through all loaded
     // animations and resolving their image and layout asset keys
-    let iter_assets = animations.iter()
-        .filter_map(|(anim_id, anim)| {
-            anim.resolve_image_atlas(&preloaded, preloaded.get_key_for_asset(anim_id))
-        });
+    let iter_assets = animations.iter().filter_map(|(anim_id, anim)| {
+        anim.resolve_image_atlas(
+            &preloaded,
+            preloaded.get_key_for_asset(anim_id),
+        )
+    });
 
     for (h_image, h_layout) in iter_assets {
-        let Some(image) = images.get_mut(&h_image) else {
+        let Some(image_origin) = images.get_mut(&h_image) else {
             continue;
         };
         let Some(layout) = layouts.get(&h_layout) else {
@@ -275,8 +281,38 @@ fn populate_collider_map(
         let mut collider_ids = vec![];
         let mut collider_points = vec![];
 
+        let mut image = image_origin.convert(TextureFormat::Rgba8UnormSrgb).unwrap();
+        let width = image.width() as usize;
+        let mut data = &mut image.data;
         for anim_frame_rect in &layout.textures {
             collider_points.clear();
+            let min = anim_frame_rect.min;
+            let max = anim_frame_rect.max;
+            for y in min.y as usize..max.y as usize {
+                for x in min.x as usize..max.x as usize {
+                    let pixel_index = (y * width + x) * 4;
+
+                    // Read the pixel values (assuming RGBA format)
+                    let pixel = &mut data[pixel_index..pixel_index + 4];
+
+                    // Any pixels with the bright Magenta color will be used for
+                    // building the collider
+                    if pixel[0] == 255 && pixel[1] == 0 && pixel[2] == 255 && pixel[3] == 255 {
+                        collider_points.push(Point::new(
+                            0.5 + x as f32 - min.y,
+                            0.5 + x as f32 - min.y,
+                        ));
+                        // Overwrites it with an empty color
+                        pixel.copy_from_slice(&[0, 0, 0, 0]);
+                    }
+
+                    if x == anim_frame_rect.center().x as usize
+                        || y == anim_frame_rect.center().y as usize
+                    {
+                        //pixel.copy_from_slice(&[255, 0, 0, 255]);
+                    }
+                }
+            }
 
             // TODO: compute the points of the collider shape
             // from the image pixels (and modify the image pixels
@@ -291,6 +327,7 @@ fn populate_collider_map(
             // (it is likely that consecutive frames in a single
             // animation might have the same collider points)
             // check if this frame is the same as the last
+            println!("found pixels: {collider_points:?}");
             if collider_map.colliders.last() == Some(&collider_points) {
                 collider_ids.push(collider_map.colliders.len() - 1);
             } else {
@@ -299,6 +336,7 @@ fn populate_collider_map(
                 collider_ids.push(i_new);
             }
         }
+        *image_origin = image.into();
         collider_map.map.insert(h_image.id(), collider_ids);
     }
 }
