@@ -5,8 +5,8 @@ use rapier2d::parry::query::TOIStatus;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::gent::{Gent, GentPhysicsBundle};
 use theseeker_engine::physics::{
-    into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, GROUND, PLAYER,
-    PLAYER_ATTACK,
+    into_vec2, AnimationCollider, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
+    GROUND, PLAYER, PLAYER_ATTACK,
 };
 use theseeker_engine::{
     animation::SpriteAnimationBundle, assets::animation::SpriteAnimation,
@@ -978,6 +978,7 @@ fn player_attack(
                         0.,
                         0.,
                     )),
+                    AnimationCollider(entity),
                     Collider::cuboid(
                         10.,
                         10.,
