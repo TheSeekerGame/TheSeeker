@@ -77,18 +77,26 @@ pub fn update_sprite_colliders(
             )>,
         ),
     >,
-    mut q_collider: Query<(&mut Collider, AnimationCollider)>,
+    mut q_collider: Query<(&mut Collider, &AnimationCollider)>,
 ) {
     for (mut collider, anim_entity) in &mut q_collider {
-        if let Some((h_image, atlas)) = q_sprite.get(anim_entity) {
-            let shapes_i = shape_map
-                .map
-                .get(&h_image.id())
-                .expect("Sprite image not found in collider map!")[atlas.index];
-            let convex_hull = &shape_map.shapes[shapes_i];
+        match q_sprite.get(anim_entity.0) {
+            Ok((h_image, atlas)) => {
+                let shapes_i = shape_map
+                    .map
+                    .get(&h_image.id())
+                    .expect("Sprite image not found in collider map!")[atlas.index];
+                let convex_hull = &shape_map.shapes[shapes_i];
 
-            println!("replacing collider!");
-            collider.0.set_shape(convex_hull.clone());
+                println!("replacing collider!");
+                collider.0.set_shape(convex_hull.clone());
+            },
+            Err(e) => {
+                warn!(
+                    "while updating sprite collider with entity target in AnimationCollider: {}",
+                    e
+                )
+            },
         }
     }
 }
@@ -103,7 +111,7 @@ pub fn update_sprite_colliders(
 /// If you want to do a PhysicsWorld query on a ([`Collider`], [`AnimationCollider`]) entity,
 /// make sure the query runs *after* [`update_sprite_colliders`]
 #[derive(Component)]
-pub struct AnimationCollider(Entity);
+pub struct AnimationCollider(pub Entity);
 
 /// Objects marked with this and a transform component will be updated in the
 /// collision scene. Parenting is not currently kept in sync; global transforms are used instead.

@@ -314,6 +314,9 @@ fn populate_collider_map(
                     }
                 }
             }
+            if collider_points.len() < 2 {
+                continue;
+            }
             let shape =
                 SharedShape::convex_hull(&*collider_points).expect("Cannot build convex hull");
 
@@ -321,14 +324,9 @@ fn populate_collider_map(
             // (it is likely that consecutive frames in a single
             // animation might have the same collider points)
             // check if this frame is the same as the last
-            if collider_map
-                .shapes
-                .last()
-                .unwrap()
-                .as_convex_polygon()
-                .unwrap()
-                .points()
-                == &collider_points
+            if collider_map.shapes.last().map_or(None, |v| {
+                Some(v.as_convex_polygon().unwrap().points())
+            }) == Some(&collider_points)
             {
                 collider_ids.push(collider_map.shapes.len() - 1);
             } else {
