@@ -68,9 +68,12 @@ pub struct SpriteShapeMap {
 pub fn update_sprite_colliders(
     shape_map: Res<SpriteShapeMap>,
     mut q_sprite: Query<
-        (&Handle<Image>, &TextureAtlas),
         (
-            With<ScriptPlayer<SpriteAnimation>>,
+            &Handle<Image>,
+            &TextureAtlas,
+            ScriptPlayer<SpriteAnimation>,
+        ),
+        (
             Or<(
                 Changed<Handle<Image>>,
                 Changed<TextureAtlas>,
@@ -81,7 +84,7 @@ pub fn update_sprite_colliders(
 ) {
     for (mut collider, anim_entity) in &mut q_collider {
         match q_sprite.get(anim_entity.0) {
-            Ok((h_image, atlas)) => {
+            Ok((h_image, atlas, player)) => {
                 let Some(shapes_i) = shape_map
                     .map
                     .get(&h_image.id())
@@ -100,6 +103,8 @@ pub fn update_sprite_colliders(
                     "replacing collider of entity: {:?}, with col at idx: {shapes_i}, using atlas index: {}, imageid: {}",
                     anim_entity.0, atlas.index, &h_image.id()
                 );*/
+                // todo: figure out the direction of the player?
+                // todo: generate inverted variants of the colliders?
                 collider.0.set_shape(convex_hull.clone());
             },
             Err(e) => {
