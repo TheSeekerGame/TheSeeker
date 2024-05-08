@@ -975,7 +975,7 @@ fn player_attack(
             commands
                 .spawn((
                     TransformBundle::from_transform(Transform::from_xyz(
-                        10. * facing.direction(),
+                        0. * facing.direction(),
                         0.,
                         0.,
                     )),

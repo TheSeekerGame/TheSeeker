@@ -285,10 +285,12 @@ fn populate_collider_map(
         let mut image = image_origin.convert(TextureFormat::Rgba8UnormSrgb).unwrap();
         let width = image.width() as usize;
         let mut data = &mut image.data;
-        for anim_frame_rect in &layout.textures {
+        for (i, anim_frame_rect) in layout.textures.iter().enumerate() {
             collider_points.clear();
             let min = anim_frame_rect.min;
             let max = anim_frame_rect.max;
+            let size = anim_frame_rect.size();
+            let center = anim_frame_rect.center();
             for y in min.y as usize..max.y as usize {
                 for x in min.x as usize..max.x as usize {
                     let pixel_index = (y * width + x) * 4;
@@ -300,8 +302,9 @@ fn populate_collider_map(
                     // building the collider
                     if pixel[0] == 255 && pixel[1] == 0 && pixel[2] == 255 && pixel[3] == 255 {
                         collider_points.push(Point::new(
-                            0.5 + x as f32 - min.x,
-                            max.y - (0.5 + y as f32 - min.y),
+                            (0.5 + x as f32 - min.x) - size.x * 0.5,
+                            // the siz.y - flips it on y since texture coords are inverted y
+                            size.y - ((0.5 + y as f32 - min.y) + size.y * 0.5),
                         ));
                         // Overwrites it with an empty color
                         pixel.copy_from_slice(&[0, 0, 0, 0]);
@@ -315,6 +318,7 @@ fn populate_collider_map(
                 }
             }
             if collider_points.len() < 2 {
+                println!("no col at frame_rect: {i} ");
                 collider_ids.push(0);
                 continue;
             }
@@ -332,7 +336,10 @@ fn populate_collider_map(
                 collider_ids.push(collider_map.shapes.len() - 2);
             } else {*/
             let i_new = collider_map.shapes.len();
-            println!("new col at index: {i_new} ");
+            println!(
+                "new col at index: {i_new} imageid: {}",
+                h_image.id()
+            );
             collider_map.shapes.push(shape);
             collider_ids.push(i_new);
             /*}*/

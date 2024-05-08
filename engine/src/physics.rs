@@ -96,14 +96,14 @@ pub fn update_sprite_colliders(
                 };
                 let convex_hull = &shape_map.shapes[*shapes_i];
 
-                println!("replacing collider!");
+                /*println!(
+                    "replacing collider of entity: {:?}, with col at idx: {shapes_i}, using atlas index: {}, imageid: {}",
+                    anim_entity.0, atlas.index, &h_image.id()
+                );*/
                 collider.0.set_shape(convex_hull.clone());
             },
             Err(e) => {
-                warn!(
-                    "while updating sprite collider with entity target in AnimationCollider: {}",
-                    e
-                )
+                //warn!("while updating sprite collider with entity target in AnimationCollider: {}",e)
             },
         }
     }
