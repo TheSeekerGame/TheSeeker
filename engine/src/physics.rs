@@ -71,7 +71,7 @@ pub fn update_sprite_colliders(
         (
             &Handle<Image>,
             &TextureAtlas,
-            ScriptPlayer<SpriteAnimation>,
+            &ScriptPlayer<SpriteAnimation>,
         ),
         (
             Or<(
