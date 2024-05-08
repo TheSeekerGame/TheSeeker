@@ -961,6 +961,7 @@ fn player_attack(
     mut query: Query<
         (
             Entity,
+            &Gent,
             &Facing,
             &mut Attacking,
             &mut TransitionQueue,
@@ -969,7 +970,7 @@ fn player_attack(
     >,
     mut commands: Commands,
 ) {
-    for (entity, facing, mut attacking, mut transitions) in query.iter_mut() {
+    for (entity, gent, facing, mut attacking, mut transitions) in query.iter_mut() {
         if attacking.ticks == Attacking::STARTUP * 8 {
             commands
                 .spawn((
@@ -978,7 +979,7 @@ fn player_attack(
                         0.,
                         0.,
                     )),
-                    AnimationCollider(entity),
+                    AnimationCollider(gent.e_gfx),
                     Collider::cuboid(
                         10.,
                         10.,

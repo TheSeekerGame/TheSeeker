@@ -82,11 +82,19 @@ pub fn update_sprite_colliders(
     for (mut collider, anim_entity) in &mut q_collider {
         match q_sprite.get(anim_entity.0) {
             Ok((h_image, atlas)) => {
-                let shapes_i = shape_map
+                let Some(shapes_i) = shape_map
                     .map
                     .get(&h_image.id())
-                    .expect("Sprite image not found in collider map!")[atlas.index];
-                let convex_hull = &shape_map.shapes[shapes_i];
+                    .expect("Sprite image not found in collider map!")
+                    .get(atlas.index)
+                else {
+                    println!(
+                        "er finding collider associated with image {}",
+                        atlas.index
+                    );
+                    continue;
+                };
+                let convex_hull = &shape_map.shapes[*shapes_i];
 
                 println!("replacing collider!");
                 collider.0.set_shape(convex_hull.clone());
@@ -470,15 +478,17 @@ pub fn debug_colliders(
         if let Some(convex) = collider.shared_shape().as_convex_polygon() {
             let points = convex.points();
             let num_points = points.len();
-
+            println!("{points:?}");
             for i in 0..num_points {
                 let start = points[i];
                 // modulo wraps around the first point when we get to the end
                 let end = points[(i + 1) % num_points];
+                println!("{start:?}");
+                println!("{end:?}");
 
                 collider_gizmos.line_2d(
-                    Vec2::new(start.x, start.y),
-                    Vec2::new(end.x, end.y),
+                    Vec2::new(pos.x + start.x, pos.y + start.y),
+                    Vec2::new(pos.x + end.x, pos.y + end.y),
                     Color::GREEN,
                 );
             }

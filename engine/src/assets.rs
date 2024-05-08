@@ -300,8 +300,8 @@ fn populate_collider_map(
                     // building the collider
                     if pixel[0] == 255 && pixel[1] == 0 && pixel[2] == 255 && pixel[3] == 255 {
                         collider_points.push(Point::new(
-                            0.5 + x as f32 - min.y,
-                            0.5 + x as f32 - min.y,
+                            0.5 + x as f32 - min.x,
+                            max.y - (0.5 + y as f32 - min.y),
                         ));
                         // Overwrites it with an empty color
                         pixel.copy_from_slice(&[0, 0, 0, 0]);
@@ -315,6 +315,7 @@ fn populate_collider_map(
                 }
             }
             if collider_points.len() < 2 {
+                collider_ids.push(0);
                 continue;
             }
             let shape =
@@ -324,16 +325,17 @@ fn populate_collider_map(
             // (it is likely that consecutive frames in a single
             // animation might have the same collider points)
             // check if this frame is the same as the last
-            if collider_map.shapes.last().map_or(None, |v| {
+            /*if collider_map.shapes.last().map_or(None, |v| {
                 Some(v.as_convex_polygon().unwrap().points())
             }) == Some(&collider_points)
             {
-                collider_ids.push(collider_map.shapes.len() - 1);
-            } else {
-                let i_new = collider_map.shapes.len();
-                collider_map.shapes.push(shape);
-                collider_ids.push(i_new);
-            }
+                collider_ids.push(collider_map.shapes.len() - 2);
+            } else {*/
+            let i_new = collider_map.shapes.len();
+            println!("new col at index: {i_new} ");
+            collider_map.shapes.push(shape);
+            collider_ids.push(i_new);
+            /*}*/
         }
         *image_origin = image.into();
         collider_map.map.insert(h_image.id(), collider_ids);
