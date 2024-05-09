@@ -962,7 +962,6 @@ fn player_attack(
         (
             Entity,
             &Gent,
-            &Facing,
             &mut Attacking,
             &mut TransitionQueue,
         ),
@@ -970,21 +969,16 @@ fn player_attack(
     >,
     mut commands: Commands,
 ) {
-    for (entity, gent, facing, mut attacking, mut transitions) in query.iter_mut() {
+    for (entity, gent, mut attacking, mut transitions) in query.iter_mut() {
         if attacking.ticks == Attacking::STARTUP * 8 {
             commands
                 .spawn((
-                    TransformBundle::from_transform(Transform::from_xyz(
-                        0. * facing.direction(),
-                        0.,
-                        0.,
-                    )),
+                    TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
                     AnimationCollider(gent.e_gfx),
-                    Collider::cuboid(
-                        10.,
-                        10.,
-                        InteractionGroups::new(PLAYER_ATTACK, ENEMY),
-                    ),
+                    Collider::empty(InteractionGroups::new(
+                        PLAYER_ATTACK,
+                        ENEMY,
+                    )),
                     Attack::new(16),
                 ))
                 .set_parent(entity);

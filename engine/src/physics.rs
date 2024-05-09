@@ -131,6 +131,8 @@ pub fn update_sprite_colliders(
 ///
 /// If you want to do a PhysicsWorld query on a ([`Collider`], [`AnimationCollider`]) entity,
 /// make sure the query runs *after* [`update_sprite_colliders`]
+///
+/// Also note: rotations are not currently applied to the *debug visuals* for these colliders.
 #[derive(Component)]
 pub struct AnimationCollider(pub Entity);
 
@@ -152,10 +154,10 @@ impl Collider {
                 .build(),
         )
     }
-    /// Use this if you want to use an animation collider
+    /// You can use this if you want to use an animation collider
+    ///
+    /// Note: not actually empty, makes a 10x10cube.
     pub fn empty(interaction: InteractionGroups) -> Self {
-        // Rapiers cuboid is subtely different from xpbd, as rapier is defined by its
-        // half extents, and xpbd is by its extents.
         Self(
             ColliderBuilder::cuboid(10.0, 10.0)
                 .collision_groups(interaction)
