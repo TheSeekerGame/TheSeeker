@@ -302,7 +302,6 @@ fn populate_collider_map(
             let min = anim_frame_rect.min;
             let max = anim_frame_rect.max;
             let size = anim_frame_rect.size();
-            let center = anim_frame_rect.center();
             let mut collider_points = vec![];
             for y in min.y as usize..max.y as usize {
                 for x in min.x as usize..max.x as usize {
@@ -321,12 +320,6 @@ fn populate_collider_map(
                         ));
                         // Overwrites it with an empty color
                         pixel.copy_from_slice(&[0, 0, 0, 0]);
-                    }
-
-                    if x == anim_frame_rect.center().x as usize
-                        || y == anim_frame_rect.center().y as usize
-                    {
-                        //pixel.copy_from_slice(&[255, 0, 0, 255]);
                     }
                 }
             }
@@ -347,16 +340,6 @@ fn populate_collider_map(
             collider_points.iter_mut().for_each(|p| p.y = -p.y);
             let shape_flipped_xy = SharedShape::convex_hull(&*collider_points).unwrap();
 
-            // As a simple form of deduplication to avoid allocations
-            // (it is likely that consecutive frames in a single
-            // animation might have the same collider points)
-            // check if this frame is the same as the last
-            /*if collider_map.shapes.last().map_or(None, |v| {
-                Some(v.as_convex_polygon().unwrap().points())
-            }) == Some(&collider_points)
-            {
-                collider_ids.push(collider_map.shapes.len() - 2);
-            } else {*/
             let i_new = collider_map.shapes.len();
             println!(
                 "new col at index: {i_new} imageid: {}",
@@ -369,7 +352,6 @@ fn populate_collider_map(
                 shape_flipped_xy,
             ));
             collider_ids.push(i_new);
-            /*}*/
         }
         *image_origin = image.into();
         collider_map.map.insert(h_image.id(), collider_ids);
