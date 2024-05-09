@@ -72,6 +72,7 @@ pub fn update_sprite_colliders(
             &Handle<Image>,
             &TextureAtlas,
             &ScriptPlayer<SpriteAnimation>,
+            &Sprite,
         ),
         (
             Or<(
@@ -84,7 +85,7 @@ pub fn update_sprite_colliders(
 ) {
     for (mut collider, anim_entity) in &mut q_collider {
         match q_sprite.get(anim_entity.0) {
-            Ok((h_image, atlas, player)) => {
+            Ok((h_image, atlas, player, sprite)) => {
                 let Some(shapes_i) = shape_map
                     .map
                     .get(&h_image.id())
@@ -98,6 +99,7 @@ pub fn update_sprite_colliders(
                     continue;
                 };
                 let convex_hull = &shape_map.shapes[*shapes_i];
+                collider.0.set_shape(convex_hull.clone());
 
                 /*println!(
                     "replacing collider of entity: {:?}, with col at idx: {shapes_i}, using atlas index: {}, imageid: {}",
@@ -105,7 +107,6 @@ pub fn update_sprite_colliders(
                 );*/
                 // todo: figure out the direction of the player?
                 // todo: generate inverted variants of the colliders?
-                collider.0.set_shape(convex_hull.clone());
             },
             Err(e) => {
                 //warn!("while updating sprite collider with entity target in AnimationCollider: {}",e)

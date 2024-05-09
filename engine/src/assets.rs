@@ -271,6 +271,15 @@ fn populate_collider_map(
         )
     });
 
+    // A dummy collider that gets used when the image has no shape generated.
+    // (need to do it this way because it removes any requirements for tracking the collider component
+    // properties, so everything works as expected.)
+    let null_shape = SharedShape::convex_hull(&*vec![
+        Point::new(1000000.0f32, 1000000.0f32),
+        Point::new(1000001.0f32, 1000000.0f32),
+    ])
+    .unwrap();
+    collider_map.shapes.push(null_shape);
     for (h_image, h_layout) in iter_assets {
         let Some(image_origin) = images.get_mut(&h_image) else {
             continue;
@@ -281,7 +290,6 @@ fn populate_collider_map(
 
         let mut collider_ids = vec![];
         let mut collider_points = vec![];
-
         let mut image = image_origin.convert(TextureFormat::Rgba8UnormSrgb).unwrap();
         let width = image.width() as usize;
         let mut data = &mut image.data;
