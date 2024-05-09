@@ -279,7 +279,13 @@ fn populate_collider_map(
         Point::new(1000001.0f32, 1000000.0f32),
     ])
     .unwrap();
-    collider_map.shapes.push(null_shape);
+    // fun thing about shared shapes is the are arc, so clones don't use more memory.
+    collider_map.shapes.push((
+        null_shape.clone(),
+        null_shape.clone(),
+        null_shape.clone(),
+        null_shape,
+    ));
     for (h_image, h_layout) in iter_assets {
         let Some(image_origin) = images.get_mut(&h_image) else {
             continue;
@@ -289,16 +295,15 @@ fn populate_collider_map(
         };
 
         let mut collider_ids = vec![];
-        let mut collider_points = vec![];
         let mut image = image_origin.convert(TextureFormat::Rgba8UnormSrgb).unwrap();
         let width = image.width() as usize;
         let mut data = &mut image.data;
         for (i, anim_frame_rect) in layout.textures.iter().enumerate() {
-            collider_points.clear();
             let min = anim_frame_rect.min;
             let max = anim_frame_rect.max;
             let size = anim_frame_rect.size();
             let center = anim_frame_rect.center();
+            let mut collider_points = vec![];
             for y in min.y as usize..max.y as usize {
                 for x in min.x as usize..max.x as usize {
                     let pixel_index = (y * width + x) * 4;
@@ -332,6 +337,15 @@ fn populate_collider_map(
             }
             let shape =
                 SharedShape::convex_hull(&*collider_points).expect("Cannot build convex hull");
+            collider_points.iter_mut().for_each(|p| p.x = -p.x);
+            let shape_flipped_x = SharedShape::convex_hull(&*collider_points).unwrap();
+            collider_points.iter_mut().for_each(|p| {
+                p.x = -p.x;
+                p.y = -p.y;
+            });
+            let shape_flipped_y = SharedShape::convex_hull(&*collider_points).unwrap();
+            collider_points.iter_mut().for_each(|p| p.y = -p.y);
+            let shape_flipped_xy = SharedShape::convex_hull(&*collider_points).unwrap();
 
             // As a simple form of deduplication to avoid allocations
             // (it is likely that consecutive frames in a single
@@ -348,7 +362,12 @@ fn populate_collider_map(
                 "new col at index: {i_new} imageid: {}",
                 h_image.id()
             );
-            collider_map.shapes.push(shape);
+            collider_map.shapes.push((
+                shape,
+                shape_flipped_x,
+                shape_flipped_y,
+                shape_flipped_xy,
+            ));
             collider_ids.push(i_new);
             /*}*/
         }

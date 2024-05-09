@@ -61,10 +61,17 @@ pub const SENSOR: Group = Group::from_bits_truncate(0b100000);
 
 #[derive(Resource, Default)]
 pub struct SpriteShapeMap {
-    pub shapes: Vec<SharedShape>,
+    /// Normal, flipped x, flipped y, and flipped x & y, respectively
+    pub shapes: Vec<(
+        SharedShape,
+        SharedShape,
+        SharedShape,
+        SharedShape,
+    )>,
     pub map: HashMap<AssetId<Image>, Vec<usize>>,
 }
 
+#[rustfmt::skip]
 pub fn update_sprite_colliders(
     shape_map: Res<SpriteShapeMap>,
     mut q_sprite: Query<
@@ -99,14 +106,13 @@ pub fn update_sprite_colliders(
                     continue;
                 };
                 let convex_hull = &shape_map.shapes[*shapes_i];
-                collider.0.set_shape(convex_hull.clone());
 
-                /*println!(
-                    "replacing collider of entity: {:?}, with col at idx: {shapes_i}, using atlas index: {}, imageid: {}",
-                    anim_entity.0, atlas.index, &h_image.id()
-                );*/
-                // todo: figure out the direction of the player?
-                // todo: generate inverted variants of the colliders?
+                match (sprite.flip_x, sprite.flip_y) {
+                    (false, false) => { collider.0.set_shape(convex_hull.0.clone()); },
+                    (true , false) => { collider.0.set_shape(convex_hull.1.clone()); },
+                    (false, true ) => { collider.0.set_shape(convex_hull.2.clone()); },
+                    (true , true ) => { collider.0.set_shape(convex_hull.3.clone()); },
+                }
             },
             Err(e) => {
                 //warn!("while updating sprite collider with entity target in AnimationCollider: {}",e)
