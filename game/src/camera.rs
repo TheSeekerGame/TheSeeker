@@ -2,6 +2,8 @@
 
 use crate::game::player::Player;
 use crate::graphics::darkness::DarknessSettings;
+use crate::level::MainBackround;
+use crate::parallax::Parallax;
 use crate::prelude::*;
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::tonemapping::Tonemapping;
@@ -175,13 +177,17 @@ pub(crate) fn update_rig_trauma(
 }
 
 /// Camera updates the camera position to smoothly interpolate to the
-/// rig location. also applies camera shake
+/// rig location. also applies camera shake, and limits camera within the level boundaries
 pub(crate) fn update_camera_rig(
-    mut q_cam: Query<&mut Transform, With<MainCamera>>,
+    mut q_cam: Query<(&mut Transform, &OrthographicProjection), With<MainCamera>>,
     mut rig: ResMut<CameraRig>,
+    backround_query: Query<
+        (&LayerMetadata, &Transform),
+        (With<MainBackround>, Without<MainCamera>),
+    >,
     time: Res<Time>,
 ) {
-    let Ok(mut cam_xform) = q_cam.get_single_mut() else {
+    let Ok((mut cam_xform, ortho_projection)) = q_cam.get_single_mut() else {
         return;
     };
 
@@ -201,6 +207,30 @@ pub(crate) fn update_camera_rig(
     cam_xform.rotation.z = 0.0 + angle;
     cam_xform.translation.x = rig.camera.x + offset_x;
     cam_xform.translation.y = rig.camera.y + offset_y;
+
+    if let Some((bg_layer, bg_transform)) = backround_query.iter().next() {
+        let bg_width = (bg_layer.c_wid * bg_layer.grid_size) as f32;
+        let bg_height = (bg_layer.c_hei * bg_layer.grid_size) as f32;
+
+        let cam_rect = ortho_projection.area;
+
+        // The backround width and height actually have 3 pixels extra padding on the far
+        // right/upper sides. This accounts for that.
+        let bg_max = Vec2::new(bg_width - 3.0, bg_height - 3.0);
+
+        // bottom left corner of the background is zero/minimum corner, because
+        // that's how LDtk imports it.
+        let limit_rect = Rect::from_corners(
+            bg_max + bg_transform.translation.xy(),
+            bg_transform.translation.xy(),
+        );
+
+        let xy = cam_xform.translation.xy().clamp(
+            limit_rect.min + cam_rect.half_size(),
+            limit_rect.max - cam_rect.half_size(),
+        );
+        cam_xform.translation = xy.extend(cam_xform.translation.z);
+    }
 }
 
 fn cli_camera_at(In(args): In<Vec<String>>, mut q_cam: Query<&mut Transform, With<MainCamera>>) {

@@ -58,6 +58,11 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
     ));
 }
 
+/// An indicator component for when you want the main background without needing
+/// to go through all the layers again.
+#[derive(Component)]
+pub struct MainBackround;
+
 /// attaches parallax components to the different LdtkWorldBundle layers
 fn attach_parallax(
     mut commands: Commands,
@@ -69,6 +74,10 @@ fn attach_parallax(
             "FarBackground" => 0.3,
             "MiddleBackground" => 0.2,
             "NearBackground" => 0.1,
+            "Main" => {
+                commands.entity(entity).insert(MainBackround);
+                continue;
+            },
             _ => {
                 continue;
             },
