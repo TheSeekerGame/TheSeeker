@@ -33,6 +33,7 @@ pub struct Attack {
     current_lifetime: u32,
     max_lifetime: u32,
     damage: u32,
+    attacker: Entity,
     damaged: Vec<Entity>,
 }
 
@@ -48,11 +49,12 @@ pub struct Health {
     pub max: u32,
 }
 impl Attack {
-    pub fn new(lifetime: u32) -> Self {
+    pub fn new(lifetime: u32, attacker: Entity) -> Self {
         Attack {
             current_lifetime: 0,
             max_lifetime: lifetime,
             damage: 20,
+            attacker,
             damaged: Vec::new(),
         }
     }

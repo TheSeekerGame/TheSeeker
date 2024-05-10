@@ -232,6 +232,7 @@ fn setup_player(
             },
             Falling,
             WallSlideTime(f32::MAX),
+            HitFreezeTime(u32::MAX),
             TransitionQueue::default(),
             AddQueue::default(),
         ));
@@ -300,20 +301,6 @@ impl GentState for Jumping {}
 impl GenericState for Jumping {}
 
 #[derive(Component, Default, Debug)]
-pub struct CoyoteTime(f32);
-
-/// Indicates that sliding is tracked for this entity
-#[derive(Component, Default, Debug)]
-pub struct WallSlideTime(f32);
-impl WallSlideTime {
-    /// Player is sliding if f32 value is less then the coyote time
-    /// f32 starts incrementing when the player stops pressing into the wall
-    fn sliding(&self, cfg: &PlayerConfig) -> bool {
-        self.0 <= cfg.max_coyote_time * 2.0
-    }
-}
-
-#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
 impl GentState for Grounded {}
@@ -350,6 +337,28 @@ impl Transitionable<Attacking> for CanAttack {
     type Removals = (CanAttack);
 }
 
+// Pseudo-States
+// Not quite the same as states, these components enable certain behaviours when attached,
+// and provide storage for that behaviours state
+
+/// If a player attack lands, locks their velocity for the configured number of ticks
+#[derive(Component, Default, Debug)]
+pub struct HitFreezeTime(u32);
+
+#[derive(Component, Default, Debug)]
+pub struct CoyoteTime(f32);
+
+/// Indicates that sliding is tracked for this entity
+#[derive(Component, Default, Debug)]
+pub struct WallSlideTime(f32);
+impl WallSlideTime {
+    /// Player is sliding if f32 value is less then the coyote time
+    /// f32 starts incrementing when the player stops pressing into the wall
+    fn sliding(&self, cfg: &PlayerConfig) -> bool {
+        self.0 <= cfg.max_coyote_time * 2.0
+    }
+}
+
 ///Player behavior systems.
 ///Do stuff here in states and add transitions to other states by pushing
 ///to a TransitionQueue.
@@ -375,7 +384,8 @@ impl Plugin for PlayerBehaviorPlugin {
                     .run_if(any_matching::<(With<Falling>,)>()),
                 //consider a set for all movement/systems modify velocity, then collisions/move
                 //moves based on velocity
-                player_collisions
+                (hitfreeze, player_collisions)
+                    .chain()
                     .after(player_move)
                     .after(player_sliding)
                     .after(player_grounded)
@@ -493,6 +503,8 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
        warn!("failed to load player cfg value: {}", error);
    }
 }
+
+fn hitfreeze(mut player_q: Query<(Entity), (With<Player>)>, attack_q: Query<&Attack>) {}
 
 fn player_idle(
     mut query: Query<
@@ -983,7 +995,7 @@ fn player_attack(
                         10.,
                         InteractionGroups::new(PLAYER_ATTACK, ENEMY),
                     ),
-                    Attack::new(16),
+                    Attack::new(16, entity),
                 ))
                 .set_parent(entity);
         }

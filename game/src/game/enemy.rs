@@ -538,7 +538,7 @@ fn pushback_attack(
                             filter: PLAYER,
                         },
                     ),
-                    Attack::new(8),
+                    Attack::new(8, entity),
                     Pushback {
                         direction: facing.direction(),
                     },
@@ -680,6 +680,7 @@ fn chasing(
 fn ranged_attack(
     mut query: Query<
         (
+            Entity,
             &mut RangedAttack,
             &mut LinearVelocity,
             &mut TransitionQueue,
@@ -690,7 +691,7 @@ fn ranged_attack(
     player_query: Query<(&Transform), With<Player>>,
     mut commands: Commands,
 ) {
-    for (mut attack, mut velocity, mut trans_q, mut add_q) in query.iter_mut() {
+    for (entity, mut attack, mut velocity, mut trans_q, mut add_q) in query.iter_mut() {
         if attack.ticks == 0 {
             velocity.x = 0.;
         }
@@ -707,7 +708,7 @@ fn ranged_attack(
         };
         if attack.ticks == RangedAttack::STARTUP * 8 {
             commands.spawn((
-                Attack::new(100),
+                Attack::new(100, entity),
                 Collider::cuboid(
                     10.,
                     10.,
@@ -754,7 +755,7 @@ fn melee_attack(
                         0.,
                         0.,
                     )),
-                    Attack::new(8),
+                    Attack::new(8, entity),
                 ))
                 .set_parent(entity)
                 .id();
