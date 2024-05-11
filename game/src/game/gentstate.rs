@@ -1,5 +1,4 @@
 use bevy::ecs::component::SparseStorage;
-use leafwing_input_manager::orientation::Direction;
 
 use crate::prelude::*;
 
