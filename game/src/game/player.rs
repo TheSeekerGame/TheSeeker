@@ -55,6 +55,7 @@ impl Plugin for PlayerPlugin {
 #[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum PlayerStateSet {
     Behavior,
+    Collisions,
     Transition,
     Animation,
 }
@@ -373,17 +374,20 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                player_idle.run_if(any_with_component::<Idle>),
-                add_attack,
-                player_attack.run_if(any_with_component::<Attacking>),
-                player_move,
-                player_run.run_if(any_with_component::<Running>),
-                player_jump.run_if(any_with_component::<Jumping>),
-                player_grounded.run_if(any_with_component::<Grounded>),
-                player_falling.run_if(any_with_component::<Falling>),
-                player_sliding
-                    .before(player_jump)
-                    .run_if(any_matching::<(With<Falling>,)>()),
+                (
+                    player_idle.run_if(any_with_component::<Idle>),
+                    add_attack,
+                    player_attack.run_if(any_with_component::<Attacking>),
+                    player_move,
+                    player_run.run_if(any_with_component::<Running>),
+                    player_jump.run_if(any_with_component::<Jumping>),
+                    player_grounded.run_if(any_with_component::<Grounded>),
+                    player_falling.run_if(any_with_component::<Falling>),
+                    player_sliding
+                        .before(player_jump)
+                        .run_if(any_matching::<(With<Falling>,)>()),
+                )
+                    .in_set(PlayerStateSet::Behavior),
                 //consider a set for all movement/systems modify velocity, then collisions/move
                 //moves based on velocity
                 (
@@ -392,14 +396,15 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_collisions,
                 )
                     .chain()
-                    .after(player_move)
-                    .after(player_sliding)
-                    .after(player_grounded)
-                    .after(player_jump)
-                    .after(player_falling)
-                    .before(TransformPropagate),
+                    // .after(player_move)
+                    // .after(player_sliding)
+                    // .after(player_grounded)
+                    // .after(player_jump)
+                    // .after(player_falling)
+                    .before(TransformPropagate)
+                    .in_set(PlayerStateSet::Collisions),
             )
-                .in_set(PlayerStateSet::Behavior),
+                .chain(),
         );
     }
 }

@@ -1,4 +1,5 @@
 use bevy::ecs::component::SparseStorage;
+use leafwing_input_manager::orientation::Direction;
 
 use crate::prelude::*;
 
@@ -108,6 +109,7 @@ impl GentState for Idle {}
 // pub struct Attacking;
 // impl GentState for Attacking {}
 //
+
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Hitstun;

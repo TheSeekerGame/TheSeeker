@@ -4,7 +4,10 @@ use theseeker_engine::physics::{
 use theseeker_engine::{assets::animation::SpriteAnimation, gent::Gent, script::ScriptPlayer};
 
 use super::{enemy::EnemyGfx, player::PlayerGfx};
-use crate::{game::player::PlayerStateSet, prelude::*};
+use crate::{
+    game::{enemy::EnemyStateSet, player::PlayerStateSet},
+    prelude::*,
+};
 
 pub struct AttackPlugin;
 
@@ -17,16 +20,19 @@ impl Plugin for AttackPlugin {
                 attack_tick,
                 attack_cleanup,
                 damage_flash,
+                knockback,
             )
                 .chain()
-                .before(PlayerStateSet::Behavior)
-                .after(update_sprite_colliders),
+                .after(update_sprite_colliders)
+                .after(PlayerStateSet::Behavior)
+                .before(PlayerStateSet::Collisions), // .before(PlayerStateSet::Behavior),
         );
         app.add_systems(
             GameTickUpdate,
             despawn_dead
+                //TODO: unify statesets?
                 .after(PlayerStateSet::Transition)
-                .before(PhysicsSet),
+                .after(EnemyStateSet::Transition), // .before(PhysicsSet),
         );
     }
 }
@@ -70,9 +76,28 @@ pub struct DamageFlash {
     pub max_ticks: u32,
 }
 
+//Component added to attack entity to indicate it causes knockback
 #[derive(Component, Default)]
 pub struct Pushback {
     pub direction: f32,
+}
+
+//Component added to an entity damaged by a pushback attack
+#[derive(Component, Default, Debug)]
+pub struct Knockback {
+    pub ticks: u32,
+    pub max_ticks: u32,
+    pub direction: f32,
+}
+
+impl Knockback {
+    pub fn new(direction: f32, max_ticks: u32) -> Self {
+        Knockback {
+            ticks: 0,
+            max_ticks,
+            direction,
+        }
+    }
 }
 
 //TODO: change to a gentstate once we have death animations
@@ -88,13 +113,7 @@ pub fn attack_damage(
         &Collider,
         Option<&Pushback>,
     )>,
-    mut damageable_query: Query<(
-        Entity,
-        &mut Health,
-        &Collider,
-        &Gent,
-        &mut LinearVelocity,
-    )>,
+    mut damageable_query: Query<(Entity, &mut Health, &Collider, &Gent)>,
     mut gfx_query: Query<
         (
             Entity,
@@ -112,7 +131,7 @@ pub fn attack_damage(
             attack_collider.0.collision_groups(),
             Some(entity),
         );
-        for (entity, mut health, collider, gent, mut velocity) in damageable_query.iter_mut() {
+        for (entity, mut health, collider, gent) in damageable_query.iter_mut() {
             if colliding_entities.contains(&entity)
                 && attack.damaged.iter().find(|x| x.0 == entity).is_none()
             {
@@ -129,13 +148,29 @@ pub fn attack_damage(
                 if health.current == 0 {
                     commands.entity(entity).insert(Dead);
                 }
-                //TODO: should happen after movement systems but before collision systems?
-                // if let Some(pushback) = maybe_pushback {
-                //     //TODO:this doesnt work
-                //     //also should add knockback gentstate
-                //     velocity.x = pushback.direction * 40.;
-                // }
+                if let Some(pushback) = maybe_pushback {
+                    commands
+                        .entity(entity)
+                        .insert(Knockback::new(pushback.direction, 16));
+                }
             }
+        }
+    }
+}
+
+fn knockback(
+    mut query: Query<(
+        Entity,
+        &mut Knockback,
+        &mut LinearVelocity,
+    )>,
+    mut commands: Commands,
+) {
+    for (entity, mut knockback, mut velocity) in query.iter_mut() {
+        knockback.ticks += 1;
+        velocity.x = knockback.direction * 200.;
+        if knockback.ticks > knockback.max_ticks {
+            commands.entity(entity).remove::<Knockback>();
         }
     }
 }

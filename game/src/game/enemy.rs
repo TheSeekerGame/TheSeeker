@@ -3,9 +3,8 @@ use crate::prelude::*;
 #[cfg(feature = "dev")]
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use rand::distributions::Standard;
-use rapier2d::geometry::SharedShape;
 use rapier2d::prelude::{Group, InteractionGroups};
-use theseeker_engine::gent::GentPhysicsBundle;
+use rapier2d::{geometry::SharedShape, parry::query::TOIStatus};
 use theseeker_engine::physics::{
     Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, GROUND, PLAYER,
     SENSOR,
@@ -16,6 +15,7 @@ use theseeker_engine::{
     gent::{Gent, TransformGfxFromGent},
     script::ScriptPlayer,
 };
+use theseeker_engine::{gent::GentPhysicsBundle, physics::into_vec2};
 
 use super::player::Player;
 
@@ -540,7 +540,7 @@ fn pushback_attack(
                     ),
                     Attack::new(8, entity),
                     Pushback {
-                        direction: facing.direction(),
+                        direction: -facing.direction(),
                     },
                 ))
                 .set_parent(entity);
@@ -628,51 +628,6 @@ fn aggro(
         //if there is no player it should also return to patrol state
         } else {
             transitions.push(Aggroed::new_transition(Patrolling));
-        }
-    }
-}
-
-fn chasing(
-    mut query: Query<
-        (
-            &GlobalTransform,
-            &mut LinearVelocity,
-            &Facing,
-            &Chasing,
-            &Role,
-            &Range,
-            &mut TransitionQueue,
-        ),
-        With<Enemy>,
-    >,
-    player_query: Query<(Entity, &GlobalTransform), With<Player>>,
-) {
-    for (transform, mut velocity, facing, chasing, role, range, mut transitions) in query.iter_mut()
-    {
-        if let Ok((p_entity, p_transform)) = player_query.get_single() {
-            let target_range = match role {
-                Role::Ranged => Range::RANGED,
-                Role::Melee => Range::MELEE,
-            };
-            let distance = transform
-                .translation()
-                .truncate()
-                .distance(p_transform.translation().truncate());
-            if distance > target_range {
-                velocity.x = -20. * facing.direction();
-            } else {
-                velocity.x = 0.;
-                match role {
-                    Role::Melee => transitions.push(Chasing::new_transition(
-                        MeleeAttack::default(),
-                    )),
-                    Role::Ranged => transitions.push(Chasing::new_transition(RangedAttack {
-                        target: p_entity,
-                        ticks: 0,
-                    })),
-                }
-            }
-            //TODO: make them stop at the edge of ledge
         }
     }
 }
@@ -928,14 +883,97 @@ fn retreating(
     }
 }
 
-fn move_collide(
-    mut query: Query<(&LinearVelocity, &mut Transform), With<Enemy>>,
-    time: Res<GameTime>,
+fn chasing(
+    mut query: Query<
+        (
+            &GlobalTransform,
+            &mut LinearVelocity,
+            &Facing,
+            &Chasing,
+            &Role,
+            &Range,
+            &mut TransitionQueue,
+        ),
+        With<Enemy>,
+    >,
+    player_query: Query<(Entity, &GlobalTransform), With<Player>>,
 ) {
-    for (velocity, mut transform) in query.iter_mut() {
+    for (transform, mut velocity, facing, chasing, role, range, mut transitions) in query.iter_mut()
+    {
+        if let Ok((p_entity, p_transform)) = player_query.get_single() {
+            let target_range = match role {
+                Role::Ranged => Range::RANGED,
+                Role::Melee => Range::MELEE,
+            };
+            let distance = transform
+                .translation()
+                .truncate()
+                .distance(p_transform.translation().truncate());
+            if distance > target_range {
+                velocity.x = -20. * facing.direction();
+            } else {
+                velocity.x = 0.;
+                match role {
+                    Role::Melee => transitions.push(Chasing::new_transition(
+                        MeleeAttack::default(),
+                    )),
+                    Role::Ranged => transitions.push(Chasing::new_transition(RangedAttack {
+                        target: p_entity,
+                        ticks: 0,
+                    })),
+                }
+            }
+            //TODO: make them stop at the edge of ledge
+        }
+    }
+}
+
+fn move_collide(
+    mut query: Query<
+        (
+            &mut LinearVelocity,
+            &mut Transform,
+            &Collider,
+        ),
+        With<Enemy>,
+    >,
+    time: Res<GameTime>,
+    spatial_query: Res<PhysicsWorld>,
+) {
+    for (mut linear_velocity, mut transform, collider) in query.iter_mut() {
+        let mut shape = collider.0.shared_shape().clone();
+        let dir = linear_velocity.x.signum();
         let z = transform.translation.z;
+        while let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
+            if let Some((e, first_hit)) = spatial_query.shape_cast(
+                transform.translation.xy(),
+                shape_dir,
+                &*shape,
+                linear_velocity.length() / time.hz as f32 + 0.5,
+                InteractionGroups {
+                    memberships: ENEMY,
+                    filter: GROUND,
+                },
+                None,
+                // Some(entity),
+            ) {
+                if first_hit.status != TOIStatus::Penetrating {
+                    let sliding_plane = into_vec2(first_hit.normal1);
+                    let projected_velocity = linear_velocity.xy()
+                        - sliding_plane * linear_velocity.xy().dot(sliding_plane);
+                    // linear_velocity.0 = projected_velocity + friction_vec + bounce_force;
+                    linear_velocity.0 = projected_velocity;
+                    let new_pos =
+                        transform.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
+                    transform.translation.x = new_pos.x;
+                    transform.translation.y = new_pos.y;
+                }
+            } else {
+                break;
+            };
+        }
         transform.translation =
-            (transform.translation.xy() + velocity.xy() * (1.0 / time.hz as f32)).extend(z);
+            (transform.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
     }
 }
 
