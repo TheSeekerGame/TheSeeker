@@ -18,7 +18,7 @@ pub struct SpriteAnimation {
     pub settings: ExtendedScriptSettings<SpriteAnimationSettings>,
     /// Optional frame bookmarks to help during scripting
     #[serde(default)]
-    pub frame_bookmarks: HashMap<String, u32>,
+    pub frame_bookmarks: HashMap<String, FrameId>,
     /// Optional "script": list of actions to perform during playback
     #[serde(default)]
     pub script: Vec<
@@ -36,9 +36,9 @@ pub struct SpriteAnimationSettings {
     pub atlas_asset_key: Option<String>,
     pub image_asset_key: Option<String>,
     pub ticks_per_frame: u32,
-    pub frame_start: u32,
-    pub frame_min: u32,
-    pub frame_max: u32,
+    pub frame_start: FrameId,
+    pub frame_min: FrameId,
+    pub frame_max: FrameId,
     #[serde(default)]
     pub play_reversed: bool,
 }
@@ -79,14 +79,14 @@ pub enum SpriteAnimationScriptAction {
         /// Use this bookmark
         to_frame_bookmark: Option<String>,
         /// The frame index
-        frame_index: Option<u32>,
+        frame_index: Option<FrameId>,
     },
     /// Change the next frame to be displayed, after `ticks_per_frame` elapses.
     SetFrameNext {
         /// Use this bookmark
         to_frame_bookmark: Option<String>,
         /// The frame index
-        frame_index: Option<u32>,
+        frame_index: Option<FrameId>,
     },
     /// Set sprite colorization
     SetSpriteColor {
@@ -130,7 +130,7 @@ pub enum SpriteAnimationScriptAction {
 #[derive(Serialize, Deserialize)]
 #[serde(untagged)]
 pub enum FrameIndexOrBookmark {
-    Index(u32),
+    Index(FrameId),
     Bookmark(String),
 }
 
@@ -160,5 +160,56 @@ impl SpriteAnimation {
             preloaded.get_single_asset(image_key)?,
             preloaded.get_single_asset(layout_key)?,
         ))
+    }
+}
+
+/// Because c12 wants 1-based indexing
+/// and i want to use the type system to ensure no off-by-1 errors
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct FrameId(pub u32);
+
+impl FrameId {
+    pub fn as_sprite_index(self) -> usize {
+        debug_assert!(self.0 != 0);
+        (self.0 - 1) as usize
+    }
+    pub fn from_sprite_index(i: usize) -> Self {
+        FrameId(i as u32 + 1)
+    }
+}
+
+impl Default for FrameId {
+    fn default() -> Self {
+        FrameId(1)
+    }
+}
+
+impl std::ops::Add<FrameId> for FrameId {
+    type Output = FrameId;
+    fn add(self, rhs: FrameId) -> Self::Output {
+        FrameId(self.0 + rhs.0 - 1)
+    }
+}
+
+impl std::ops::Add<u32> for FrameId {
+    type Output = FrameId;
+    fn add(self, rhs: u32) -> Self::Output {
+        FrameId(self.0 + rhs)
+    }
+}
+
+impl std::ops::Sub<FrameId> for FrameId {
+    type Output = FrameId;
+    fn sub(self, rhs: FrameId) -> Self::Output {
+        FrameId(self.0 - (rhs.0 - 1))
+    }
+}
+
+impl std::ops::Sub<u32> for FrameId {
+    type Output = FrameId;
+    fn sub(self, rhs: u32) -> Self::Output {
+        FrameId(self.0 - rhs)
     }
 }
