@@ -2,15 +2,15 @@
 time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
-frame_min = 0
-frame_max = 2
-frame_start = 0
+frame_min = 1
+frame_max = 3
+frame_start = 1
 
 # LOOP
 [[script]]
-run_at_frame = 2
+run_at_frame = 3
 action = "SetFrameNext"
-frame_index = 0
+frame_index = 1
 
 # Support left/right flipping
 [[script]]

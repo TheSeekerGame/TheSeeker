@@ -2,31 +2,31 @@
 time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
-frame_min = 0
-frame_max = 21
-frame_start = 0
+frame_min = 1
+frame_max = 22
+frame_start = 1
 
 # LOOP (left)
 [[script]]
-run_at_frame = 10
+run_at_frame = 11
 action = "SetFrameNext"
-frame_index = 1
+frame_index = 2
 
 # LOOP (right)
 [[script]]
-run_at_frame = 21
+run_at_frame = 22
 action = "SetFrameNext"
-frame_index = 11
+frame_index = 12
 
 # Support left/right
 [[script]]
 run_on_slot_enable = "DirectionLeft"
 action = "SetFrameNow"
-frame_index = 0
+frame_index = 1
 [[script]]
 run_on_slot_enable = "DirectionRight"
 action = "SetFrameNow"
-frame_index = 10
+frame_index = 11
 
 # Blink Red on Damage
 [[script]]
