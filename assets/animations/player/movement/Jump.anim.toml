@@ -2,9 +2,9 @@
 time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
-frame_min = 0
-frame_max = 11
-frame_start = 0
+frame_min = 1
+frame_max = 12
+frame_start = 1
 
 
 # INITIALIZE JUMP STRAIGHT
@@ -12,14 +12,9 @@ frame_start = 0
 run_on_playback_control = "Start"
 forbid_slots_all = ["MovingHorizontally"]
 action = "SetFrameNow"
-frame_index = 0
+frame_index = 1
 
 #SWITCH FROM FORWARD TO STRAIGHT
-[[script]]
-run_at_frame = 6
-forbid_slots_all = ["MovingHorizontally"]
-action = "SetFrameNow"
-frame_index = 0
 [[script]]
 run_at_frame = 7
 forbid_slots_all = ["MovingHorizontally"]
@@ -45,6 +40,11 @@ run_at_frame = 11
 forbid_slots_all = ["MovingHorizontally"]
 action = "SetFrameNow"
 frame_index = 5
+[[script]]
+run_at_frame = 12
+forbid_slots_all = ["MovingHorizontally"]
+action = "SetFrameNow"
+frame_index = 6
 
 # LOOP JUMP STRAIGHT
 [[script]]
