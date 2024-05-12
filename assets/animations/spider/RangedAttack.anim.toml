@@ -2,17 +2,17 @@ atlas_asset_key = "anim.spider.RangedAttack.sprite"
 
 [settings]
 time_base = "Relative"
-frame_start = 0
+frame_start = 1
 tick_quant = "8"
 ticks_per_frame = 8
-frame_max = 14
-frame_min = 0
+frame_max = 15
+frame_min = 1
 
 # LOOP
 [[script]]
 action = "SetFrameNext"
-frame_index = 0
-run_at_frame = 14
+frame_index = 1
+run_at_frame = 15
 
 # Support left/right flipping
 [[script]]

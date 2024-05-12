@@ -1,15 +1,15 @@
 [settings]
 time_base = "Relative"
 ticks_per_frame = 8
-frame_min = 0
-frame_max = 7
-frame_start = 0
+frame_min = 1
+frame_max = 8
+frame_start = 1
 
 # Loop animation
 [[script]]
-run_at_frame = 7
+run_at_frame = 8
 action = "SetFrameNext"
-frame_index = 0
+frame_index = 1
 
 # Blink Red
 [[script]]

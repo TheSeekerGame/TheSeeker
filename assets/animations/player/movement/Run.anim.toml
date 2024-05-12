@@ -2,34 +2,34 @@
 time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
-frame_min = 0
-frame_max = 9
-frame_start = 0
+frame_min = 1
+frame_max = 10
+frame_start = 1
 
 # INITIALIZE RUN REGULAR
 [[script]]
 run_on_playback_control = "Start"
 action = "SetFrameNext"
-frame_index = 1
+frame_index = 2
 
 # RESET ON DIRECTION CHANGE
 [[script]]
 run_on_slot_enable = "DirectionChanged"
 action = "SetFrameNext"
-frame_index = 0
+frame_index = 1
 
 # INITIALIZE FALL>RUN TRANSITION
 [[script]]
 run_on_playback_control = "Start"
 if_previous_script_key = "testtt"
 action = "SetFrameNext"
-frame_index = 0
+frame_index = 1
 
 # LOOP
 [[script]]
-run_at_frame = 9
+run_at_frame = 10
 action = "SetFrameNext"
-frame_index = 2
+frame_index = 3
 
 # Support left/right flipping
 [[script]]

@@ -314,8 +314,8 @@ pub struct Attacking {
     ticks: u32,
 }
 impl Attacking {
-    const STARTUP: u32 = 1;
-    const MAX: u32 = 5;
+    const STARTUP: u32 = 0;
+    const MAX: u32 = 4;
 }
 impl GentState for Attacking {}
 
@@ -759,7 +759,7 @@ fn player_collisions(
                 linear_velocity.length() / time.hz as f32 + 0.5,
                 InteractionGroups {
                     memberships: PLAYER,
-                    filter: GROUND,
+                    filter: GROUND
                 },
                 Some(entity),
             ) {
