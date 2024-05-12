@@ -20,6 +20,15 @@ skip frames), you can add `[[script]]` sections, using animation-specific
 When using the Scriptable Animation System, *please do not* modify the Bevy
 Texture Atlas Index value directly from Rust, outside of it!
 
+## Frame Indexing
+
+All frame index values in animation asset files are 1-indexed!
+
+The first frame of an animation is 1.
+
+When using [frame bookmarks](#frame-bookmarks), this is automatically
+compensated for. Frame index 1 means the frame of the bookmark.
+
 ## Sprite Sheet
 
 Every animation (obviously) requires a sprite sheet (image and layout).
@@ -60,20 +69,20 @@ the bookmark.
 
 ```toml
 [frame_bookmarks]
-my_intro = 4 # say our intro is frames 4 to 7
-my_idle_loop = 10 # say our loop is frames 10 to 19
+my_intro = 4
+my_idle_loop = 10
 
 [[script]]
 frame_bookmark = "my_idle_loop"
-run_at_frame = 9 # relative to `frame_bookmark`; so actually frame 19
+run_at_frame = 10 # relative to `frame_bookmark`
 action = "SetFrameNext"
-frame_index = 0  # relative to `frame_bookmark`; so actually frame 10
+frame_index = 1  # relative to `frame_bookmark`
 
 [[script]]
 frame_bookmark = "my_intro"
 run_on_playback_control = "Start"
 action = "SetFrameNow"
-frame_index = 0 # relative to "my_intro"
+frame_index = 1 # This will be frame 4, as per "my_intro"
 
 [[script]]
 frame_bookmark = "my_intro"
@@ -82,7 +91,7 @@ action = "SetFrameNext"
 # you can use a different bookmark for the destination of
 # `SetFrameNext`/`SetFrameNow`, using `to_frame_bookmark`
 to_frame_bookmark = "my_idle_loop"
-frame_index = 0
+frame_index = 1
 ```
 
 </details>
@@ -112,7 +121,7 @@ idle_loop_end = 19
 run_at_frame = "idle_loop_end"
 action = "SetFrameNext"
 to_frame_bookmark = "idle_loop_start"
-# if omitted, `frame_index` defaults to 0
+# if omitted, `frame_index` defaults to 1
 
 [[script]]
 run_on_playback_control = "Start"
@@ -140,13 +149,13 @@ Example:
 ```toml
 [settings]
 ticks_per_frame = 8
-frame_min = 0
-frame_max = 7
-frame_start = 0
+frame_min = 1
+frame_max = 8
+frame_start = 1
 ```
 
-The above example will create an animation that starts from frame index 0,
-advances to the next frame automatically every 8 ticks, and ends after frame 7
+The above example will create an animation that starts from frame index 1,
+advances to the next frame automatically every 8 ticks, and ends after frame 8
 is displayed.
 
 This is perfectly sufficient for a basic animation that does not require any
@@ -185,7 +194,7 @@ Example:
 
 ```toml
 [settings]
-frame_min = 0
+frame_min = 1
 # ...
 ```
 
@@ -319,7 +328,7 @@ action = "SetFrameNext"
 frame_index = 20
 
 [[script]]
-run_at_frame = 7
+run_at_frame = 8
 action = "SetSpriteFlip"
 flip_x = true
 ```
@@ -351,13 +360,13 @@ action = "..."
 # also applies to any other frame numbers
 # in this `[[script]]` section
 [[script]]
-run_at_frame = 0
+run_at_frame = 1
 frame_bookmark = "my_bookmark"
 action = "..."
 
 # you can specify multiple frames
 [[script]]
-run_at_frames = [ 0, 1, 2, 3, 5, 7, 11 ]
+run_at_frames = [ 1, 2, 3, 5, 7, 11 ]
 frame_bookmark = "my_bookmark"
 action = "..."
 
@@ -390,12 +399,12 @@ trigger on any of them.
 Example:
 
 ```toml
-# frames 0, 8, 16, 24, 32, ...
+# Every 8 frames, starting from the first
 [[script]]
 run_every_n_frames = "8"
 action = "..."
 
-# frames 3, 11, 19, 27, 35, ...
+# Every 8 frames, starting from the fourth
 [[script]]
 run_every_n_frames = "8+3"
 action = "..."
@@ -624,7 +633,7 @@ This is useful to skip around the sprite sheet, and to implement loops
 ---
 
 `frame_index` can be used to specify a literal frame number. It defaults to
-`0` if unspecified.
+`1` if unspecified.
 
 If `to_frame_bookmark` is specified, the `frame_index` will be interpreted
 relative to that.
@@ -665,7 +674,7 @@ Any actions that are configured to trigger on the specified frame will run.
 ---
 
 `frame_index` can be used to specify a literal frame number. It defaults to
-`0` if unspecified.
+`1` if unspecified.
 
 If `to_frame_bookmark` is specified, the `frame_index` will be interpreted
 relative to that.
