@@ -232,7 +232,7 @@ fn setup_player(
             },
             Falling,
             WallSlideTime(f32::MAX),
-            HitFreezeTime(u32::MAX),
+            HitFreezeTime(u32::MAX, None),
             TransitionQueue::default(),
             AddQueue::default(),
         ));
@@ -341,9 +341,11 @@ impl Transitionable<Attacking> for CanAttack {
 // Not quite the same as states, these components enable certain behaviours when attached,
 // and provide storage for that behaviours state
 
-/// If a player attack lands, locks their velocity for the configured number of ticks
+/// If a player attack lands, locks their velocity for the configured number of ticks'
+//Tracks the attack entity which last caused the hirfreeze affect. (this way the same attack
+// doesn't trigger it muyltiple times)
 #[derive(Component, Default, Debug)]
-pub struct HitFreezeTime(u32);
+pub struct HitFreezeTime(u32, Option<Entity>);
 
 #[derive(Component, Default, Debug)]
 pub struct CoyoteTime(f32);
@@ -504,7 +506,39 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
    }
 }
 
-fn hitfreeze(mut player_q: Query<(Entity), (With<Player>)>, attack_q: Query<&Attack>) {}
+fn hitfreeze(
+    mut player_q: Query<
+        (
+            Entity,
+            &mut HitFreezeTime,
+            &mut LinearVelocity,
+        ),
+        (With<Player>),
+    >,
+    attack_q: Query<(Entity, &Attack)>,
+) {
+    for ((attack_entity, attack)) in attack_q.iter() {
+        if !attack.damaged.is_empty() {
+            if let Ok((entity, mut hitfreeze, _)) = player_q.get_mut(attack.attacker) {
+                if let Some(hitfreeze_last_entity) = hitfreeze.1 {
+                    if hitfreeze_last_entity == attack_entity {
+                        continue;
+                    }
+                }
+                hitfreeze.0 = 0;
+                hitfreeze.1 = Some(attack_entity);
+            }
+        }
+    }
+    for ((entity, mut hitfreeze, mut linear_vel)) in player_q.iter_mut() {
+        if hitfreeze.0 < u32::MAX {
+            hitfreeze.0 += 1;
+        }
+        if hitfreeze.0 < 15 {
+            linear_vel.0 = Vec2::ZERO;
+        }
+    }
+}
 
 fn player_idle(
     mut query: Query<

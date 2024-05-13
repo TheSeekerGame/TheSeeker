@@ -30,11 +30,11 @@ impl Plugin for AttackPlugin {
 
 #[derive(Component)]
 pub struct Attack {
-    current_lifetime: u32,
-    max_lifetime: u32,
-    damage: u32,
-    attacker: Entity,
-    damaged: Vec<Entity>,
+    pub current_lifetime: u32,
+    pub max_lifetime: u32,
+    pub damage: u32,
+    pub attacker: Entity,
+    pub damaged: Vec<Entity>,
 }
 
 #[derive(Bundle)]
