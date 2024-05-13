@@ -444,6 +444,9 @@ pub struct PlayerConfig {
     /// Onlly applies in the downward y direction while the player is falling
     /// and trying to walk into the wall
     sliding_friction: f32,
+
+    /// How many ticks is the players velocity locked to zero after landing an attack?
+    hitfreeze_ticks: u32,
 }
 
 fn load_player_config(
@@ -500,6 +503,7 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "fall_accel", |val| config.fall_accel = val);
     update_field(&mut errors, &cfg.0, "max_coyote_time", |val| config.max_coyote_time = val);
     update_field(&mut errors, &cfg.0, "sliding_friction", |val| config.sliding_friction = val);
+    update_field(&mut errors, &cfg.0, "hitfreeze_ticks", |val| config.hitfreeze_ticks = val as u32);
 
    for error in errors{
        warn!("failed to load player cfg value: {}", error);
@@ -516,7 +520,9 @@ fn hitfreeze(
         (With<Player>),
     >,
     attack_q: Query<(Entity, &Attack)>,
+    config: Res<PlayerConfig>,
 ) {
+    // Track if we need to initialize a hitfreeze affect
     for ((attack_entity, attack)) in attack_q.iter() {
         if !attack.damaged.is_empty() {
             if let Ok((entity, mut hitfreeze, _)) = player_q.get_mut(attack.attacker) {
@@ -530,11 +536,12 @@ fn hitfreeze(
             }
         }
     }
+    // If hitfreeze affect is applied
     for ((entity, mut hitfreeze, mut linear_vel)) in player_q.iter_mut() {
         if hitfreeze.0 < u32::MAX {
             hitfreeze.0 += 1;
         }
-        if hitfreeze.0 < 15 {
+        if hitfreeze.0 < config.hitfreeze_ticks {
             linear_vel.0 = Vec2::ZERO;
         }
     }
