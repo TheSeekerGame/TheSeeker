@@ -1,5 +1,6 @@
 pub mod darkness;
 mod fog;
+mod hp_bar;
 
 use crate::graphics::darkness::DarknessPlugin;
 use crate::graphics::fog::FogPlugin;
