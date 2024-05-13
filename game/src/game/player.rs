@@ -5,8 +5,8 @@ use rapier2d::parry::query::TOIStatus;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::gent::{Gent, GentPhysicsBundle};
 use theseeker_engine::physics::{
-    into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, GROUND, PLAYER,
-    PLAYER_ATTACK,
+    into_vec2, AnimationCollider, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
+    GROUND, PLAYER, PLAYER_ATTACK,
 };
 use theseeker_engine::{
     animation::SpriteAnimationBundle, assets::animation::SpriteAnimation,
@@ -961,7 +961,7 @@ fn player_attack(
     mut query: Query<
         (
             Entity,
-            &Facing,
+            &Gent,
             &mut Attacking,
             &mut TransitionQueue,
         ),
@@ -969,20 +969,16 @@ fn player_attack(
     >,
     mut commands: Commands,
 ) {
-    for (entity, facing, mut attacking, mut transitions) in query.iter_mut() {
+    for (entity, gent, mut attacking, mut transitions) in query.iter_mut() {
         if attacking.ticks == Attacking::STARTUP * 8 {
             commands
                 .spawn((
-                    TransformBundle::from_transform(Transform::from_xyz(
-                        10. * facing.direction(),
-                        0.,
-                        0.,
+                    TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+                    AnimationCollider(gent.e_gfx),
+                    Collider::empty(InteractionGroups::new(
+                        PLAYER_ATTACK,
+                        ENEMY,
                     )),
-                    Collider::cuboid(
-                        10.,
-                        10.,
-                        InteractionGroups::new(PLAYER_ATTACK, ENEMY),
-                    ),
                     Attack::new(16),
                 ))
                 .set_parent(entity);
