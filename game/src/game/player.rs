@@ -525,7 +525,11 @@ fn hitfreeze(
     // Track if we need to initialize a hitfreeze affect
     for ((attack_entity, attack)) in attack_q.iter() {
         if !attack.damaged.is_empty() {
+            // Make sure the entity doing the attack is actually the player
             if let Ok((entity, mut hitfreeze, _)) = player_q.get_mut(attack.attacker) {
+                // If its the same exact attack entity as the last time the affect was activated.
+                // (for example, if the attack wasn't despawned yet) we don't want to
+                // trigger a timer reset again.
                 if let Some(hitfreeze_last_entity) = hitfreeze.1 {
                     if hitfreeze_last_entity == attack_entity {
                         continue;
@@ -536,11 +540,14 @@ fn hitfreeze(
             }
         }
     }
-    // If hitfreeze affect is applied
+
     for ((entity, mut hitfreeze, mut linear_vel)) in player_q.iter_mut() {
         if hitfreeze.0 < u32::MAX {
             hitfreeze.0 += 1;
         }
+        // Where the actual affect is applied.
+        // if its desired to check if its being applied in another system, can do a query and this
+        // same check,
         if hitfreeze.0 < config.hitfreeze_ticks {
             linear_vel.0 = Vec2::ZERO;
         }

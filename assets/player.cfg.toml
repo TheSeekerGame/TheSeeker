@@ -36,5 +36,5 @@ max_coyote_time = 0.1
 # and trying to walk into the wall
 sliding_friction = 0.25
 
-# How many ticks is the players velocity locked to zero after landing an attack?a
+# How many ticks is the players velocity locked to zero after landing an attack?
 hitfreeze_ticks = 45.0
