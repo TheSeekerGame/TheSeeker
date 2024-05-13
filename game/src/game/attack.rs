@@ -1,4 +1,6 @@
-use theseeker_engine::physics::{Collider, LinearVelocity, PhysicsSet, PhysicsWorld};
+use theseeker_engine::physics::{
+    update_sprite_colliders, Collider, LinearVelocity, PhysicsSet, PhysicsWorld,
+};
 use theseeker_engine::{assets::animation::SpriteAnimation, gent::Gent, script::ScriptPlayer};
 
 use super::{enemy::EnemyGfx, player::PlayerGfx};
@@ -17,7 +19,8 @@ impl Plugin for AttackPlugin {
                 damage_flash,
             )
                 .chain()
-                .before(PlayerStateSet::Behavior),
+                .before(PlayerStateSet::Behavior)
+                .after(update_sprite_colliders),
         );
         app.add_systems(
             GameTickUpdate,
