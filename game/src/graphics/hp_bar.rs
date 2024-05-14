@@ -16,7 +16,7 @@ impl Plugin for HpBarsPlugin {
         app.add_plugins(UiMaterialPlugin::<HpBarUiMaterial>::default());
         app.add_systems(Update, instance);
         app.add_systems(Update, update_positions);
-        //app.add_systems(Update, update_hp);
+        app.add_systems(Update, update_hp);
     }
 }
 
@@ -49,7 +49,7 @@ fn instance(
                             padding: UiRect::all(Val::Px(3.0)),
                             ..default()
                         },
-                        background_color: Color::rgb(0.9, 0.9, 0.9).into(),
+                        background_color: Color::rgb(0.5, 0.5, 0.5).into(),
                         //visibility: Visibility::Hidden,
                         ..default()
                     },
@@ -66,7 +66,7 @@ fn instance(
                                 ..default()
                             },
                             material: ui_materials.add(HpBarUiMaterial {
-                                factor: 100.0,
+                                factor: 1.0,
                                 background_color: Color::rgb(0.1, 0.1, 0.1).into(),
                                 filled_color: Color::rgb(0.8, 0.2, 0.2).into(),
                             }),
@@ -89,8 +89,8 @@ fn update_positions(
         return;
     };
 
-    for (bg_entity, background, mut style) in hp_bar.iter_mut() {
-        if let Ok((global_transform, collider)) = entity_with_hp.get(background.0) {
+    for (bg_entity, hp_bg, mut style) in hp_bar.iter_mut() {
+        if let Ok((global_transform, collider)) = entity_with_hp.get(hp_bg.0) {
             let mut world_position = global_transform.translation();
 
             // Makes the health bar float above the collider, if it exists
@@ -124,6 +124,22 @@ fn update_positions(
             commands.entity(bg_entity).despawn();
             // Hide the health bar UI if the entity is not found
             //visibility = Visibility::Hidden;
+        }
+    }
+}
+
+fn update_hp(
+    mut commands: Commands,
+    entity_with_hp: Query<&Health>,
+    mut hp_bar: Query<(&HpBar, &Handle<HpBarUiMaterial>)>,
+    mut ui_materials: ResMut<Assets<HpBarUiMaterial>>,
+    //mut hp_bar_bg: Query<&mut Visibility, With<HpBackground>>,
+) {
+    for (hpbar, ui_mat_handle) in hp_bar.iter() {
+        if let Ok(health) = entity_with_hp.get(hpbar.0) {
+            if let Some(mat) = ui_materials.get_mut(ui_mat_handle) {
+                mat.factor = 1.0 * (health.current as f32 / health.max as f32)
+            }
         }
     }
 }
