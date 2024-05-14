@@ -25,14 +25,18 @@ impl Plugin for AttackPlugin {
                 .chain()
                 .after(update_sprite_colliders)
                 .after(PlayerStateSet::Behavior)
-                .before(PlayerStateSet::Collisions), // .before(PlayerStateSet::Behavior),
+                .after(EnemyStateSet::Behavior)
+                .before(PlayerStateSet::Collisions)
+                .before(EnemyStateSet::Collisions), // .before(PlayerStateSet::Behavior),
         );
         app.add_systems(
             GameTickUpdate,
             despawn_dead
                 //TODO: unify statesets?
                 .after(PlayerStateSet::Transition)
-                .after(EnemyStateSet::Transition), // .before(PhysicsSet),
+                .after(EnemyStateSet::Transition)
+                //has to be before physics set or colliders sometimes linger
+                .before(PhysicsSet),
         );
     }
 }
@@ -76,6 +80,7 @@ pub struct DamageFlash {
     pub max_ticks: u32,
 }
 
+//TODO: add strength
 //Component added to attack entity to indicate it causes knockback
 #[derive(Component, Default)]
 pub struct Pushback {
@@ -170,6 +175,8 @@ fn knockback(
         knockback.ticks += 1;
         velocity.x = knockback.direction * 200.;
         if knockback.ticks > knockback.max_ticks {
+            velocity.x = 0.;
+            println!("knockback done");
             commands.entity(entity).remove::<Knockback>();
         }
     }

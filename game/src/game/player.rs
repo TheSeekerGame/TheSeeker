@@ -797,6 +797,7 @@ fn player_collisions(
                             pos.translation.xy(),
                             Vec2::new(dir, 0.0),
                             shape.as_cuboid().unwrap().half_extents.x + 0.1,
+                            true,
                             InteractionGroups {
                                 memberships: PLAYER,
                                 filter: GROUND,
@@ -1030,6 +1031,7 @@ fn player_attack(
         (
             Entity,
             &Gent,
+            &Facing,
             &mut Attacking,
             &mut TransitionQueue,
         ),
@@ -1037,7 +1039,7 @@ fn player_attack(
     >,
     mut commands: Commands,
 ) {
-    for (entity, gent, mut attacking, mut transitions) in query.iter_mut() {
+    for (entity, gent, facing, mut attacking, mut transitions) in query.iter_mut() {
         if attacking.ticks == Attacking::STARTUP * 8 {
             commands
                 .spawn((
@@ -1048,6 +1050,10 @@ fn player_attack(
                         ENEMY,
                     )),
                     Attack::new(16, entity),
+                    //TODO: add strength
+                    Pushback {
+                        direction: facing.direction(),
+                    },
                 ))
                 .set_parent(entity);
         }

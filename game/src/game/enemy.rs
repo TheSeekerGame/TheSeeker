@@ -57,6 +57,7 @@ pub fn debug_enemy(world: &World, query: Query<Entity, With<Gent>>) {
 #[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum EnemyStateSet {
     Behavior,
+    Collisions,
     Transition,
     Animation,
 }
@@ -171,6 +172,7 @@ fn setup_enemy(
                     linear_velocity: LinearVelocity(Vec2::ZERO),
                 },
             },
+            Navigation::Grounded,
             Range::None,
             Health {
                 current: 100,
@@ -205,28 +207,30 @@ impl Plugin for EnemyBehaviorPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             GameTickUpdate,
-            ((
-                assign_group,
-                check_player_range,
-                (
-                    patrolling.run_if(any_with_component::<Patrolling>),
-                    aggro.run_if(any_with_component::<Aggroed>),
-                    waiting.run_if(any_with_component::<Waiting>),
-                    defense.run_if(any_with_component::<Defense>),
-                    ranged_attack.run_if(any_with_component::<RangedAttack>),
-                    melee_attack.run_if(any_with_component::<MeleeAttack>),
-                    pushback_attack.run_if(any_with_component::<PushbackAttack>),
-                ),
-                (
-                    walking.run_if(any_with_component::<Walking>),
-                    retreating.run_if(any_with_component::<Retreating>),
-                    chasing.run_if(any_with_component::<Chasing>),
-                ),
-                move_collide,
-            )
-                .chain(),)
-                .run_if(in_state(AppState::InGame))
-                .in_set(EnemyStateSet::Behavior),
+            (
+                ((
+                    assign_group,
+                    check_player_range,
+                    (
+                        patrolling.run_if(any_with_component::<Patrolling>),
+                        aggro.run_if(any_with_component::<Aggroed>),
+                        waiting.run_if(any_with_component::<Waiting>),
+                        defense.run_if(any_with_component::<Defense>),
+                        ranged_attack.run_if(any_with_component::<RangedAttack>),
+                        melee_attack.run_if(any_with_component::<MeleeAttack>),
+                        pushback_attack.run_if(any_with_component::<PushbackAttack>),
+                    ),
+                    (
+                        walking.run_if(any_with_component::<Walking>),
+                        retreating.run_if(any_with_component::<Retreating>),
+                        chasing.run_if(any_with_component::<Chasing>),
+                    ),
+                )
+                    .chain(),)
+                    .run_if(in_state(AppState::InGame))
+                    .in_set(EnemyStateSet::Behavior),
+                move_collide.in_set(EnemyStateSet::Collisions),
+            ),
         );
     }
 }
@@ -345,6 +349,13 @@ impl Waiting {
 }
 impl GentState for Waiting {}
 impl GenericState for Waiting {}
+
+#[derive(Component)]
+enum Navigation {
+    Grounded,
+    Falling,
+    Blocked,
+}
 
 #[derive(Component)]
 enum Role {
@@ -522,7 +533,6 @@ fn pushback_attack(
     for (entity, facing, mut attack, mut transitions) in query.iter_mut() {
         attack.ticks += 1;
         if attack.ticks == PushbackAttack::STARTUP * 8 {
-            //TODO: pushback attack currently doesnt actually apply knockback
             commands
                 .spawn((
                     TransformBundle::from_transform(Transform::from_xyz(
@@ -560,7 +570,7 @@ fn aggro(
             &mut Facing,
             &GlobalTransform,
             &mut TransitionQueue,
-            &mut AddQueue,
+            // &mut AddQueue,
             &Range,
             &Role,
             Has<Grouped>,
@@ -571,6 +581,8 @@ fn aggro(
         ),
         (
             With<Enemy>,
+            //does it need without chasing?
+            Without<Chasing>,
             Without<Retreating>,
             Without<Walking>,
         ),
@@ -582,7 +594,7 @@ fn aggro(
         mut facing,
         trans,
         mut transitions,
-        mut add_q,
+        // mut add_q,
         range,
         role,
         is_grouped,
@@ -726,14 +738,13 @@ fn melee_attack(
 fn walking(
     mut query: Query<
         (
-            Entity,
-            &GlobalTransform,
-            // &mut Transform,
+            &mut Navigation,
             &mut Facing,
             &mut LinearVelocity,
             &mut Walking,
             &mut TransitionQueue,
             &mut AddQueue,
+            //TODO: remove aggro, remove addqueue
             Option<&Aggroed>,
         ),
         (With<Enemy>, Without<Retreating>),
@@ -742,9 +753,7 @@ fn walking(
     time: Res<GameTime>,
 ) {
     for (
-        entity,
-        g_transform,
-        // mut transform,
+        mut nav,
         mut facing,
         mut velocity,
         mut walking,
@@ -753,6 +762,7 @@ fn walking(
         maybe_aggroed,
     ) in query.iter_mut()
     {
+        //set initial velocity
         velocity.x = -20. * facing.direction();
         if walking.ticks >= walking.max_ticks {
             velocity.x = 0.;
@@ -763,54 +773,79 @@ fn walking(
             add_q.add(Idle);
             continue;
         }
-        let ray_origin = Vec2::new(
-            g_transform.translation().x - 10. * facing.direction(),
-            g_transform.translation().y - 9.,
-        );
-        if let Some((hit_entity, first_hit)) = spatial_query.ray_cast(
-            ray_origin,
-            Vec2::NEG_Y,
-            //change
-            100.,
-            InteractionGroups {
-                memberships: ENEMY,
-                filter: GROUND,
-            },
-            Some(entity),
-        ) {
-            if first_hit.toi > 0.0 {
-                //if not aggro turn around to walk away from edge
-                if maybe_aggroed.is_none() {
-                    *facing = match *facing {
-                        Facing::Right => Facing::Left,
-                        Facing::Left => Facing::Right,
-                    };
-                    velocity.x *= -1.;
-                } else {
-                    velocity.x = 0.;
+        match *nav {
+            Navigation::Blocked => {
+                velocity.x *= -1.;
+                *nav = Navigation::Grounded;
+                *facing = match *facing {
+                    Facing::Right => Facing::Left,
+                    Facing::Left => Facing::Right,
                 }
-            };
-        } else if maybe_aggroed.is_none() {
-            *facing = match *facing {
-                Facing::Right => Facing::Left,
-                Facing::Left => Facing::Right,
-            };
-            velocity.x *= -1.;
-        } else {
-            velocity.x = 0.;
-        };
-        //TODO: another shapecast in walking direction to check if we are walking into a wall?
-        // if let Some(first_hit) = spatial_query.cast_shape(
-        //
-        // ) {}
+            },
+            Navigation::Grounded => {},
+            _ => {},
+        }
         walking.ticks += 1;
+
+        // velocity.x = -20. * facing.direction();
+        // if walking.ticks >= walking.max_ticks {
+        //     velocity.x = 0.;
+        //     transitions.push(Walking::new_transition(Waiting {
+        //         ticks: 0,
+        //         max_ticks: 240,
+        //     }));
+        //     add_q.add(Idle);
+        //     continue;
+        // }
+        // let ray_origin = Vec2::new(
+        //     g_transform.translation().x - 10. * facing.direction(),
+        //     g_transform.translation().y - 9.,
+        // );
+        // if let Some((hit_entity, first_hit)) = spatial_query.ray_cast(
+        //     ray_origin,
+        //     Vec2::NEG_Y,
+        //     //change
+        //     100.,
+        //     true,
+        //     InteractionGroups {
+        //         memberships: ENEMY,
+        //         filter: GROUND,
+        //     },
+        //     Some(entity),
+        // ) {
+        //     if first_hit.toi > 0.0 {
+        //         //if not aggro turn around to walk away from edge
+        //         if maybe_aggroed.is_none() {
+        //             *facing = match *facing {
+        //                 Facing::Right => Facing::Left,
+        //                 Facing::Left => Facing::Right,
+        //             };
+        //             velocity.x *= -1.;
+        //         } else {
+        //             velocity.x = 0.;
+        //         }
+        //     };
+        // } else if maybe_aggroed.is_none() {
+        //     *facing = match *facing {
+        //         Facing::Right => Facing::Left,
+        //         Facing::Left => Facing::Right,
+        //     };
+        //     velocity.x *= -1.;
+        // } else {
+        //     velocity.x = 0.;
+        // };
+        // //TODO: another shapecast in walking direction to check if we are walking into a wall?
+        // // if let Some(first_hit) = spatial_query.cast_shape(
+        // //
+        // // ) {}
+        // walking.ticks += 1;
     }
 }
 
 fn retreating(
     mut query: Query<
         (
-            &GlobalTransform,
+            &Navigation,
             &Range,
             &mut Facing,
             &mut LinearVelocity,
@@ -820,38 +855,18 @@ fn retreating(
         (With<Enemy>, Without<Walking>),
     >,
     player_query: Query<(Entity), With<Player>>,
-    spatial_query: Res<PhysicsWorld>,
 ) {
-    for (g_transform, range, mut facing, mut velocity, mut retreating, mut transitions) in
-        query.iter_mut()
+    for (nav, range, mut facing, mut velocity, mut retreating, mut transitions) in query.iter_mut()
     {
         let mut done = false;
         velocity.x = 20. * facing.direction();
         if let Range::Ranged = range {
             done = true;
         }
-        //if we retreated for max duration stop
-        // if retreating.current_ticks >= retreating.max_ticks {
-        //     done = true;
-        //     println!("should be done duration");
-        // }
-        let ray_origin = Vec2::new(
-            g_transform.translation().x + 11. * facing.direction(),
-            g_transform.translation().y - 9.,
-        );
-        if let Some((hit_entity, first_hit)) = spatial_query.ray_cast(
-            ray_origin,
-            Vec2::NEG_Y,
-            //change
-            100.,
-            InteractionGroups::new(ENEMY, GROUND),
-            None,
-        ) {
-            //if we walked as far away as we can, hit a ledge
-            if first_hit.toi > 0.0 {
-                done = true;
-            };
-        };
+        if let Navigation::Blocked = nav {
+            done = true;
+        }
+
         if done {
             velocity.x = 0.;
             match range {
@@ -874,11 +889,6 @@ fn retreating(
             }
         }
 
-        // velocity.x = 0.;
-        //TODO: another shapecast in walking direction to check if we are walking into a wal
-        // if let Some(first_hit) = spatial_query.cast_shape(
-        //
-        // ) {}
         retreating.ticks += 1;
     }
 }
@@ -886,6 +896,7 @@ fn retreating(
 fn chasing(
     mut query: Query<
         (
+            &Navigation,
             &GlobalTransform,
             &mut LinearVelocity,
             &Facing,
@@ -898,7 +909,8 @@ fn chasing(
     >,
     player_query: Query<(Entity, &GlobalTransform), With<Player>>,
 ) {
-    for (transform, mut velocity, facing, chasing, role, range, mut transitions) in query.iter_mut()
+    for (nav, transform, mut velocity, facing, chasing, role, range, mut transitions) in
+        query.iter_mut()
     {
         if let Ok((p_entity, p_transform)) = player_query.get_single() {
             let target_range = match role {
@@ -909,8 +921,18 @@ fn chasing(
                 .translation()
                 .truncate()
                 .distance(p_transform.translation().truncate());
+            //if we are outside our target range, walk closer.
             if distance > target_range {
                 velocity.x = -20. * facing.direction();
+                //if we cant get any closer because of edge
+                if let Navigation::Blocked = nav {
+                    velocity.x = 0.;
+                    //TODO: decide what should actually happen here
+                    transitions.push(Chasing::new_transition(
+                        Waiting::default(),
+                    ));
+                    //probably transition to ranged attack either way?
+                }
             } else {
                 velocity.x = 0.;
                 match role {
@@ -923,7 +945,6 @@ fn chasing(
                     })),
                 }
             }
-            //TODO: make them stop at the edge of ledge
         }
     }
 }
@@ -933,6 +954,7 @@ fn move_collide(
         (
             &mut LinearVelocity,
             &mut Transform,
+            &mut Navigation,
             &Collider,
         ),
         With<Enemy>,
@@ -940,40 +962,66 @@ fn move_collide(
     time: Res<GameTime>,
     spatial_query: Res<PhysicsWorld>,
 ) {
-    for (mut linear_velocity, mut transform, collider) in query.iter_mut() {
-        let mut shape = collider.0.shared_shape().clone();
+    for (mut linear_velocity, mut transform, mut nav, collider) in query.iter_mut() {
+        let shape = collider.0.shared_shape().clone();
         let dir = linear_velocity.x.signum();
+        let x_len = linear_velocity.x.abs();
+        let front = transform.translation.x + 10. * dir;
         let z = transform.translation.z;
+        let interaction = InteractionGroups {
+            memberships: ENEMY,
+            filter: GROUND,
+        };
         while let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
             if let Some((e, first_hit)) = spatial_query.shape_cast(
                 transform.translation.xy(),
                 shape_dir,
                 &*shape,
                 linear_velocity.length() / time.hz as f32 + 0.5,
-                InteractionGroups {
-                    memberships: ENEMY,
-                    filter: GROUND,
-                },
+                interaction,
                 None,
-                // Some(entity),
             ) {
                 if first_hit.status != TOIStatus::Penetrating {
                     let sliding_plane = into_vec2(first_hit.normal1);
                     let projected_velocity = linear_velocity.xy()
                         - sliding_plane * linear_velocity.xy().dot(sliding_plane);
-                    // linear_velocity.0 = projected_velocity + friction_vec + bounce_force;
                     linear_velocity.0 = projected_velocity;
                     let new_pos =
                         transform.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
                     transform.translation.x = new_pos.x;
                     transform.translation.y = new_pos.y;
+                    *nav = Navigation::Blocked;
                 }
             } else {
+                //hmmm control flow?
                 break;
             };
         }
-        transform.translation =
-            (transform.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
+
+        //if Navigation::Grounded
+        //no support for air right now
+        //cast from underground in direction of movement
+        let mut projected_velocity = linear_velocity;
+
+        if let Some((entity, first_hit)) = spatial_query.ray_cast(
+            Vec2::new(front, transform.translation.y - 10.),
+            Vec2::new(dir, 0.),
+            //should be max velocity
+            x_len / time.hz as f32,
+            false,
+            interaction,
+            None,
+        ) {
+            // println!("hit edge?");
+            // dbg!(first_hit);
+            *nav = Navigation::Blocked;
+            projected_velocity.x = first_hit.toi * dir;
+            // dbg!(projected_velocity.x);
+        }
+
+        transform.translation = (transform.translation.xy()
+            + projected_velocity.xy() * (1.0 / time.hz as f32))
+            .extend(z);
     }
 }
 
