@@ -44,9 +44,9 @@ fn instance(
                 .spawn((
                     NodeBundle {
                         style: Style {
-                            width: Val::Px(100.0),
-                            height: Val::Px(20.0),
-                            align_self: AlignSelf::Center,
+                            width: Val::Px(75.0),
+                            height: Val::Px(14.0),
+                            padding: UiRect::all(Val::Px(3.0)),
                             ..default()
                         },
                         background_color: Color::rgb(0.9, 0.9, 0.9).into(),
@@ -59,7 +59,10 @@ fn instance(
                     parent.spawn((
                         MaterialNodeBundle {
                             style: Style {
-                                padding: UiRect::all(Val::Px(3.0)),
+                                width: Val::Percent(100.0),
+                                height: Val::Percent(100.0),
+                                //padding: UiRect::all(Val::Px(3.0)),
+                                align_self: AlignSelf::Center,
                                 ..default()
                             },
                             material: ui_materials.add(HpBarUiMaterial {
@@ -82,33 +85,39 @@ fn update_positions(
     mut hp_bar: Query<(Entity, &HpBackground, &mut Style)>,
     mut q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
 ) {
-    let Some((camera_transform, camera_projection)) = q_cam.iter().next() else {
+    let Some((camera_transform, camera)) = q_cam.iter().next() else {
         return;
     };
 
     for (bg_entity, background, mut style) in hp_bar.iter_mut() {
         if let Ok((global_transform, collider)) = entity_with_hp.get(background.0) {
-            let world_position = global_transform.translation();
+            let mut world_position = global_transform.translation();
+
+            // Makes the health bar float above the collider, if it exists
+            world_position += match collider {
+                Some(collider) => {
+                    let collider_height = collider.0.compute_aabb().half_extents().y;
+                    Vec3::new(0.0, collider_height, 0.0)
+                },
+                None => Vec3::ZERO,
+            };
 
             // Calculate the screen position of the entity
-            let screen_position = camera_projection
+            let screen_position = camera
                 .world_to_viewport(camera_transform, world_position)
                 .unwrap();
 
-            // Calculate the offset for the health bar UI
-            let offset = Vec2::ZERO;
-            /*let offset = match collider {
-                Some(collider) => {
-                    // Adjust the offset based on the collider's dimensions
-                    let collider_height = collider.raw.compute_local_aabb().half_extents().y;
-                    Vec2::new(0.0, collider_height + 10.0)
-                },
-                None => Vec2::ZERO,
-            };*/
+            let width = match style.width {
+                Val::Px(value) => value,
+                _ => 100.0,
+            };
+
+            // center the bar, and make it hover above the collider
+            let mut offset = Vec2::ZERO + Vec2::new(-width * 0.5, -30.0);
 
             // Update the position of the health bar UI
             style.left = Val::Px(screen_position.x + offset.x);
-            style.bottom = Val::Px(screen_position.y + offset.y);
+            style.top = Val::Px(screen_position.y + offset.y);
             style.position_type = PositionType::Absolute;
             //*visibility = Visibility::Visible;
         } else {
