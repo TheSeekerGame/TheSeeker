@@ -1,5 +1,6 @@
 use crate::camera::MainCamera;
 use crate::game::attack::Health;
+use crate::game::player::Player;
 use crate::prelude::Update;
 use bevy::prelude::*;
 use bevy::prelude::*;
@@ -28,23 +29,37 @@ struct HpBackground(Entity);
 
 fn instance(
     mut commands: Commands,
-    entity_with_hp: Query<(Entity, Ref<Health>), With<GlobalTransform>>,
+    entity_with_hp: Query<(Entity, Ref<Health>, Option<&Player>), With<GlobalTransform>>,
     mut ui_materials: ResMut<Assets<HpBarUiMaterial>>,
 ) {
-    for ((entity, health)) in entity_with_hp.iter() {
+    for ((entity, health, player)) in entity_with_hp.iter() {
         if health.is_added() {
             commands
                 .spawn((
-                    NodeBundle {
-                        style: Style {
-                            width: Val::Px(75.0),
-                            height: Val::Px(14.0),
-                            padding: UiRect::all(Val::Px(3.0)),
+                    if player.is_some() {
+                        NodeBundle {
+                            style: Style {
+                                width: Val::Px(250.0),
+                                height: Val::Px(24.0),
+                                padding: UiRect::all(Val::Px(3.0)),
+                                ..default()
+                            },
+                            background_color: Color::rgb(0.75, 0.75, 0.75).into(),
+                            visibility: Visibility::Inherited,
                             ..default()
-                        },
-                        background_color: Color::rgb(0.75, 0.75, 0.75).into(),
-                        visibility: Visibility::Hidden,
-                        ..default()
+                        }
+                    } else {
+                        NodeBundle {
+                            style: Style {
+                                width: Val::Px(75.0),
+                                height: Val::Px(14.0),
+                                padding: UiRect::all(Val::Px(3.0)),
+                                ..default()
+                            },
+                            background_color: Color::rgb(0.75, 0.75, 0.75).into(),
+                            visibility: Visibility::Hidden,
+                            ..default()
+                        }
                     },
                     HpBackground(entity),
                 ))
@@ -73,7 +88,11 @@ fn instance(
 
 fn update_positions(
     mut commands: Commands,
-    entity_with_hp: Query<(&GlobalTransform, Option<&Collider>)>,
+    entity_with_hp: Query<(
+        &GlobalTransform,
+        Option<&Collider>,
+        Option<&Player>,
+    )>,
     mut hp_bar: Query<(Entity, &HpBackground, &mut Style)>,
     mut q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
 ) {
@@ -82,7 +101,15 @@ fn update_positions(
     };
 
     for (bg_entity, hp_bg, mut style) in hp_bar.iter_mut() {
-        if let Ok((global_transform, collider)) = entity_with_hp.get(hp_bg.0) {
+        if let Ok((global_transform, collider, player)) = entity_with_hp.get(hp_bg.0) {
+            if player.is_some() {
+                // Update the position of the health bar UI
+                style.left = Val::Px(20.0);
+                style.top = Val::Px(20.0);
+                style.position_type = PositionType::Absolute;
+                continue;
+            }
+
             let mut world_position = global_transform.translation();
 
             // Makes the health bar float above the collider, if it exists
@@ -131,11 +158,14 @@ fn update_hp(
 }
 
 fn update_visibility(
-    entity_with_hp: Query<Ref<Health>>,
+    entity_with_hp: Query<(Ref<Health>, Option<&Player>)>,
     mut hp_bar: Query<(&HpBackground, &mut Visibility)>,
 ) {
     for (hpbar, mut visibility) in hp_bar.iter_mut() {
-        if let Ok(health) = entity_with_hp.get(hpbar.0) {
+        if let Ok((health, player)) = entity_with_hp.get(hpbar.0) {
+            if player.is_some() {
+                continue;
+            }
             if health.is_changed() {
                 if health.current == health.max {
                     *visibility = Visibility::Hidden
