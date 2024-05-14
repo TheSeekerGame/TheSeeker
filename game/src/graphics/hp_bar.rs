@@ -1,88 +1,137 @@
-// For the hp bar, going to generate a mesh, and have the mesh be attacked to anything with hp.
-// At least for the initial approach
-// wwaaait, don't really need shaders for this; can just stack some rectangles; ez
-// especially since its something so simple
-
+use crate::camera::MainCamera;
 use crate::game::attack::Health;
 use crate::prelude::Update;
 use bevy::prelude::*;
+use bevy::prelude::*;
+use bevy::reflect::TypePath;
+use bevy::render::render_resource::*;
 use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
 use glam::{Vec2, Vec3Swizzles};
+use theseeker_engine::physics::Collider;
 
 pub struct HpBarsPlugin;
 
 impl Plugin for HpBarsPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, run);
+        app.add_plugins(UiMaterialPlugin::<HpBarUiMaterial>::default());
+        app.add_systems(Update, instance);
+        app.add_systems(Update, update_positions);
+        //app.add_systems(Update, update_hp);
     }
 }
 
-// Yeah, so the plan is to iterate through everything with an hp component,
-// and if hp is less then max, spawn in a rectangle entity, attach it to the entity as its child?
-// okay I think that works. Yeah and then can use hp_bar component to track the child entity
-// and then get the hp_bar entity using the parent child query.
-// okay.
-// or heck, dont even need an hp bar component on the main entity, since querys filter already
-
 #[derive(Component)]
-struct HpBar(Mesh2dHandle);
+struct HpBar(Entity);
 #[derive(Component)]
-struct HpBackground(Mesh2dHandle);
+struct HpBackground(Entity);
 
-fn run(
+/*fn update(time: Res<Time>, mut ui_materials: ResMut<Assets<HpBarUiMaterial>>) {
+    for (_, material) in ui_materials.iter_mut() {
+        // rainbow color effect
+        let new_color = Color::hsl((time.elapsed_seconds() * 60.0) % 360.0, 1., 0.5);
+        material.color = new_color.rgba_to_vec4();
+    }
+}*/
+
+fn instance(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-    entity_with_hp: Query<(Entity, &Children, &Health), (Without<HpBar>, Without<HpBackground>)>,
-    mut hp_bar_child: Query<(Entity, &mut Transform, HpBar), Without<Without<HpBackground>>>,
-    mut hp_backround_child: Query<(Entity, &Transform, HpBackground), Without<HpBar>>,
+    entity_with_hp: Query<(Entity, Ref<Health>), With<GlobalTransform>>,
+    mut ui_materials: ResMut<Assets<HpBarUiMaterial>>,
 ) {
-    let hp_bar_width = 15.0;
-    let hp_bar_height = 1.0;
-    let padding = 0.2;
-    for ((entity, children, hp)) in entity_with_hp.iter() {
-        let should_display_bar = hp.current != hp.max || hp.current == 0;
-        for &child in children.iter() {
-            let mut anchor_pt = None;
-            if let Ok((hp_bar_entity, transform, bar)) = hp_backround_child.get_mut(child) {
-                if !should_display_bar {
-                    commands.entity(entity).remove_children(&[hp_bar_entity]);
-                    commands.entity(hp_bar_entity).despawn();
-                }
-                anchor_pt = Some(transform.translation.xy());
-            }
-            if let Ok((hp_bar_entity, mut transform, bar)) = hp_bar_child.get_mut(child) {
-                if !should_display_bar {
-                    commands.entity(entity).remove_children(&[hp_bar_entity]);
-                    commands.entity(hp_bar_entity).despawn();
-                } else {
-                    let scale = hp.current as f32 / hp.max as f32;
-                    transform.scale.x = scale;
-                    transform.translation.x = anchor_pt.unwrap().x - scale * 0.5 + padding;
-                }
-            }
-            // get the health of each child unit
-            let health = q_child.get(child);
+    for ((entity, health)) in entity_with_hp.iter() {
+        if health.is_added() {
+            commands
+                .spawn((
+                    NodeBundle {
+                        style: Style {
+                            width: Val::Px(100.0),
+                            height: Val::Px(20.0),
+                            align_self: AlignSelf::Center,
+                            ..default()
+                        },
+                        background_color: Color::rgb(0.9, 0.9, 0.9).into(),
+                        //visibility: Visibility::Hidden,
+                        ..default()
+                    },
+                    HpBackground(entity),
+                ))
+                .with_children(|parent| {
+                    parent.spawn((
+                        MaterialNodeBundle {
+                            style: Style {
+                                padding: UiRect::all(Val::Px(3.0)),
+                                ..default()
+                            },
+                            material: ui_materials.add(HpBarUiMaterial {
+                                factor: 100.0,
+                                background_color: Color::rgb(0.1, 0.1, 0.1).into(),
+                                filled_color: Color::rgb(0.8, 0.2, 0.2).into(),
+                            }),
+                            ..default()
+                        },
+                        HpBar(entity),
+                    ));
+                });
         }
     }
-    let hp_bar_mesh_handle = Mesh2dHandle(meshes.add(Rectangle::new(
-        hp_bar_width,
-        hp_bar_height,
-    )));
-    let hp_bg_mesh_handle = Mesh2dHandle(meshes.add(Rectangle::new(
-        hp_bar_width,
-        hp_bar_height,
-    )));
-    let bg_color = Color::rgb(0.0, ));
-    commands.spawn(MaterialMesh2dBundle {
-        mesh: hp_bar_mesh_handle,
-        material: materials.add(color),
-        transform: Transform::from_xyz(
-            // Distribute shapes from -X_EXTENT to +X_EXTENT.
-            -X_EXTENT / 2. + i as f32 / (num_shapes - 1) as f32 * X_EXTENT,
-            0.0,
-            0.0,
-        ),
-        ..default()
-    });
+}
+
+fn update_positions(
+    mut commands: Commands,
+    entity_with_hp: Query<(&GlobalTransform, Option<&Collider>)>,
+    mut hp_bar: Query<(Entity, &HpBackground, &mut Style)>,
+    mut q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
+) {
+    let Some((camera_transform, camera_projection)) = q_cam.iter().next() else {
+        return;
+    };
+
+    for (bg_entity, background, mut style) in hp_bar.iter_mut() {
+        if let Ok((global_transform, collider)) = entity_with_hp.get(background.0) {
+            let world_position = global_transform.translation();
+
+            // Calculate the screen position of the entity
+            let screen_position = camera_projection
+                .world_to_viewport(camera_transform, world_position)
+                .unwrap();
+
+            // Calculate the offset for the health bar UI
+            let offset = Vec2::ZERO;
+            /*let offset = match collider {
+                Some(collider) => {
+                    // Adjust the offset based on the collider's dimensions
+                    let collider_height = collider.raw.compute_local_aabb().half_extents().y;
+                    Vec2::new(0.0, collider_height + 10.0)
+                },
+                None => Vec2::ZERO,
+            };*/
+
+            // Update the position of the health bar UI
+            style.left = Val::Px(screen_position.x + offset.x);
+            style.bottom = Val::Px(screen_position.y + offset.y);
+            style.position_type = PositionType::Absolute;
+            //*visibility = Visibility::Visible;
+        } else {
+            commands.entity(bg_entity).despawn();
+            // Hide the health bar UI if the entity is not found
+            //visibility = Visibility::Hidden;
+        }
+    }
+}
+
+#[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
+pub struct HpBarUiMaterial {
+    // A number between `0` and `1` indicating how much of the bar should be filled.
+    #[uniform(0)]
+    pub factor: f32,
+    #[uniform(1)]
+    pub background_color: Color,
+    #[uniform(2)]
+    pub filled_color: Color,
+}
+
+impl UiMaterial for HpBarUiMaterial {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/hp_bar.wgsl".into()
+    }
 }
