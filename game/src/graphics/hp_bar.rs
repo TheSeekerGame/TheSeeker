@@ -17,6 +17,7 @@ impl Plugin for HpBarsPlugin {
         app.add_systems(Update, instance);
         app.add_systems(Update, update_positions);
         app.add_systems(Update, update_hp);
+        app.add_systems(Update, update_visibility);
     }
 }
 
@@ -24,14 +25,6 @@ impl Plugin for HpBarsPlugin {
 struct HpBar(Entity);
 #[derive(Component)]
 struct HpBackground(Entity);
-
-/*fn update(time: Res<Time>, mut ui_materials: ResMut<Assets<HpBarUiMaterial>>) {
-    for (_, material) in ui_materials.iter_mut() {
-        // rainbow color effect
-        let new_color = Color::hsl((time.elapsed_seconds() * 60.0) % 360.0, 1., 0.5);
-        material.color = new_color.rgba_to_vec4();
-    }
-}*/
 
 fn instance(
     mut commands: Commands,
@@ -49,8 +42,8 @@ fn instance(
                             padding: UiRect::all(Val::Px(3.0)),
                             ..default()
                         },
-                        background_color: Color::rgb(0.5, 0.5, 0.5).into(),
-                        //visibility: Visibility::Hidden,
+                        background_color: Color::rgb(0.75, 0.75, 0.75).into(),
+                        visibility: Visibility::Hidden,
                         ..default()
                     },
                     HpBackground(entity),
@@ -61,13 +54,12 @@ fn instance(
                             style: Style {
                                 width: Val::Percent(100.0),
                                 height: Val::Percent(100.0),
-                                //padding: UiRect::all(Val::Px(3.0)),
                                 align_self: AlignSelf::Center,
                                 ..default()
                             },
                             material: ui_materials.add(HpBarUiMaterial {
                                 factor: 1.0,
-                                background_color: Color::rgb(0.1, 0.1, 0.1).into(),
+                                background_color: Color::rgb(0.15, 0.15, 0.15).into(),
                                 filled_color: Color::rgb(0.8, 0.2, 0.2).into(),
                             }),
                             ..default()
@@ -102,7 +94,6 @@ fn update_positions(
                 None => Vec3::ZERO,
             };
 
-            // Calculate the screen position of the entity
             let screen_position = camera
                 .world_to_viewport(camera_transform, world_position)
                 .unwrap();
@@ -119,26 +110,38 @@ fn update_positions(
             style.left = Val::Px(screen_position.x + offset.x);
             style.top = Val::Px(screen_position.y + offset.y);
             style.position_type = PositionType::Absolute;
-            //*visibility = Visibility::Visible;
         } else {
             commands.entity(bg_entity).despawn();
-            // Hide the health bar UI if the entity is not found
-            //visibility = Visibility::Hidden;
         }
     }
 }
 
 fn update_hp(
-    mut commands: Commands,
     entity_with_hp: Query<&Health>,
     mut hp_bar: Query<(&HpBar, &Handle<HpBarUiMaterial>)>,
     mut ui_materials: ResMut<Assets<HpBarUiMaterial>>,
-    //mut hp_bar_bg: Query<&mut Visibility, With<HpBackground>>,
 ) {
     for (hpbar, ui_mat_handle) in hp_bar.iter() {
         if let Ok(health) = entity_with_hp.get(hpbar.0) {
             if let Some(mat) = ui_materials.get_mut(ui_mat_handle) {
                 mat.factor = 1.0 * (health.current as f32 / health.max as f32)
+            }
+        }
+    }
+}
+
+fn update_visibility(
+    entity_with_hp: Query<Ref<Health>>,
+    mut hp_bar: Query<(&HpBackground, &mut Visibility)>,
+) {
+    for (hpbar, mut visibility) in hp_bar.iter_mut() {
+        if let Ok(health) = entity_with_hp.get(hpbar.0) {
+            if health.is_changed() {
+                if health.current == health.max {
+                    *visibility = Visibility::Hidden
+                } else {
+                    *visibility = Visibility::Inherited
+                }
             }
         }
     }
