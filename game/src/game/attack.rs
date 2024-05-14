@@ -37,7 +37,7 @@ pub struct Attack {
     pub max_lifetime: u32,
     pub damage: u32,
     pub attacker: Entity,
-    pub damaged: Vec<Entity>,
+    pub damaged: Vec<(Entity, u64)>,
 }
 
 #[derive(Bundle)]
@@ -102,7 +102,7 @@ fn attack_damage(
         Or<(With<PlayerGfx>, With<EnemyGfx>)>,
     >,
     mut commands: Commands,
-    //animation query to flash red?
+    time: Res<GameTime>, //animation query to flash red?
 ) {
     for (entity, pos, mut attack, attack_collider, maybe_pushback) in query.iter_mut() {
         let colliding_entities = spatial_query.intersect(
@@ -112,9 +112,11 @@ fn attack_damage(
             Some(entity),
         );
         for (entity, mut health, collider, gent, mut velocity) in damageable_query.iter_mut() {
-            if colliding_entities.contains(&entity) && !attack.damaged.contains(&entity) {
+            if colliding_entities.contains(&entity)
+                && attack.damaged.iter().find(|x| x.0 == entity).is_none()
+            {
                 health.current = health.current.saturating_sub(attack.damage);
-                attack.damaged.push(entity);
+                attack.damaged.push((entity, time.tick()));
                 if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
                     // is there any way to check if a slot is set?
                     anim_player.set_slot("Damage", true);

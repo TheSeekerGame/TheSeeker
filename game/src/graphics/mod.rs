@@ -1,4 +1,5 @@
 pub mod darkness;
+mod dmg_numbers;
 mod fog;
 
 use crate::graphics::darkness::DarknessPlugin;
