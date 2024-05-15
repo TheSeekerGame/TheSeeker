@@ -272,9 +272,6 @@ impl GenericState for Chasing {}
 struct Aggroed {
     target: Entity,
 }
-impl Aggroed {
-    const RANGE: f32 = 60.;
-}
 
 impl GentState for Aggroed {}
 impl Transitionable<Patrolling> for Aggroed {
@@ -353,7 +350,7 @@ impl GenericState for Waiting {}
 #[derive(Component)]
 enum Navigation {
     Grounded,
-    Falling,
+    // Falling,
     Blocked,
 }
 
@@ -456,7 +453,6 @@ fn patrolling(
     mut query: Query<
         (
             &GlobalTransform,
-            &Facing,
             &mut TransitionQueue,
             &mut AddQueue,
             Option<&Waiting>,
@@ -467,7 +463,7 @@ fn patrolling(
 ) {
     if let Ok((player_gent, player_trans)) = player_query.get_single() {
         let mut rng = rand::thread_rng();
-        for (trans, facing, mut transitions, mut additions, maybe_waiting) in query.iter_mut() {
+        for (trans, mut transitions, additions, maybe_waiting) in query.iter_mut() {
             let distance = trans
                 .translation()
                 .truncate()
@@ -489,7 +485,7 @@ fn patrolling(
         }
     //if there is no player
     } else {
-        for (trans, facing, transitions, mut additions, maybe_waiting) in query.iter_mut() {
+        for (trans, transitions, mut additions, maybe_waiting) in query.iter_mut() {
             if let Some(waiting) = maybe_waiting {
                 //when the animation is finished to transition back to idle
                 if waiting.ticks >= 15 * 8 {
@@ -620,8 +616,6 @@ fn aggro(
             if distance > Range::AGGRO {
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if !is_attacking && !is_grouped && !is_defending && distance > Range::MELEE {
-                //TODO: duration of retreat should be random
-                println!("should retreat");
                 transitions.push(Waiting::new_transition(Retreating {
                     ticks: 0,
                     max_ticks: rng.gen_range(24..300),
@@ -694,14 +688,13 @@ fn melee_attack(
             &mut MeleeAttack,
             &mut LinearVelocity,
             &Facing,
-            &GlobalTransform,
             &mut TransitionQueue,
         ),
         With<Enemy>,
     >,
     mut commands: Commands,
 ) {
-    for (entity, mut attack, mut velocity, facing, transform, mut trans_q) in query.iter_mut() {
+    for (entity, mut attack, mut velocity, facing, mut trans_q) in query.iter_mut() {
         velocity.x = 0.;
         attack.ticks += 1;
         if attack.ticks == 8 * MeleeAttack::STARTUP {
@@ -773,7 +766,6 @@ fn walking(
                 }
             },
             Navigation::Grounded => {},
-            _ => {},
         }
         walking.ticks += 1;
     }
@@ -784,7 +776,7 @@ fn retreating(
         (
             &Navigation,
             &Range,
-            &mut Facing,
+            &Facing,
             &mut LinearVelocity,
             &mut Retreating,
             &mut TransitionQueue,
@@ -793,18 +785,15 @@ fn retreating(
     >,
     player_query: Query<(Entity), With<Player>>,
 ) {
-    for (nav, range, mut facing, mut velocity, mut retreating, mut transitions) in query.iter_mut()
-    {
+    for (nav, range, facing, mut velocity, mut retreating, mut transitions) in query.iter_mut() {
         velocity.x = 20. * facing.direction();
         if matches!(nav, Navigation::Blocked) || retreating.ticks > retreating.max_ticks {
-            println!("blocked");
             velocity.x = 0.;
             match range {
                 Range::Melee => {
                     transitions.push(Retreating::new_transition(
                         Defense::default(),
                     ));
-                    println!("transitioned to defense from retreating due to done");
                 },
                 Range::Ranged => transitions.push(Retreating::new_transition(
                     RangedAttack {

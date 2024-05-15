@@ -168,7 +168,6 @@ fn setup_player(
 ) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
         //TODO: proper way of ensuring z is correct
-        //why is this getting changed? xpbd?
         xf_gent.translation.z = 15.;
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
@@ -876,7 +875,7 @@ fn player_grounded(
     {
         let mut time_of_impact = 0.0;
         let is_falling = ray_cast_info
-            .cast(&*spatial_query, &position, Some(entity))
+            .cast(&spatial_query, &position, Some(entity))
             .iter()
             .any(|x| {
                 time_of_impact = x.1.toi;
@@ -933,11 +932,7 @@ fn player_falling(
     {
         let fall_accel = config.fall_accel;
         let mut falling = true;
-        if let Some((hit_entity, toi)) = hits.cast(
-            &*spatial_query,
-            &transform,
-            Some(entity),
-        ) {
+        if let Some((hit_entity, toi)) = hits.cast(&spatial_query, &transform, Some(entity)) {
             //if we are ~touching the ground
             if (toi.toi + velocity.y * (1.0 / time.hz) as f32) < GROUNDED_THRESHOLD {
                 transitions.push(Falling::new_transition(Grounded));
@@ -970,30 +965,26 @@ fn player_sliding(
         &Gent,
         &ActionState<PlayerAction>,
         &mut TransitionQueue,
-        &mut Transform,
         &mut WallSlideTime,
         &mut LinearVelocity,
     )>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
 ) {
-    for (gent, action_state, mut transitions, mut trsnfrm, mut wall_slide_time, mut lin_vel) in
-        query.iter_mut()
+    for (gent, action_state, mut transitions, mut wall_slide_time, mut lin_vel) in query.iter_mut()
     {
         let mut direction: f32 = 0.0;
         if action_state.pressed(&PlayerAction::Move) {
             direction = action_state.value(&PlayerAction::Move);
         }
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            if wall_slide_time.sliding(&config) {
-                if action_state.just_pressed(&PlayerAction::Jump) {
-                    wall_slide_time.0 = f32::MAX;
-                    // Move away from the wall a bit so that friction stops
-                    lin_vel.x = -direction * config.move_accel_init;
-                    // Give a little boost for the frame that it takes for input to be received
-                    lin_vel.y = config.fall_accel;
-                    transitions.push(Falling::new_transition(Jumping))
-                }
+        if let Ok(player) = gfx_query.get_mut(gent.e_gfx) {
+            if wall_slide_time.sliding(&config) && action_state.just_pressed(&PlayerAction::Jump) {
+                wall_slide_time.0 = f32::MAX;
+                // Move away from the wall a bit so that friction stops
+                lin_vel.x = -direction * config.move_accel_init;
+                // Give a little boost for the frame that it takes for input to be received
+                lin_vel.y = config.fall_accel;
+                transitions.push(Falling::new_transition(Jumping))
             }
         }
     }

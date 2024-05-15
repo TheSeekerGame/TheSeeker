@@ -176,7 +176,6 @@ fn knockback(
         velocity.x = knockback.direction * 200.;
         if knockback.ticks > knockback.max_ticks {
             velocity.x = 0.;
-            println!("knockback done");
             commands.entity(entity).remove::<Knockback>();
         }
     }
@@ -208,7 +207,6 @@ fn attack_tick(mut query: Query<&mut Attack>) {
 fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
     for (entity, attack) in query.iter() {
         if attack.current_lifetime >= attack.max_lifetime {
-            println!("despawned attack collider");
             commands.entity(entity).despawn();
         }
     }
