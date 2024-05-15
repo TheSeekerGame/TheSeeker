@@ -234,7 +234,6 @@ fn setup_player(
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
             TransitionQueue::default(),
-            AddQueue::default(),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
@@ -259,7 +258,6 @@ impl Plugin for PlayerTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (transition.run_if(any_with_component::<TransitionQueue>),)
-                // .chain()
                 .in_set(PlayerStateSet::Transition)
                 .after(PlayerStateSet::Behavior)
                 .run_if(in_state(AppState::InGame)),
@@ -394,11 +392,6 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_collisions,
                 )
                     .chain()
-                    // .after(player_move)
-                    // .after(player_sliding)
-                    // .after(player_grounded)
-                    // .after(player_jump)
-                    // .after(player_falling)
                     .before(TransformPropagate)
                     .in_set(PlayerStateSet::Collisions),
             )

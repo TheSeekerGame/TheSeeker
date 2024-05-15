@@ -570,7 +570,6 @@ fn aggro(
             &mut Facing,
             &GlobalTransform,
             &mut TransitionQueue,
-            // &mut AddQueue,
             &Range,
             &Role,
             Has<Grouped>,
@@ -594,7 +593,6 @@ fn aggro(
         mut facing,
         trans,
         mut transitions,
-        // mut add_q,
         range,
         role,
         is_grouped,
@@ -604,6 +602,7 @@ fn aggro(
         is_defending,
     ) in query.iter_mut()
     {
+        //TODO: once over, simplify?
         if let Ok(player_trans) = player_query.get(aggroed.target) {
             let mut rng = rand::thread_rng();
             let is_attacking = is_r_attacking || is_m_attacking || is_d_attacking;
@@ -746,22 +745,12 @@ fn walking(
             &mut TransitionQueue,
             &mut AddQueue,
             //TODO: remove aggro, remove addqueue
-            Option<&Aggroed>,
         ),
         (With<Enemy>, Without<Retreating>),
     >,
-    spatial_query: Res<PhysicsWorld>,
-    time: Res<GameTime>,
 ) {
-    for (
-        mut nav,
-        mut facing,
-        mut velocity,
-        mut walking,
-        mut transitions,
-        mut add_q,
-        maybe_aggroed,
-    ) in query.iter_mut()
+    for (mut nav, mut facing, mut velocity, mut walking, mut transitions, mut add_q) in
+        query.iter_mut()
     {
         //set initial velocity
         velocity.x = -20. * facing.direction();
@@ -787,59 +776,6 @@ fn walking(
             _ => {},
         }
         walking.ticks += 1;
-
-        // velocity.x = -20. * facing.direction();
-        // if walking.ticks >= walking.max_ticks {
-        //     velocity.x = 0.;
-        //     transitions.push(Walking::new_transition(Waiting {
-        //         ticks: 0,
-        //         max_ticks: 240,
-        //     }));
-        //     add_q.add(Idle);
-        //     continue;
-        // }
-        // let ray_origin = Vec2::new(
-        //     g_transform.translation().x - 10. * facing.direction(),
-        //     g_transform.translation().y - 9.,
-        // );
-        // if let Some((hit_entity, first_hit)) = spatial_query.ray_cast(
-        //     ray_origin,
-        //     Vec2::NEG_Y,
-        //     //change
-        //     100.,
-        //     true,
-        //     InteractionGroups {
-        //         memberships: ENEMY,
-        //         filter: GROUND,
-        //     },
-        //     Some(entity),
-        // ) {
-        //     if first_hit.toi > 0.0 {
-        //         //if not aggro turn around to walk away from edge
-        //         if maybe_aggroed.is_none() {
-        //             *facing = match *facing {
-        //                 Facing::Right => Facing::Left,
-        //                 Facing::Left => Facing::Right,
-        //             };
-        //             velocity.x *= -1.;
-        //         } else {
-        //             velocity.x = 0.;
-        //         }
-        //     };
-        // } else if maybe_aggroed.is_none() {
-        //     *facing = match *facing {
-        //         Facing::Right => Facing::Left,
-        //         Facing::Left => Facing::Right,
-        //     };
-        //     velocity.x *= -1.;
-        // } else {
-        //     velocity.x = 0.;
-        // };
-        // //TODO: another shapecast in walking direction to check if we are walking into a wall?
-        // // if let Some(first_hit) = spatial_query.cast_shape(
-        // //
-        // // ) {}
-        // walking.ticks += 1;
     }
 }
 
