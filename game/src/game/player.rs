@@ -202,7 +202,6 @@ fn setup_player(
                         },
                     },
                     linear_velocity: LinearVelocity(Vec2::ZERO),
-                    // layers: CollisionLayers::new([Layer::Player], [Layer::EnemyAttack]),
                 },
                 coyote_time: Default::default(),
             },
@@ -239,7 +238,6 @@ fn setup_player(
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
-            //marker: Gfxent { e_gent},
             gent2gfx: TransformGfxFromGent {
                 pixel_aligned: false,
                 gent: e_gent,
