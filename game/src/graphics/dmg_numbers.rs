@@ -108,7 +108,7 @@ fn update_number(
         // apply a little wobble affect, and start each with a random different phase
         let global_pos = dmg_number.0
             + Vec3::new(
-                ((elapsed_time + dmg_number.1 * 7777.0).sin() * elapsed_time * 5.0) as f32,
+                ((elapsed_time + dmg_number.1 * 777777.0).sin() * elapsed_time * 5.0) as f32,
                 4.0 * elapsed_time as f32,
                 0.0,
             );
@@ -116,6 +116,7 @@ fn update_number(
             .world_to_viewport(camera_transform, global_pos)
             .unwrap();
 
+        // Fades the floating number out after waiting 4 seconds
         let a = text_style
             .color
             .a()
@@ -132,7 +133,6 @@ fn update_number(
             a,
         );
 
-        // Update the position of the health bar UI
         style.left = Val::Px(screen_position.x);
         style.top = Val::Px(screen_position.y);
         style.position_type = PositionType::Absolute;
