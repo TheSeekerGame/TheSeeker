@@ -78,7 +78,7 @@ pub struct Pushback {
 #[derive(Component)]
 pub struct Dead;
 
-fn attack_damage(
+pub fn attack_damage(
     spatial_query: Res<PhysicsWorld>,
     mut query: Query<(
         Entity,
