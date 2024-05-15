@@ -622,6 +622,7 @@ fn aggro(
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if !is_attacking && !is_grouped && !is_defending && distance > Range::MELEE {
                 //TODO: duration of retreat should be random
+                println!("should retreat");
                 transitions.push(Waiting::new_transition(Retreating {
                     ticks: 0,
                     max_ticks: rng.gen_range(24..300),
@@ -858,16 +859,9 @@ fn retreating(
 ) {
     for (nav, range, mut facing, mut velocity, mut retreating, mut transitions) in query.iter_mut()
     {
-        let mut done = false;
         velocity.x = 20. * facing.direction();
-        if let Range::Ranged = range {
-            done = true;
-        }
-        if let Navigation::Blocked = nav {
-            done = true;
-        }
-
-        if done {
+        if matches!(nav, Navigation::Blocked) || retreating.ticks > retreating.max_ticks {
+            println!("blocked");
             velocity.x = 0.;
             match range {
                 Range::Melee => {
@@ -882,7 +876,6 @@ fn retreating(
                         ticks: 0,
                     },
                 )),
-                // _ => {},
                 _ => transitions.push(Retreating::new_transition(
                     Waiting::default(),
                 )),
@@ -923,7 +916,7 @@ fn chasing(
                 .distance(p_transform.translation().truncate());
             //if we are outside our target range, walk closer.
             if distance > target_range {
-                velocity.x = -20. * facing.direction();
+                velocity.x = -35. * facing.direction();
                 //if we cant get any closer because of edge
                 if let Navigation::Blocked = nav {
                     velocity.x = 0.;
