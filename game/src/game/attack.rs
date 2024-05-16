@@ -151,12 +151,13 @@ pub fn attack_damage(
             if colliding_entities.contains(&entity)
                 && attack.damaged.iter().find(|x| x.0 == entity).is_none()
             {
-                health.current = if is_defending {
-                    health.current.saturating_sub(attack.damage / 4)
+                let damage_dealt = if is_defending {
+                    attack.damage / 4
                 } else {
-                    health.current.saturating_sub(attack.damage)
+                    attack.damage
                 };
-                attack.damaged.push((entity, time.tick()));
+                health.current = health.current.saturating_sub(damage_dealt);
+                attack.damaged.push((entity, time.tick(), damage_dealt));
                 if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
                     // is there any way to check if a slot is set?
                     anim_player.set_slot("Damage", true);
