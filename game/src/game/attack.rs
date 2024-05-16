@@ -85,6 +85,7 @@ pub struct DamageFlash {
 #[derive(Component, Default)]
 pub struct Pushback {
     pub direction: f32,
+    pub strength: f32,
 }
 
 //Component added to an entity damaged by a pushback attack
@@ -93,14 +94,16 @@ pub struct Knockback {
     pub ticks: u32,
     pub max_ticks: u32,
     pub direction: f32,
+    pub strength: f32,
 }
 
 impl Knockback {
-    pub fn new(direction: f32, max_ticks: u32) -> Self {
+    pub fn new(direction: f32, strength: f32, max_ticks: u32) -> Self {
         Knockback {
             ticks: 0,
             max_ticks,
             direction,
+            strength,
         }
     }
 }
@@ -154,9 +157,11 @@ pub fn attack_damage(
                     commands.entity(entity).insert(Dead);
                 }
                 if let Some(pushback) = maybe_pushback {
-                    commands
-                        .entity(entity)
-                        .insert(Knockback::new(pushback.direction, 16));
+                    commands.entity(entity).insert(Knockback::new(
+                        pushback.direction,
+                        pushback.strength,
+                        16,
+                    ));
                 }
             }
         }
@@ -173,7 +178,7 @@ fn knockback(
 ) {
     for (entity, mut knockback, mut velocity) in query.iter_mut() {
         knockback.ticks += 1;
-        velocity.x = knockback.direction * 200.;
+        velocity.x = knockback.direction * knockback.strength;
         if knockback.ticks > knockback.max_ticks {
             velocity.x = 0.;
             commands.entity(entity).remove::<Knockback>();

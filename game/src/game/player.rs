@@ -1035,6 +1035,7 @@ fn player_attack(
                     //TODO: add strength
                     Pushback {
                         direction: facing.direction(),
+                        strength: 80.,
                     },
                 ))
                 .set_parent(entity);
@@ -1044,7 +1045,6 @@ fn player_attack(
             transitions.push(Attacking::new_transition(CanAttack));
         }
     }
-    //3 attack chain,
 }
 
 ///play animations here, run after transitions

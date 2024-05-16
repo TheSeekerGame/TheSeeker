@@ -478,6 +478,9 @@ fn patrolling(
         match range {
             Range::Aggro | Range::Melee | Range::Ranged => {
                 transitions.push(Patrolling::new_transition(Aggroed));
+                transitions.push(Walking::new_transition(
+                    Waiting::default(),
+                ));
             },
             Range::Deaggro => {
                 if let Some(waiting) = maybe_waiting {
@@ -566,6 +569,7 @@ fn pushback_attack(
                     Attack::new(8, entity),
                     Pushback {
                         direction: -facing.direction(),
+                        strength: 100.,
                     },
                 ))
                 .set_parent(entity);
@@ -629,25 +633,7 @@ fn aggro(
                     transitions.push(Waiting::new_transition(Chasing));
                 }
             }
-            //TODO: make instant transition if walking to chasing
-            //
-            // } else if !is_attacking && !is_grouped && !is_defending && distance > Range::MELEE {
-            //     transitions.push(Waiting::new_transition(Retreating {
-            //         ticks: 0,
-            //         max_ticks: rng.gen_range(24..300),
-            //     }));
-            // } else if !is_attacking && !is_grouped && !is_defending && distance <= Range::MELEE {
-            //     transitions.push(Waiting::new_transition(
-            //         Defense::default(),
-            //     ));
-            // } else if distance > Range::MELEE && !is_grouped && is_defending {
-            //     transitions.push(Defense::new_transition(Waiting::new(
-            //         rng.gen_range(16..100),
-            //     )));
-            // } else if !is_attacking && is_grouped {
-            //     transitions.push(Waiting::new_transition(Chasing));
-            // }
-            //if there is no player it should also return to patrol state
+        //if there is no player it should also return to patrol state
         } else {
             transitions.push(Aggroed::new_transition(Patrolling));
         }
