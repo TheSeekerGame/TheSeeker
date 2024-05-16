@@ -37,7 +37,8 @@ pub struct Attack {
     pub max_lifetime: u32,
     pub damage: u32,
     pub attacker: Entity,
-    pub damaged: Vec<(Entity, u64)>,
+    /// (entity that got damaged, tick it was damaged, damage actually applied)
+    pub damaged: Vec<(Entity, u64, u32)>,
 }
 
 #[derive(Bundle)]

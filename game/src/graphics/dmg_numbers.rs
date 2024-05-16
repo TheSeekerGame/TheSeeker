@@ -35,7 +35,7 @@ fn instance(
     };
 
     for attack in attacks.iter() {
-        for (attacked, at_tick) in attack.damaged.iter() {
+        for (attacked, at_tick, dmg) in attack.damaged.iter() {
             if *at_tick == game_time.tick() {
                 // only spawn in a floating number for a new attack damage instance
                 if let Ok((transform, collider)) = entity_with_hp.get(*attacked) {
@@ -61,7 +61,7 @@ fn instance(
                                 + game_time.last_update().as_secs_f64(),
                         ),
                         TextBundle::from_section(
-                            format!("{}", attack.damage),
+                            format!("{}", dmg),
                             TextStyle {
                                 font: asset_server.load("font/Tektur-Regular.ttf"),
                                 font_size: 24.0,
