@@ -493,13 +493,10 @@ pub fn debug_colliders(
         if let Some(convex) = collider.shared_shape().as_convex_polygon() {
             let points = convex.points();
             let num_points = points.len();
-            println!("{points:?}");
             for i in 0..num_points {
                 let start = points[i];
                 // modulo wraps around the first point when we get to the end
                 let end = points[(i + 1) % num_points];
-                println!("{start:?}");
-                println!("{end:?}");
 
                 collider_gizmos.line_2d(
                     Vec2::new(pos.x + start.x, pos.y + start.y),

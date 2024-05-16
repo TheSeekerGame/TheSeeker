@@ -386,7 +386,11 @@ impl Plugin for PlayerBehaviorPlugin {
                     .run_if(any_matching::<(With<Falling>,)>()),
                 //consider a set for all movement/systems modify velocity, then collisions/move
                 //moves based on velocity
-                (hitfreeze, player_collisions)
+                (
+                    hitfreeze,
+                    set_movement_slots,
+                    player_collisions,
+                )
                     .chain()
                     .after(player_move)
                     .after(player_sliding)
@@ -579,7 +583,6 @@ fn player_idle(
 }
 
 fn player_move(
-    time: Res<GameTime>,
     config: Res<PlayerConfig>,
     mut q_gent: Query<
         (
@@ -591,7 +594,6 @@ fn player_move(
         ),
         (With<Player>),
     >,
-    mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for (mut velocity, action_state, mut facing, grounded, gent) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
@@ -628,14 +630,20 @@ fn player_move(
             config.max_move_vel,
         );
 
+        if direction > 0.0 {
+            *facing = Facing::Right;
+        } else if direction < 0.0 {
+            *facing = Facing::Left;
+        }
+    }
+}
+
+fn set_movement_slots(
+    mut q_gent: Query<(&LinearVelocity, &Gent), (With<Player>)>,
+    mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+) {
+    for (velocity, gent) in q_gent.iter_mut() {
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
-            // if direction > 0.0 {
-            //     player.set_slot("DirectionRight", true);
-            //     player.set_slot("DirectionLeft", false);
-            // } else if direction < 0.0 {
-            //     player.set_slot("DirectionRight", false);
-            //     player.set_slot("DirectionLeft", true);
-            // }
             if velocity.length() > 0.001 {
                 if velocity.x.abs() > velocity.y.abs() {
                     player.set_slot("MovingVertically", false);
@@ -659,11 +667,6 @@ fn player_move(
             } else {
                 player.set_slot("MovingDown", false);
             }
-        }
-        if direction > 0.0 {
-            *facing = Facing::Right;
-        } else if direction < 0.0 {
-            *facing = Facing::Left;
         }
     }
 }
@@ -1164,16 +1167,21 @@ fn player_attacking_animation(
             Has<Falling>,
             Has<Jumping>,
             Has<Running>,
+            Option<&HitFreezeTime>,
         ),
         Added<Attacking>,
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    config: Res<PlayerConfig>,
 ) {
-    for (gent, is_falling, is_jumping, is_running) in r_query.iter() {
+    for (gent, is_falling, is_jumping, is_running, hitfrozen) in r_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            let hitfrozen = hitfrozen
+                .map(|f| f.0 < config.hitfreeze_ticks)
+                .unwrap_or(false);
             if is_falling || is_jumping {
                 player.play_key("anim.player.SwordBasicAir")
-            } else if is_running {
+            } else if is_running && !hitfrozen {
                 player.play_key("anim.player.SwordBasicRun")
             } else {
                 player.play_key("anim.player.SwordBasicIdle")
