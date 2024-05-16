@@ -56,7 +56,7 @@ pub fn add_states(mut query: Query<(Entity, &mut AddQueue)>, mut commands: Comma
     }
 }
 
-#[derive(Component, Debug, Default)]
+#[derive(Component, Debug, Default, Clone)]
 pub enum Facing {
     #[default]
     Right,

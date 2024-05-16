@@ -1067,7 +1067,7 @@ impl Plugin for PlayerAnimationPlugin {
                 player_jumping_animation,
                 player_running_animation,
                 player_attacking_animation,
-                sprite_flip,
+                sprite_flip.after(player_attacking_animation),
             )
                 .in_set(PlayerStateSet::Animation)
                 .after(PlayerStateSet::Transition)
@@ -1193,14 +1193,30 @@ fn player_attacking_animation(
 }
 
 fn sprite_flip(
-    query: Query<(&Facing, &Gent)>,
+    query: Query<(&Facing, &Gent, Option<&WallSlideTime>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     mut current_direction: Local<bool>,
     mut old_direction: Local<bool>,
+    time: Res<GameTime>,
 ) {
-    for (facing, gent) in query.iter() {
+    for (facing, gent, wall_slide_time) in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             *old_direction = *current_direction;
+            let mut facing = facing.clone();
+
+            // Have the player face away from the wall if they are attacking while wall sliding
+            let pressed_on_wall = wall_slide_time
+                // checks that player is actually against the wall, rather then it being close
+                // enough time from the player having left the wall to still jump
+                // (ie: not wall_jump_coyote_time)
+                .map(|s| s.0 <= 1.0 / time.hz as f32)
+                .unwrap_or(false);
+            if pressed_on_wall && player.current_key() == Some("anim.player.SwordBasicAir") {
+                facing = match facing {
+                    Facing::Right => Facing::Left,
+                    Facing::Left => Facing::Right,
+                }
+            }
             match facing {
                 Facing::Right => {
                     //TODO: toggle facing script action
