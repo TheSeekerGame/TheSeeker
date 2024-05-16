@@ -377,7 +377,7 @@ impl Distribution<Role> for Standard {
     }
 }
 
-#[derive(Component, Debug, Reflect)]
+#[derive(Component, Debug, Reflect, PartialEq, Eq)]
 enum Range {
     Melee,
     Ranged,
@@ -387,10 +387,11 @@ enum Range {
 }
 
 #[derive(Component, Debug, Deref)]
+//Target entity, distance
 struct Target(Option<Entity>);
 
 impl Range {
-    const MELEE: f32 = 30.;
+    const MELEE: f32 = 16.;
     const RANGED: f32 = 40.;
     const AGGRO: f32 = 61.;
 }
@@ -606,13 +607,9 @@ fn aggro(
         (
             With<Enemy>,
             With<Aggroed>,
-            Without<Defense>,
-            Without<Chasing>,
-            Without<Retreating>,
-            Without<Walking>,
-            Without<RangedAttack>,
-            Without<MeleeAttack>,
-            Without<PushbackAttack>,
+            //each "substate" of aggro should return back to waiting when with wants to return control
+            //to aggro
+            With<Waiting>,
         ),
     >,
 ) {
@@ -816,33 +813,26 @@ fn chasing(
     mut query: Query<
         (
             &Navigation,
-            &GlobalTransform,
-            &mut LinearVelocity,
+            &Target,
             &Facing,
-            &Chasing,
             &Role,
             &Range,
+            &mut LinearVelocity,
             &mut TransitionQueue,
         ),
-        With<Enemy>,
+        (With<Enemy>, With<Chasing>),
     >,
-    player_query: Query<(Entity, &GlobalTransform), With<Player>>,
 ) {
-    for (nav, transform, mut velocity, facing, chasing, role, range, mut transitions) in
-        query.iter_mut()
-    {
-        //TODO: how should blocked from knockback interact with movement ai?
-        if let Ok((p_entity, p_transform)) = player_query.get_single() {
+    for (nav, target, facing, role, range, mut velocity, mut transitions) in query.iter_mut() {
+        if let Some(p_entity) = target.0 {
+            //TODO: how should blocked from knockback interact with movement ai?
             let target_range = match role {
-                Role::Ranged => Range::RANGED,
-                Role::Melee => Range::MELEE,
+                Role::Ranged => Range::Ranged,
+                Role::Melee => Range::Melee,
             };
-            let distance = transform
-                .translation()
-                .truncate()
-                .distance(p_transform.translation().truncate());
+
             //if we are outside our target range, walk closer.
-            if distance > target_range {
+            if *range != target_range {
                 velocity.x = -35. * facing.direction();
                 //if we cant get any closer because of edge
                 if let Navigation::Blocked = nav {
