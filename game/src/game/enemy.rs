@@ -395,38 +395,51 @@ impl Range {
     const AGGRO: f32 = 61.;
 }
 
+//Check how far the player is, set our range, set our target if applicable, turn to face player if
+//in range
 fn check_player_range(
     mut query: Query<
         (
             &mut Range,
             &mut Target,
+            &mut Facing,
             &GlobalTransform,
         ),
         With<Enemy>,
     >,
-    spatial_query: Res<PhysicsWorld>,
+    player_query: Query<(Entity, &GlobalTransform), (Without<Enemy>, With<Player>)>,
 ) {
-    for (mut range, mut target, transform) in query.iter_mut() {
-        let project_from = transform.translation().truncate();
-        if let Some((point_ent, projection)) = spatial_query.point_project(
-            project_from,
-            InteractionGroups::new(SENSOR, PLAYER),
-            None,
-        ) {
-            let distance = project_from.distance([projection.point.x, projection.point.y].into());
+    for (mut range, mut target, mut facing, trans) in query.iter_mut() {
+        if let Ok((player_e, player_trans)) = player_query.get_single() {
+            let distance = trans
+                .translation()
+                .truncate()
+                .distance(player_trans.translation().truncate());
+
+            //if we are in AGGRO range, face the player
+            if distance <= Range::AGGRO {
+                if trans.translation().x > player_trans.translation().x {
+                    *facing = Facing::Right;
+                } else if trans.translation().x < player_trans.translation().x {
+                    *facing = Facing::Left;
+                }
+            }
+
+            //set range and target
             if distance <= Range::MELEE {
                 *range = Range::Melee;
-                target.0 = Some(point_ent);
+                target.0 = Some(player_e);
             } else if distance <= Range::RANGED {
                 *range = Range::Ranged;
-                target.0 = Some(point_ent);
+                target.0 = Some(player_e);
             } else if distance <= Range::AGGRO {
                 *range = Range::Aggro;
-                target.0 = Some(point_ent);
+                target.0 = Some(player_e);
             } else {
                 *range = Range::Deaggro;
                 target.0 = None;
             }
+        //if there is no player
         } else {
             *range = Range::None;
             target.0 = None;
@@ -585,16 +598,14 @@ fn pushback_attack(
 fn aggro(
     mut query: Query<
         (
-            &Aggroed,
-            &mut Facing,
-            &GlobalTransform,
-            &mut TransitionQueue,
             &Range,
             &Target,
             Has<Grouped>,
+            &mut TransitionQueue,
         ),
         (
             With<Enemy>,
+            With<Aggroed>,
             Without<Defense>,
             Without<Chasing>,
             Without<Retreating>,
@@ -604,34 +615,20 @@ fn aggro(
             Without<PushbackAttack>,
         ),
     >,
-    player_query: Query<(&GlobalTransform), (Without<Enemy>, With<Player>)>,
 ) {
-    for (aggroed, mut facing, trans, mut transitions, range, target, is_grouped) in query.iter_mut()
-    {
-        if let Some(target_ent) = target.0 {
-            if let Ok(player_trans) = player_query.get(target_ent) {
-                let mut rng = rand::thread_rng();
-                //face player
-                if trans.translation().x > player_trans.translation().x {
-                    *facing = Facing::Right;
-                } else if trans.translation().x < player_trans.translation().x {
-                    *facing = Facing::Left;
-                }
-                let distance = trans
-                    .translation()
-                    .truncate()
-                    .distance(player_trans.translation().truncate());
-                //return to patrol if out of aggro range
-                if distance > Range::AGGRO {
-                    transitions.push(Aggroed::new_transition(Patrolling));
-                } else if !is_grouped {
-                    transitions.push(Waiting::new_transition(Retreating {
-                        ticks: 0,
-                        max_ticks: rng.gen_range(24..300),
-                    }));
-                } else if is_grouped {
-                    transitions.push(Waiting::new_transition(Chasing));
-                }
+    for (range, target, is_grouped, mut transitions) in query.iter_mut() {
+        if target.0.is_some() {
+            let mut rng = rand::thread_rng();
+            //return to patrol if out of aggro range
+            if matches!(range, Range::Deaggro) {
+                transitions.push(Aggroed::new_transition(Patrolling));
+            } else if !is_grouped {
+                transitions.push(Waiting::new_transition(Retreating {
+                    ticks: 0,
+                    max_ticks: rng.gen_range(24..300),
+                }));
+            } else if is_grouped {
+                transitions.push(Waiting::new_transition(Chasing));
             }
         //if there is no player it should also return to patrol state
         } else {
