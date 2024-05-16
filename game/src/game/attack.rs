@@ -27,7 +27,7 @@ impl Plugin for AttackPlugin {
                 .after(PlayerStateSet::Behavior)
                 .after(EnemyStateSet::Behavior)
                 .before(PlayerStateSet::Collisions)
-                .before(EnemyStateSet::Collisions), // .before(PlayerStateSet::Behavior),
+                .before(EnemyStateSet::Collisions),
         );
         app.add_systems(
             GameTickUpdate,
@@ -80,7 +80,6 @@ pub struct DamageFlash {
     pub max_ticks: u32,
 }
 
-//TODO: add strength
 //Component added to attack entity to indicate it causes knockback
 #[derive(Component, Default)]
 pub struct Pushback {
