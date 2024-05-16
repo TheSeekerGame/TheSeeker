@@ -4,7 +4,13 @@ use theseeker_engine::physics::{
 use theseeker_engine::{assets::animation::SpriteAnimation, gent::Gent, script::ScriptPlayer};
 
 use super::{enemy::EnemyGfx, player::PlayerGfx};
-use crate::{game::player::PlayerStateSet, prelude::*};
+use crate::{
+    game::{
+        enemy::{Defense, EnemyStateSet},
+        player::PlayerStateSet,
+    },
+    prelude::*,
+};
 
 pub struct AttackPlugin;
 
@@ -17,15 +23,22 @@ impl Plugin for AttackPlugin {
                 attack_tick,
                 attack_cleanup,
                 damage_flash,
+                knockback,
             )
                 .chain()
-                .before(PlayerStateSet::Behavior)
-                .after(update_sprite_colliders),
+                .after(update_sprite_colliders)
+                .after(PlayerStateSet::Behavior)
+                .after(EnemyStateSet::Behavior)
+                .before(PlayerStateSet::Collisions)
+                .before(EnemyStateSet::Collisions),
         );
         app.add_systems(
             GameTickUpdate,
             despawn_dead
+                //TODO: unify statesets?
                 .after(PlayerStateSet::Transition)
+                .after(EnemyStateSet::Transition)
+                //has to be before physics set or colliders sometimes linger
                 .before(PhysicsSet),
         );
     }
@@ -70,9 +83,31 @@ pub struct DamageFlash {
     pub max_ticks: u32,
 }
 
+//Component added to attack entity to indicate it causes knockback
 #[derive(Component, Default)]
 pub struct Pushback {
     pub direction: f32,
+    pub strength: f32,
+}
+
+//Component added to an entity damaged by a pushback attack
+#[derive(Component, Default, Debug)]
+pub struct Knockback {
+    pub ticks: u32,
+    pub max_ticks: u32,
+    pub direction: f32,
+    pub strength: f32,
+}
+
+impl Knockback {
+    pub fn new(direction: f32, strength: f32, max_ticks: u32) -> Self {
+        Knockback {
+            ticks: 0,
+            max_ticks,
+            direction,
+            strength,
+        }
+    }
 }
 
 //TODO: change to a gentstate once we have death animations
@@ -93,7 +128,7 @@ pub fn attack_damage(
         &mut Health,
         &Collider,
         &Gent,
-        &mut LinearVelocity,
+        Has<Defense>,
     )>,
     mut gfx_query: Query<
         (
@@ -112,12 +147,17 @@ pub fn attack_damage(
             attack_collider.0.collision_groups(),
             Some(entity),
         );
-        for (entity, mut health, collider, gent, mut velocity) in damageable_query.iter_mut() {
+        for (entity, mut health, collider, gent, is_defending) in damageable_query.iter_mut() {
             if colliding_entities.contains(&entity)
                 && attack.damaged.iter().find(|x| x.0 == entity).is_none()
             {
-                health.current = health.current.saturating_sub(attack.damage);
-                attack.damaged.push((entity, time.tick()));
+                let damage_dealt = if is_defending {
+                    attack.damage / 4
+                } else {
+                    attack.damage
+                };
+                health.current = health.current.saturating_sub(damage_dealt);
+                attack.damaged.push((entity, time.tick(), damage_dealt));
                 if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
                     // is there any way to check if a slot is set?
                     anim_player.set_slot("Damage", true);
@@ -129,13 +169,35 @@ pub fn attack_damage(
                 if health.current == 0 {
                     commands.entity(entity).insert(Dead);
                 }
-                //TODO: should happen after movement systems but before collision systems?
-                // if let Some(pushback) = maybe_pushback {
-                //     //TODO:this doesnt work
-                //     //also should add knockback gentstate
-                //     velocity.x = pushback.direction * 40.;
-                // }
+                if let Some(pushback) = maybe_pushback {
+                    commands.entity(entity).insert(Knockback::new(
+                        pushback.direction,
+                        pushback.strength,
+                        16,
+                    ));
+                }
             }
+        }
+    }
+}
+
+fn knockback(
+    mut query: Query<(
+        Entity,
+        &mut Knockback,
+        &mut LinearVelocity,
+        Has<Defense>,
+    )>,
+    mut commands: Commands,
+) {
+    for (entity, mut knockback, mut velocity, is_defending) in query.iter_mut() {
+        knockback.ticks += 1;
+        if !is_defending {
+            velocity.x = knockback.direction * knockback.strength;
+        }
+        if knockback.ticks > knockback.max_ticks {
+            velocity.x = 0.;
+            commands.entity(entity).remove::<Knockback>();
         }
     }
 }
@@ -166,7 +228,6 @@ fn attack_tick(mut query: Query<&mut Attack>) {
 fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
     for (entity, attack) in query.iter() {
         if attack.current_lifetime >= attack.max_lifetime {
-            println!("despawned attack collider");
             commands.entity(entity).despawn();
         }
     }

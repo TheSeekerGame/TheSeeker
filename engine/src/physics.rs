@@ -261,6 +261,7 @@ impl PhysicsWorld {
         origin: Vec2,
         cast: Vec2,
         max_toi: f32,
+        solid: bool,
         interaction: InteractionGroups,
         exclude: Option<Entity>,
     ) -> Option<(Entity, parry::query::RayIntersection)> {
@@ -279,7 +280,7 @@ impl PhysicsWorld {
             &self.col_set,
             &ray,
             max_toi,
-            true,
+            solid,
             filter,
         );
         if let Some((collider, intersection)) = result {

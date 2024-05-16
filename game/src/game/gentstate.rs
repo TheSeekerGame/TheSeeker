@@ -108,7 +108,7 @@ impl GentState for Idle {}
 // pub struct Attacking;
 // impl GentState for Attacking {}
 //
-#[derive(Component, Default, Debug)]
-#[component(storage = "SparseSet")]
-pub struct Hitstun;
-impl GentState for Hitstun {}
+// #[derive(Component, Default, Debug)]
+// #[component(storage = "SparseSet")]
+// pub struct Hitstun;
+// impl GentState for Hitstun {}

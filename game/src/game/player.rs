@@ -55,6 +55,7 @@ impl Plugin for PlayerPlugin {
 #[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum PlayerStateSet {
     Behavior,
+    Collisions,
     Transition,
     Animation,
 }
@@ -167,7 +168,6 @@ fn setup_player(
 ) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
         //TODO: proper way of ensuring z is correct
-        //why is this getting changed? xpbd?
         xf_gent.translation.z = 15.;
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
@@ -194,14 +194,12 @@ fn setup_player(
                         origin: Vec2::new(0.0, 0.0),
                         max_toi: f32::MAX,
                         direction: Direction2d::NEG_Y,
-                        //something seems sus here
                         interaction: InteractionGroups {
                             memberships: PLAYER,
                             filter: GROUND,
                         },
                     },
                     linear_velocity: LinearVelocity(Vec2::ZERO),
-                    // layers: CollisionLayers::new([Layer::Player], [Layer::EnemyAttack]),
                 },
                 coyote_time: Default::default(),
             },
@@ -234,11 +232,9 @@ fn setup_player(
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
             TransitionQueue::default(),
-            AddQueue::default(),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
-            //marker: Gfxent { e_gent},
             gent2gfx: TransformGfxFromGent {
                 pixel_aligned: false,
                 gent: e_gent,
@@ -260,7 +256,6 @@ impl Plugin for PlayerTransitionPlugin {
         app.add_systems(
             GameTickUpdate,
             (transition.run_if(any_with_component::<TransitionQueue>),)
-                // .chain()
                 .in_set(PlayerStateSet::Transition)
                 .after(PlayerStateSet::Behavior)
                 .run_if(in_state(AppState::InGame)),
@@ -373,17 +368,20 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                player_idle.run_if(any_with_component::<Idle>),
-                add_attack,
-                player_attack.run_if(any_with_component::<Attacking>),
-                player_move,
-                player_run.run_if(any_with_component::<Running>),
-                player_jump.run_if(any_with_component::<Jumping>),
-                player_grounded.run_if(any_with_component::<Grounded>),
-                player_falling.run_if(any_with_component::<Falling>),
-                player_sliding
-                    .before(player_jump)
-                    .run_if(any_matching::<(With<Falling>,)>()),
+                (
+                    player_idle.run_if(any_with_component::<Idle>),
+                    add_attack,
+                    player_attack.run_if(any_with_component::<Attacking>),
+                    player_move,
+                    player_run.run_if(any_with_component::<Running>),
+                    player_jump.run_if(any_with_component::<Jumping>),
+                    player_grounded.run_if(any_with_component::<Grounded>),
+                    player_falling.run_if(any_with_component::<Falling>),
+                    player_sliding
+                        .before(player_jump)
+                        .run_if(any_matching::<(With<Falling>,)>()),
+                )
+                    .in_set(PlayerStateSet::Behavior),
                 //consider a set for all movement/systems modify velocity, then collisions/move
                 //moves based on velocity
                 (
@@ -392,14 +390,10 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_collisions,
                 )
                     .chain()
-                    .after(player_move)
-                    .after(player_sliding)
-                    .after(player_grounded)
-                    .after(player_jump)
-                    .after(player_falling)
-                    .before(TransformPropagate),
+                    .before(TransformPropagate)
+                    .in_set(PlayerStateSet::Collisions),
             )
-                .in_set(PlayerStateSet::Behavior),
+                .chain(),
         );
     }
 }
@@ -697,7 +691,6 @@ fn player_run(
     }
 }
 
-//TODO: load jump properties from script/animation (velocity/accel + ticks/frames)
 fn player_jump(
     mut query: Query<
         (
@@ -792,6 +785,7 @@ fn player_collisions(
                             pos.translation.xy(),
                             Vec2::new(dir, 0.0),
                             shape.as_cuboid().unwrap().half_extents.x + 0.1,
+                            true,
                             InteractionGroups {
                                 memberships: PLAYER,
                                 filter: GROUND,
@@ -879,7 +873,7 @@ fn player_grounded(
     {
         let mut time_of_impact = 0.0;
         let is_falling = ray_cast_info
-            .cast(&*spatial_query, &position, Some(entity))
+            .cast(&spatial_query, &position, Some(entity))
             .iter()
             .any(|x| {
                 time_of_impact = x.1.toi;
@@ -936,11 +930,7 @@ fn player_falling(
     {
         let fall_accel = config.fall_accel;
         let mut falling = true;
-        if let Some((hit_entity, toi)) = hits.cast(
-            &*spatial_query,
-            &transform,
-            Some(entity),
-        ) {
+        if let Some((hit_entity, toi)) = hits.cast(&spatial_query, &transform, Some(entity)) {
             //if we are ~touching the ground
             if (toi.toi + velocity.y * (1.0 / time.hz) as f32) < GROUNDED_THRESHOLD {
                 transitions.push(Falling::new_transition(Grounded));
@@ -973,30 +963,26 @@ fn player_sliding(
         &Gent,
         &ActionState<PlayerAction>,
         &mut TransitionQueue,
-        &mut Transform,
         &mut WallSlideTime,
         &mut LinearVelocity,
     )>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
 ) {
-    for (gent, action_state, mut transitions, mut trsnfrm, mut wall_slide_time, mut lin_vel) in
-        query.iter_mut()
+    for (gent, action_state, mut transitions, mut wall_slide_time, mut lin_vel) in query.iter_mut()
     {
         let mut direction: f32 = 0.0;
         if action_state.pressed(&PlayerAction::Move) {
             direction = action_state.value(&PlayerAction::Move);
         }
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            if wall_slide_time.sliding(&config) {
-                if action_state.just_pressed(&PlayerAction::Jump) {
-                    wall_slide_time.0 = f32::MAX;
-                    // Move away from the wall a bit so that friction stops
-                    lin_vel.x = -direction * config.move_accel_init;
-                    // Give a little boost for the frame that it takes for input to be received
-                    lin_vel.y = config.fall_accel;
-                    transitions.push(Falling::new_transition(Jumping))
-                }
+        if let Ok(player) = gfx_query.get_mut(gent.e_gfx) {
+            if wall_slide_time.sliding(&config) && action_state.just_pressed(&PlayerAction::Jump) {
+                wall_slide_time.0 = f32::MAX;
+                // Move away from the wall a bit so that friction stops
+                lin_vel.x = -direction * config.move_accel_init;
+                // Give a little boost for the frame that it takes for input to be received
+                lin_vel.y = config.fall_accel;
+                transitions.push(Falling::new_transition(Jumping))
             }
         }
     }
@@ -1025,6 +1011,7 @@ fn player_attack(
         (
             Entity,
             &Gent,
+            &Facing,
             &mut Attacking,
             &mut TransitionQueue,
         ),
@@ -1032,7 +1019,7 @@ fn player_attack(
     >,
     mut commands: Commands,
 ) {
-    for (entity, gent, mut attacking, mut transitions) in query.iter_mut() {
+    for (entity, gent, facing, mut attacking, mut transitions) in query.iter_mut() {
         if attacking.ticks == Attacking::STARTUP * 8 {
             commands
                 .spawn((
@@ -1043,6 +1030,10 @@ fn player_attack(
                         ENEMY,
                     )),
                     Attack::new(16, entity),
+                    Pushback {
+                        direction: facing.direction(),
+                        strength: 80.,
+                    },
                 ))
                 .set_parent(entity);
         }
@@ -1051,7 +1042,6 @@ fn player_attack(
             transitions.push(Attacking::new_transition(CanAttack));
         }
     }
-    //3 attack chain,
 }
 
 ///play animations here, run after transitions
@@ -1093,7 +1083,6 @@ fn player_idle_animation(
     }
 }
 
-//TODO: add FallForward
 fn player_falling_animation(
     f_query: Query<
         (&Gent, Option<&WallSlideTime>),
