@@ -786,7 +786,7 @@ fn retreating(
 ) {
     for (range, facing, mut nav, mut velocity, mut retreating, mut transitions) in query.iter_mut()
     {
-        velocity.x = 20. * facing.direction();
+        velocity.x = 12. * facing.direction();
         if matches!(*nav, Navigation::Blocked) || retreating.ticks > retreating.max_ticks {
             velocity.x = 0.;
             *nav = Navigation::Grounded;
