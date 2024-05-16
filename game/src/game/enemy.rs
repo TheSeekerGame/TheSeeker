@@ -284,7 +284,7 @@ pub struct Defense {
     cooldown_ticks: u32,
 }
 impl Defense {
-    const COOLDOWN: u32 = 50;
+    const COOLDOWN: u32 = 30;
 }
 
 impl GentState for Defense {}
