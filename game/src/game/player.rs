@@ -194,7 +194,6 @@ fn setup_player(
                         origin: Vec2::new(0.0, 0.0),
                         max_toi: f32::MAX,
                         direction: Direction2d::NEG_Y,
-                        //something seems sus here
                         interaction: InteractionGroups {
                             memberships: PLAYER,
                             filter: GROUND,
@@ -692,7 +691,6 @@ fn player_run(
     }
 }
 
-//TODO: load jump properties from script/animation (velocity/accel + ticks/frames)
 fn player_jump(
     mut query: Query<
         (
@@ -1032,7 +1030,6 @@ fn player_attack(
                         ENEMY,
                     )),
                     Attack::new(16, entity),
-                    //TODO: add strength
                     Pushback {
                         direction: facing.direction(),
                         strength: 80.,
@@ -1086,7 +1083,6 @@ fn player_idle_animation(
     }
 }
 
-//TODO: add FallForward
 fn player_falling_animation(
     f_query: Query<
         (&Gent, Option<&WallSlideTime>),
