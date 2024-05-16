@@ -1,8 +1,10 @@
 pub mod darkness;
+mod dmg_numbers;
 mod fog;
 mod hp_bar;
 
 use crate::graphics::darkness::DarknessPlugin;
+use crate::graphics::dmg_numbers::DmgNumbersPlugin;
 use crate::graphics::fog::FogPlugin;
 use crate::graphics::hp_bar::HpBarsPlugin;
 use crate::prelude::*;
@@ -15,6 +17,7 @@ impl Plugin for GraphicsFxPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(FogPlugin);
         app.add_plugins(DarknessPlugin);
+        app.add_plugins(DmgNumbersPlugin);
         app.add_plugins(HpBarsPlugin);
     }
 }
