@@ -232,6 +232,7 @@ fn setup_player(
             },
             Falling,
             WallSlideTime(f32::MAX),
+            HitFreezeTime(u32::MAX, None),
             TransitionQueue::default(),
             AddQueue::default(),
         ));
@@ -300,20 +301,6 @@ impl GentState for Jumping {}
 impl GenericState for Jumping {}
 
 #[derive(Component, Default, Debug)]
-pub struct CoyoteTime(f32);
-
-/// Indicates that sliding is tracked for this entity
-#[derive(Component, Default, Debug)]
-pub struct WallSlideTime(f32);
-impl WallSlideTime {
-    /// Player is sliding if f32 value is less then the coyote time
-    /// f32 starts incrementing when the player stops pressing into the wall
-    fn sliding(&self, cfg: &PlayerConfig) -> bool {
-        self.0 <= cfg.max_coyote_time * 2.0
-    }
-}
-
-#[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Grounded;
 impl GentState for Grounded {}
@@ -350,6 +337,30 @@ impl Transitionable<Attacking> for CanAttack {
     type Removals = (CanAttack);
 }
 
+// Pseudo-States
+// Not quite the same as states, these components enable certain behaviours when attached,
+// and provide storage for that behaviours state
+
+/// If a player attack lands, locks their velocity for the configured number of ticks'
+//Tracks the attack entity which last caused the hirfreeze affect. (this way the same attack
+// doesn't trigger it muyltiple times)
+#[derive(Component, Default, Debug)]
+pub struct HitFreezeTime(u32, Option<Entity>);
+
+#[derive(Component, Default, Debug)]
+pub struct CoyoteTime(f32);
+
+/// Indicates that sliding is tracked for this entity
+#[derive(Component, Default, Debug)]
+pub struct WallSlideTime(f32);
+impl WallSlideTime {
+    /// Player is sliding if f32 value is less then the coyote time
+    /// f32 starts incrementing when the player stops pressing into the wall
+    fn sliding(&self, cfg: &PlayerConfig) -> bool {
+        self.0 <= cfg.max_coyote_time * 2.0
+    }
+}
+
 ///Player behavior systems.
 ///Do stuff here in states and add transitions to other states by pushing
 ///to a TransitionQueue.
@@ -375,7 +386,8 @@ impl Plugin for PlayerBehaviorPlugin {
                     .run_if(any_matching::<(With<Falling>,)>()),
                 //consider a set for all movement/systems modify velocity, then collisions/move
                 //moves based on velocity
-                player_collisions
+                (hitfreeze, player_collisions)
+                    .chain()
                     .after(player_move)
                     .after(player_sliding)
                     .after(player_grounded)
@@ -432,6 +444,9 @@ pub struct PlayerConfig {
     /// Onlly applies in the downward y direction while the player is falling
     /// and trying to walk into the wall
     sliding_friction: f32,
+
+    /// How many ticks is the players velocity locked to zero after landing an attack?
+    hitfreeze_ticks: u32,
 }
 
 fn load_player_config(
@@ -488,10 +503,55 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "fall_accel", |val| config.fall_accel = val);
     update_field(&mut errors, &cfg.0, "max_coyote_time", |val| config.max_coyote_time = val);
     update_field(&mut errors, &cfg.0, "sliding_friction", |val| config.sliding_friction = val);
+    update_field(&mut errors, &cfg.0, "hitfreeze_ticks", |val| config.hitfreeze_ticks = val as u32);
 
    for error in errors{
        warn!("failed to load player cfg value: {}", error);
    }
+}
+
+fn hitfreeze(
+    mut player_q: Query<
+        (
+            Entity,
+            &mut HitFreezeTime,
+            &mut LinearVelocity,
+        ),
+        (With<Player>),
+    >,
+    attack_q: Query<(Entity, &Attack)>,
+    config: Res<PlayerConfig>,
+) {
+    // Track if we need to initialize a hitfreeze affect
+    for ((attack_entity, attack)) in attack_q.iter() {
+        if !attack.damaged.is_empty() {
+            // Make sure the entity doing the attack is actually the player
+            if let Ok((entity, mut hitfreeze, _)) = player_q.get_mut(attack.attacker) {
+                // If its the same exact attack entity as the last time the affect was activated.
+                // (for example, if the attack wasn't despawned yet) we don't want to
+                // trigger a timer reset again.
+                if let Some(hitfreeze_last_entity) = hitfreeze.1 {
+                    if hitfreeze_last_entity == attack_entity {
+                        continue;
+                    }
+                }
+                hitfreeze.0 = 0;
+                hitfreeze.1 = Some(attack_entity);
+            }
+        }
+    }
+
+    for ((entity, mut hitfreeze, mut linear_vel)) in player_q.iter_mut() {
+        if hitfreeze.0 < u32::MAX {
+            hitfreeze.0 += 1;
+        }
+        // Where the actual affect is applied.
+        // if its desired to check if its being applied in another system, can do a query and this
+        // same check,
+        if hitfreeze.0 < config.hitfreeze_ticks {
+            linear_vel.0 = Vec2::ZERO;
+        }
+    }
 }
 
 fn player_idle(
@@ -979,7 +1039,7 @@ fn player_attack(
                         PLAYER_ATTACK,
                         ENEMY,
                     )),
-                    Attack::new(16),
+                    Attack::new(16, entity),
                 ))
                 .set_parent(entity);
         }
