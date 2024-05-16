@@ -866,13 +866,14 @@ fn move_collide(
             &mut Transform,
             &mut Navigation,
             &Collider,
+            Has<Knockback>,
         ),
         With<Enemy>,
     >,
     time: Res<GameTime>,
     spatial_query: Res<PhysicsWorld>,
 ) {
-    for (mut linear_velocity, mut transform, mut nav, collider) in query.iter_mut() {
+    for (mut linear_velocity, mut transform, mut nav, collider, is_knocked) in query.iter_mut() {
         let shape = collider.0.shared_shape().clone();
         let dir = linear_velocity.x.signum();
         let x_len = linear_velocity.x.abs();
@@ -900,10 +901,11 @@ fn move_collide(
                         transform.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
                     transform.translation.x = new_pos.x;
                     transform.translation.y = new_pos.y;
-                    *nav = Navigation::Blocked;
+                    if !is_knocked {
+                        *nav = Navigation::Blocked;
+                    }
                 }
             } else {
-                //hmmm control flow?
                 break;
             };
         }
@@ -916,17 +918,15 @@ fn move_collide(
         if let Some((entity, first_hit)) = spatial_query.ray_cast(
             Vec2::new(front, transform.translation.y - 10.),
             Vec2::new(dir, 0.),
-            //should be max velocity
             x_len / time.hz as f32,
             false,
             interaction,
             None,
         ) {
-            // println!("hit edge?");
-            // dbg!(first_hit);
-            *nav = Navigation::Blocked;
+            if !is_knocked {
+                *nav = Navigation::Blocked;
+            }
             projected_velocity.x = first_hit.toi * dir;
-            // dbg!(projected_velocity.x);
         }
 
         transform.translation = (transform.translation.xy()
