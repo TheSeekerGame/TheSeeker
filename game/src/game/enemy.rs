@@ -280,7 +280,7 @@ impl Transitionable<Patrolling> for Aggroed {
 
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
-struct Defense {
+pub struct Defense {
     cooldown_ticks: u32,
 }
 impl Defense {
@@ -390,8 +390,8 @@ enum Range {
 struct Target(Option<Entity>);
 
 impl Range {
-    const MELEE: f32 = 20.;
-    const RANGED: f32 = 60.;
+    const MELEE: f32 = 30.;
+    const RANGED: f32 = 40.;
     const AGGRO: f32 = 61.;
 }
 

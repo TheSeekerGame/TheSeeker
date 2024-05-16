@@ -5,7 +5,10 @@ use theseeker_engine::{assets::animation::SpriteAnimation, gent::Gent, script::S
 
 use super::{enemy::EnemyGfx, player::PlayerGfx};
 use crate::{
-    game::{enemy::EnemyStateSet, player::PlayerStateSet},
+    game::{
+        enemy::{Defense, EnemyStateSet},
+        player::PlayerStateSet,
+    },
     prelude::*,
 };
 
@@ -120,7 +123,13 @@ pub fn attack_damage(
         &Collider,
         Option<&Pushback>,
     )>,
-    mut damageable_query: Query<(Entity, &mut Health, &Collider, &Gent)>,
+    mut damageable_query: Query<(
+        Entity,
+        &mut Health,
+        &Collider,
+        &Gent,
+        Has<Defense>,
+    )>,
     mut gfx_query: Query<
         (
             Entity,
@@ -138,11 +147,15 @@ pub fn attack_damage(
             attack_collider.0.collision_groups(),
             Some(entity),
         );
-        for (entity, mut health, collider, gent) in damageable_query.iter_mut() {
+        for (entity, mut health, collider, gent, is_defending) in damageable_query.iter_mut() {
             if colliding_entities.contains(&entity)
                 && attack.damaged.iter().find(|x| x.0 == entity).is_none()
             {
-                health.current = health.current.saturating_sub(attack.damage);
+                health.current = if is_defending {
+                    health.current.saturating_sub(attack.damage / 4)
+                } else {
+                    health.current.saturating_sub(attack.damage)
+                };
                 attack.damaged.push((entity, time.tick()));
                 if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
                     // is there any way to check if a slot is set?
@@ -172,12 +185,15 @@ fn knockback(
         Entity,
         &mut Knockback,
         &mut LinearVelocity,
+        Has<Defense>,
     )>,
     mut commands: Commands,
 ) {
-    for (entity, mut knockback, mut velocity) in query.iter_mut() {
+    for (entity, mut knockback, mut velocity, is_defending) in query.iter_mut() {
         knockback.ticks += 1;
-        velocity.x = knockback.direction * knockback.strength;
+        if !is_defending {
+            velocity.x = knockback.direction * knockback.strength;
+        }
         if knockback.ticks > knockback.max_ticks {
             velocity.x = 0.;
             commands.entity(entity).remove::<Knockback>();
