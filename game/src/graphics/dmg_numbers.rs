@@ -1,7 +1,9 @@
 use crate::camera::MainCamera;
 use crate::game::attack::{attack_damage, Attack};
+use crate::game::player::Player;
 use crate::prelude::Update;
 use bevy::prelude::*;
+use ran::ran_f64;
 use theseeker_engine::physics::Collider;
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 
@@ -25,7 +27,11 @@ struct DmgNumber(Vec3, f64);
 fn instance(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    entity_with_hp: Query<(&GlobalTransform, Option<&Collider>)>,
+    entity_with_hp: Query<(
+        &GlobalTransform,
+        Option<&Collider>,
+        Option<&Player>,
+    )>,
     attacks: Query<&Attack, With<GlobalTransform>>,
     game_time: Res<GameTime>,
     q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
@@ -38,14 +44,19 @@ fn instance(
         for (attacked, at_tick, dmg) in attack.damaged.iter() {
             if *at_tick == game_time.tick() {
                 // only spawn in a floating number for a new attack damage instance
-                if let Ok((transform, collider)) = entity_with_hp.get(*attacked) {
+                if let Ok((transform, collider, player)) = entity_with_hp.get(*attacked) {
                     let mut world_position = transform.translation();
 
                     // Makes the number start above the collider, if it exists
                     world_position += match collider {
                         Some(collider) => {
+                            let above_hb_offset = if player.is_some() { 1.0 } else { 10.0 };
                             let collider_height = collider.0.compute_aabb().half_extents().y;
-                            Vec3::new(0.0, collider_height + 10.0, 0.0)
+                            Vec3::new(
+                                (ran_f64() as f32 - 0.5) * 9.0,
+                                collider_height + above_hb_offset + (ran_f64() as f32) * 3.0,
+                                0.0,
+                            )
                         },
                         None => Vec3::ZERO,
                     };
@@ -106,12 +117,7 @@ fn update_number(
             - dmg_number.1;
 
         // apply a little wobble affect, and start each with a random different phase
-        let global_pos = dmg_number.0
-            + Vec3::new(
-                ((elapsed_time + dmg_number.1 * 777777.0).sin() * elapsed_time * 5.0) as f32,
-                4.0 * elapsed_time as f32,
-                0.0,
-            );
+        let global_pos = dmg_number.0 + Vec3::new(0.0, 4.0 * elapsed_time as f32, 0.0);
         let screen_position = camera
             .world_to_viewport(camera_transform, global_pos)
             .unwrap();
