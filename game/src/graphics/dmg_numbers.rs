@@ -55,11 +55,11 @@ fn instance(
                     // Makes the number start above the collider, if it exists
                     world_position += match collider {
                         Some(collider) => {
-                            let above_hb_offset = 10.0;
+                            let above_hb_offset = 11.0;
                             let collider_height = collider.0.compute_aabb().half_extents().y;
                             Vec3::new(
-                                (ran_f64() as f32 - 0.5) * 9.0,
-                                collider_height + above_hb_offset + (ran_f64() as f32) * 3.0,
+                                1.0,
+                                collider_height + above_hb_offset,
                                 0.0,
                             )
                         },
@@ -80,8 +80,8 @@ fn instance(
                             format!("{}", dmg),
                             TextStyle {
                                 font: asset_server.load("font/Tektur-Regular.ttf"),
-                                font_size: 24.0,
-                                color: Color::RED,
+                                font_size: 42.0,
+                                color: Color::WHITE,
                             },
                         )
                         .with_style(Style {
@@ -122,7 +122,7 @@ fn update_number(
             - dmg_number.1;
 
         // apply a little wobble affect, and start each with a random different phase
-        let global_pos = dmg_number.0 + Vec3::new(0.0, 4.0 * elapsed_time as f32, 0.0);
+        let global_pos = dmg_number.0 + Vec3::new(0.0, 3.0 * elapsed_time as f32, 0.0);
         let screen_position = camera
             .world_to_viewport(camera_transform, global_pos)
             .unwrap();
@@ -133,7 +133,7 @@ fn update_number(
             .a()
             .lerp(
                 0.0,
-                (elapsed_time as f32 - 4.0) / (max_time - 4.0),
+                (elapsed_time as f32 - 1.0) / (max_time - 1.0),
             )
             .clamp(0.0, 1.0);
 

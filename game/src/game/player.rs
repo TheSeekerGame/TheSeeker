@@ -1032,7 +1032,7 @@ fn player_attack(
                     Attack::new(16, entity),
                     Pushback {
                         direction: facing.direction(),
-                        strength: 80.,
+                        strength: 10.,
                     },
                 ))
                 .set_parent(entity);
