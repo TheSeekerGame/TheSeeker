@@ -45,12 +45,17 @@ fn instance(
             if *at_tick == game_time.tick() {
                 // only spawn in a floating number for a new attack damage instance
                 if let Ok((transform, collider, player)) = entity_with_hp.get(*attacked) {
+                    // Don't display damage numbers at all for the player
+                    if player.is_some() {
+                        continue;
+                    }
+
                     let mut world_position = transform.translation();
 
                     // Makes the number start above the collider, if it exists
                     world_position += match collider {
                         Some(collider) => {
-                            let above_hb_offset = if player.is_some() { 1.0 } else { 10.0 };
+                            let above_hb_offset = 10.0;
                             let collider_height = collider.0.compute_aabb().half_extents().y;
                             Vec3::new(
                                 (ran_f64() as f32 - 0.5) * 9.0,
