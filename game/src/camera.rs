@@ -82,7 +82,7 @@ fn setup_main_camera(mut commands: Commands) {
         tonemapping: Tonemapping::AcesFitted,
         ..default()
     };
-    camera.projection.scale = 1.0 / 6.0;
+    camera.projection.scale = 1.0 / 8.0;
 
     commands.spawn((
         MainCameraBundle {
@@ -123,7 +123,7 @@ fn camera_rig_follow_player(
     // before the camera switches to track that direction
     let max_err = 10.0;
     // Define how far ahead the camera will lead the player by
-    let lead_amnt = 15.0;
+    let lead_amnt = 20.0;
 
     // Default state is to predict the player goes forward, ie "right"
     let delta_x = player_xform.translation.x - rig.target.x;
@@ -191,7 +191,7 @@ pub(crate) fn update_camera_rig(
         return;
     };
 
-    let speed = 2.34;
+    let speed = 1.9;
 
     let new_xy = rig.camera.lerp(rig.target, time.delta_seconds() * speed);
 
