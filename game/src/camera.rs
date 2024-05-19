@@ -82,7 +82,7 @@ fn setup_main_camera(mut commands: Commands) {
         tonemapping: Tonemapping::AcesFitted,
         ..default()
     };
-    camera.projection.scale = 1.0 / 8.0;
+    camera.projection.scale = 1.0 / 9.0;
 
     commands.spawn((
         MainCameraBundle {
