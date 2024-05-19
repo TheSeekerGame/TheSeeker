@@ -964,6 +964,7 @@ impl Plugin for EnemyAnimationPlugin {
                 enemy_idle_animation,
                 enemy_defense_animation,
                 enemy_walking_animation,
+                enemy_chasing_animation,
                 enemy_retreat_animation,
                 enemy_ranged_attack_animation,
                 enemy_melee_attack_animation,
@@ -992,7 +993,7 @@ fn enemy_walking_animation(
     i_query: Query<
         &Gent,
         (
-            Or<(Added<Walking>, Added<Chasing>)>,
+            (Added<Walking>),
             (With<Enemy>),
         ),
     >,
@@ -1001,6 +1002,23 @@ fn enemy_walking_animation(
     for gent in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
             enemy.play_key("anim.spider.Walk");
+        }
+    }
+}
+
+fn enemy_chasing_animation(
+    i_query: Query<
+        &Gent,
+        (
+            (Added<Chasing>),
+            (With<Enemy>),
+        ),
+    >,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+) {
+    for gent in i_query.iter() {
+        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
+            enemy.play_key("anim.spider.Chase");
         }
     }
 }

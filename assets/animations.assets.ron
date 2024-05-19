@@ -193,6 +193,18 @@
         rows: 1,
         columns: 11,
     ),
+    "anim.spider.Chase": File (
+            path: "animations/spider/Chase.anim.toml",
+    ),
+        "anim.spider.Chase.image": File (
+            path: "animations/spider/Chase.png",
+    ),
+        "anim.spider.Chase.atlas": TextureAtlasLayout (
+            tile_size_x: 90.,
+            tile_size_y: 90.,
+            rows: 1,
+            columns: 6,
+    ),
     "anim.spider.DefensiveAttack": File (
         path: "animations/spider/DefensiveAttack.anim.toml",
     ),
