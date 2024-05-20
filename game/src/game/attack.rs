@@ -1,16 +1,15 @@
+use theseeker_engine::assets::animation::SpriteAnimation;
+use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
     update_sprite_colliders, Collider, LinearVelocity, PhysicsSet, PhysicsWorld,
 };
-use theseeker_engine::{assets::animation::SpriteAnimation, gent::Gent, script::ScriptPlayer};
+use theseeker_engine::script::ScriptPlayer;
 
-use super::{enemy::EnemyGfx, player::PlayerGfx};
-use crate::{
-    game::{
-        enemy::{Defense, EnemyStateSet},
-        player::PlayerStateSet,
-    },
-    prelude::*,
-};
+use super::enemy::EnemyGfx;
+use super::player::PlayerGfx;
+use crate::game::enemy::{Defense, EnemyStateSet};
+use crate::game::player::PlayerStateSet;
+use crate::prelude::*;
 
 pub struct AttackPlugin;
 
@@ -35,13 +34,34 @@ impl Plugin for AttackPlugin {
         app.add_systems(
             GameTickUpdate,
             despawn_dead
-                //TODO: unify statesets?
+                // TODO: unify statesets?
                 .after(PlayerStateSet::Transition)
                 .after(EnemyStateSet::Transition)
-                //has to be before physics set or colliders sometimes linger
+                // has to be before physics set or colliders sometimes linger
                 .before(PhysicsSet),
         );
     }
+}
+#[derive(Component)]
+pub struct Health {
+    pub current: u32,
+    pub max: u32,
+}
+
+#[derive(Component)]
+pub struct DamageFlash {
+    pub current_ticks: u32,
+    pub max_ticks: u32,
+}
+
+// TODO: change to a gentstate once we have death animations
+#[derive(Component)]
+pub struct Dead;
+
+#[derive(Bundle)]
+pub struct AttackBundle {
+    attack: Attack,
+    collider: Collider,
 }
 
 #[derive(Component)]
@@ -52,18 +72,6 @@ pub struct Attack {
     pub attacker: Entity,
     /// (entity that got damaged, tick it was damaged, damage actually applied)
     pub damaged: Vec<(Entity, u64, u32)>,
-}
-
-#[derive(Bundle)]
-pub struct AttackBundle {
-    attack: Attack,
-    collider: Collider,
-}
-
-#[derive(Component)]
-pub struct Health {
-    pub current: u32,
-    pub max: u32,
 }
 impl Attack {
     pub fn new(lifetime: u32, attacker: Entity) -> Self {
@@ -77,20 +85,14 @@ impl Attack {
     }
 }
 
-#[derive(Component)]
-pub struct DamageFlash {
-    pub current_ticks: u32,
-    pub max_ticks: u32,
-}
-
-//Component added to attack entity to indicate it causes knockback
+// Component added to attack entity to indicate it causes knockback
 #[derive(Component, Default)]
 pub struct Pushback {
     pub direction: f32,
     pub strength: f32,
 }
 
-//Component added to an entity damaged by a pushback attack
+// Component added to an entity damaged by a pushback attack
 #[derive(Component, Default, Debug)]
 pub struct Knockback {
     pub ticks: u32,
@@ -109,10 +111,6 @@ impl Knockback {
         }
     }
 }
-
-//TODO: change to a gentstate once we have death animations
-#[derive(Component)]
-pub struct Dead;
 
 pub fn attack_damage(
     spatial_query: Res<PhysicsWorld>,
@@ -138,7 +136,7 @@ pub fn attack_damage(
         Or<(With<PlayerGfx>, With<EnemyGfx>)>,
     >,
     mut commands: Commands,
-    time: Res<GameTime>, //animation query to flash red?
+    time: Res<GameTime>, // animation query to flash red?
 ) {
     for (entity, pos, mut attack, attack_collider, maybe_pushback) in query.iter_mut() {
         let colliding_entities = spatial_query.intersect(
@@ -233,7 +231,7 @@ fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
     }
 }
 
-//TODO: change to a gentstate Dying once we have death animations
+// TODO: change to a gentstate Dying once we have death animations
 fn despawn_dead(query: Query<(Entity, &Gent), With<Dead>>, mut commands: Commands) {
     for (entity, gent) in query.iter() {
         commands.entity(gent.e_gfx).despawn_recursive();
