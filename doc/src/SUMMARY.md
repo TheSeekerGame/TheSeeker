@@ -10,6 +10,8 @@
         - [Passive Skills](./game-design/game-mechanics/passive-skills.md)
         - [Platforming](./game-design/game-mechanics/platforming.md)
         - [Creatures / Ecosystem](./game-design/game-mechanics/creatures-ecosystem.md)
+        - [Auto Aim](./game-design/game-mechanics/auto-aim.md)
+        - [Cooldowns + Energy](./game-design/game-mechanics/cooldowns-and-energy.md)
 - [Development Policies](./policy.md)
     - [Assets Organization](./policy/assets.md)
     - [CLI Commands](./policy/cli.md)
