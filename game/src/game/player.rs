@@ -761,7 +761,7 @@ fn player_collisions(
                 linear_velocity.length() / time.hz as f32 + 0.5,
                 InteractionGroups {
                     memberships: PLAYER,
-                    filter: GROUND,
+                    filter: Group::from_bits_truncate(0b10010),
                 },
                 Some(entity),
             ) {

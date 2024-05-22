@@ -391,9 +391,10 @@ enum Range {
 struct Target(Option<Entity>);
 
 impl Range {
-    const AGGRO: f32 = 61.;
     const MELEE: f32 = 16.;
+    const AGGRO: f32 = 61.;
     const RANGED: f32 = 40.;
+    const GROUPED: f32 = 30.;
 }
 
 //Check how far the player is, set our range, set our target if applicable, turn to face player if
@@ -463,9 +464,9 @@ fn assign_group(
             Some(entity),
         ) {
             let closest = project_from.distance([projection.point.x, projection.point.y].into());
-            if closest < Range::AGGRO && !is_grouped {
+            if closest < Range::GROUPED && !is_grouped {
                 commands.entity(entity).insert(Grouped);
-            } else if closest >= Range::AGGRO && is_grouped {
+            } else if closest >= Range::GROUPED && is_grouped {
                 commands.entity(entity).remove::<Grouped>();
             }
         } else {
@@ -655,9 +656,6 @@ fn ranged_attack(
     for (entity, enemy_transform, mut attack, mut velocity, mut trans_q, mut add_q) in
         query.iter_mut()
     {
-        if attack.ticks == 0 {
-            velocity.x = 0.;
-        }
         attack.ticks += 1;
         if attack.ticks >= 15 * 8 {
             trans_q.push(RangedAttack::new_transition(
@@ -774,7 +772,7 @@ fn melee_attack(
     mut commands: Commands,
 ) {
     for (entity, mut attack, mut velocity, facing, mut trans_q) in query.iter_mut() {
-        velocity.x = 0.;
+        // velocity.x = 0.;
         attack.ticks += 1;
         if attack.ticks == 8 * MeleeAttack::STARTUP {
             //spawn attack hitbox collider as child
@@ -886,6 +884,11 @@ fn retreating(
                     Waiting::default(),
                 )),
             }
+        } else if matches!(range, Range::Melee) {
+            velocity.x = 0.;
+            transitions.push(Retreating::new_transition(
+                Defense::default(),
+            ));
         }
 
         retreating.ticks += 1;
@@ -964,7 +967,8 @@ fn move_collide(
         let z = transform.translation.z;
         let interaction = InteractionGroups {
             memberships: ENEMY,
-            filter: GROUND,
+            filter: Group::from_bits_truncate(0b10001),
+            // filter: GROUND,
         };
         while let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
             if let Some((e, first_hit)) = spatial_query.shape_cast(
@@ -987,11 +991,14 @@ fn move_collide(
                     if !is_knocked {
                         *nav = Navigation::Blocked;
                     }
+                } else {
+                    break;
                 }
             } else {
                 break;
             };
         }
+        //its easy to get stuck on the corner of an enemy...
 
         //if Navigation::Grounded
         //no support for air right now
