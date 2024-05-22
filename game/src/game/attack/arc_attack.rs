@@ -1,3 +1,4 @@
+use theseeker_engine::ballistics_math::solve_ballistic_arc;
 use theseeker_engine::physics::{Collider, LinearVelocity, PhysicsWorld};
 
 use crate::game::attack::Attack;
@@ -15,12 +16,24 @@ impl Projectile {
     /// Creates a projectile component with a starting [`LinearVelocity`]
     /// of magnitude vel, such that the projectile will intersect target.
     /// Use Playerconfig.fall_accel for gravity
-    pub fn with_vel(target: Vec2, start: Vec2, angle: f32, gravity: f32) -> Self {
+    pub fn with_vel(target: Vec2, start: Vec2, max_speed: f32, gravity: f32) -> Option<Self> {
         let diff = target - start;
-
-        Some(Self {
-            vel: LinearVelocity(Vec2::new(vx, vy)),
-        })
+        let result = solve_ballistic_arc(
+            start,
+            max_speed,
+            target,
+            Vec2::new(0.0, 0.0),
+            gravity * 60.0,
+        );
+        println!("{result:?}");
+        if result.2 != 0 {
+            Some(Self {
+                vel: LinearVelocity(result.0),
+            })
+        } else {
+            warn!("no trajectory found!");
+            None
+        }
     }
 }
 

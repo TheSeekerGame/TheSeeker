@@ -32,6 +32,7 @@ use crate::prelude::*;
 
 pub mod animation;
 pub mod assets;
+pub mod ballistics_math;
 pub mod condition;
 pub mod data;
 pub mod gent;
