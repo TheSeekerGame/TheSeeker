@@ -1,3 +1,5 @@
+pub mod arc_attack;
+
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
@@ -7,6 +9,7 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::enemy::EnemyGfx;
 use super::player::PlayerGfx;
+use crate::game::attack::arc_attack::arc_projectile;
 use crate::game::enemy::{Defense, EnemyStateSet};
 use crate::game::player::PlayerStateSet;
 use crate::prelude::*;
@@ -18,6 +21,7 @@ impl Plugin for AttackPlugin {
         app.add_systems(
             GameTickUpdate,
             (
+                arc_projectile,
                 attack_damage,
                 attack_tick,
                 attack_cleanup,
@@ -74,6 +78,7 @@ pub struct Attack {
     pub damaged: Vec<(Entity, u64, u32)>,
 }
 impl Attack {
+    /// Lifetime is in game ticks
     pub fn new(lifetime: u32, attacker: Entity) -> Self {
         Attack {
             current_lifetime: 0,

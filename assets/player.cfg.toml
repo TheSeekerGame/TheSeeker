@@ -27,6 +27,7 @@ jump_fall_accel = 5.0
 # How fast does the player accelerate downward while in the falling state?
 # (ie: after releasing the jump key)
 # (in pixels/second^2)
+# Note: sets the games global_gravity! (affects projectiles and other things that fall)
 fall_accel = 6.9
 
 # How many seconds does our characters innate hover boots work?

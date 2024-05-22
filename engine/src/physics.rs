@@ -522,5 +522,5 @@ pub fn into_vec2(vec: Unit<Vector<f32>>) -> Vec2 {
 /// A convenient component type for referring to velocity of an entity.
 ///
 /// Doesn't do anything on its own, but character controllers use it.
-#[derive(Component, Deref, DerefMut)]
+#[derive(Component, Deref, DerefMut, Debug)]
 pub struct LinearVelocity(pub Vec2);

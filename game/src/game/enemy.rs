@@ -1,23 +1,23 @@
-use crate::game::{attack::*, gentstate::*};
-use crate::prelude::*;
 #[cfg(feature = "dev")]
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use rand::distributions::Standard;
+use rapier2d::geometry::SharedShape;
+use rapier2d::parry::query::TOIStatus;
 use rapier2d::prelude::{Group, InteractionGroups};
-use rapier2d::{geometry::SharedShape, parry::query::TOIStatus};
+use theseeker_engine::animation::SpriteAnimationBundle;
+use theseeker_engine::assets::animation::SpriteAnimation;
+use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
-    Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, GROUND, PLAYER,
-    SENSOR,
+    into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, GROUND,
+    PLAYER, SENSOR,
 };
-use theseeker_engine::{
-    animation::SpriteAnimationBundle,
-    assets::animation::SpriteAnimation,
-    gent::{Gent, TransformGfxFromGent},
-    script::ScriptPlayer,
-};
-use theseeker_engine::{gent::GentPhysicsBundle, physics::into_vec2};
+use theseeker_engine::script::ScriptPlayer;
 
-use super::player::Player;
+use super::player::{Player, PlayerConfig};
+use crate::game::attack::arc_attack::Projectile;
+use crate::game::attack::*;
+use crate::game::gentstate::*;
+use crate::prelude::*;
 
 pub struct EnemyPlugin;
 
@@ -140,7 +140,7 @@ fn setup_enemy(
     mut commands: Commands,
 ) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
-        //TODO: ensure propper z order
+        // TODO: ensure propper z order
         xf_gent.translation.z = 14.;
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
@@ -149,8 +149,8 @@ fn setup_enemy(
                 enemy: Enemy,
                 marker: Gent { e_gfx },
                 phys: GentPhysicsBundle {
-                    //need to find a way to offset this one px toward back of enemys facing
-                    //direction
+                    // need to find a way to offset this one px toward back of enemys facing
+                    // direction
                     collider: Collider::cuboid(
                         22.0,
                         10.0,
@@ -309,9 +309,9 @@ struct MeleeAttack {
     ticks: u32,
 }
 impl MeleeAttack {
-    const STARTUP: u32 = 7;
     // const RECOVERY: u32 = 9;
     const MAX: u32 = 10;
+    const STARTUP: u32 = 7;
 }
 impl GentState for MeleeAttack {}
 impl GenericState for MeleeAttack {}
@@ -322,9 +322,9 @@ struct PushbackAttack {
     ticks: u32,
 }
 impl PushbackAttack {
-    const STARTUP: u32 = 5;
     // const RECOVERY: u32 = 7;
     const MAX: u32 = 10;
+    const STARTUP: u32 = 5;
 }
 impl GentState for PushbackAttack {}
 impl GenericState for PushbackAttack {}
@@ -387,17 +387,17 @@ enum Range {
 }
 
 #[derive(Component, Debug, Deref)]
-//Target entity, distance
+// Target entity, distance
 struct Target(Option<Entity>);
 
 impl Range {
+    const AGGRO: f32 = 61.;
     const MELEE: f32 = 16.;
     const RANGED: f32 = 40.;
-    const AGGRO: f32 = 61.;
 }
 
-//Check how far the player is, set our range, set our target if applicable, turn to face player if
-//in range
+// Check how far the player is, set our range, set our target if applicable, turn to face player if
+// in range
 fn check_player_range(
     mut query: Query<
         (
@@ -417,7 +417,7 @@ fn check_player_range(
                 .truncate()
                 .distance(player_trans.translation().truncate());
 
-            //if we are in AGGRO range, face the player
+            // if we are in AGGRO range, face the player
             if distance <= Range::AGGRO {
                 if trans.translation().x > player_trans.translation().x {
                     *facing = Facing::Right;
@@ -426,7 +426,7 @@ fn check_player_range(
                 }
             }
 
-            //set range and target
+            // set range and target
             if distance <= Range::MELEE {
                 *range = Range::Melee;
                 target.0 = Some(player_e);
@@ -440,7 +440,7 @@ fn check_player_range(
                 *range = Range::Deaggro;
                 target.0 = None;
             }
-        //if there is no player
+        // if there is no player
         } else {
             *range = Range::None;
             target.0 = None;
@@ -449,7 +449,7 @@ fn check_player_range(
     }
 }
 
-//check if any other enemies are nearby, if so assign to group
+// check if any other enemies are nearby, if so assign to group
 fn assign_group(
     query: Query<(Entity, &GlobalTransform, Has<Grouped>), With<Enemy>>,
     spatial_query: Res<PhysicsWorld>,
@@ -607,8 +607,8 @@ fn aggro(
         (
             With<Enemy>,
             With<Aggroed>,
-            //each "substate" of aggro should return back to waiting when with wants to return control
-            //to aggro
+            // each "substate" of aggro should return back to waiting when with wants to return control
+            // to aggro
             With<Waiting>,
         ),
     >,
@@ -616,7 +616,7 @@ fn aggro(
     for (range, target, is_grouped, mut transitions) in query.iter_mut() {
         if target.0.is_some() {
             let mut rng = rand::thread_rng();
-            //return to patrol if out of aggro range
+            // return to patrol if out of aggro range
             if matches!(range, Range::Deaggro) {
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if !is_grouped {
@@ -627,7 +627,7 @@ fn aggro(
             } else if is_grouped {
                 transitions.push(Waiting::new_transition(Chasing));
             }
-        //if there is no player it should also return to patrol state
+        // if there is no player it should also return to patrol state
         } else {
             transitions.push(Aggroed::new_transition(Patrolling));
         }
@@ -638,6 +638,7 @@ fn ranged_attack(
     mut query: Query<
         (
             Entity,
+            &GlobalTransform,
             &mut RangedAttack,
             &mut LinearVelocity,
             &mut TransitionQueue,
@@ -647,8 +648,11 @@ fn ranged_attack(
     >,
     player_query: Query<(&Transform), With<Player>>,
     mut commands: Commands,
+    config: Res<PlayerConfig>,
 ) {
-    for (entity, mut attack, mut velocity, mut trans_q, mut add_q) in query.iter_mut() {
+    for (entity, enemy_transform, mut attack, mut velocity, mut trans_q, mut add_q) in
+        query.iter_mut()
+    {
         if attack.ticks == 0 {
             velocity.x = 0.;
         }
@@ -659,20 +663,32 @@ fn ranged_attack(
             ));
             add_q.add(Idle);
         }
-        //if player isnt alive, do nothing, we will transiton back once animation finishes
+        // if player isnt alive, do nothing, we will transiton back once animation finishes
         let Ok(transform) = player_query.get(attack.target) else {
             continue;
         };
         if attack.ticks == RangedAttack::STARTUP * 8 {
-            commands.spawn((
-                Attack::new(100, entity),
-                Collider::cuboid(
-                    10.,
-                    10.,
-                    InteractionGroups::new(ENEMY_ATTACK, PLAYER),
-                ),
-                TransformBundle::from_transform(*transform),
-            ));
+            if let Some(projectile) = Projectile::with_vel(
+                transform.translation.xy(),
+                enemy_transform.translation().xy(),
+                45.0,
+                config.fall_accel,
+            ) {
+                commands.spawn((
+                    Attack::new(1000, entity),
+                    projectile,
+                    Collider::cuboid(
+                        10.,
+                        10.,
+                        InteractionGroups::new(ENEMY_ATTACK, PLAYER),
+                    ),
+                    TransformBundle::from(Transform::from_translation(
+                        enemy_transform.translation(),
+                    )),
+                ));
+            } else {
+                warn!("No solution for ballistic trajectory, use a higher projectile velocity!")
+            }
         }
     }
 }
@@ -694,11 +710,11 @@ fn melee_attack(
         velocity.x = 0.;
         attack.ticks += 1;
         if attack.ticks == 8 * MeleeAttack::STARTUP {
-            //spawn attack hitbox collider as child
+            // spawn attack hitbox collider as child
             let collider = commands
                 .spawn((
                     Collider::cuboid(
-                        //todo, half extents correct?
+                        // todo, half extents correct?
                         10.,
                         10.,
                         InteractionGroups {
@@ -733,7 +749,7 @@ fn walking(
             &mut Walking,
             &mut TransitionQueue,
             &mut AddQueue,
-            //TODO: remove addqueue
+            // TODO: remove addqueue
         ),
         (With<Enemy>, Without<Retreating>),
     >,
@@ -741,7 +757,7 @@ fn walking(
     for (mut nav, mut facing, mut velocity, mut walking, mut transitions, mut add_q) in
         query.iter_mut()
     {
-        //set initial velocity
+        // set initial velocity
         velocity.x = -20. * facing.direction();
         if walking.ticks >= walking.max_ticks {
             velocity.x = 0.;
@@ -825,23 +841,23 @@ fn chasing(
 ) {
     for (nav, target, facing, role, range, mut velocity, mut transitions) in query.iter_mut() {
         if let Some(p_entity) = target.0 {
-            //TODO: how should blocked from knockback interact with movement ai?
+            // TODO: how should blocked from knockback interact with movement ai?
             let target_range = match role {
                 Role::Ranged => Range::Ranged,
                 Role::Melee => Range::Melee,
             };
 
-            //if we are outside our target range, walk closer.
+            // if we are outside our target range, walk closer.
             if *range != target_range {
                 velocity.x = -35. * facing.direction();
-                //if we cant get any closer because of edge
+                // if we cant get any closer because of edge
                 if let Navigation::Blocked = nav {
                     velocity.x = 0.;
-                    //TODO: decide what should actually happen here
+                    // TODO: decide what should actually happen here
                     transitions.push(Chasing::new_transition(
                         Waiting::default(),
                     ));
-                    //probably transition to ranged attack either way?
+                    // probably transition to ranged attack either way?
                 }
             } else {
                 velocity.x = 0.;
@@ -910,9 +926,9 @@ fn move_collide(
             };
         }
 
-        //if Navigation::Grounded
-        //no support for air right now
-        //cast from underground in direction of movement
+        // if Navigation::Grounded
+        // no support for air right now
+        // cast from underground in direction of movement
         let mut projected_velocity = linear_velocity;
 
         if let Some((entity, first_hit)) = spatial_query.ray_cast(
@@ -990,13 +1006,7 @@ fn enemy_idle_animation(
 }
 
 fn enemy_walking_animation(
-    i_query: Query<
-        &Gent,
-        (
-            (Added<Walking>),
-            (With<Enemy>),
-        ),
-    >,
+    i_query: Query<&Gent, ((Added<Walking>), (With<Enemy>))>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
     for gent in i_query.iter() {
@@ -1007,13 +1017,7 @@ fn enemy_walking_animation(
 }
 
 fn enemy_chasing_animation(
-    i_query: Query<
-        &Gent,
-        (
-            (Added<Chasing>),
-            (With<Enemy>),
-        ),
-    >,
+    i_query: Query<&Gent, ((Added<Chasing>), (With<Enemy>))>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
     for gent in i_query.iter() {
@@ -1086,7 +1090,7 @@ fn sprite_flip(
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             match facing {
                 Facing::Right => {
-                    //TODO: toggle facing script action
+                    // TODO: toggle facing script action
                     player.set_slot("DirectionRight", true);
                     player.set_slot("DirectionLeft", false);
                 },
