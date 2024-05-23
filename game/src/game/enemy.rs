@@ -635,6 +635,7 @@ fn aggro(
 }
 
 fn ranged_attack(
+    spatial_query: Res<PhysicsWorld>,
     mut query: Query<
         (
             Entity,
@@ -669,12 +670,77 @@ fn ranged_attack(
             continue;
         };
         if attack.ticks == RangedAttack::STARTUP * 8 {
-            if let Some(projectile) = Projectile::with_vel(
+            // cast a ray midway between enemy and player to find height of ceiling
+            // we want to avoid
+            let mid_pt = (enemy_transform.translation().xy() + transform.translation.xy()) * 0.5;
+            // how far is the ceiling above the mid point of the projectile trajectory?
+            let mut ceiling = f32::MAX;
+            if let Some((hit_e, hit)) = spatial_query.ray_cast(
+                mid_pt,
+                Vec2::new(0.0, 1.0),
+                f32::MAX,
+                true,
+                InteractionGroups::new(ENEMY, GROUND),
+                None,
+            ) {
+                // only count it if the ray didn't start underground
+                if hit.toi != 0.0 {
+                    ceiling = mid_pt.y + hit.toi - enemy_transform.translation().y;
+                } else {
+                    // if it did start underground, fire another one to find how far underground, and then fire again from there + 0.1
+                    if let Some((hit_e, hit)) = spatial_query.ray_cast(
+                        mid_pt,
+                        Vec2::new(0.0, 1.0),
+                        f32::MAX,
+                        false,
+                        InteractionGroups::new(ENEMY, GROUND),
+                        None,
+                    ) {
+                        if let Some((hit_e, hit_2)) = spatial_query.ray_cast(
+                            mid_pt + Vec2::new(0.0, hit.toi + 0.001),
+                            Vec2::new(0.0, 1.0),
+                            f32::MAX,
+                            true,
+                            InteractionGroups::new(ENEMY, GROUND),
+                            None,
+                        ) {
+                            ceiling = mid_pt.y + hit.toi + hit_2.toi + 0.001
+                                - enemy_transform.translation().y;
+                        }
+                    }
+                }
+            }
+
+            // account for projectile width
+            ceiling -= 5.0;
+
+            let gravity = config.fall_accel * time.hz as f32;
+
+            if let Some(mut projectile) = Projectile::with_vel(
                 transform.translation.xy(),
                 enemy_transform.translation().xy(),
                 200.0,
-                config.fall_accel * time.hz as f32,
+                gravity,
             ) {
+                let max_proj_h = projectile.vel.y.powi(2) / (2.0 * gravity);
+                //println!("ceiling_h: {ceiling}, estimated_h: {max_proj_h}");
+                if max_proj_h >= ceiling {
+                    //if projectile would hit ceiling, lower available power proportionally
+                    let max_vel_y = (ceiling * (2.0 * gravity)).sqrt();
+                    let max_vel_x = max_vel_y / projectile.vel.y * projectile.vel.x;
+                    let max_vel = Vec2::new(max_vel_x, max_vel_y).length();
+                    //println!("trying again with new max vel: {max_vel}");
+                    if let Some(mut projectile_2) = Projectile::with_vel(
+                        transform.translation.xy(),
+                        enemy_transform.translation().xy(),
+                        max_vel,
+                        gravity,
+                    ) {
+                        projectile = projectile_2
+                    } else {
+                        //println!("can't find solution, ceiling too low");
+                    }
+                }
                 commands.spawn((
                     Attack::new(1000, entity),
                     projectile,
