@@ -386,7 +386,7 @@ impl Plugin for PlayerBehaviorPlugin {
                 //consider a set for all movement/systems modify velocity, then collisions/move
                 //moves based on velocity
                 (
-                    hitfreeze,
+                    // hitfreeze,
                     set_movement_slots,
                     player_collisions,
                 )

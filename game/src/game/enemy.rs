@@ -392,8 +392,8 @@ struct Target(Option<Entity>);
 
 impl Range {
     const MELEE: f32 = 16.;
+    const RANGED: f32 = 45.;
     const AGGRO: f32 = 61.;
-    const RANGED: f32 = 40.;
     const GROUPED: f32 = 30.;
 }
 
@@ -626,7 +626,13 @@ fn aggro(
                     max_ticks: rng.gen_range(24..300),
                 }));
             } else if is_grouped {
-                transitions.push(Waiting::new_transition(Chasing));
+                if matches!(range, Range::Melee) {
+                    transitions.push(Waiting::new_transition(
+                        MeleeAttack::default(),
+                    ));
+                } else {
+                    transitions.push(Waiting::new_transition(Chasing));
+                }
             }
         //if there is no player it should also return to patrol state
         } else {
@@ -641,10 +647,12 @@ fn ranged_attack(
         (
             Entity,
             &GlobalTransform,
+            &Range,
             &mut RangedAttack,
             &mut LinearVelocity,
             &mut TransitionQueue,
             &mut AddQueue,
+            Has<Grouped>,
         ),
         With<Enemy>,
     >,
@@ -653,10 +661,19 @@ fn ranged_attack(
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
-    for (entity, enemy_transform, mut attack, mut velocity, mut trans_q, mut add_q) in
-        query.iter_mut()
+    for (
+        entity,
+        enemy_transform,
+        range,
+        mut attack,
+        mut velocity,
+        mut trans_q,
+        mut add_q,
+        is_grouped,
+    ) in query.iter_mut()
     {
         attack.ticks += 1;
+        // if attack.ticks >= 15 * 8 || !matches!(range, Range::Ranged) {
         if attack.ticks >= 15 * 8 {
             trans_q.push(RangedAttack::new_transition(
                 Waiting::default(),
@@ -754,6 +771,11 @@ fn ranged_attack(
             } else {
                 warn!("No solution for ballistic trajectory, use a higher projectile velocity!")
             }
+        }
+        if matches!(range, Range::Melee) && is_grouped {
+            trans_q.push(RangedAttack::new_transition(
+                MeleeAttack::default(),
+            ));
         }
     }
 }
@@ -881,13 +903,25 @@ fn retreating(
                     },
                 )),
                 _ => transitions.push(Retreating::new_transition(
-                    Waiting::default(),
+                    RangedAttack {
+                        target: player_query.get_single().expect("no player"),
+                        ticks: 0,
+                    },
+                    // Waiting::default(),
                 )),
             }
         } else if matches!(range, Range::Melee) {
             velocity.x = 0.;
             transitions.push(Retreating::new_transition(
                 Defense::default(),
+            ));
+        } else if matches!(range, Range::Ranged) {
+            velocity.x = 0.;
+            transitions.push(Retreating::new_transition(
+                RangedAttack {
+                    target: player_query.get_single().expect("no player"),
+                    ticks: 0,
+                },
             ));
         }
 
