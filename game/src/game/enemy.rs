@@ -671,7 +671,7 @@ fn ranged_attack(
             if let Some(projectile) = Projectile::with_vel(
                 transform.translation.xy(),
                 enemy_transform.translation().xy(),
-                100.0,
+                200.0,
                 config.fall_accel,
             ) {
                 commands.spawn((

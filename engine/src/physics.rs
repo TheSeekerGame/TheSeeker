@@ -420,6 +420,22 @@ pub fn update_query_pipeline(
             // what entity its associated with.
             col_set.get_mut(col_id).unwrap().user_data = entity.to_bits() as u128;
             //println!("new collider added: {col_id:?}");
+
+            col_set
+                .get_mut(col_id)
+                .unwrap()
+                .set_translation(into_vec(transform.translation().xy()));
+            col_set
+                .get_mut(col_id)
+                .unwrap()
+                .set_rotation(UnitComplex::new(
+                    transform
+                        .compute_transform()
+                        .rotation
+                        .to_euler(EulerRot::XYZ)
+                        .2,
+                ));
+
             col_id
         } else {
             handle.unwrap().0

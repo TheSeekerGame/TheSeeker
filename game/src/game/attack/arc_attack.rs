@@ -6,7 +6,8 @@ use crate::game::player::PlayerConfig;
 use crate::prelude::*;
 
 /// Attach this to an [`Attack`] entity to make it move with a fixed initial velocity
-/// (in pixels/s) and despawn on collision
+/// (in pixels/s) and despawn on collision. (The despawn on collision logic is
+/// handled by the [`attack_damage`] system)
 #[derive(Component, Debug)]
 pub struct Projectile {
     pub vel: LinearVelocity,
@@ -15,30 +16,29 @@ pub struct Projectile {
 impl Projectile {
     /// Creates a projectile component with a starting [`LinearVelocity`]
     /// of magnitude vel, such that the projectile will intersect target.
-    /// Use Playerconfig.fall_accel for gravity
+    /// needs Playerconfig.fall_accel to account for gravity
     pub fn with_vel(target: Vec2, start: Vec2, max_speed: f32, gravity: f32) -> Option<Self> {
-        let diff = target - start;
-        let result = solve_ballistic_arc(
-            start,
-            max_speed,
-            target,
-            Vec2::new(0.0, 0.0),
-            gravity * 60.0,
-        );
+        let result = solve_ballistic_arc(start, max_speed, target, gravity * 96.0);
         println!("{result:?}");
         if result.2 != 0 {
-            Some(Self {
-                vel: LinearVelocity(result.0),
-            })
+            // use the arc that has the bigger y component
+            if result.0.y > result.1.y {
+                Some(Self {
+                    vel: LinearVelocity(result.0),
+                })
+            } else {
+                Some(Self {
+                    vel: LinearVelocity(result.1),
+                })
+            }
         } else {
-            warn!("no trajectory found!");
             None
         }
     }
 }
 
+/// Applies gravity to the projectile
 pub fn arc_projectile(
-    spatial_query: Res<PhysicsWorld>,
     mut query: Query<
         (
             &mut Transform,
@@ -47,7 +47,6 @@ pub fn arc_projectile(
         ),
         With<Attack>,
     >,
-    mut commands: Commands,
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {

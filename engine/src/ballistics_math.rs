@@ -222,7 +222,54 @@ fn solve_quartic(
     num
 }
 
+/// For a stationary target
 pub fn solve_ballistic_arc(
+    proj_pos: Vec2,
+    proj_speed: f32,
+    target: Vec2,
+    gravity: f32,
+) -> (Vec2, Vec2, i32) {
+    // Handling these cases is up to your project's coding standards
+    assert!(
+        proj_pos != target && proj_speed > 0.0 && gravity > 0.0,
+        "solve_ballistic_arc called with invalid data"
+    );
+
+    let mut s0 = Vec2::ZERO;
+    let mut s1 = Vec2::ZERO;
+
+    let diff = target - proj_pos;
+    let ground_dist = diff.length();
+    let speed2 = proj_speed * proj_speed;
+    let speed4 = proj_speed * proj_speed * proj_speed * proj_speed;
+    let y = diff.y;
+    let x = ground_dist;
+    let gx = gravity * x;
+    let root = speed4 - gravity * (gravity * x * x + 2.0 * y * speed2);
+
+    // No solution
+    if root < 0.0 {
+        return (s0, s1, 0);
+    }
+
+    let root = root.sqrt();
+    let low_ang = f32::atan2(speed2 - root, gx);
+    let high_ang = f32::atan2(speed2 + root, gx);
+    let num_solutions = if low_ang != high_ang { 2 } else { 1 };
+
+    let ground_dir = diff.normalize();
+    s0 = ground_dir * f32::cos(low_ang) * proj_speed
+        + Vec2::new(0.0, f32::sin(low_ang) * proj_speed);
+    if num_solutions > 1 {
+        s1 = ground_dir * f32::cos(high_ang) * proj_speed
+            + Vec2::new(0.0, f32::sin(high_ang) * proj_speed);
+    }
+
+    (s0, s1, num_solutions)
+}
+
+/// For a moving target
+pub fn solve_ballistic_arc_moving(
     proj_pos: Vec2,
     proj_speed: f32,
     target_pos: Vec2,
