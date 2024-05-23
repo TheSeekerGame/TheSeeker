@@ -153,7 +153,7 @@ pub fn attack_damage(
             attack_collider
                 .0
                 .collision_groups()
-                .with_filter(attack_collider.0.collision_groups().filter),
+                .with_filter(attack_collider.0.collision_groups().filter | GROUND),
             Some(entity),
         );
         for (entity, mut health, collider, gent, is_defending) in damageable_query.iter_mut() {
@@ -187,7 +187,11 @@ pub fn attack_damage(
                 }
             }
         }
-        if maybe_projectile.is_some() && !colliding_entities.is_empty() {
+        if maybe_projectile.is_some()
+            && !colliding_entities.is_empty()
+            && attack.current_lifetime > 1
+        {
+            println!("collided with ground aparently");
             commands.entity(entity).despawn();
         }
     }

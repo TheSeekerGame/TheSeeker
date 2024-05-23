@@ -678,8 +678,8 @@ fn ranged_attack(
                     Attack::new(1000, entity),
                     projectile,
                     Collider::cuboid(
-                        10.,
-                        10.,
+                        5.,
+                        5.,
                         InteractionGroups::new(ENEMY_ATTACK, PLAYER),
                     ),
                     TransformBundle::from(Transform::from_translation(
