@@ -16,10 +16,12 @@ pub struct Projectile {
 impl Projectile {
     /// Creates a projectile component with a starting [`LinearVelocity`]
     /// of magnitude vel, such that the projectile will intersect target.
-    /// needs Playerconfig.fall_accel to account for gravity
+    ///
+    /// set gravity to Playerconfig.fall_accel * time.hz
+    /// since Playerconfig.fall_accel is in pixels/tick, you need to multiply by the time.hz
+    /// to convert to per/second units, like velocity is.
     pub fn with_vel(target: Vec2, start: Vec2, max_speed: f32, gravity: f32) -> Option<Self> {
-        let result = solve_ballistic_arc(start, max_speed, target, gravity * 96.0);
-        println!("{result:?}");
+        let result = solve_ballistic_arc(start, max_speed, target, gravity);
         if result.2 != 0 {
             // use the arc that has the bigger y component
             if result.0.y > result.1.y {

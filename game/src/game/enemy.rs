@@ -649,6 +649,7 @@ fn ranged_attack(
     player_query: Query<(&Transform), With<Player>>,
     mut commands: Commands,
     config: Res<PlayerConfig>,
+    time: Res<GameTime>,
 ) {
     for (entity, enemy_transform, mut attack, mut velocity, mut trans_q, mut add_q) in
         query.iter_mut()
@@ -672,7 +673,7 @@ fn ranged_attack(
                 transform.translation.xy(),
                 enemy_transform.translation().xy(),
                 200.0,
-                config.fall_accel,
+                config.fall_accel * time.hz as f32,
             ) {
                 commands.spawn((
                     Attack::new(1000, entity),

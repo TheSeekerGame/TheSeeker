@@ -191,7 +191,6 @@ pub fn attack_damage(
             && !colliding_entities.is_empty()
             && attack.current_lifetime > 1
         {
-            println!("collided with ground aparently");
             commands.entity(entity).despawn();
         }
     }

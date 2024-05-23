@@ -1,3 +1,6 @@
+// Credit: translated to rust from:
+// https://github.com/forrestthewoods/lib_fts/blob/master/code/fts_ballistic_trajectory.cs
+
 use glam::Vec2;
 
 fn is_zero(value: f64) -> bool {
@@ -269,6 +272,9 @@ pub fn solve_ballistic_arc(
 }
 
 /// For a moving target
+///
+/// Note: still returns a solution even if none exists for some reason.
+/// make sure to check range first and clamp velocity to max if used.
 pub fn solve_ballistic_arc_moving(
     proj_pos: Vec2,
     proj_speed: f32,
