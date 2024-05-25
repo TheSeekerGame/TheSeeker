@@ -24,7 +24,7 @@ pub fn attack_particles_setup(
                 })
                 .into(),
             material: materials.add(ColorMaterial {
-                color: Color::WHITE,
+                color: Color::RED,
                 ..Default::default()
             }),
             ..Default::default()
@@ -33,8 +33,8 @@ pub fn attack_particles_setup(
 
     // Create a color gradient for the particles
     let mut gradient = Gradient::new();
-    gradient.add_key(0.0, Vec4::new(0.5, 0.5, 1.0, 1.0));
-    gradient.add_key(1.0, Vec4::new(0.5, 0.5, 1.0, 0.0));
+    gradient.add_key(0.0, Vec4::new(0.0, 0.0, 1.0, 1.0));
+    gradient.add_key(1.0, Vec4::new(1.0, 0.0, 0.0, 0.0));
 
     let writer = ExprWriter::new();
 
@@ -45,7 +45,7 @@ pub fn attack_particles_setup(
     let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
 
     let init_pos = SetPositionCircleModifier {
-        center: writer.lit(Vec3::new(100.0, 100.0, 100.0)).expr(),
+        center: writer.lit(Vec3::new(100.0, 50.0, 100.0)).expr(),
         axis: writer.lit(Vec3::Z).expr(),
         radius: writer.lit(0.05).expr(),
         dimension: ShapeDimension::Surface,
@@ -54,7 +54,7 @@ pub fn attack_particles_setup(
     let init_vel = SetVelocityCircleModifier {
         center: writer.lit(Vec3::ZERO).expr(),
         axis: writer.lit(Vec3::Z).expr(),
-        speed: writer.lit(0.1).expr(),
+        speed: writer.lit(10.0).expr(),
     };
 
     // Create a new effect asset spawning 30 particles per second from a circle
@@ -69,7 +69,7 @@ pub fn attack_particles_setup(
             .init(init_age)
             .init(init_lifetime)
             .render(SizeOverLifetimeModifier {
-                gradient: Gradient::constant(Vec2::splat(0.02)),
+                gradient: Gradient::constant(Vec2::splat(1.0)),
                 screen_space_size: false,
             })
             .render(ColorOverLifetimeModifier { gradient }),
