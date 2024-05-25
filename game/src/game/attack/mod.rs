@@ -1,5 +1,5 @@
 pub mod arc_attack;
-mod particles;
+pub mod particles;
 
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
@@ -21,10 +21,7 @@ pub struct AttackPlugin;
 impl Plugin for AttackPlugin {
     fn build(&self, app: &mut App) {
         //app.add_systems(Startup, attack_particles_setup);
-        app.add_systems(
-            OnEnter(AppState::InGame),
-            attack_particles_setup,
-        );
+        app.add_systems(Startup, attack_particles_setup);
         app.add_systems(
             GameTickUpdate,
             (

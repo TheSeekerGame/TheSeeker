@@ -1,5 +1,7 @@
-use crate::prelude::{Assets, ColorMaterial, Commands, Mesh, Rectangle, ResMut};
-use bevy::prelude::{default, Color, Name};
+use crate::prelude::{
+    Assets, ColorMaterial, Commands, Component, Handle, Mesh, Rectangle, ResMut, Resource,
+};
+use bevy::prelude::{default, Color, Name, Transform};
 use bevy::sprite::MaterialMesh2dBundle;
 use bevy_hanabi::{
     AccelModifier, Attribute, ColorOverLifetimeModifier, EffectAsset, ExprWriter, Gradient, Module,
@@ -8,6 +10,9 @@ use bevy_hanabi::{
     ShapeDimension, SizeOverLifetimeModifier, Spawner,
 };
 use glam::{Vec2, Vec3, Vec4};
+
+#[derive(Resource)]
+pub struct ArcParticleEffectHandle(pub Handle<EffectAsset>);
 
 pub fn attack_particles_setup(
     mut commands: Commands,
@@ -37,7 +42,7 @@ pub fn attack_particles_setup(
     gradient.add_key(1.0, Vec4::new(1.0, 0.0, 0.0, 0.0));
 
     let writer = ExprWriter::new();
-
+    let vel = Module::default().prop("my_velocity");
     let age = writer.lit(0.).expr();
     let init_age = SetAttributeModifier::new(Attribute::AGE, age);
 
@@ -45,10 +50,10 @@ pub fn attack_particles_setup(
     let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
 
     let init_pos = SetPositionCircleModifier {
-        center: writer.lit(Vec3::new(100.0, 50.0, 100.0)).expr(),
+        center: writer.lit(Vec3::new(0.0, 0.0, 0.0)).expr(),
         axis: writer.lit(Vec3::Z).expr(),
         radius: writer.lit(0.05).expr(),
-        dimension: ShapeDimension::Surface,
+        dimension: ShapeDimension::Volume,
     };
 
     let init_vel = SetVelocityCircleModifier {
@@ -60,7 +65,7 @@ pub fn attack_particles_setup(
     // Create a new effect asset spawning 30 particles per second from a circle
     // and slowly fading from blue-ish to transparent over their lifetime.
     // By default the asset spawns the particles at Z=0.
-    let spawner = Spawner::rate(30.0.into());
+    let spawner = Spawner::rate(300.0.into());
     let effect = effects.add(
         EffectAsset::new(4096, spawner, writer.finish())
             .with_name("2d")
@@ -75,14 +80,17 @@ pub fn attack_particles_setup(
             .render(ColorOverLifetimeModifier { gradient }),
     );
 
+    commands.insert_resource(ArcParticleEffectHandle(effect.clone()));
     // Spawn an instance of the particle effect, and override its Z layer to
     // be above the reference white square previously spawned.
     commands
         .spawn(ParticleEffectBundle {
             // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
             effect: ParticleEffect::new(effect).with_z_layer_2d(Some(100.0)),
+            transform: Transform::from_translation(Vec3::new(100.0, 50.0, 0.0)),
             ..default()
         })
         .insert(Name::new("effect:2d"));
+
     println!("spawned particle system");
 }

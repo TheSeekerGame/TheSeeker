@@ -1,3 +1,4 @@
+use bevy_hanabi::{ParticleEffect, ParticleEffectBundle};
 #[cfg(feature = "dev")]
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use rand::distributions::Standard;
@@ -15,6 +16,7 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::player::{Player, PlayerConfig};
 use crate::game::attack::arc_attack::Projectile;
+use crate::game::attack::particles::ArcParticleEffectHandle;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
 use crate::prelude::*;
@@ -649,6 +651,7 @@ fn ranged_attack(
     mut commands: Commands,
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
+    particle_effect: Res<ArcParticleEffectHandle>,
 ) {
     for (entity, enemy_transform, mut attack, mut velocity, mut trans_q, mut add_q) in
         query.iter_mut()
@@ -739,18 +742,24 @@ fn ranged_attack(
                         //println!("can't find solution, ceiling too low");
                     }
                 }
-                commands.spawn((
-                    Attack::new(1000, entity),
-                    projectile,
-                    Collider::cuboid(
-                        5.,
-                        5.,
-                        InteractionGroups::new(ENEMY_ATTACK, PLAYER),
-                    ),
-                    TransformBundle::from(Transform::from_translation(
-                        enemy_transform.translation(),
-                    )),
-                ));
+                commands
+                    .spawn((
+                        Attack::new(1000, entity),
+                        projectile,
+                        Collider::cuboid(
+                            5.,
+                            5.,
+                            InteractionGroups::new(ENEMY_ATTACK, PLAYER),
+                        ),
+                        ParticleEffectBundle {
+                            // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
+                            effect: ParticleEffect::new(particle_effect.0.clone())
+                                .with_z_layer_2d(Some(100.0)),
+                            transform: Transform::from_translation(enemy_transform.translation()),
+                            ..default()
+                        },
+                    ))
+                    .insert(Name::new("projectile"));
             } else {
                 warn!("No solution for ballistic trajectory, use a higher projectile velocity!")
             }
