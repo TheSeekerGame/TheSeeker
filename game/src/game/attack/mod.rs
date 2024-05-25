@@ -1,4 +1,5 @@
 pub mod arc_attack;
+mod particles;
 
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
@@ -10,6 +11,7 @@ use theseeker_engine::script::ScriptPlayer;
 use super::enemy::EnemyGfx;
 use super::player::PlayerGfx;
 use crate::game::attack::arc_attack::{arc_projectile, Projectile};
+use crate::game::attack::particles::attack_particles_setup;
 use crate::game::enemy::{Defense, EnemyStateSet};
 use crate::game::player::PlayerStateSet;
 use crate::prelude::*;
@@ -18,6 +20,11 @@ pub struct AttackPlugin;
 
 impl Plugin for AttackPlugin {
     fn build(&self, app: &mut App) {
+        //app.add_systems(Startup, attack_particles_setup);
+        app.add_systems(
+            OnEnter(AppState::InGame),
+            attack_particles_setup,
+        );
         app.add_systems(
             GameTickUpdate,
             (

@@ -40,8 +40,6 @@ impl Plugin for EnemyPlugin {
         ));
         app.register_type::<Range>();
         app.register_type::<Navigation>();
-        #[cfg(feature = "dev")]
-        app.add_plugins(FilterQueryInspectorPlugin::<With<Enemy>>::default());
     }
 }
 

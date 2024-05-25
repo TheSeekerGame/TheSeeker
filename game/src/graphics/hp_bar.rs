@@ -123,7 +123,7 @@ fn update_positions(
 
             let screen_position = camera
                 .world_to_viewport(camera_transform, world_position)
-                .unwrap();
+                .unwrap_or_default();
 
             let width = match style.width {
                 Val::Px(value) => value,

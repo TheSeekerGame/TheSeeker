@@ -30,6 +30,7 @@ impl Plugin for DevPlugin {
             // WorldInspectorPlugin::new(),
             SteppingEguiPlugin::default().add_schedule(GameTickUpdate),
         ));
+        app.add_plugins(WorldInspectorPlugin::default());
     }
 }
 

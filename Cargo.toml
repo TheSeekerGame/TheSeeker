@@ -59,6 +59,7 @@ ran = "2.0.1"            #for lighter weight/easier use random noise then using 
 
 bevy_egui = "0.27"
 bevy-inspector-egui = "0.24"
+bevy_hanabi = { version = "0.10.0", default-features = false, features = ["2d"] }
 
 [dependencies.serde]
 version = "1.0.196"
