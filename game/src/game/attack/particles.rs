@@ -3,7 +3,7 @@ use crate::prelude::{
     Parent, Plugin, PushChildren, Rectangle, Res, ResMut, Resource, Startup, Update,
 };
 use bevy::ecs::system::EntityCommands;
-use bevy::prelude::{default, BuildChildren, Color, Entity, Name, Query, Transform};
+use bevy::prelude::{default, BuildChildren, Color, Entity, Name, Query, Transform, Without};
 use bevy::sprite::MaterialMesh2dBundle;
 use bevy::utils::smallvec::SmallVec;
 use bevy_hanabi::{
@@ -21,6 +21,7 @@ impl Plugin for AttackParticlesPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, attack_particles_setup);
         app.add_systems(Update, track_particles_parent);
+        app.add_systems(Update, despawn_lingering);
     }
 }
 
@@ -70,14 +71,20 @@ fn attack_particles_setup(
     let init_pos = SetPositionCircleModifier {
         center: writer.prop("emission_location").expr(),
         axis: writer.lit(Vec3::Z).expr(),
-        radius: writer.lit(0.05).expr(),
+        radius: writer.lit(3.0).expr(),
         dimension: ShapeDimension::Volume,
+    };
+
+    let modded_pos = SetAttributeModifier {
+        attribute: Attribute::POSITION,
+        value: (writer.attr(Attribute::POSITION) * writer.prop("vel")).expr(),
     };
 
     let init_vel = SetVelocityCircleModifier {
         center: writer.lit(Vec3::ZERO).expr(),
         axis: writer.lit(Vec3::Z).expr(),
-        speed: writer.lit(10.0).expr(),
+        //speed: writer.lit(10.0).expr(),
+        speed: writer.lit(0.0).expr(),
     };
 
     // Create a new effect asset spawning 30 particles per second from a circle
@@ -99,7 +106,8 @@ fn attack_particles_setup(
             .with_property(
                 "emission_location",
                 Vec3::splat(0.0).into(),
-            ),
+            )
+            .with_property("vel", 1.0.into()),
     );
 
     commands.insert_resource(ArcParticleEffectHandle(effect.clone()));
@@ -138,6 +146,29 @@ impl crate::graphics::particles_util::BuildParticles for EntityCommands<'_> {
     }
 }
 
+fn update_velocity(
+    time: Res<GameTime>,
+    q_parent: Query<&GlobalTransform>,
+    mut query: Query<(
+        Entity,
+        &Parent,
+        &mut EffectProperties,
+        //&mut SystemLifetime,
+    )>,
+    mut commands: Commands,
+) {
+    /*for (entity, parent, mut effect) in &mut query {
+        if q_parent.get(**parent).is_err() {
+            commands.entity(entity).remove_parent();
+            // sets emission location far far away so emission appears to have stopped
+            effect.set(
+                "emission_location",
+                Vec3::new(1000000.0, 0.0, 0.0).into(),
+            );
+        }
+    }*/
+}
+
 fn track_particles_parent(
     time: Res<GameTime>,
     q_parent: Query<&GlobalTransform>,
@@ -157,6 +188,19 @@ fn track_particles_parent(
                 "emission_location",
                 Vec3::new(1000000.0, 0.0, 0.0).into(),
             );
+        }
+    }
+}
+
+fn despawn_lingering(
+    time: Res<GameTime>,
+    mut query: Query<(Entity, &mut SystemLifetime), Without<Parent>>,
+    mut commands: Commands,
+) {
+    for ((entity, mut lifetime)) in &mut query {
+        lifetime.0 -= 1.0 / time.hz as f32;
+        if lifetime.0 < 0.0 {
+            commands.entity(entity).despawn();
         }
     }
 }
