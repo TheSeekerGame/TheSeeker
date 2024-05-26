@@ -1,20 +1,35 @@
 use crate::prelude::{
-    Assets, ColorMaterial, Commands, Component, Handle, Mesh, Rectangle, ResMut, Resource,
+    App, Assets, ColorMaterial, Commands, Component, Handle, Mesh, Plugin, Rectangle, Res, ResMut,
+    Resource, Startup, Update,
 };
-use bevy::prelude::{default, Color, Name, Transform};
+use bevy::prelude::{default, Color, Name, Query, Transform};
 use bevy::sprite::MaterialMesh2dBundle;
 use bevy_hanabi::{
-    AccelModifier, Attribute, ColorOverLifetimeModifier, EffectAsset, ExprWriter, Gradient, Module,
-    ParticleEffect, ParticleEffectBundle, SetAttributeModifier, SetPositionCircleModifier,
-    SetPositionSphereModifier, SetVelocityCircleModifier, SetVelocitySphereModifier,
-    ShapeDimension, SizeOverLifetimeModifier, Spawner,
+    AccelModifier, Attribute, ColorOverLifetimeModifier, EffectAsset, EffectProperties, ExprWriter,
+    Gradient, Module, ParticleEffect, ParticleEffectBundle, SetAttributeModifier,
+    SetPositionCircleModifier, SetPositionSphereModifier, SetVelocityCircleModifier,
+    SetVelocitySphereModifier, ShapeDimension, SizeOverLifetimeModifier, Spawner,
 };
 use glam::{Vec2, Vec3, Vec4};
+use theseeker_engine::prelude::GameTime;
+
+pub struct AttackParticlesPlugin;
+
+impl Plugin for AttackParticlesPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Startup, attack_particles_setup);
+        app.add_systems(Update, update_arc);
+    }
+}
+
+const MAX_LIFETIME: f32 = 5.0;
 
 #[derive(Resource)]
 pub struct ArcParticleEffectHandle(pub Handle<EffectAsset>);
 
-pub fn attack_particles_setup(
+//pub struct despawn particle affect after time
+
+fn attack_particles_setup(
     mut commands: Commands,
     mut effects: ResMut<Assets<EffectAsset>>,
     mut meshes: ResMut<Assets<Mesh>>,
@@ -46,7 +61,7 @@ pub fn attack_particles_setup(
     let age = writer.lit(0.).expr();
     let init_age = SetAttributeModifier::new(Attribute::AGE, age);
 
-    let lifetime = writer.lit(5.).expr();
+    let lifetime = writer.lit(MAX_LIFETIME).expr();
     let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
 
     let init_pos = SetPositionCircleModifier {
@@ -77,7 +92,8 @@ pub fn attack_particles_setup(
                 gradient: Gradient::constant(Vec2::splat(1.0)),
                 screen_space_size: false,
             })
-            .render(ColorOverLifetimeModifier { gradient }),
+            .render(ColorOverLifetimeModifier { gradient })
+            .with_property("emission", 0.0.into()),
     );
 
     commands.insert_resource(ArcParticleEffectHandle(effect.clone()));
@@ -86,11 +102,22 @@ pub fn attack_particles_setup(
     commands
         .spawn(ParticleEffectBundle {
             // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
-            effect: ParticleEffect::new(effect).with_z_layer_2d(Some(100.0)),
+            effect: ParticleEffect::new(effect).with_z_layer_2d(Some(4.5)),
             transform: Transform::from_translation(Vec3::new(100.0, 50.0, 0.0)),
             ..default()
         })
         .insert(Name::new("effect:2d"));
 
     println!("spawned particle system");
+}
+
+fn update_arc(time: Res<GameTime>, mut query: Query<&mut EffectProperties>) {
+    return;
+    // No easy way to stop spawning particles..
+    for mut properties in query.iter_mut() {
+        properties.set(
+            "emission",
+            (time.tick() as f32 / time.hz as f32).into(),
+        );
+    }
 }
