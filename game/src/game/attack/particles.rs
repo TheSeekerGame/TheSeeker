@@ -1,9 +1,11 @@
 use crate::prelude::{
-    App, Assets, ColorMaterial, Commands, Component, Handle, Mesh, Plugin, Rectangle, Res, ResMut,
-    Resource, Startup, Update,
+    App, Assets, ChildBuilder, ColorMaterial, Commands, Component, GlobalTransform, Handle, Mesh,
+    Parent, Plugin, PushChildren, Rectangle, Res, ResMut, Resource, Startup, Update,
 };
-use bevy::prelude::{default, Color, Name, Query, Transform};
+use bevy::ecs::system::EntityCommands;
+use bevy::prelude::{default, BuildChildren, Color, Entity, Name, Query, Transform};
 use bevy::sprite::MaterialMesh2dBundle;
+use bevy::utils::smallvec::SmallVec;
 use bevy_hanabi::{
     AccelModifier, Attribute, ColorOverLifetimeModifier, EffectAsset, EffectProperties, ExprWriter,
     Gradient, Module, ParticleEffect, ParticleEffectBundle, SetAttributeModifier,
@@ -18,7 +20,7 @@ pub struct AttackParticlesPlugin;
 impl Plugin for AttackParticlesPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, attack_particles_setup);
-        app.add_systems(Update, update_arc);
+        app.add_systems(Update, track_particles_parent);
     }
 }
 
@@ -27,7 +29,9 @@ const MAX_LIFETIME: f32 = 5.0;
 #[derive(Resource)]
 pub struct ArcParticleEffectHandle(pub Handle<EffectAsset>);
 
-//pub struct despawn particle affect after time
+/// Tracks how long the parent has been despawned
+#[derive(Component)]
+pub struct SystemLifetime(f32);
 
 fn attack_particles_setup(
     mut commands: Commands,
@@ -57,7 +61,6 @@ fn attack_particles_setup(
     gradient.add_key(1.0, Vec4::new(1.0, 0.0, 0.0, 0.0));
 
     let writer = ExprWriter::new();
-    let vel = Module::default().prop("my_velocity");
     let age = writer.lit(0.).expr();
     let init_age = SetAttributeModifier::new(Attribute::AGE, age);
 
@@ -65,7 +68,7 @@ fn attack_particles_setup(
     let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
 
     let init_pos = SetPositionCircleModifier {
-        center: writer.lit(Vec3::new(0.0, 0.0, 0.0)).expr(),
+        center: writer.prop("emission_location").expr(),
         axis: writer.lit(Vec3::Z).expr(),
         radius: writer.lit(0.05).expr(),
         dimension: ShapeDimension::Volume,
@@ -93,31 +96,67 @@ fn attack_particles_setup(
                 screen_space_size: false,
             })
             .render(ColorOverLifetimeModifier { gradient })
-            .with_property("emission", 0.0.into()),
+            .with_property(
+                "emission_location",
+                Vec3::splat(0.0).into(),
+            ),
     );
 
     commands.insert_resource(ArcParticleEffectHandle(effect.clone()));
     // Spawn an instance of the particle effect, and override its Z layer to
     // be above the reference white square previously spawned.
     commands
-        .spawn(ParticleEffectBundle {
+        .spawn((ParticleEffectBundle {
             // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
             effect: ParticleEffect::new(effect).with_z_layer_2d(Some(4.5)),
             transform: Transform::from_translation(Vec3::new(100.0, 50.0, 0.0)),
             ..default()
-        })
+        },))
         .insert(Name::new("effect:2d"));
 
     println!("spawned particle system");
 }
 
-fn update_arc(time: Res<GameTime>, mut query: Query<&mut EffectProperties>) {
-    return;
-    // No easy way to stop spawning particles..
-    for mut properties in query.iter_mut() {
-        properties.set(
-            "emission",
-            (time.tick() as f32 / time.hz as f32).into(),
-        );
+impl crate::graphics::particles_util::BuildParticles for EntityCommands<'_> {
+    /// Attaches a particle bundle as a child entity to the entity being spawned
+    /// When the parent entity is despawned, the particle bundles particles will
+    /// stop emitting, and linger for [`MAX_LIFETIME`] seconds
+    fn with_lingering_particles(&mut self, handle: Handle<EffectAsset>) -> &mut Self {
+        self.with_children(|builder| {
+            builder
+                .spawn((
+                    ParticleEffectBundle {
+                        // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
+                        effect: ParticleEffect::new(handle.clone()).with_z_layer_2d(Some(100.0)),
+                        ..default()
+                    },
+                    SystemLifetime(MAX_LIFETIME),
+                    EffectProperties::default(),
+                ))
+                .insert(Name::new("projectile_particles"));
+        })
+    }
+}
+
+fn track_particles_parent(
+    time: Res<GameTime>,
+    q_parent: Query<&GlobalTransform>,
+    mut query: Query<(
+        Entity,
+        &Parent,
+        &mut EffectProperties,
+        //&mut SystemLifetime,
+    )>,
+    mut commands: Commands,
+) {
+    for (entity, parent, mut effect) in &mut query {
+        if q_parent.get(**parent).is_err() {
+            commands.entity(entity).remove_parent();
+            // sets emission location far far away so emission appears to have stopped
+            effect.set(
+                "emission_location",
+                Vec3::new(1000000.0, 0.0, 0.0).into(),
+            );
+        }
     }
 }

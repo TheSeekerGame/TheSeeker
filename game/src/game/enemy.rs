@@ -19,6 +19,7 @@ use crate::game::attack::arc_attack::Projectile;
 use crate::game::attack::particles::ArcParticleEffectHandle;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
+use crate::graphics::particles_util::BuildParticles;
 use crate::prelude::*;
 
 pub struct EnemyPlugin;
@@ -751,14 +752,11 @@ fn ranged_attack(
                             5.,
                             InteractionGroups::new(ENEMY_ATTACK, PLAYER),
                         ),
-                        ParticleEffectBundle {
-                            // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
-                            effect: ParticleEffect::new(particle_effect.0.clone())
-                                .with_z_layer_2d(Some(100.0)),
-                            transform: Transform::from_translation(enemy_transform.translation()),
-                            ..default()
-                        },
+                        TransformBundle::from_transform(Transform::from_translation(
+                            enemy_transform.translation(),
+                        )),
                     ))
+                    .with_lingering_particles(particle_effect.0.clone())
                     .insert(Name::new("projectile"));
             } else {
                 warn!("No solution for ballistic trajectory, use a higher projectile velocity!")

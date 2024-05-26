@@ -194,6 +194,8 @@ pub fn attack_damage(
             && !colliding_entities.is_empty()
             && attack.current_lifetime > 1
         {
+            // Note: purposefully does not despawn child entities, nor remove the
+            // reference, so that child particle systems have the option of lingering
             commands.entity(entity).despawn();
         }
     }
