@@ -1,3 +1,4 @@
+use crate::game::attack::arc_attack::Projectile;
 use crate::prelude::{
     App, Assets, ChildBuilder, ColorMaterial, Commands, Component, GlobalTransform, Handle, Mesh,
     Parent, Plugin, PushChildren, Rectangle, Res, ResMut, Resource, Startup, Update,
@@ -13,7 +14,8 @@ use bevy_hanabi::{
     SetVelocitySphereModifier, ShapeDimension, SizeOverLifetimeModifier, Spawner,
 };
 use glam::{Vec2, Vec3, Vec4};
-use theseeker_engine::prelude::GameTime;
+use theseeker_engine::physics::LinearVelocity;
+use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 
 pub struct AttackParticlesPlugin;
 
@@ -21,7 +23,8 @@ impl Plugin for AttackParticlesPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, attack_particles_setup);
         app.add_systems(Update, track_particles_parent);
-        app.add_systems(Update, despawn_lingering);
+        app.add_systems(GameTickUpdate, despawn_lingering);
+        app.add_systems(GameTickUpdate, update_velocity);
     }
 }
 
@@ -58,8 +61,9 @@ fn attack_particles_setup(
 
     // Create a color gradient for the particles
     let mut gradient = Gradient::new();
-    gradient.add_key(0.0, Vec4::new(0.0, 0.0, 1.0, 1.0));
-    gradient.add_key(1.0, Vec4::new(1.0, 0.0, 0.0, 0.0));
+    gradient.add_key(0.0, Vec4::new(200.0, 200.0, 200.0, 1.0));
+    gradient.add_key(0.03, Vec4::new(1.0, 1.0, 1.0, 1.0));
+    gradient.add_key(1.0, Vec4::new(0.0, 0.0, 0.0, 0.0));
 
     let writer = ExprWriter::new();
     let age = writer.lit(0.).expr();
@@ -95,6 +99,7 @@ fn attack_particles_setup(
         EffectAsset::new(4096, spawner, writer.finish())
             .with_name("2d")
             .init(init_pos)
+            .init(modded_pos)
             .init(init_vel)
             .init(init_age)
             .init(init_lifetime)
@@ -147,37 +152,24 @@ impl crate::graphics::particles_util::BuildParticles for EntityCommands<'_> {
 }
 
 fn update_velocity(
-    time: Res<GameTime>,
-    q_parent: Query<&GlobalTransform>,
-    mut query: Query<(
-        Entity,
-        &Parent,
-        &mut EffectProperties,
-        //&mut SystemLifetime,
-    )>,
-    mut commands: Commands,
+    q_parent: Query<&Projectile>,
+    mut query: Query<(&Parent, &mut EffectProperties)>,
 ) {
-    /*for (entity, parent, mut effect) in &mut query {
-        if q_parent.get(**parent).is_err() {
-            commands.entity(entity).remove_parent();
+    for (parent, mut effect) in &mut query {
+        if let Ok(vel) = q_parent.get(**parent) {
+            println!("setting velocity");
             // sets emission location far far away so emission appears to have stopped
             effect.set(
-                "emission_location",
-                Vec3::new(1000000.0, 0.0, 0.0).into(),
+                "vel",
+                (1.0 + vel.vel.0.length() * 0.005).into(),
             );
         }
-    }*/
+    }
 }
 
 fn track_particles_parent(
-    time: Res<GameTime>,
     q_parent: Query<&GlobalTransform>,
-    mut query: Query<(
-        Entity,
-        &Parent,
-        &mut EffectProperties,
-        //&mut SystemLifetime,
-    )>,
+    mut query: Query<(Entity, &Parent, &mut EffectProperties)>,
     mut commands: Commands,
 ) {
     for (entity, parent, mut effect) in &mut query {
