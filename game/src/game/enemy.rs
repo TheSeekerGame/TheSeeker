@@ -39,6 +39,7 @@ impl Plugin for EnemyPlugin {
             EnemyAnimationPlugin,
         ));
         app.register_type::<Range>();
+        app.register_type::<Role>();
         app.register_type::<Navigation>();
         #[cfg(feature = "dev")]
         app.add_plugins(FilterQueryInspectorPlugin::<With<Enemy>>::default());
@@ -241,7 +242,9 @@ impl Plugin for EnemyBehaviorPlugin {
 struct Patrolling;
 impl GentState for Patrolling {}
 impl Transitionable<Aggroed> for Patrolling {
-    type Removals = (Patrolling, Waiting);
+    //TODO:
+    // type Removals = (Patrolling, Waiting);
+    type Removals = (Patrolling);
 }
 
 #[derive(Component, Default, Debug)]
@@ -353,7 +356,7 @@ enum Navigation {
     Blocked,
 }
 
-#[derive(Component)]
+#[derive(Component, Reflect)]
 enum Role {
     Melee,
     Ranged,
@@ -383,6 +386,7 @@ enum Range {
     Ranged,
     Aggro,
     Deaggro,
+    Far,
     None,
 }
 
@@ -392,8 +396,9 @@ struct Target(Option<Entity>);
 
 impl Range {
     const MELEE: f32 = 16.;
-    const RANGED: f32 = 45.;
-    const AGGRO: f32 = 61.;
+    const AGGRO: f32 = 50.;
+    const RANGED: f32 = 60.;
+    const DEAGGRO: f32 = 70.;
     const GROUPED: f32 = 30.;
 }
 
@@ -406,20 +411,23 @@ fn check_player_range(
             &mut Target,
             &mut Facing,
             &GlobalTransform,
+            Has<Aggroed>,
         ),
         With<Enemy>,
     >,
     player_query: Query<(Entity, &GlobalTransform), (Without<Enemy>, With<Player>)>,
 ) {
-    for (mut range, mut target, mut facing, trans) in query.iter_mut() {
+    for (mut range, mut target, mut facing, trans, is_aggroed) in query.iter_mut() {
         if let Ok((player_e, player_trans)) = player_query.get_single() {
             let distance = trans
                 .translation()
                 .truncate()
                 .distance(player_trans.translation().truncate());
 
-            //if we are in AGGRO range, face the player
-            if distance <= Range::AGGRO {
+            if is_aggroed {
+                // }
+                //if we are in AGGRO range, face the player
+                // if distance <= Range::AGGRO {
                 if trans.translation().x > player_trans.translation().x {
                     *facing = Facing::Right;
                 } else if trans.translation().x < player_trans.translation().x {
@@ -431,14 +439,18 @@ fn check_player_range(
             if distance <= Range::MELEE {
                 *range = Range::Melee;
                 target.0 = Some(player_e);
-            } else if distance <= Range::RANGED {
-                *range = Range::Ranged;
-                target.0 = Some(player_e);
             } else if distance <= Range::AGGRO {
                 *range = Range::Aggro;
                 target.0 = Some(player_e);
-            } else {
+            } else if distance <= Range::RANGED {
+                *range = Range::Ranged;
+                target.0 = Some(player_e);
+            } else if distance <= Range::DEAGGRO {
                 *range = Range::Deaggro;
+                target.0 = Some(player_e);
+                // target.0 = None;
+            } else {
+                *range = Range::Far;
                 target.0 = None;
             }
         //if there is no player
@@ -491,13 +503,13 @@ fn patrolling(
 ) {
     for (range, mut transitions, mut additions, maybe_waiting) in query.iter_mut() {
         match range {
-            Range::Aggro | Range::Melee | Range::Ranged => {
+            Range::Aggro | Range::Melee => {
                 transitions.push(Patrolling::new_transition(Aggroed));
                 transitions.push(Walking::new_transition(
                     Waiting::default(),
                 ));
             },
-            Range::Deaggro => {
+            Range::Deaggro | Range::Ranged | Range::Far => {
                 if let Some(waiting) = maybe_waiting {
                     if waiting.ticks >= waiting.max_ticks {
                         transitions.push(Waiting::new_transition(Walking {
@@ -618,7 +630,7 @@ fn aggro(
         if target.0.is_some() {
             let mut rng = rand::thread_rng();
             //return to patrol if out of aggro range
-            if matches!(range, Range::Deaggro) {
+            if matches!(range, Range::Far) {
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if !is_grouped {
                 transitions.push(Waiting::new_transition(Retreating {
@@ -785,7 +797,6 @@ fn melee_attack(
         (
             Entity,
             &mut MeleeAttack,
-            &mut LinearVelocity,
             &Facing,
             &mut TransitionQueue,
         ),
@@ -793,8 +804,7 @@ fn melee_attack(
     >,
     mut commands: Commands,
 ) {
-    for (entity, mut attack, mut velocity, facing, mut trans_q) in query.iter_mut() {
-        // velocity.x = 0.;
+    for (entity, mut attack, facing, mut trans_q) in query.iter_mut() {
         attack.ticks += 1;
         if attack.ticks == 8 * MeleeAttack::STARTUP {
             //spawn attack hitbox collider as child
@@ -855,6 +865,7 @@ fn walking(
             add_q.add(Idle);
             continue;
         }
+        //Turn around if we get to the edge/wall
         match *nav {
             Navigation::Blocked => {
                 velocity.x *= -1.;
@@ -896,18 +907,18 @@ fn retreating(
                         Defense::default(),
                     ));
                 },
-                Range::Ranged => transitions.push(Retreating::new_transition(
+                Range::Ranged | Range::Aggro => transitions.push(Retreating::new_transition(
                     RangedAttack {
                         target: player_query.get_single().expect("no player"),
                         ticks: 0,
                     },
                 )),
                 _ => transitions.push(Retreating::new_transition(
-                    RangedAttack {
-                        target: player_query.get_single().expect("no player"),
-                        ticks: 0,
-                    },
-                    // Waiting::default(),
+                    // RangedAttack {
+                    //     target: player_query.get_single().expect("no player"),
+                    //     ticks: 0,
+                    // },
+                    Waiting::default(),
                 )),
             }
         } else if matches!(range, Range::Melee) {
@@ -915,7 +926,7 @@ fn retreating(
             transitions.push(Retreating::new_transition(
                 Defense::default(),
             ));
-        } else if matches!(range, Range::Ranged) {
+        } else if matches!(range, Range::Ranged) || matches!(range, Range::Aggro) {
             velocity.x = 0.;
             transitions.push(Retreating::new_transition(
                 RangedAttack {
@@ -932,18 +943,18 @@ fn retreating(
 fn chasing(
     mut query: Query<
         (
-            &Navigation,
             &Target,
             &Facing,
             &Role,
             &Range,
+            &mut Navigation,
             &mut LinearVelocity,
             &mut TransitionQueue,
         ),
         (With<Enemy>, With<Chasing>),
     >,
 ) {
-    for (nav, target, facing, role, range, mut velocity, mut transitions) in query.iter_mut() {
+    for (target, facing, role, range, mut nav, mut velocity, mut transitions) in query.iter_mut() {
         if let Some(p_entity) = target.0 {
             //TODO: how should blocked from knockback interact with movement ai?
             let target_range = match role {
@@ -952,16 +963,18 @@ fn chasing(
             };
 
             //if we are outside our target range, walk closer.
+            //TODO: change to add random offsets?
             if *range != target_range {
                 velocity.x = -35. * facing.direction();
                 //if we cant get any closer because of edge
-                if let Navigation::Blocked = nav {
+                if let Navigation::Blocked = *nav {
                     velocity.x = 0.;
-                    // TODO: decide what should actually happen here
-                    transitions.push(Chasing::new_transition(
-                        Waiting::default(),
-                    ));
-                    //probably transition to ranged attack either way?
+                    *nav = Navigation::Grounded;
+                    // println!("chasing but blocked");
+                    transitions.push(Chasing::new_transition(RangedAttack {
+                        target: p_entity,
+                        ticks: 0,
+                    }));
                 }
             } else {
                 velocity.x = 0.;
