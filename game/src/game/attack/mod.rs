@@ -11,6 +11,7 @@ use theseeker_engine::script::ScriptPlayer;
 use super::enemy::EnemyGfx;
 use super::player::PlayerGfx;
 use crate::game::attack::arc_attack::{arc_projectile, Projectile};
+use crate::game::attack::particles::AttackParticlesPlugin;
 use crate::game::enemy::{Defense, EnemyStateSet};
 use crate::game::player::PlayerStateSet;
 use crate::prelude::*;
@@ -54,13 +55,15 @@ pub struct Health {
     pub max: u32,
 }
 
+///Component applied to Gfx entity sibling of Gent which has been damaged
 #[derive(Component)]
 pub struct DamageFlash {
     pub current_ticks: u32,
     pub max_ticks: u32,
 }
 
-// TODO: change to a gentstate once we have death animations
+//TODO: change to a gentstate once we have death animations
+///Component applied to an entity when its health was depleted
 #[derive(Component)]
 pub struct Dead;
 
@@ -92,13 +95,6 @@ impl Attack {
     }
 }
 
-///Component applied to Gfx entity sibling of Gent which has been damaged
-#[derive(Component)]
-pub struct DamageFlash {
-    pub current_ticks: u32,
-    pub max_ticks: u32,
-}
-
 ///Component added to attack entity to indicate it causes knockback
 #[derive(Component, Default)]
 pub struct Pushback {
@@ -125,11 +121,6 @@ impl Knockback {
         }
     }
 }
-
-//TODO: change to a gentstate once we have death animations
-///Component applied to an entity when its health was depleted
-#[derive(Component)]
-pub struct Dead;
 
 pub fn attack_damage(
     spatial_query: Res<PhysicsWorld>,

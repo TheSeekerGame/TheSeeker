@@ -774,18 +774,20 @@ fn ranged_attack(
                         //println!("can't find solution, ceiling too low");
                     }
                 }
-                commands.spawn((
-                    Attack::new(1000, entity),
-                    projectile,
-                    Collider::cuboid(
-                        5.,
-                        5.,
-                        InteractionGroups::new(ENEMY_ATTACK, PLAYER),
-                    ),
-                    TransformBundle::from(Transform::from_translation(
-                        enemy_transform.translation(),
-                    )),
-                ));
+                commands
+                    .spawn((
+                        Attack::new(1000, entity),
+                        projectile,
+                        Collider::cuboid(
+                            5.,
+                            5.,
+                            InteractionGroups::new(ENEMY_ATTACK, PLAYER),
+                        ),
+                        TransformBundle::from(Transform::from_translation(
+                            enemy_transform.translation(),
+                        )),
+                    ))
+                    .with_lingering_particles(particle_effect.0.clone());
             } else {
                 warn!("No solution for ballistic trajectory, use a higher projectile velocity!")
             }
