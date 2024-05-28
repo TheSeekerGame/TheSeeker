@@ -61,7 +61,7 @@ pub enum PlayerStateSet {
     Animation,
 }
 
-// TODO: change to player spawnpoint
+//TODO: change to player spawnpoint
 #[derive(Bundle, LdtkEntity, Default)]
 pub struct PlayerBlueprintBundle {
     marker: PlayerBlueprint,
@@ -168,7 +168,7 @@ fn setup_player(
     mut commands: Commands,
 ) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
-        // TODO: proper way of ensuring z is correct
+        //TODO: proper way of ensuring z is correct
         xf_gent.translation.z = 15.;
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
@@ -183,7 +183,7 @@ fn setup_player(
                         10.0,
                         InteractionGroups {
                             memberships: PLAYER,
-                            // should be more specific
+                            //should be more specific
                             filter: Group::all(),
                         },
                     ),
@@ -209,8 +209,8 @@ fn setup_player(
                 current: 600,
                 max: 600,
             },
-            // have to use builder here *i think* because of different types between keycode and
-            // axis
+            //have to use builder here *i think* because of different types between keycode and
+            //axis
             InputManagerBundle::<PlayerAction> {
                 action_state: ActionState::default(),
                 input_map: InputMap::default()
@@ -300,11 +300,11 @@ impl GenericState for Jumping {}
 #[component(storage = "SparseSet")]
 pub struct Grounded;
 impl GentState for Grounded {}
-// cant be Idle or Running if not Grounded
+//cant be Idle or Running if not Grounded
 impl Transitionable<Jumping> for Grounded {
     type Removals = (Grounded, Idle, Running);
 }
-// cant be Idle or Running if not Grounded
+//cant be Idle or Running if not Grounded
 impl Transitionable<Falling> for Grounded {
     type Removals = (Grounded, Idle, Running);
 }
@@ -338,7 +338,7 @@ impl Transitionable<Attacking> for CanAttack {
 // and provide storage for that behaviours state
 
 /// If a player attack lands, locks their velocity for the configured number of ticks'
-// Tracks the attack entity which last caused the hirfreeze affect. (this way the same attack
+//Tracks the attack entity which last caused the hirfreeze affect. (this way the same attack
 // doesn't trigger it muyltiple times)
 #[derive(Component, Default, Debug)]
 pub struct HitFreezeTime(u32, Option<Entity>);
@@ -357,9 +357,9 @@ impl WallSlideTime {
     }
 }
 
-/// Player behavior systems.
-/// Do stuff here in states and add transitions to other states by pushing
-/// to a TransitionQueue.
+///Player behavior systems.
+///Do stuff here in states and add transitions to other states by pushing
+///to a TransitionQueue.
 struct PlayerBehaviorPlugin;
 
 impl Plugin for PlayerBehaviorPlugin {
@@ -383,8 +383,8 @@ impl Plugin for PlayerBehaviorPlugin {
                         .run_if(any_matching::<(With<Falling>,)>()),
                 )
                     .in_set(PlayerStateSet::Behavior),
-                // consider a set for all movement/systems modify velocity, then collisions/move
-                // moves based on velocity
+                //consider a set for all movement/systems modify velocity, then collisions/move
+                //moves based on velocity
                 (
                     hitfreeze,
                     set_movement_slots,
@@ -685,8 +685,8 @@ fn player_run(
         if action_state.pressed(&PlayerAction::Move) {
             direction = action_state.value(&PlayerAction::Move);
         }
-        // should it account for decel and only transition to idle when player stops completely?
-        // shouldnt be able to transition to idle if we also jump
+        //should it account for decel and only transition to idle when player stops completely?
+        //shouldnt be able to transition to idle if we also jump
         if direction == 0.0 && action_state.released(&PlayerAction::Jump) {
             transitions.push(Running::new_transition(Idle));
         }
@@ -706,8 +706,8 @@ fn player_jump(
     config: Res<PlayerConfig>,
 ) {
     for (action_state, mut velocity, mut jumping, mut transitions) in query.iter_mut() {
-        // can enter state and first frame jump not pressed if you tap
-        // i think this is related to the fixedtimestep input
+        //can enter state and first frame jump not pressed if you tap
+        //i think this is related to the fixedtimestep input
         // print!("{:?}", action_state.get_pressed());
 
         let deaccel_rate = config.jump_fall_accel;
@@ -752,7 +752,7 @@ fn player_collisions(
         // so the velocity is only stopped in the x direction, but not the y, so without the extra
         // check with the new velocity and position, the y might clip the player through the roof
         // of the corner.
-        // if we are not moving, we can not shapecast in direction of movement
+        //if we are not moving, we can not shapecast in direction of movement
         while let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
             if let Some((e, first_hit)) = spatial_query.shape_cast(
                 pos.translation.xy(),
@@ -898,9 +898,9 @@ fn player_grounded(
             }
         };
 
-        // just pressed seems to get missed sometimes... but we need it because pressed makes you
-        // jump continuously if held
-        // known issue https://github.com/bevyengine/bevy/issues/6183
+        //just pressed seems to get missed sometimes... but we need it because pressed makes you
+        //jump continuously if held
+        //known issue https://github.com/bevyengine/bevy/issues/6183
         if action_state.just_pressed(&PlayerAction::Jump) {
             transitions.push(Grounded::new_transition(Jumping))
         } else if is_falling {
@@ -933,10 +933,10 @@ fn player_falling(
         let fall_accel = config.fall_accel;
         let mut falling = true;
         if let Some((hit_entity, toi)) = hits.cast(&spatial_query, &transform, Some(entity)) {
-            // if we are ~touching the ground
+            //if we are ~touching the ground
             if (toi.toi + velocity.y * (1.0 / time.hz) as f32) < GROUNDED_THRESHOLD {
                 transitions.push(Falling::new_transition(Grounded));
-                // stop falling
+                //stop falling
                 velocity.y = 0.0;
                 transform.translation.y = transform.translation.y - toi.toi + GROUNDED_THRESHOLD;
                 if action_state.pressed(&PlayerAction::Move) {
@@ -1046,7 +1046,7 @@ fn player_attack(
     }
 }
 
-/// play animations here, run after transitions
+///play animations here, run after transitions
 struct PlayerAnimationPlugin;
 
 impl Plugin for PlayerAnimationPlugin {
@@ -1179,8 +1179,8 @@ fn player_attacking_animation(
             }
         }
     }
-    // have to check if first or 2nd attack, play diff anim
-    // also check for up attack?
+    //have to check if first or 2nd attack, play diff anim
+    //also check for up attack?
 }
 
 fn sprite_flip(
@@ -1210,7 +1210,7 @@ fn sprite_flip(
             }
             match facing {
                 Facing::Right => {
-                    // TODO: toggle facing script action
+                    //TODO: toggle facing script action
                     player.set_slot("DirectionRight", true);
                     player.set_slot("DirectionLeft", false);
                     *current_direction = true;

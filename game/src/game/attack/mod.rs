@@ -38,10 +38,10 @@ impl Plugin for AttackPlugin {
         app.add_systems(
             GameTickUpdate,
             despawn_dead
-                // TODO: unify statesets?
+                //TODO: unify statesets?
                 .after(PlayerStateSet::Transition)
                 .after(EnemyStateSet::Transition)
-                // has to be before physics set or colliders sometimes linger
+                //has to be before physics set or colliders sometimes linger
                 .before(PhysicsSet),
         );
     }
@@ -90,14 +90,14 @@ impl Attack {
     }
 }
 
-// Component added to attack entity to indicate it causes knockback
+//Component added to attack entity to indicate it causes knockback
 #[derive(Component, Default)]
 pub struct Pushback {
     pub direction: f32,
     pub strength: f32,
 }
 
-// Component added to an entity damaged by a pushback attack
+//Component added to an entity damaged by a pushback attack
 #[derive(Component, Default, Debug)]
 pub struct Knockback {
     pub ticks: u32,
@@ -142,7 +142,7 @@ pub fn attack_damage(
         Or<(With<PlayerGfx>, With<EnemyGfx>)>,
     >,
     mut commands: Commands,
-    time: Res<GameTime>, // animation query to flash red?
+    time: Res<GameTime>, //animation query to flash red?
 ) {
     for (entity, pos, mut attack, attack_collider, maybe_pushback, maybe_projectile) in
         query.iter_mut()
@@ -248,7 +248,7 @@ fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
     }
 }
 
-// TODO: change to a gentstate Dying once we have death animations
+//TODO: change to a gentstate Dying once we have death animations
 fn despawn_dead(query: Query<(Entity, &Gent), With<Dead>>, mut commands: Commands) {
     for (entity, gent) in query.iter() {
         commands.entity(gent.e_gfx).despawn_recursive();
