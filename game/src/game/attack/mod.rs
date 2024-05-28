@@ -1,16 +1,18 @@
-use theseeker_engine::physics::{
-    update_sprite_colliders, Collider, LinearVelocity, PhysicsSet, PhysicsWorld,
-};
-use theseeker_engine::{assets::animation::SpriteAnimation, gent::Gent, script::ScriptPlayer};
+pub mod arc_attack;
 
-use super::{enemy::EnemyGfx, player::PlayerGfx};
-use crate::{
-    game::{
-        enemy::{Defense, EnemyStateSet},
-        player::PlayerStateSet,
-    },
-    prelude::*,
+use theseeker_engine::assets::animation::SpriteAnimation;
+use theseeker_engine::gent::Gent;
+use theseeker_engine::physics::{
+    update_sprite_colliders, Collider, LinearVelocity, PhysicsSet, PhysicsWorld, GROUND,
 };
+use theseeker_engine::script::ScriptPlayer;
+
+use super::enemy::EnemyGfx;
+use super::player::PlayerGfx;
+use crate::game::attack::arc_attack::{arc_projectile, Projectile};
+use crate::game::enemy::{Defense, EnemyStateSet};
+use crate::game::player::PlayerStateSet;
+use crate::prelude::*;
 
 pub struct AttackPlugin;
 
@@ -19,6 +21,7 @@ impl Plugin for AttackPlugin {
         app.add_systems(
             GameTickUpdate,
             (
+                arc_projectile,
                 attack_damage,
                 attack_tick,
                 attack_cleanup,
@@ -43,6 +46,27 @@ impl Plugin for AttackPlugin {
         );
     }
 }
+#[derive(Component)]
+pub struct Health {
+    pub current: u32,
+    pub max: u32,
+}
+
+#[derive(Component)]
+pub struct DamageFlash {
+    pub current_ticks: u32,
+    pub max_ticks: u32,
+}
+
+// TODO: change to a gentstate once we have death animations
+#[derive(Component)]
+pub struct Dead;
+
+#[derive(Bundle)]
+pub struct AttackBundle {
+    attack: Attack,
+    collider: Collider,
+}
 
 #[derive(Component)]
 pub struct Attack {
@@ -53,19 +77,8 @@ pub struct Attack {
     /// (entity that got damaged, tick it was damaged, damage actually applied)
     pub damaged: Vec<(Entity, u64, u32)>,
 }
-
-#[derive(Bundle)]
-pub struct AttackBundle {
-    attack: Attack,
-    collider: Collider,
-}
-
-#[derive(Component)]
-pub struct Health {
-    pub current: u32,
-    pub max: u32,
-}
 impl Attack {
+    /// Lifetime is in game ticks
     pub fn new(lifetime: u32, attacker: Entity) -> Self {
         Attack {
             current_lifetime: 0,
@@ -75,12 +88,6 @@ impl Attack {
             damaged: Vec::new(),
         }
     }
-}
-
-#[derive(Component)]
-pub struct DamageFlash {
-    pub current_ticks: u32,
-    pub max_ticks: u32,
 }
 
 //Component added to attack entity to indicate it causes knockback
@@ -110,10 +117,6 @@ impl Knockback {
     }
 }
 
-//TODO: change to a gentstate once we have death animations
-#[derive(Component)]
-pub struct Dead;
-
 pub fn attack_damage(
     spatial_query: Res<PhysicsWorld>,
     mut query: Query<(
@@ -122,6 +125,7 @@ pub fn attack_damage(
         &mut Attack,
         &Collider,
         Option<&Pushback>,
+        Option<&Projectile>,
     )>,
     mut damageable_query: Query<(
         Entity,
@@ -140,11 +144,16 @@ pub fn attack_damage(
     mut commands: Commands,
     time: Res<GameTime>, //animation query to flash red?
 ) {
-    for (entity, pos, mut attack, attack_collider, maybe_pushback) in query.iter_mut() {
+    for (entity, pos, mut attack, attack_collider, maybe_pushback, maybe_projectile) in
+        query.iter_mut()
+    {
         let colliding_entities = spatial_query.intersect(
             pos.translation().xy(),
             attack_collider.0.shape(),
-            attack_collider.0.collision_groups(),
+            attack_collider
+                .0
+                .collision_groups()
+                .with_filter(attack_collider.0.collision_groups().filter | GROUND),
             Some(entity),
         );
         for (entity, mut health, collider, gent, is_defending) in damageable_query.iter_mut() {
@@ -177,6 +186,12 @@ pub fn attack_damage(
                     ));
                 }
             }
+        }
+        if maybe_projectile.is_some()
+            && !colliding_entities.is_empty()
+            && attack.current_lifetime > 1
+        {
+            commands.entity(entity).despawn();
         }
     }
 }

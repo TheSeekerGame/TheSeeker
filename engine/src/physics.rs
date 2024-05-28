@@ -420,6 +420,22 @@ pub fn update_query_pipeline(
             // what entity its associated with.
             col_set.get_mut(col_id).unwrap().user_data = entity.to_bits() as u128;
             //println!("new collider added: {col_id:?}");
+
+            col_set
+                .get_mut(col_id)
+                .unwrap()
+                .set_translation(into_vec(transform.translation().xy()));
+            col_set
+                .get_mut(col_id)
+                .unwrap()
+                .set_rotation(UnitComplex::new(
+                    transform
+                        .compute_transform()
+                        .rotation
+                        .to_euler(EulerRot::XYZ)
+                        .2,
+                ));
+
             col_id
         } else {
             handle.unwrap().0
@@ -522,5 +538,5 @@ pub fn into_vec2(vec: Unit<Vector<f32>>) -> Vec2 {
 /// A convenient component type for referring to velocity of an entity.
 ///
 /// Doesn't do anything on its own, but character controllers use it.
-#[derive(Component, Deref, DerefMut)]
+#[derive(Component, Deref, DerefMut, Debug)]
 pub struct LinearVelocity(pub Vec2);

@@ -1,23 +1,23 @@
-use crate::game::{attack::*, gentstate::*};
-use crate::prelude::*;
 #[cfg(feature = "dev")]
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use rand::distributions::Standard;
+use rapier2d::geometry::SharedShape;
+use rapier2d::parry::query::TOIStatus;
 use rapier2d::prelude::{Group, InteractionGroups};
-use rapier2d::{geometry::SharedShape, parry::query::TOIStatus};
+use theseeker_engine::animation::SpriteAnimationBundle;
+use theseeker_engine::assets::animation::SpriteAnimation;
+use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
-    Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, GROUND, PLAYER,
-    SENSOR,
+    into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, GROUND,
+    PLAYER, SENSOR,
 };
-use theseeker_engine::{
-    animation::SpriteAnimationBundle,
-    assets::animation::SpriteAnimation,
-    gent::{Gent, TransformGfxFromGent},
-    script::ScriptPlayer,
-};
-use theseeker_engine::{gent::GentPhysicsBundle, physics::into_vec2};
+use theseeker_engine::script::ScriptPlayer;
 
-use super::player::Player;
+use super::player::{Player, PlayerConfig};
+use crate::game::attack::arc_attack::Projectile;
+use crate::game::attack::*;
+use crate::game::gentstate::*;
+use crate::prelude::*;
 
 pub struct EnemyPlugin;
 
@@ -309,9 +309,9 @@ struct MeleeAttack {
     ticks: u32,
 }
 impl MeleeAttack {
-    const STARTUP: u32 = 7;
     // const RECOVERY: u32 = 9;
     const MAX: u32 = 10;
+    const STARTUP: u32 = 7;
 }
 impl GentState for MeleeAttack {}
 impl GenericState for MeleeAttack {}
@@ -322,9 +322,9 @@ struct PushbackAttack {
     ticks: u32,
 }
 impl PushbackAttack {
-    const STARTUP: u32 = 5;
     // const RECOVERY: u32 = 7;
     const MAX: u32 = 10;
+    const STARTUP: u32 = 5;
 }
 impl GentState for PushbackAttack {}
 impl GenericState for PushbackAttack {}
@@ -391,9 +391,9 @@ enum Range {
 struct Target(Option<Entity>);
 
 impl Range {
+    const AGGRO: f32 = 61.;
     const MELEE: f32 = 16.;
     const RANGED: f32 = 40.;
-    const AGGRO: f32 = 61.;
 }
 
 //Check how far the player is, set our range, set our target if applicable, turn to face player if
@@ -635,9 +635,11 @@ fn aggro(
 }
 
 fn ranged_attack(
+    spatial_query: Res<PhysicsWorld>,
     mut query: Query<
         (
             Entity,
+            &GlobalTransform,
             &mut RangedAttack,
             &mut LinearVelocity,
             &mut TransitionQueue,
@@ -647,8 +649,12 @@ fn ranged_attack(
     >,
     player_query: Query<(&Transform), With<Player>>,
     mut commands: Commands,
+    config: Res<PlayerConfig>,
+    time: Res<GameTime>,
 ) {
-    for (entity, mut attack, mut velocity, mut trans_q, mut add_q) in query.iter_mut() {
+    for (entity, enemy_transform, mut attack, mut velocity, mut trans_q, mut add_q) in
+        query.iter_mut()
+    {
         if attack.ticks == 0 {
             velocity.x = 0.;
         }
@@ -664,15 +670,92 @@ fn ranged_attack(
             continue;
         };
         if attack.ticks == RangedAttack::STARTUP * 8 {
-            commands.spawn((
-                Attack::new(100, entity),
-                Collider::cuboid(
-                    10.,
-                    10.,
-                    InteractionGroups::new(ENEMY_ATTACK, PLAYER),
-                ),
-                TransformBundle::from_transform(*transform),
-            ));
+            // cast a ray midway between enemy and player to find height of ceiling
+            // we want to avoid
+            let mid_pt = (enemy_transform.translation().xy() + transform.translation.xy()) * 0.5;
+            // how far is the ceiling above the mid point of the projectile trajectory?
+            let mut ceiling = f32::MAX;
+            if let Some((hit_e, hit)) = spatial_query.ray_cast(
+                mid_pt,
+                Vec2::new(0.0, 1.0),
+                f32::MAX,
+                true,
+                InteractionGroups::new(ENEMY, GROUND),
+                None,
+            ) {
+                // only count it if the ray didn't start underground
+                if hit.toi != 0.0 {
+                    ceiling = mid_pt.y + hit.toi - enemy_transform.translation().y;
+                } else {
+                    // if it did start underground, fire another one to find how far underground, and then fire again from there + 0.1
+                    if let Some((hit_e, hit)) = spatial_query.ray_cast(
+                        mid_pt,
+                        Vec2::new(0.0, 1.0),
+                        f32::MAX,
+                        false,
+                        InteractionGroups::new(ENEMY, GROUND),
+                        None,
+                    ) {
+                        if let Some((hit_e, hit_2)) = spatial_query.ray_cast(
+                            mid_pt + Vec2::new(0.0, hit.toi + 0.001),
+                            Vec2::new(0.0, 1.0),
+                            f32::MAX,
+                            true,
+                            InteractionGroups::new(ENEMY, GROUND),
+                            None,
+                        ) {
+                            ceiling = mid_pt.y + hit.toi + hit_2.toi + 0.001
+                                - enemy_transform.translation().y;
+                        }
+                    }
+                }
+            }
+
+            // account for projectile width
+            ceiling -= 5.0;
+
+            let gravity = config.fall_accel * time.hz as f32;
+
+            if let Some(mut projectile) = Projectile::with_vel(
+                transform.translation.xy(),
+                enemy_transform.translation().xy(),
+                200.0,
+                gravity,
+            ) {
+                let max_proj_h = projectile.vel.y.powi(2) / (2.0 * gravity);
+                //println!("ceiling_h: {ceiling}, estimated_h: {max_proj_h}");
+                if max_proj_h >= ceiling {
+                    //if projectile would hit ceiling, lower available power proportionally
+                    let max_vel_y = (ceiling * (2.0 * gravity)).sqrt();
+                    let max_vel_x = max_vel_y / projectile.vel.y * projectile.vel.x;
+                    let max_vel = Vec2::new(max_vel_x, max_vel_y).length();
+                    //println!("trying again with new max vel: {max_vel}");
+                    if let Some(mut projectile_2) = Projectile::with_vel(
+                        transform.translation.xy(),
+                        enemy_transform.translation().xy(),
+                        max_vel,
+                        gravity,
+                    ) {
+                        projectile = projectile_2
+                    } else {
+                        //println!("can't find solution, ceiling too low");
+                    }
+                }
+                commands.spawn((
+                    Attack::new(1000, entity),
+                    projectile,
+                    Collider::cuboid(
+                        5.,
+                        5.,
+                        InteractionGroups::new(ENEMY_ATTACK, PLAYER),
+                    ),
+                    TransformBundle::from(Transform::from_translation(
+                        enemy_transform.translation(),
+                    )),
+                ));
+            } else {
+                warn!("No solution for ballistic trajectory, use a higher projectile velocity!")
+            }
         }
     }
 }
@@ -837,7 +920,7 @@ fn chasing(
                 //if we cant get any closer because of edge
                 if let Navigation::Blocked = nav {
                     velocity.x = 0.;
-                    //TODO: decide what should actually happen here
+                    // TODO: decide what should actually happen here
                     transitions.push(Chasing::new_transition(
                         Waiting::default(),
                     ));
@@ -990,13 +1073,7 @@ fn enemy_idle_animation(
 }
 
 fn enemy_walking_animation(
-    i_query: Query<
-        &Gent,
-        (
-            (Added<Walking>),
-            (With<Enemy>),
-        ),
-    >,
+    i_query: Query<&Gent, ((Added<Walking>), (With<Enemy>))>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
     for gent in i_query.iter() {
@@ -1007,13 +1084,7 @@ fn enemy_walking_animation(
 }
 
 fn enemy_chasing_animation(
-    i_query: Query<
-        &Gent,
-        (
-            (Added<Chasing>),
-            (With<Enemy>),
-        ),
-    >,
+    i_query: Query<&Gent, ((Added<Chasing>), (With<Enemy>))>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
     for gent in i_query.iter() {

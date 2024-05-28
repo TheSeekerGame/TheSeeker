@@ -1,19 +1,20 @@
 use bevy::transform::TransformSystem::TransformPropagate;
-use leafwing_input_manager::{axislike::VirtualAxis, prelude::*};
+use leafwing_input_manager::axislike::VirtualAxis;
+use leafwing_input_manager::prelude::*;
 use rapier2d::geometry::{Group, InteractionGroups};
 use rapier2d::parry::query::TOIStatus;
+use theseeker_engine::animation::SpriteAnimationBundle;
+use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
-use theseeker_engine::gent::{Gent, GentPhysicsBundle};
+use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
     into_vec2, AnimationCollider, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
     GROUND, PLAYER, PLAYER_ATTACK,
 };
-use theseeker_engine::{
-    animation::SpriteAnimationBundle, assets::animation::SpriteAnimation,
-    gent::TransformGfxFromGent, script::ScriptPlayer,
-};
+use theseeker_engine::script::ScriptPlayer;
 
-use crate::game::{attack::*, gentstate::*};
+use crate::game::attack::*;
+use crate::game::gentstate::*;
 use crate::prelude::*;
 
 pub struct PlayerPlugin;
@@ -51,7 +52,7 @@ impl Plugin for PlayerPlugin {
     }
 }
 
-///set to order the player behavior, state transitions, and animations relative to eachother
+/// set to order the player behavior, state transitions, and animations relative to eachother
 #[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum PlayerStateSet {
     Behavior,
@@ -314,8 +315,8 @@ pub struct Attacking {
     ticks: u32,
 }
 impl Attacking {
-    const STARTUP: u32 = 0;
     const MAX: u32 = 4;
+    const STARTUP: u32 = 0;
 }
 impl GentState for Attacking {}
 
@@ -434,7 +435,8 @@ pub struct PlayerConfig {
     /// (ie: after releasing the jump key)
     ///
     /// (in pixels/second^2)
-    fall_accel: f32,
+    /// Note: sets the games global_gravity! (affects projectiles and other things that fall)
+    pub fall_accel: f32,
 
     /// How many seconds does our characters innate hover boots work?
     max_coyote_time: f32,
@@ -759,7 +761,7 @@ fn player_collisions(
                 linear_velocity.length() / time.hz as f32 + 0.5,
                 InteractionGroups {
                     memberships: PLAYER,
-                    filter: GROUND
+                    filter: GROUND,
                 },
                 Some(entity),
             ) {
