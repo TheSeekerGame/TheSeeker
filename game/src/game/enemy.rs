@@ -412,19 +412,20 @@ fn check_player_range(
             &mut Facing,
             &GlobalTransform,
             Has<Aggroed>,
+            Has<MeleeAttack>,
         ),
         With<Enemy>,
     >,
     player_query: Query<(Entity, &GlobalTransform), (Without<Enemy>, With<Player>)>,
 ) {
-    for (mut range, mut target, mut facing, trans, is_aggroed) in query.iter_mut() {
+    for (mut range, mut target, mut facing, trans, is_aggroed, is_meleeing) in query.iter_mut() {
         if let Ok((player_e, player_trans)) = player_query.get_single() {
             let distance = trans
                 .translation()
                 .truncate()
                 .distance(player_trans.translation().truncate());
 
-            if is_aggroed {
+            if is_aggroed && !is_meleeing {
                 // }
                 //if we are in AGGRO range, face the player
                 // if distance <= Range::AGGRO {
