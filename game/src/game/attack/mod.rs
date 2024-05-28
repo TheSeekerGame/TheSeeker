@@ -52,16 +52,6 @@ pub struct Health {
     pub max: u32,
 }
 
-#[derive(Component)]
-pub struct DamageFlash {
-    pub current_ticks: u32,
-    pub max_ticks: u32,
-}
-
-// TODO: change to a gentstate once we have death animations
-#[derive(Component)]
-pub struct Dead;
-
 #[derive(Bundle)]
 pub struct AttackBundle {
     attack: Attack,
@@ -90,14 +80,21 @@ impl Attack {
     }
 }
 
-//Component added to attack entity to indicate it causes knockback
+///Component applied to Gfx entity sibling of Gent which has been damaged
+#[derive(Component)]
+pub struct DamageFlash {
+    pub current_ticks: u32,
+    pub max_ticks: u32,
+}
+
+///Component added to attack entity to indicate it causes knockback
 #[derive(Component, Default)]
 pub struct Pushback {
     pub direction: f32,
     pub strength: f32,
 }
 
-//Component added to an entity damaged by a pushback attack
+///Component added to an entity damaged by a pushback attack
 #[derive(Component, Default, Debug)]
 pub struct Knockback {
     pub ticks: u32,
@@ -116,6 +113,11 @@ impl Knockback {
         }
     }
 }
+
+//TODO: change to a gentstate once we have death animations
+///Component applied to an entity when its health was depleted
+#[derive(Component)]
+pub struct Dead;
 
 pub fn attack_damage(
     spatial_query: Res<PhysicsWorld>,
@@ -196,6 +198,8 @@ pub fn attack_damage(
     }
 }
 
+//maybe should not modify velocity directly but add knockback, but this makes it behave differently
+//in states which dont set velocity every frame
 fn knockback(
     mut query: Query<(
         Entity,
@@ -208,7 +212,7 @@ fn knockback(
     for (entity, mut knockback, mut velocity, is_defending) in query.iter_mut() {
         knockback.ticks += 1;
         if !is_defending {
-            velocity.x = knockback.direction * knockback.strength;
+            velocity.x += knockback.direction * knockback.strength;
         }
         if knockback.ticks > knockback.max_ticks {
             velocity.x = 0.;

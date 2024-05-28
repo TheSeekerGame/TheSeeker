@@ -206,8 +206,8 @@ fn setup_player(
             },
             Facing::Right,
             Health {
-                current: 600,
-                max: 600,
+                current: 1600,
+                max: 1600,
             },
             //have to use builder here *i think* because of different types between keycode and
             //axis
@@ -386,7 +386,7 @@ impl Plugin for PlayerBehaviorPlugin {
                 //consider a set for all movement/systems modify velocity, then collisions/move
                 //moves based on velocity
                 (
-                    hitfreeze,
+                    // hitfreeze,
                     set_movement_slots,
                     player_collisions,
                 )
@@ -761,7 +761,7 @@ fn player_collisions(
                 linear_velocity.length() / time.hz as f32 + 0.5,
                 InteractionGroups {
                     memberships: PLAYER,
-                    filter: GROUND,
+                    filter: Group::from_bits_truncate(0b10010),
                 },
                 Some(entity),
             ) {
