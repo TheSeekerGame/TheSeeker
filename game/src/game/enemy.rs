@@ -784,10 +784,16 @@ fn ranged_attack(
                 warn!("No solution for ballistic trajectory, use a higher projectile velocity!")
             }
         }
-        if matches!(range, Range::Melee) && is_grouped {
-            trans_q.push(RangedAttack::new_transition(
-                MeleeAttack::default(),
-            ));
+        if matches!(range, Range::Melee) {
+            if is_grouped {
+                trans_q.push(RangedAttack::new_transition(
+                    MeleeAttack::default(),
+                ));
+            } else {
+                trans_q.push(RangedAttack::new_transition(
+                    Defense::default(),
+                ));
+            }
         }
     }
 }
