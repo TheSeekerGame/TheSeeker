@@ -11,9 +11,9 @@ use bevy_hanabi::{
     AccelModifier, Attribute, ColorOverLifetimeModifier, EffectAsset, EffectProperties, ExprWriter,
     Gradient, Module, ParticleEffect, ParticleEffectBundle, SetAttributeModifier,
     SetPositionCircleModifier, SetPositionSphereModifier, SetVelocityCircleModifier,
-    SetVelocitySphereModifier, ShapeDimension, SizeOverLifetimeModifier, Spawner,
+    SetVelocitySphereModifier, ShapeDimension, SizeOverLifetimeModifier, Spawner, Value,
 };
-use glam::{Vec2, Vec3, Vec4};
+use glam::{Vec2, Vec2Swizzles, Vec3, Vec4};
 use theseeker_engine::physics::LinearVelocity;
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 
@@ -28,7 +28,7 @@ impl Plugin for AttackParticlesPlugin {
     }
 }
 
-const MAX_LIFETIME: f32 = 5.0;
+const MAX_LIFETIME: f32 = 0.2;
 
 #[derive(Resource)]
 pub struct ArcParticleEffectHandle(pub Handle<EffectAsset>);
@@ -61,9 +61,44 @@ fn attack_particles_setup(
 
     // Create a color gradient for the particles
     let mut gradient = Gradient::new();
-    gradient.add_key(0.0, Vec4::new(200.0, 200.0, 200.0, 1.0));
-    gradient.add_key(0.03, Vec4::new(1.0, 1.0, 1.0, 1.0));
-    gradient.add_key(1.0, Vec4::new(0.0, 0.0, 0.0, 0.0));
+    let r = (1.0 / 8.0);
+    // set w to 5 on the first one for fun
+    gradient.add_key(
+        r * 0.0,
+        Vec4::new(0.643, 0.753, 0.773, 1.0),
+    );
+    gradient.add_key(
+        r * 3.0,
+        Vec4::new(0.643, 0.753, 0.773, 1.),
+    );
+    gradient.add_key(
+        r * 3.0,
+        Vec4::new(0.761, 0.827, 0.851, 1.),
+    );
+    gradient.add_key(
+        r * 4.0,
+        Vec4::new(0.761, 0.827, 0.851, 1.),
+    );
+    gradient.add_key(
+        r * 4.0,
+        Vec4::new(0.925, 0.965, 0.98, 1.0),
+    );
+    gradient.add_key(
+        r * 6.0,
+        Vec4::new(0.925, 0.965, 0.98, 1.0),
+    );
+    gradient.add_key(
+        r * 6.0,
+        Vec4::new(0.761, 0.827, 0.851, 1.),
+    );
+    gradient.add_key(
+        r * 7.0,
+        Vec4::new(0.761, 0.827, 0.851, 1.),
+    );
+    gradient.add_key(
+        r * 8.0,
+        Vec4::new(0.761, 0.827, 0.851, 0.),
+    );
 
     let writer = ExprWriter::new();
     let age = writer.lit(0.).expr();
@@ -72,31 +107,39 @@ fn attack_particles_setup(
     let lifetime = writer.lit(MAX_LIFETIME).expr();
     let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
 
+    let emit_loc = writer.add_property("emit_loc", Vec3::splat(0.0).into());
+    let dir = writer.add_property("dir", Vec3::splat(0.0).into());
+    let speed = writer.add_property("speed", 1.0.into());
+
     let init_pos = SetPositionCircleModifier {
-        center: writer.prop("emission_location").expr(),
+        center: writer.prop(emit_loc).expr(),
         axis: writer.lit(Vec3::Z).expr(),
-        radius: writer.lit(3.0).expr(),
+        radius: writer.lit(2.5).expr(),
         dimension: ShapeDimension::Volume,
     };
 
+    // makes the particles spawn aligned with the direction the projectile is moving
+    let particle_pos = writer.attr(Attribute::POSITION) - writer.prop(emit_loc);
+    let projection = particle_pos.clone().dot(writer.prop(dir));
+    let skewed_pos = particle_pos.clone()
+        + writer.prop(dir) * projection * (writer.prop(speed) - writer.lit(1.0));
+
     let modded_pos = SetAttributeModifier {
         attribute: Attribute::POSITION,
-        value: (writer.attr(Attribute::POSITION) * writer.prop("vel")).expr(),
+        value: skewed_pos.expr(),
     };
 
-    let init_vel = SetVelocityCircleModifier {
-        center: writer.lit(Vec3::ZERO).expr(),
-        axis: writer.lit(Vec3::Z).expr(),
-        //speed: writer.lit(10.0).expr(),
-        speed: writer.lit(0.0).expr(),
+    let init_vel = SetAttributeModifier {
+        attribute: Attribute::VELOCITY,
+        value: (writer.prop(dir) * writer.lit(-0.5) - particle_pos * writer.lit(5.5)).expr(),
     };
 
     // Create a new effect asset spawning 30 particles per second from a circle
     // and slowly fading from blue-ish to transparent over their lifetime.
     // By default the asset spawns the particles at Z=0.
-    let spawner = Spawner::rate(300.0.into());
+    let spawner = Spawner::rate(1000.0.into());
     let effect = effects.add(
-        EffectAsset::new(4096, spawner, writer.finish())
+        EffectAsset::new(vec![4096], spawner, writer.finish())
             .with_name("2d")
             .init(init_pos)
             .init(modded_pos)
@@ -107,12 +150,7 @@ fn attack_particles_setup(
                 gradient: Gradient::constant(Vec2::splat(1.0)),
                 screen_space_size: false,
             })
-            .render(ColorOverLifetimeModifier { gradient })
-            .with_property(
-                "emission_location",
-                Vec3::splat(0.0).into(),
-            )
-            .with_property("vel", 1.0.into()),
+            .render(ColorOverLifetimeModifier { gradient }),
     );
 
     commands.insert_resource(ArcParticleEffectHandle(effect.clone()));
@@ -144,7 +182,6 @@ impl crate::graphics::particles_util::BuildParticles for EntityCommands<'_> {
                         ..default()
                     },
                     SystemLifetime(MAX_LIFETIME),
-                    EffectProperties::default(),
                 ))
                 .insert(Name::new("projectile_particles"));
         })
@@ -157,11 +194,14 @@ fn update_velocity(
 ) {
     for (parent, mut effect) in &mut query {
         if let Ok(vel) = q_parent.get(**parent) {
-            println!("setting velocity");
             // sets emission location far far away so emission appears to have stopped
             effect.set(
-                "vel",
-                (1.0 + vel.vel.0.length() * 0.005).into(),
+                "dir",
+                vel.vel.0.normalize_or_zero().extend(0.0).into(),
+            );
+            effect.set(
+                "speed",
+                (vel.vel.0.length() * 0.005 + 1.0).into(),
             );
         }
     }
@@ -177,7 +217,7 @@ fn track_particles_parent(
             commands.entity(entity).remove_parent();
             // sets emission location far far away so emission appears to have stopped
             effect.set(
-                "emission_location",
+                "emit_loc",
                 Vec3::new(1000000.0, 0.0, 0.0).into(),
             );
         }
