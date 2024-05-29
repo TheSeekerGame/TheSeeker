@@ -963,15 +963,43 @@ fn chasing(
 ) {
     for (target, facing, role, range, mut nav, mut velocity, mut transitions) in query.iter_mut() {
         if let Some(p_entity) = target.0 {
-            //TODO: how should blocked from knockback interact with movement ai?
-            let target_range = match role {
-                Role::Ranged => Range::Ranged,
-                Role::Melee => Range::Melee,
-            };
+            let mut continue_chasing = false;
+            //check if we need to transition
+            match role {
+                Role::Ranged => match *range {
+                    Range::Ranged | Range::Aggro => {
+                        transitions.push(Chasing::new_transition(RangedAttack {
+                            target: p_entity,
+                            ticks: 0,
+                        }));
+                    },
+                    Range::Melee => transitions.push(Chasing::new_transition(
+                        MeleeAttack::default(),
+                    )),
+                    Range::Deaggro => {
+                        continue_chasing = true;
+                    },
+                    _ => transitions.push(Chasing::new_transition(
+                        Waiting::default(),
+                    )),
+                },
+
+                Role::Melee => match *range {
+                    Range::Melee => transitions.push(Chasing::new_transition(
+                        MeleeAttack::default(),
+                    )),
+                    Range::Ranged | Range::Aggro | Range::Deaggro => {
+                        continue_chasing = true;
+                    },
+                    _ => transitions.push(Chasing::new_transition(
+                        Waiting::default(),
+                    )),
+                },
+            }
 
             //if we are outside our target range, walk closer.
             //TODO: change to add random offsets?
-            if *range != target_range {
+            if continue_chasing {
                 velocity.x = -35. * facing.direction();
                 //if we cant get any closer because of edge
                 if let Navigation::Blocked = *nav {
@@ -983,17 +1011,9 @@ fn chasing(
                         ticks: 0,
                     }));
                 }
+            //if not continuing to chase, set velocity to 0 before leaving state
             } else {
                 velocity.x = 0.;
-                match role {
-                    Role::Melee => transitions.push(Chasing::new_transition(
-                        MeleeAttack::default(),
-                    )),
-                    Role::Ranged => transitions.push(Chasing::new_transition(RangedAttack {
-                        target: p_entity,
-                        ticks: 0,
-                    })),
-                }
             }
         }
     }
