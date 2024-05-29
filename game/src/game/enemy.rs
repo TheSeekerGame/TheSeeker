@@ -7,6 +7,7 @@ use rapier2d::parry::query::TOIStatus;
 use rapier2d::prelude::{Group, InteractionGroups};
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
+use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
     into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, GROUND,
@@ -747,48 +748,58 @@ fn ranged_attack(
             // account for projectile width
             ceiling -= 5.0;
 
+            let relative_height = enemy_transform.translation().x - transform.translation.x;
             let gravity = config.fall_accel * time.hz as f32;
-
-            if let Some(mut projectile) = Projectile::with_vel(
-                transform.translation.xy(),
-                enemy_transform.translation().xy(),
-                200.0,
-                gravity,
-            ) {
-                let max_proj_h = projectile.vel.y.powi(2) / (2.0 * gravity);
-                if max_proj_h >= ceiling {
-                    let max_vel_y = (ceiling * (2.0 * gravity)).sqrt();
-                    let max_vel_x = max_vel_y / projectile.vel.y * projectile.vel.x;
-                    let max_vel = Vec2::new(max_vel_x, max_vel_y).length();
-                    //println!("trying again with new max vel: {max_vel}");
-                    if let Some(projectile_2) = Projectile::with_vel(
-                        transform.translation.xy(),
-                        enemy_transform.translation().xy(),
-                        max_vel,
-                        gravity,
-                    ) {
-                        println!("using slower firing solution: {max_vel}");
-                        projectile = projectile_2
+            let mut speed = ballistic_speed(Range::RANGED, gravity, relative_height);
+            println!("setting speed to: {speed}");
+            let max_attempts = 10;
+            for i in 0..max_attempts {
+                if let Some(mut projectile) = Projectile::with_vel(
+                    transform.translation.xy(),
+                    enemy_transform.translation().xy(),
+                    speed,
+                    gravity,
+                ) {
+                    let max_proj_h = projectile.vel.y.powi(2) / (2.0 * gravity);
+                    if max_proj_h >= ceiling {
+                        let max_vel_y = (ceiling * (2.0 * gravity)).sqrt();
+                        let max_vel_x = max_vel_y / projectile.vel.y * projectile.vel.x;
+                        let max_vel = Vec2::new(max_vel_x, max_vel_y).length();
+                        //println!("trying again with new max vel: {max_vel}");
+                        if let Some(projectile_2) = Projectile::with_vel(
+                            transform.translation.xy(),
+                            enemy_transform.translation().xy(),
+                            max_vel,
+                            gravity,
+                        ) {
+                            //println!("using slower firing solution: {max_vel}");
+                            projectile = projectile_2
+                        } else {
+                            // attempts to fire anyway, even though ceiling will always block the shot
+                        }
+                    }
+                    commands
+                        .spawn((
+                            Attack::new(1000, entity),
+                            projectile,
+                            Collider::cuboid(
+                                5.,
+                                5.,
+                                InteractionGroups::new(ENEMY_ATTACK, PLAYER),
+                            ),
+                            TransformBundle::from(Transform::from_translation(
+                                enemy_transform.translation(),
+                            )),
+                        ))
+                        .with_lingering_particles(particle_effect.0.clone());
+                    break;
+                } else {
+                    if i == max_attempts - 1 {
+                        warn!("No solution for ballistic trajectory, even after increased speed to {speed}!")
                     } else {
-                        // attempts to fire anyway, even though ceiling will always block the shot
+                        speed *= 1.15;
                     }
                 }
-                commands
-                    .spawn((
-                        Attack::new(1000, entity),
-                        projectile,
-                        Collider::cuboid(
-                            5.,
-                            5.,
-                            InteractionGroups::new(ENEMY_ATTACK, PLAYER),
-                        ),
-                        TransformBundle::from(Transform::from_translation(
-                            enemy_transform.translation(),
-                        )),
-                    ))
-                    .with_lingering_particles(particle_effect.0.clone());
-            } else {
-                warn!("No solution for ballistic trajectory, use a higher projectile velocity!")
             }
         }
         if matches!(range, Range::Melee) {
