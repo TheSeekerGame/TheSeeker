@@ -756,22 +756,21 @@ fn ranged_attack(
                 gravity,
             ) {
                 let max_proj_h = projectile.vel.y.powi(2) / (2.0 * gravity);
-                //println!("ceiling_h: {ceiling}, estimated_h: {max_proj_h}");
                 if max_proj_h >= ceiling {
-                    //if projectile would hit ceiling, lower available power proportionally
                     let max_vel_y = (ceiling * (2.0 * gravity)).sqrt();
                     let max_vel_x = max_vel_y / projectile.vel.y * projectile.vel.x;
                     let max_vel = Vec2::new(max_vel_x, max_vel_y).length();
                     //println!("trying again with new max vel: {max_vel}");
-                    if let Some(mut projectile_2) = Projectile::with_vel(
+                    if let Some(projectile_2) = Projectile::with_vel(
                         transform.translation.xy(),
                         enemy_transform.translation().xy(),
                         max_vel,
                         gravity,
                     ) {
+                        println!("using slower firing solution: {max_vel}");
                         projectile = projectile_2
                     } else {
-                        //println!("can't find solution, ceiling too low");
+                        // attempts to fire anyway, even though ceiling will always block the shot
                     }
                 }
                 commands
