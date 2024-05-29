@@ -8,6 +8,8 @@ mod prelude {
 }
 
 use crate::prelude::*;
+use bevy::render::settings::{WgpuFeatures, WgpuSettings};
+use bevy::render::RenderPlugin;
 use theseeker_engine::physics::PhysicsPlugin;
 
 mod appstate;
@@ -35,6 +37,12 @@ fn main() {
     let mut app = App::new();
     app.insert_resource(ClearColor(Color::BLACK));
 
+    let mut wgpu_settings = WgpuSettings::default();
+    wgpu_settings.features.set(
+        WgpuFeatures::VERTEX_WRITABLE_STORAGE,
+        true,
+    );
+
     let bevy_plugins = DefaultPlugins;
     let bevy_plugins = bevy_plugins.set(WindowPlugin {
         primary_window: Some(Window {
@@ -46,6 +54,12 @@ fn main() {
         ..Default::default()
     });
     let bevy_plugins = bevy_plugins.set(ImagePlugin::default_nearest());
+
+    let bevy_plugins = bevy_plugins.set(RenderPlugin {
+        render_creation: wgpu_settings.into(),
+        synchronous_pipeline_compilation: false,
+    });
+
     #[cfg(feature = "dev")]
     let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
         filter: "info,wgpu_core=warn,wgpu_hal=warn,iyes_progress=trace,theseeker_game=trace,theseeker_engine=trace".into(),

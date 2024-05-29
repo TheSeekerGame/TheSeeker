@@ -324,7 +324,6 @@ fn populate_collider_map(
                 }
             }
             if collider_points.len() < 2 {
-                println!("no col at frame_rect: {i} ");
                 collider_ids.push(0);
                 continue;
             }
@@ -341,10 +340,6 @@ fn populate_collider_map(
             let shape_flipped_xy = SharedShape::convex_hull(&*collider_points).unwrap();
 
             let i_new = collider_map.shapes.len();
-            println!(
-                "new col at index: {i_new} imageid: {}",
-                h_image.id()
-            );
             collider_map.shapes.push((
                 shape,
                 shape_flipped_x,

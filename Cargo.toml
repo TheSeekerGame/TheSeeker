@@ -59,6 +59,11 @@ ran = "2.0.1"            #for lighter weight/easier use random noise then using 
 
 bevy_egui = "0.27"
 bevy-inspector-egui = "0.24"
+# This specific rev was working main on may 28th.
+# needed for moveble forcefields not availible in 0.10
+# (also has some wgsl fixes)
+bevy_hanabi = { git = "https://github.com/djeedai/bevy_hanabi", rev = "cabb3cb", default-features = false, features = ["2d"] }
+
 
 [dependencies.serde]
 version = "1.0.196"

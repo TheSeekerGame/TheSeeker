@@ -1,4 +1,5 @@
 pub mod arc_attack;
+pub mod particles;
 
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
@@ -10,6 +11,7 @@ use theseeker_engine::script::ScriptPlayer;
 use super::enemy::EnemyGfx;
 use super::player::PlayerGfx;
 use crate::game::attack::arc_attack::{arc_projectile, Projectile};
+use crate::game::attack::particles::AttackParticlesPlugin;
 use crate::game::enemy::{Defense, EnemyStateSet};
 use crate::game::player::PlayerStateSet;
 use crate::prelude::*;
@@ -18,6 +20,7 @@ pub struct AttackPlugin;
 
 impl Plugin for AttackPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(AttackParticlesPlugin);
         app.add_systems(
             GameTickUpdate,
             (
@@ -52,6 +55,18 @@ pub struct Health {
     pub max: u32,
 }
 
+///Component applied to Gfx entity sibling of Gent which has been damaged
+#[derive(Component)]
+pub struct DamageFlash {
+    pub current_ticks: u32,
+    pub max_ticks: u32,
+}
+
+//TODO: change to a gentstate once we have death animations
+///Component applied to an entity when its health was depleted
+#[derive(Component)]
+pub struct Dead;
+
 #[derive(Bundle)]
 pub struct AttackBundle {
     attack: Attack,
@@ -80,13 +95,6 @@ impl Attack {
     }
 }
 
-///Component applied to Gfx entity sibling of Gent which has been damaged
-#[derive(Component)]
-pub struct DamageFlash {
-    pub current_ticks: u32,
-    pub max_ticks: u32,
-}
-
 ///Component added to attack entity to indicate it causes knockback
 #[derive(Component, Default)]
 pub struct Pushback {
@@ -113,11 +121,6 @@ impl Knockback {
         }
     }
 }
-
-//TODO: change to a gentstate once we have death animations
-///Component applied to an entity when its health was depleted
-#[derive(Component)]
-pub struct Dead;
 
 pub fn attack_damage(
     spatial_query: Res<PhysicsWorld>,
@@ -193,6 +196,8 @@ pub fn attack_damage(
             && !colliding_entities.is_empty()
             && attack.current_lifetime > 1
         {
+            // Note: purposefully does not despawn child entities, nor remove the
+            // reference, so that child particle systems have the option of lingering
             commands.entity(entity).despawn();
         }
     }

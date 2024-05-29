@@ -22,6 +22,7 @@ impl Projectile {
     /// to convert to per/second units, like velocity is.
     pub fn with_vel(target: Vec2, start: Vec2, max_speed: f32, gravity: f32) -> Option<Self> {
         let result = solve_ballistic_arc(start, max_speed, target, gravity);
+        println!("result: {result:?}");
         if result.2 != 0 {
             // use the arc that has the bigger y component
             if result.0.y > result.1.y {

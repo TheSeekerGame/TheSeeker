@@ -1,4 +1,4 @@
-// Credit: translated to rust from:
+// Credit: translated to rust from, everything except ballistic_speed()
 // https://github.com/forrestthewoods/lib_fts/blob/master/code/fts_ballistic_trajectory.cs
 
 use glam::Vec2;
@@ -225,6 +225,49 @@ fn solve_quartic(
     num
 }
 
+// Calculate the maximum range that a ballistic projectile can be fired on given speed and gravity.
+//
+// speed (f32): projectile velocity
+// gravity (f32): force of gravity, positive is down
+// initial_height (f32): distance above flat terrain
+//
+// return (f32): maximum range
+pub fn ballistic_range(speed: f32, gravity: f32, initial_height: f32) -> f32 {
+    // Handling these cases is up to your project's coding standards
+    if speed > 0.0 && gravity > 0.0 && initial_height >= 0.0 {
+    } else {
+        return 0.0;
+    }
+
+    // Derivation
+    // (1) x = speed * time * cos O
+    // (2) y = initial_height + (speed * time * sin O) - (0.5 * gravity * time * time)
+    // (3) via quadratic: t = (speed * sin O) / gravity + sqrt(speed * speed * sin O + 2 * gravity * initial_height) / gravity [ignore smaller root]
+    // (4) solution: range = x = (speed * cos O) / gravity * sqrt(speed * speed * sin O + 2 * gravity * initial_height) [plug t back into x = speed * time * cos O]
+
+    let angle = std::f32::consts::PI; // no air resistance, so 45 degrees provides maximum range
+    let cos = angle.cos();
+    let sin = angle.sin();
+
+    let range = (speed * cos / gravity)
+        * (speed * sin + (speed * speed * sin * sin + 2.0 * gravity * initial_height).sqrt());
+
+    range
+}
+
+/// Given a range and gravity, finds the needed speed
+pub fn ballistic_speed(range: f32, gravity: f32, initial_height: f32) -> f32 {
+    // Handling these cases is up to your project's coding standards
+    if initial_height.abs() < 0.000001 && range.abs() < 0.000001 {
+        return 0.0;
+    }
+
+    // Solving the ballistic_range equation for speed gives:
+    let speed = gravity.sqrt() * range / (initial_height + range).sqrt();
+
+    speed
+}
+
 /// For a stationary target
 pub fn solve_ballistic_arc(
     proj_pos: Vec2,
@@ -232,21 +275,19 @@ pub fn solve_ballistic_arc(
     target: Vec2,
     gravity: f32,
 ) -> (Vec2, Vec2, i32) {
-    // Handling these cases is up to your project's coding standards
-    assert!(
-        proj_pos != target && proj_speed > 0.0 && gravity > 0.0,
-        "solve_ballistic_arc called with invalid data"
-    );
+    if proj_pos != target && proj_speed > 0.0 && gravity > 0.0 {
+    } else {
+        return (Vec2::ZERO, Vec2::ZERO, 0);
+    }
 
     let mut s0 = Vec2::ZERO;
     let mut s1 = Vec2::ZERO;
 
     let diff = target - proj_pos;
-    let ground_dist = diff.length();
     let speed2 = proj_speed * proj_speed;
     let speed4 = proj_speed * proj_speed * proj_speed * proj_speed;
     let y = diff.y;
-    let x = ground_dist;
+    let x = diff.x.abs();
     let gx = gravity * x;
     let root = speed4 - gravity * (gravity * x * x + 2.0 * y * speed2);
 
@@ -260,7 +301,7 @@ pub fn solve_ballistic_arc(
     let high_ang = f32::atan2(speed2 + root, gx);
     let num_solutions = if low_ang != high_ang { 2 } else { 1 };
 
-    let ground_dir = diff.normalize();
+    let ground_dir = Vec2::X * diff.x.signum();
     s0 = ground_dir * f32::cos(low_ang) * proj_speed
         + Vec2::new(0.0, f32::sin(low_ang) * proj_speed);
     if num_solutions > 1 {
