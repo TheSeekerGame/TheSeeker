@@ -750,7 +750,9 @@ fn ranged_attack(
 
             let relative_height = enemy_transform.translation().x - transform.translation.x;
             let gravity = config.fall_accel * time.hz as f32;
-            let mut speed = ballistic_speed(Range::RANGED, gravity, relative_height);
+            let rng_factor = 1.0 + 0.2 * ran::ran_f64();
+            let mut speed =
+                ballistic_speed(Range::RANGED, gravity, relative_height) * rng_factor as f32;
             println!("setting speed to: {speed}");
             let max_attempts = 10;
             for i in 0..max_attempts {
