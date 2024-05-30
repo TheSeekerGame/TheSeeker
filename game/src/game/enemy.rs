@@ -1056,6 +1056,7 @@ fn move_collide(
         let shape = collider.0.shared_shape().clone();
         let dir = linear_velocity.x.signum();
         let x_len = linear_velocity.x.abs();
+        //TODO: should be collider half extents
         let front = transform.translation.x + 10. * dir;
         let z = transform.translation.z;
         let interaction = InteractionGroups {
@@ -1063,6 +1064,8 @@ fn move_collide(
             filter: Group::from_bits_truncate(0b10001),
             // filter: GROUND,
         };
+        //maybe dont need
+        let mut projected_velocity = linear_velocity.xy();
         while let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
             if let Some((e, first_hit)) = spatial_query.shape_cast(
                 transform.translation.xy(),
@@ -1074,13 +1077,9 @@ fn move_collide(
             ) {
                 if first_hit.status != TOIStatus::Penetrating {
                     let sliding_plane = into_vec2(first_hit.normal1);
-                    let projected_velocity = linear_velocity.xy()
+                    projected_velocity = linear_velocity.xy()
                         - sliding_plane * linear_velocity.xy().dot(sliding_plane);
                     linear_velocity.0 = projected_velocity;
-                    let new_pos =
-                        transform.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
-                    transform.translation.x = new_pos.x;
-                    transform.translation.y = new_pos.y;
                     if !is_knocked {
                         *nav = Navigation::Blocked;
                     }
@@ -1096,7 +1095,7 @@ fn move_collide(
         //if Navigation::Grounded
         //no support for air right now
         //cast from underground in direction of movement
-        let mut projected_velocity = linear_velocity;
+        // let mut projected_velocity = linear_velocity;
 
         if let Some((entity, first_hit)) = spatial_query.ray_cast(
             Vec2::new(front, transform.translation.y - 10.),
@@ -1109,12 +1108,12 @@ fn move_collide(
             if !is_knocked {
                 *nav = Navigation::Blocked;
             }
+            //TODO: is this correct?
             projected_velocity.x = first_hit.toi * dir;
         }
 
-        transform.translation = (transform.translation.xy()
-            + projected_velocity.xy() * (1.0 / time.hz as f32))
-            .extend(z);
+        transform.translation =
+            (transform.translation.xy() + projected_velocity * (1.0 / time.hz as f32)).extend(z);
     }
 }
 

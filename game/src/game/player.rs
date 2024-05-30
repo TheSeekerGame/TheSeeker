@@ -737,13 +737,23 @@ fn player_collisions(
         ),
         (With<Player>),
     >,
+    mut q_enemy: Query<Entity, With<super::enemy::Enemy>>,
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
 ) {
     for (entity, mut pos, mut linear_velocity, collider, slide) in q_gent.iter_mut() {
         let mut shape = collider.0.shared_shape().clone();
-        let mut tries = 0;
+        // let mut tries = 0;
         let mut original_pos = pos.translation.xy();
+        let mut possible_pos = pos.translation.xy();
+        let z = pos.translation.z;
+        let mut projected_velocity = linear_velocity.xy();
+        // println!("initial projected_velocity");
+        // dbg!(projected_velocity);
+        let mut interaction = InteractionGroups {
+            memberships: PLAYER,
+            filter: Group::from_bits_truncate(0b10010),
+        };
 
         let mut wall_slide = false;
         let dir = linear_velocity.x.signum();
@@ -753,79 +763,107 @@ fn player_collisions(
         // check with the new velocity and position, the y might clip the player through the roof
         // of the corner.
         //if we are not moving, we can not shapecast in direction of movement
-        while let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
+        while let Ok(shape_dir) = Direction2d::new(projected_velocity) {
             if let Some((e, first_hit)) = spatial_query.shape_cast(
-                pos.translation.xy(),
+                possible_pos,
                 shape_dir,
                 &*shape,
-                linear_velocity.length() / time.hz as f32 + 0.5,
-                InteractionGroups {
-                    memberships: PLAYER,
-                    filter: Group::from_bits_truncate(0b10010),
-                },
+                projected_velocity.length() / time.hz as f32 + 0.5,
+                interaction,
                 Some(entity),
             ) {
-                if first_hit.status != TOIStatus::Penetrating {
-                    // Applies a very small amount of bounce, as well as sliding to the character
-                    // the bounce helps prevent the player from getting stuck.
-                    let sliding_plane = into_vec2(first_hit.normal1);
-
-                    let bounce_coefficient = 0.05;
-                    let bounce_force =
-                        -sliding_plane * linear_velocity.dot(sliding_plane) * bounce_coefficient;
-
-                    let projected_velocity = linear_velocity.xy()
-                        - sliding_plane * linear_velocity.xy().dot(sliding_plane);
-
-                    // Applies downward friction only when player tries to push
-                    // against the wall while falling. Ignores x component.
-                    let friction_coefficient = config.sliding_friction;
-                    let friction_force = if projected_velocity.y < -0.0 {
-                        // make sure at least 1/2 of player is against the wall
-                        // (because it looks wierd to have the character hanging by their head)
-                        if let Some((e, first_hit)) = spatial_query.ray_cast(
-                            pos.translation.xy(),
-                            Vec2::new(dir, 0.0),
-                            shape.as_cuboid().unwrap().half_extents.x + 0.1,
-                            true,
-                            InteractionGroups {
-                                memberships: PLAYER,
-                                filter: GROUND,
-                            },
-                            Some(entity),
-                        ) {
-                            wall_slide = true;
-                            -(projected_velocity.y * friction_coefficient)
-                        } else {
-                            0.0
-                        }
-                    } else {
-                        0.0
+                if let Ok(enemy) = q_enemy.get(e) {
+                    interaction = InteractionGroups {
+                        memberships: PLAYER,
+                        filter: GROUND,
                     };
-                    let friction_vec = Vec2::new(0.0, friction_force);
+                    match first_hit.status {
+                        TOIStatus::Converged | TOIStatus::OutOfIterations => {
+                            let sliding_plane = into_vec2(first_hit.normal1);
+                            if sliding_plane.y == 1.0 {
+                                println!("should do nothing");
+                            } else {
+                                projected_velocity.x = linear_velocity.x
+                                    - sliding_plane.x * linear_velocity.xy().dot(sliding_plane);
+                            }
+                            dbg!(sliding_plane);
+                            dbg!(projected_velocity);
+                            dbg!(first_hit.toi);
+                            // dbg!(projected_velocity);
+                        },
+                        TOIStatus::Penetrating => {
+                            // println!("penetrating enemy");
+                            // dbg!(first_hit.toi);
+                            // dbg!(projected_velocity);
+                        },
+                        //maybe failed never happens?
+                        TOIStatus::Failed => println!("failed"),
+                    }
+                } else {
+                    match first_hit.status {
+                        TOIStatus::Converged | TOIStatus::OutOfIterations => {
+                            // Applies a very small amount of bounce, as well as sliding to the character
+                            // the bounce helps prevent the player from getting stuck.
+                            let sliding_plane = into_vec2(first_hit.normal1);
 
-                    linear_velocity.0 = projected_velocity + friction_vec + bounce_force;
+                            let bounce_coefficient = 0.05;
+                            let bounce_force = -sliding_plane
+                                * linear_velocity.dot(sliding_plane)
+                                * bounce_coefficient;
 
-                    let new_pos = pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
-                    pos.translation.x = new_pos.x;
-                    pos.translation.y = new_pos.y;
-                } else if tries > 1 {
-                    // If we tried a few times and still penetrating, just abort the whole movement
-                    // thing entirely. This scenario rarely occurs, so stopping movement is fine.
-                    pos.translation.x = original_pos.x;
-                    pos.translation.y = original_pos.y;
-                    linear_velocity.0 = Vec2::ZERO;
-                    break;
+                            projected_velocity = linear_velocity.xy()
+                                - sliding_plane * linear_velocity.xy().dot(sliding_plane);
+
+                            // Applies downward friction only when player tries to push
+                            // against the wall while falling. Ignores x component.
+                            let friction_coefficient = config.sliding_friction;
+                            let friction_force = if projected_velocity.y < -0.0 {
+                                // make sure at least 1/2 of player is against the wall
+                                // (because it looks wierd to have the character hanging by their head)
+                                if let Some((e, first_hit)) = spatial_query.ray_cast(
+                                    pos.translation.xy(),
+                                    Vec2::new(dir, 0.0),
+                                    shape.as_cuboid().unwrap().half_extents.x + 0.1,
+                                    true,
+                                    InteractionGroups {
+                                        memberships: PLAYER,
+                                        filter: GROUND,
+                                    },
+                                    Some(entity),
+                                ) {
+                                    wall_slide = true;
+                                    -(projected_velocity.y * friction_coefficient)
+                                } else {
+                                    0.0
+                                }
+                            } else {
+                                0.0
+                            };
+                            let friction_vec = Vec2::new(0.0, friction_force);
+
+                            projected_velocity += friction_vec + bounce_force;
+
+                            possible_pos =
+                                (pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01)));
+                            println!("converged");
+                        },
+                        TOIStatus::Penetrating => {
+                            let depenetration = -linear_velocity.0;
+                            projected_velocity += depenetration;
+                            dbg!(projected_velocity);
+                            println!("penetrating");
+                            possible_pos = original_pos;
+                        },
+                        TOIStatus::Failed => println!("failed"),
+                    }
                 }
-                tries += 1;
+                linear_velocity.0 = projected_velocity;
+                pos.translation = possible_pos.extend(z);
             } else {
                 break;
             }
-            if tries > 5 {
-                break;
-            }
         }
-        let z = pos.translation.z;
+
         pos.translation =
             (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
 
