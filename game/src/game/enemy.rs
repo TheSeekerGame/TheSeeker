@@ -748,9 +748,9 @@ fn ranged_attack(
             // account for projectile width
             ceiling -= 5.0;
 
-            let relative_height = enemy_transform.translation().x - transform.translation.x;
+            let relative_height = enemy_transform.translation().y - transform.translation.y;
             let gravity = config.fall_accel * time.hz as f32;
-            let rng_factor = 1.0 + 0.2 * ran::ran_f64();
+            let rng_factor = 1.0 + 0.25 * ran::ran_f64();
             let mut speed =
                 ballistic_speed(Range::RANGED, gravity, relative_height) * rng_factor as f32;
             println!("setting speed to: {speed}");

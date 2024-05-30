@@ -37,28 +37,7 @@ pub struct ArcParticleEffectHandle(pub Handle<EffectAsset>);
 #[derive(Component)]
 pub struct SystemLifetime(f32);
 
-fn attack_particles_setup(
-    mut commands: Commands,
-    mut effects: ResMut<Assets<EffectAsset>>,
-    mut meshes: ResMut<Assets<Mesh>>,
-    mut materials: ResMut<Assets<ColorMaterial>>,
-) {
-    // Spawn a reference white square in the center of the screen at Z=0
-    commands
-        .spawn(MaterialMesh2dBundle {
-            mesh: meshes
-                .add(Rectangle {
-                    half_size: Vec2::splat(100.0),
-                })
-                .into(),
-            material: materials.add(ColorMaterial {
-                color: Color::RED,
-                ..Default::default()
-            }),
-            ..Default::default()
-        })
-        .insert(Name::new("square"));
-
+fn attack_particles_setup(mut commands: Commands, mut effects: ResMut<Assets<EffectAsset>>) {
     // Create a color gradient for the particles
     let mut gradient = Gradient::new();
     let r = (1.0 / 8.0);
@@ -154,18 +133,6 @@ fn attack_particles_setup(
     );
 
     commands.insert_resource(ArcParticleEffectHandle(effect.clone()));
-    // Spawn an instance of the particle effect, and override its Z layer to
-    // be above the reference white square previously spawned.
-    commands
-        .spawn((ParticleEffectBundle {
-            // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
-            effect: ParticleEffect::new(effect).with_z_layer_2d(Some(4.5)),
-            transform: Transform::from_translation(Vec3::new(100.0, 50.0, 0.0)),
-            ..default()
-        },))
-        .insert(Name::new("effect:2d"));
-
-    println!("spawned particle system");
 }
 
 impl crate::graphics::particles_util::BuildParticles for EntityCommands<'_> {
@@ -178,7 +145,7 @@ impl crate::graphics::particles_util::BuildParticles for EntityCommands<'_> {
                 .spawn((
                     ParticleEffectBundle {
                         // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
-                        effect: ParticleEffect::new(handle.clone()).with_z_layer_2d(Some(100.0)),
+                        effect: ParticleEffect::new(handle.clone()).with_z_layer_2d(Some(4.5)),
                         ..default()
                     },
                     SystemLifetime(MAX_LIFETIME),
