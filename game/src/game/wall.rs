@@ -179,7 +179,7 @@ pub fn spawn_wall_collision(
                                 * grid_size as f32,
                             InteractionGroups {
                                 memberships: GROUND,
-                                //TODO: layers, player and enemy
+                                //TODO: layers, player and enemy ... and ranged attacks?
                                 filter: Group::all(),
                             },
                         ),
