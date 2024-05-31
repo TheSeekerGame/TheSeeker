@@ -772,33 +772,32 @@ fn player_collisions(
                 interaction,
                 Some(entity),
             ) {
+                //If we are colliding with an enemy
                 if let Ok(enemy) = q_enemy.get(e) {
+                    //change collision groups to only include ground so on the next loop we can
+                    //ignore enemies/check our ground collision
                     interaction = InteractionGroups {
                         memberships: PLAYER,
                         filter: GROUND,
                     };
                     match first_hit.status {
+                        //if we are not yet inside the enemy, collide, but not if we are falling
+                        //from above
                         TOIStatus::Converged | TOIStatus::OutOfIterations => {
                             let sliding_plane = into_vec2(first_hit.normal1);
-                            if sliding_plane.y == 1.0 {
-                                println!("should do nothing");
-                            } else {
+                            //configurable theshold for collision normal/sliding plane in case of physics instability
+                            let threshold = 0.000001;
+                            if !(1. - threshold..=1. + threshold).contains(&sliding_plane.y) {
                                 projected_velocity.x = linear_velocity.x
                                     - sliding_plane.x * linear_velocity.xy().dot(sliding_plane);
                             }
-                            dbg!(sliding_plane);
-                            dbg!(projected_velocity);
-                            dbg!(first_hit.toi);
-                            // dbg!(projected_velocity);
                         },
-                        TOIStatus::Penetrating => {
-                            // println!("penetrating enemy");
-                            // dbg!(first_hit.toi);
-                            // dbg!(projected_velocity);
-                        },
+                        //if we are already inside, do nothing
+                        TOIStatus::Penetrating => {},
                         //maybe failed never happens?
                         TOIStatus::Failed => println!("failed"),
                     }
+                //otherwise we are colliding with the ground
                 } else {
                     match first_hit.status {
                         TOIStatus::Converged | TOIStatus::OutOfIterations => {

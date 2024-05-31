@@ -244,8 +244,6 @@ impl Plugin for EnemyBehaviorPlugin {
 struct Patrolling;
 impl GentState for Patrolling {}
 impl Transitionable<Aggroed> for Patrolling {
-    //TODO:
-    // type Removals = (Patrolling, Waiting);
     type Removals = (Patrolling);
 }
 
@@ -837,7 +835,6 @@ fn melee_attack(
             let collider = commands
                 .spawn((
                     Collider::cuboid(
-                        //todo, half extents correct?
                         10.,
                         10.,
                         InteractionGroups {
@@ -1056,23 +1053,25 @@ fn move_collide(
         let shape = collider.0.shared_shape().clone();
         let dir = linear_velocity.x.signum();
         let x_len = linear_velocity.x.abs();
-        //TODO: should be collider half extents
+        //TODO: should be based on collider half extent x
         let front = transform.translation.x + 10. * dir;
         let z = transform.translation.z;
-        let interaction = InteractionGroups {
-            memberships: ENEMY,
-            filter: Group::from_bits_truncate(0b10001),
-            // filter: GROUND,
-        };
-        //maybe dont need
         let mut projected_velocity = linear_velocity.xy();
+
+        //Simplified version of the player collisions
+        //If the enemy encounters a collision with the player, wall or edge of platform, it sets
+        //the Navigation component to Navigation::Blocked
         while let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
             if let Some((e, first_hit)) = spatial_query.shape_cast(
                 transform.translation.xy(),
                 shape_dir,
                 &*shape,
                 linear_velocity.length() / time.hz as f32 + 0.5,
-                interaction,
+                InteractionGroups {
+                    memberships: ENEMY,
+                    //combination of the PLAYER + GROUND Groups
+                    filter: Group::from_bits_truncate(0b10001),
+                },
                 None,
             ) {
                 if first_hit.status != TOIStatus::Penetrating {
@@ -1090,25 +1089,24 @@ fn move_collide(
                 break;
             };
         }
-        //its easy to get stuck on the corner of an enemy...
 
-        //if Navigation::Grounded
-        //no support for air right now
-        //cast from underground in direction of movement
-        // let mut projected_velocity = linear_velocity;
-
+        //Raycast from underground directly below the enemy in direction of movement, detecting the edges of a platform from
+        //inside
         if let Some((entity, first_hit)) = spatial_query.ray_cast(
+            //TODO: should be based on collider half extent y + a little
             Vec2::new(front, transform.translation.y - 10.),
             Vec2::new(dir, 0.),
             x_len / time.hz as f32,
             false,
-            interaction,
+            InteractionGroups {
+                memberships: ENEMY,
+                filter: GROUND,
+            },
             None,
         ) {
             if !is_knocked {
                 *nav = Navigation::Blocked;
             }
-            //TODO: is this correct?
             projected_velocity.x = first_hit.toi * dir;
         }
 
