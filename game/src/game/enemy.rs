@@ -747,12 +747,19 @@ fn ranged_attack(
             ceiling -= 5.0;
 
             let relative_height = enemy_transform.translation().y - transform.translation.y;
+            let delta_x = transform.translation.x - enemy_transform.translation().x;
             let gravity = config.fall_accel * time.hz as f32;
-            let rng_factor = 1.0 + 0.25 * ran::ran_f64();
+            let rng_factor = 1.0;
             let mut speed =
                 ballistic_speed(Range::RANGED, gravity, relative_height) * rng_factor as f32;
-            println!("setting speed to: {speed}");
             let max_attempts = 10;
+            // Define default arc as 50ish degree shot with in the direction of the player
+            let mut final_solution = Projectile {
+                vel: LinearVelocity(Vec2::new(
+                    134.0 * delta_x.signum(),
+                    151.0,
+                )),
+            };
             for i in 0..max_attempts {
                 if let Some(mut projectile) = Projectile::with_vel(
                     transform.translation.xy(),
@@ -765,42 +772,42 @@ fn ranged_attack(
                         let max_vel_y = (ceiling * (2.0 * gravity)).sqrt();
                         let max_vel_x = max_vel_y / projectile.vel.y * projectile.vel.x;
                         let max_vel = Vec2::new(max_vel_x, max_vel_y).length();
-                        //println!("trying again with new max vel: {max_vel}");
                         if let Some(projectile_2) = Projectile::with_vel(
                             transform.translation.xy(),
                             enemy_transform.translation().xy(),
                             max_vel,
                             gravity,
                         ) {
-                            //println!("using slower firing solution: {max_vel}");
                             projectile = projectile_2
                         } else {
                             // attempts to fire anyway, even though ceiling will always block the shot
                         }
                     }
-                    commands
-                        .spawn((
-                            Attack::new(1000, entity),
-                            projectile,
-                            Collider::cuboid(
-                                5.,
-                                5.,
-                                InteractionGroups::new(ENEMY_ATTACK, PLAYER),
-                            ),
-                            TransformBundle::from(Transform::from_translation(
-                                enemy_transform.translation(),
-                            )),
-                        ))
-                        .with_lingering_particles(particle_effect.0.clone());
+                    final_solution = projectile;
                     break;
                 } else {
                     if i == max_attempts - 1 {
-                        warn!("No solution for ballistic trajectory, even after increased speed to {speed}!")
+                        warn!("No solution for ballistic trajectory, even after increased speed to {speed}, using default trajectory!")
                     } else {
                         speed *= 1.15;
                     }
                 }
             }
+            // spawn in the new projectile:
+            commands
+                .spawn((
+                    Attack::new(1000, entity),
+                    final_solution,
+                    Collider::cuboid(
+                        5.,
+                        5.,
+                        InteractionGroups::new(ENEMY_ATTACK, PLAYER),
+                    ),
+                    TransformBundle::from(Transform::from_translation(
+                        enemy_transform.translation(),
+                    )),
+                ))
+                .with_lingering_particles(particle_effect.0.clone());
         }
         if matches!(range, Range::Melee) {
             if is_grouped {
