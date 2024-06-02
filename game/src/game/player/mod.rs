@@ -106,6 +106,7 @@ pub enum PlayerAction {
     Move,
     Jump,
     Attack,
+    Dash,
 }
 
 fn debug_player_states(
@@ -116,13 +117,15 @@ fn debug_player_states(
             Ref<Falling>,
             Ref<Jumping>,
             Ref<Grounded>,
+            Ref<Dashing>,
+            Ref<CanDash>,
         )>,
         With<Player>,
     >,
 ) {
     for states in query.iter() {
         // println!("{:?}", states);
-        let (running, idle, falling, jumping, grounded) = states;
+        let (running, idle, falling, jumping, grounded, dashing, can_dash) = states;
         let mut states_string: String = String::new();
         if let Some(running) = running {
             if running.is_added() {
@@ -147,6 +150,16 @@ fn debug_player_states(
         if let Some(grounded) = grounded {
             if grounded.is_added() {
                 states_string.push_str("added grounded, ");
+            }
+        }
+        if let Some(dashing) = dashing {
+            if dashing.is_added() {
+                states_string.push_str("added dashing, ");
+            }
+        }
+        if let Some(can_dash) = can_dash {
+            if can_dash.is_added() {
+                states_string.push_str("added can_dash, ");
             }
         }
         if !states_string.is_empty() {
@@ -234,6 +247,7 @@ fn setup_player(
                     )
                     .insert(PlayerAction::Attack, KeyCode::Enter)
                     .insert(PlayerAction::Attack, KeyCode::KeyJ)
+                    .insert(PlayerAction::Dash, KeyCode::ShiftLeft)
                     .build(),
             },
             Falling,
@@ -338,6 +352,29 @@ impl GentState for CanAttack {}
 
 impl Transitionable<Attacking> for CanAttack {
     type Removals = (CanAttack);
+}
+
+#[derive(Component, Debug)]
+#[component(storage = "SparseSet")]
+pub struct Dashing;
+impl GentState for Dashing {}
+impl Transitionable<CanDash> for Dashing {
+    type Removals = (Dashing);
+}
+
+#[derive(Component, Debug)]
+#[component(storage = "SparseSet")]
+pub struct CanDash;
+impl GentState for CanDash {}
+impl Transitionable<Dashing> for CanDash {
+    type Removals = (
+        CanDash,
+        Idle,
+        Running,
+        Jumping,
+        Falling,
+        Grounded,
+    );
 }
 
 // Pseudo-States

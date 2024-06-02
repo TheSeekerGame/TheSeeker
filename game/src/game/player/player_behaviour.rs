@@ -2,13 +2,14 @@ use crate::game::attack::{Attack, Pushback};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
-    Attacking, CanAttack, CoyoteTime, Falling, Grounded, HitFreezeTime, Idle, Jumping, Player,
-    PlayerAction, PlayerConfig, PlayerGfx, PlayerStateSet, Running, WallSlideTime,
+    Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded, HitFreezeTime, Idle,
+    Jumping, Player, PlayerAction, PlayerConfig, PlayerGfx, PlayerStateSet, Running, WallSlideTime,
 };
 use crate::prelude::{
     any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
     IntoSystemConfigs, Plugin, Query, Res, Transform, TransformBundle, With, Without,
 };
+use bevy::prelude::not;
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
@@ -21,7 +22,7 @@ use theseeker_engine::physics::{
     into_vec2, AnimationCollider, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
     GROUND, PLAYER, PLAYER_ATTACK,
 };
-use theseeker_engine::prelude::{GameTickUpdate, GameTime};
+use theseeker_engine::prelude::{Condition, GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
 
 ///Player behavior systems.
@@ -38,9 +39,10 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_idle.run_if(any_with_component::<Idle>),
                     add_attack,
                     player_attack.run_if(any_with_component::<Attacking>),
-                    player_move,
+                    player_move.run_if(not(any_with_component::<Dashing>)),
                     player_run.run_if(any_with_component::<Running>),
                     player_jump.run_if(any_with_component::<Jumping>),
+                    player_dash.run_if(any_with_component::<Dashing>),
                     player_grounded.run_if(any_with_component::<Grounded>),
                     player_falling.run_if(any_with_component::<Falling>),
                     player_sliding
@@ -141,11 +143,14 @@ pub fn player_move(
             &mut Facing,
             Option<&Grounded>,
             &Gent,
+            &mut TransitionQueue,
         ),
         (With<Player>),
     >,
 ) {
-    for (mut velocity, action_state, mut facing, grounded, gent) in q_gent.iter_mut() {
+    for (mut velocity, action_state, mut facing, grounded, gent, mut transition_queue) in
+        q_gent.iter_mut()
+    {
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
@@ -184,6 +189,10 @@ pub fn player_move(
             *facing = Facing::Right;
         } else if direction < 0.0 {
             *facing = Facing::Left;
+        }
+
+        if action_state.just_pressed(&PlayerAction::Dash) {
+            transition_queue.push(CanDash::new_transition(Dashing));
         }
     }
 }
@@ -276,6 +285,39 @@ pub fn player_jump(
         }
 
         velocity.y = velocity.y.clamp(0., config.jump_vel_init);
+    }
+}
+
+pub fn player_dash(
+    mut query: Query<
+        (
+            &ActionState<PlayerAction>,
+            &mut LinearVelocity,
+            &mut Dashing,
+            &mut TransitionQueue,
+        ),
+        With<Player>,
+    >,
+    config: Res<PlayerConfig>,
+) {
+    for (action_state, mut velocity, mut dashing, mut transitions) in query.iter_mut() {
+        //can enter state and first frame jump not pressed if you tap
+        //i think this is related to the fixedtimestep input
+        // print!("{:?}", action_state.get_pressed());
+
+        let deaccel_rate = config.jump_fall_accel;
+
+        if dashing.is_added() {
+            println!("started dashing");
+            // velocity.y += config.jump_vel_init;
+        } else {
+            //  if (velocity.y - deaccel_rate < 0.0) || action_state.released(&PlayerAction::Jump) {
+            //      transitions.push(Jumping::new_transition(Falling));
+            //  }
+            //  velocity.y -= deaccel_rate;
+        }
+
+        //velocity.y = velocity.y.clamp(0., config.jump_vel_init);
     }
 }
 
