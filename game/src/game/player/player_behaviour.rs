@@ -53,7 +53,7 @@ impl Plugin for PlayerBehaviorPlugin {
                 //consider a set for all movement/systems modify velocity, then collisions/move
                 //moves based on velocity
                 (
-                    // hitfreeze,
+                    hitfreeze,
                     set_movement_slots,
                     player_collisions,
                 )
@@ -145,12 +145,21 @@ pub fn player_move(
             &Gent,
             &mut TransitionQueue,
             Option<&Dashing>,
+            Option<&mut HitFreezeTime>,
         ),
         (With<Player>),
     >,
 ) {
-    for (mut velocity, action_state, mut facing, grounded, gent, mut transition_queue, dashing) in
-        q_gent.iter_mut()
+    for (
+        mut velocity,
+        action_state,
+        mut facing,
+        grounded,
+        gent,
+        mut transition_queue,
+        dashing,
+        hitfreeze,
+    ) in q_gent.iter_mut()
     {
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
@@ -201,6 +210,9 @@ pub fn player_move(
             )));
             velocity.x = config.dash_velocity * facing.direction();
             velocity.y = 0.0;
+            if let Some(mut hitfreeze) = hitfreeze {
+                *hitfreeze = HitFreezeTime(u32::MAX, None)
+            }
         }
     }
 }
@@ -304,6 +316,7 @@ pub fn player_dash(
             &mut LinearVelocity,
             &mut Dashing,
             &mut TransitionQueue,
+            Option<&mut HitFreezeTime>,
             Option<&Grounded>,
         ),
         With<Player>,
@@ -311,7 +324,7 @@ pub fn player_dash(
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
-    for (action_state, facing, mut velocity, mut dashing, mut transitions, grounded) in
+    for (action_state, facing, mut velocity, mut dashing, mut transitions, hitfreeze, grounded) in
         query.iter_mut()
     {
         //can enter state and first frame jump not pressed if you tap
@@ -321,6 +334,9 @@ pub fn player_dash(
         if dashing.is_added() {
             velocity.x = config.dash_velocity * facing.direction();
             velocity.y = 0.0;
+            if let Some(mut hitfreeze) = hitfreeze {
+                *hitfreeze = HitFreezeTime(u32::MAX, None)
+            }
         } else {
             dashing.duration += 1.0 / time.hz as f32;
             if dashing.duration > config.dash_duration {

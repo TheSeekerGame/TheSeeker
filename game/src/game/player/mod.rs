@@ -393,8 +393,8 @@ impl Transitionable<Dashing> for CanDash {
 // and provide storage for that behaviours state
 
 /// If a player attack lands, locks their velocity for the configured number of ticks'
-//Tracks the attack entity which last caused the hirfreeze affect. (this way the same attack
-// doesn't trigger it muyltiple times)
+//Tracks the attack entity which last caused the hirfreeze affect. and ticks since triggered
+// (this way the same attack doesn't trigger it multiple times)
 #[derive(Component, Default, Debug)]
 pub struct HitFreezeTime(u32, Option<Entity>);
 
