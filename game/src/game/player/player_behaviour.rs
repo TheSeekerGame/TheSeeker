@@ -29,7 +29,7 @@ use theseeker_engine::script::ScriptPlayer;
 ///Player behavior systems.
 ///Do stuff here in states and add transitions to other states by pushing
 ///to a TransitionQueue.
-struct PlayerBehaviorPlugin;
+pub(crate) struct PlayerBehaviorPlugin;
 
 impl Plugin for PlayerBehaviorPlugin {
     fn build(&self, app: &mut App) {
