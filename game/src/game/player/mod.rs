@@ -361,14 +361,10 @@ impl Transitionable<Attacking> for CanAttack {
 #[component(storage = "SparseSet")]
 pub struct Dashing {
     duration: f32,
-    was_grounded: bool,
 }
 impl Dashing {
     pub fn new(was_grounded: bool) -> Self {
-        Self {
-            duration: 0.0,
-            was_grounded,
-        }
+        Self { duration: 0.0 }
     }
 }
 impl GentState for Dashing {}
@@ -390,14 +386,7 @@ impl CanDash {
 }
 impl GentState for CanDash {}
 impl Transitionable<Dashing> for CanDash {
-    type Removals = (
-        CanDash,
-        Idle,
-        Running,
-        Jumping,
-        Falling,
-        Grounded,
-    );
+    type Removals = (CanDash, Running, Jumping, Idle);
 }
 
 // Pseudo-States

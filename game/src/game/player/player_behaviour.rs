@@ -339,6 +339,7 @@ pub fn player_dash(
             &mut LinearVelocity,
             &mut Dashing,
             &mut TransitionQueue,
+            Option<&Grounded>,
             Option<&mut HitFreezeTime>,
         ),
         With<Player>,
@@ -346,7 +347,9 @@ pub fn player_dash(
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
-    for (facing, mut velocity, mut dashing, mut transitions, hitfreeze) in query.iter_mut() {
+    for (facing, mut velocity, mut dashing, mut transitions, grounded, hitfreeze) in
+        query.iter_mut()
+    {
         if dashing.is_added() {
             velocity.x = config.dash_velocity * facing.direction();
             velocity.y = 0.0;
@@ -360,11 +363,8 @@ pub fn player_dash(
                 transitions.push(Dashing::new_transition(CanDash::new(
                     &config,
                 )));
-                if dashing.was_grounded {
-                    transitions.push(Falling::new_transition(Grounded));
+                if grounded.is_some() {
                     transitions.push(Running::new_transition(Idle));
-                } else {
-                    transitions.push(Grounded::new_transition(Falling));
                 }
             }
         }
@@ -550,7 +550,11 @@ fn player_grounded(
             &mut TransitionQueue,
             Option<&mut CoyoteTime>,
         ),
-        (With<Player>, With<Grounded>),
+        (
+            With<Player>,
+            With<Grounded>,
+            Without<Dashing>,
+        ),
     >,
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
@@ -616,7 +620,11 @@ fn player_falling(
             &ShapeCaster,
             &mut TransitionQueue,
         ),
-        (With<Player>, With<Falling>),
+        (
+            With<Player>,
+            With<Falling>,
+            Without<Dashing>,
+        ),
     >,
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
