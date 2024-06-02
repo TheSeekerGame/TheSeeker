@@ -5,6 +5,7 @@ use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
     Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded, HitFreezeTime, Idle,
     Jumping, Player, PlayerAction, PlayerConfig, PlayerGfx, PlayerStateSet, Running, WallSlideTime,
+    WhirlAbility,
 };
 use crate::prelude::{
     any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
@@ -40,6 +41,7 @@ impl Plugin for PlayerBehaviorPlugin {
                 (
                     player_idle.run_if(any_with_component::<Idle>),
                     add_attack,
+                    player_whirl.before(player_attack),
                     player_attack.run_if(any_with_component::<Attacking>),
                     player_move,
                     player_can_dash.run_if(any_with_component::<CanDash>),
@@ -66,6 +68,40 @@ impl Plugin for PlayerBehaviorPlugin {
             )
                 .chain(),
         );
+    }
+}
+
+pub fn player_whirl(
+    mut q_gent: Query<
+        (
+            &ActionState<PlayerAction>,
+            &mut WhirlAbility,
+            &mut TransitionQueue,
+            Option<&Grounded>,
+            Option<&Attacking>,
+        ),
+        (With<Player>, With<Gent>),
+    >,
+    time: Res<GameTime>,
+    config: Res<PlayerConfig>,
+) {
+    for (action_state, mut whirl, mut transition_queue, grounded, attacking) in q_gent.iter_mut() {
+        if action_state.pressed(&PlayerAction::Whirl) {
+            if whirl.energy > 0.0 && grounded.is_some() {
+                if attacking.is_none() {
+                    transition_queue.push(CanAttack::new_transition(
+                        Attacking::default(),
+                    ));
+                }
+                whirl.active = true;
+                whirl.energy += 1.0 / time.hz as f32;
+            } else {
+                whirl.active = false;
+            }
+        } else {
+            whirl.active = false;
+            whirl.energy += 1.0 / time.hz as f32;
+        }
     }
 }
 
@@ -711,12 +747,13 @@ fn player_attack(
             &Facing,
             &mut Attacking,
             &mut TransitionQueue,
+            Option<&WhirlAbility>,
         ),
         (With<Player>),
     >,
     mut commands: Commands,
 ) {
-    for (entity, gent, facing, mut attacking, mut transitions) in query.iter_mut() {
+    for (entity, gent, facing, mut attacking, mut transitions, whirl) in query.iter_mut() {
         if attacking.ticks == Attacking::STARTUP * 8 {
             commands
                 .spawn((
@@ -736,6 +773,12 @@ fn player_attack(
         }
         attacking.ticks += 1;
         if attacking.ticks == Attacking::MAX * 8 {
+            // Keep attacking if whirl is ongoing
+            if let Some(whirl) = whirl {
+                if whirl.active {
+                    continue;
+                }
+            }
             transitions.push(Attacking::new_transition(CanAttack));
         }
     }

@@ -2,7 +2,7 @@ use crate::appstate::AppState;
 use crate::game::gentstate::Facing;
 use crate::game::player::{
     Attacking, CanAttack, Dashing, Falling, HitFreezeTime, Idle, Jumping, PlayerConfig, PlayerGfx,
-    PlayerStateSet, Running, WallSlideTime,
+    PlayerStateSet, Running, WallSlideTime, WhirlAbility,
 };
 use crate::prelude::{
     in_state, Added, App, Has, IntoSystemConfigs, Local, Or, Plugin, Query, Res, With, Without,
@@ -126,6 +126,7 @@ fn player_attacking_animation(
             Has<Jumping>,
             Has<Running>,
             Option<&HitFreezeTime>,
+            Option<&WhirlAbility>,
         ),
         Added<Attacking>,
     >,

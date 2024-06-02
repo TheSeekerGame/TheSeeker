@@ -107,6 +107,7 @@ pub enum PlayerAction {
     Jump,
     Attack,
     Dash,
+    Whirl,
 }
 
 fn debug_player_states(
@@ -248,6 +249,7 @@ fn setup_player(
                     .insert(PlayerAction::Attack, KeyCode::Enter)
                     .insert(PlayerAction::Attack, KeyCode::KeyJ)
                     .insert(PlayerAction::Dash, KeyCode::ShiftLeft)
+                    .insert(PlayerAction::Dash, KeyCode::ControlLeft)
                     .build(),
             },
             Falling,
@@ -407,6 +409,13 @@ impl WallSlideTime {
     fn sliding(&self, cfg: &PlayerConfig) -> bool {
         self.0 <= cfg.max_coyote_time * 2.0
     }
+}
+
+/// Indicates that sliding is tracked for this entity
+#[derive(Component, Default, Debug)]
+pub struct WhirlAbility {
+    active: bool,
+    energy: f32,
 }
 
 #[derive(Resource, Debug, Default)]
