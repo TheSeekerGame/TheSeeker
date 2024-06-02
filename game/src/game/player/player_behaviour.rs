@@ -29,7 +29,7 @@ use theseeker_engine::script::ScriptPlayer;
 ///Player behavior systems.
 ///Do stuff here in states and add transitions to other states by pushing
 ///to a TransitionQueue.
-pub struct PlayerBehaviorPlugin;
+struct PlayerBehaviorPlugin;
 
 impl Plugin for PlayerBehaviorPlugin {
     fn build(&self, app: &mut App) {
@@ -112,7 +112,7 @@ fn hitfreeze(
     }
 }
 
-pub fn player_idle(
+fn player_idle(
     mut query: Query<
         (
             &ActionState<PlayerAction>,
@@ -136,7 +136,7 @@ pub fn player_idle(
     }
 }
 
-pub fn player_move(
+fn player_move(
     config: Res<PlayerConfig>,
     mut q_gent: Query<
         (
@@ -196,7 +196,7 @@ pub fn player_move(
     }
 }
 
-pub fn set_movement_slots(
+fn set_movement_slots(
     mut q_gent: Query<(&LinearVelocity, &Gent), (With<Player>)>,
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
@@ -229,7 +229,7 @@ pub fn set_movement_slots(
     }
 }
 
-pub fn player_run(
+fn player_run(
     mut q_gent: Query<
         (
             &ActionState<PlayerAction>,
@@ -255,7 +255,7 @@ pub fn player_run(
     }
 }
 
-pub fn player_jump(
+fn player_jump(
     mut query: Query<
         (
             &ActionState<PlayerAction>,
@@ -558,7 +558,7 @@ pub fn player_collisions(
 /// Needs to be non-zero to avoid getting stuck in the ground.
 const GROUNDED_THRESHOLD: f32 = 1.0;
 
-pub fn player_grounded(
+fn player_grounded(
     spatial_query: Res<PhysicsWorld>,
     mut query: Query<
         (
@@ -625,7 +625,7 @@ pub fn player_grounded(
     }
 }
 
-pub fn player_falling(
+fn player_falling(
     spatial_query: Res<PhysicsWorld>,
     mut query: Query<
         (
@@ -674,7 +674,7 @@ pub fn player_falling(
     }
 }
 
-pub fn player_sliding(
+fn player_sliding(
     mut query: Query<(
         &Gent,
         &ActionState<PlayerAction>,
@@ -704,7 +704,7 @@ pub fn player_sliding(
     }
 }
 
-pub fn add_attack(
+fn add_attack(
     mut query: Query<
         (
             &mut TransitionQueue,
@@ -722,7 +722,7 @@ pub fn add_attack(
     }
 }
 
-pub fn player_attack(
+fn player_attack(
     mut query: Query<
         (
             Entity,
