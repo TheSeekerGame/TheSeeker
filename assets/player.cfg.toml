@@ -39,3 +39,12 @@ sliding_friction = 0.25
 
 # How many ticks is the players velocity locked to zero after landing an attack?
 hitfreeze_ticks = 45.0
+
+# How many seconds does our character dash for?
+dash_duration = 0.125
+
+# How many pixels/s do they dash with?
+dash_velocity = 400.0
+
+# How long before the player can dash again?
+dash_cooldown_duration = 0.0

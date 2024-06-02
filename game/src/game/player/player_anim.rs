@@ -25,7 +25,8 @@ impl Plugin for PlayerAnimationPlugin {
                 player_jumping_animation,
                 player_running_animation,
                 player_attacking_animation,
-                sprite_flip.after(player_attacking_animation),
+                player_dashing_animation,
+                sprite_flip.after(player_dashing_animation),
             )
                 .in_set(PlayerStateSet::Animation)
                 .after(PlayerStateSet::Transition)
@@ -150,13 +151,7 @@ fn player_attacking_animation(
 }
 
 fn player_dashing_animation(
-    f_query: Query<
-        &Gent,
-        Or<(
-            (Added<Dashing>, Without<Attacking>),
-            (With<Dashing>, Added<CanAttack>),
-        )>,
-    >,
+    f_query: Query<&Gent, Or<((Added<Dashing>),)>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for gent in f_query.iter() {

@@ -192,7 +192,9 @@ pub fn player_move(
         }
 
         if action_state.just_pressed(&PlayerAction::Dash) {
-            transition_queue.push(CanDash::new_transition(Dashing));
+            transition_queue.push(CanDash::new_transition(Dashing::new(
+                grounded.is_some(),
+            )));
         }
     }
 }
@@ -292,25 +294,44 @@ pub fn player_dash(
     mut query: Query<
         (
             &ActionState<PlayerAction>,
+            &Facing,
             &mut LinearVelocity,
             &mut Dashing,
             &mut TransitionQueue,
+            Option<&Grounded>,
         ),
         With<Player>,
     >,
     config: Res<PlayerConfig>,
+    time: Res<GameTime>,
 ) {
-    for (action_state, mut velocity, mut dashing, mut transitions) in query.iter_mut() {
+    for (action_state, facing, mut velocity, mut dashing, mut transitions, grounded) in
+        query.iter_mut()
+    {
         //can enter state and first frame jump not pressed if you tap
         //i think this is related to the fixedtimestep input
         // print!("{:?}", action_state.get_pressed());
 
-        let deaccel_rate = config.jump_fall_accel;
-
         if dashing.is_added() {
             println!("started dashing");
-            // velocity.y += config.jump_vel_init;
+            velocity.x = config.dash_velocity * facing.direction();
+            velocity.y = 0.0;
         } else {
+            dashing.duration += 1.0 / time.hz as f32;
+            if dashing.duration > config.dash_duration {
+                println!("stopped dashing {}", dashing.duration);
+                println!(
+                    "stopped dashing {}",
+                    config.dash_duration
+                );
+                dashing.duration = 0.0;
+                transitions.push(Dashing::new_transition(CanDash));
+                if dashing.was_grounded {
+                    transitions.push(Falling::new_transition(Grounded));
+                } else {
+                    transitions.push(Grounded::new_transition(Falling));
+                }
+            }
             //  if (velocity.y - deaccel_rate < 0.0) || action_state.released(&PlayerAction::Jump) {
             //      transitions.push(Jumping::new_transition(Falling));
             //  }

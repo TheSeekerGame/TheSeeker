@@ -356,7 +356,18 @@ impl Transitionable<Attacking> for CanAttack {
 
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
-pub struct Dashing;
+pub struct Dashing {
+    duration: f32,
+    was_grounded: bool,
+}
+impl Dashing {
+    pub fn new(was_grounded: bool) -> Self {
+        Self {
+            duration: 0.0,
+            was_grounded,
+        }
+    }
+}
 impl GentState for Dashing {}
 impl Transitionable<CanDash> for Dashing {
     type Removals = (Dashing);
@@ -430,13 +441,13 @@ pub struct PlayerConfig {
 
     /// How fast does the player accelerate downward while holding down the jump button?
     ///
-    /// (in pixels/second^2)
+    /// (in pixels/tick^2)
     jump_fall_accel: f32,
 
     /// How fast does the player accelerate downward while in the falling state?
     /// (ie: after releasing the jump key)
     ///
-    /// (in pixels/second^2)
+    /// (in pixels/tick^2)
     /// Note: sets the games global_gravity! (affects projectiles and other things that fall)
     pub fall_accel: f32,
 
@@ -449,6 +460,15 @@ pub struct PlayerConfig {
 
     /// How many ticks is the players velocity locked to zero after landing an attack?
     hitfreeze_ticks: u32,
+
+    /// How many seconds does our character dash for?
+    dash_duration: f32,
+
+    /// How many pixels/s do they dash with?
+    dash_velocity: f32,
+
+    /// How long before the player can dash again?
+    dash_cooldown_duration: f32,
 }
 
 fn load_player_config(
@@ -506,6 +526,9 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "max_coyote_time", |val| config.max_coyote_time = val);
     update_field(&mut errors, &cfg.0, "sliding_friction", |val| config.sliding_friction = val);
     update_field(&mut errors, &cfg.0, "hitfreeze_ticks", |val| config.hitfreeze_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "dash_duration", |val| config.dash_duration = val);
+    update_field(&mut errors, &cfg.0, "dash_velocity", |val| config.dash_velocity = val);
+    update_field(&mut errors, &cfg.0, "dash_cooldown_duration", |val| config.dash_cooldown_duration = val);
 
    for error in errors{
        warn!("failed to load player cfg value: {}", error);
