@@ -10,7 +10,7 @@ use crate::prelude::{
     any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
     IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle, With, Without,
 };
-use bevy::prelude::not;
+
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
@@ -23,7 +23,7 @@ use theseeker_engine::physics::{
     into_vec2, AnimationCollider, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
     GROUND, PLAYER, PLAYER_ATTACK,
 };
-use theseeker_engine::prelude::{Condition, GameTickUpdate, GameTime};
+use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
 
 ///Player behavior systems.
@@ -335,26 +335,20 @@ pub fn player_can_dash(
 pub fn player_dash(
     mut query: Query<
         (
-            &ActionState<PlayerAction>,
             &Facing,
             &mut LinearVelocity,
             &mut Dashing,
             &mut TransitionQueue,
             Option<&mut HitFreezeTime>,
-            Option<&Grounded>,
         ),
         With<Player>,
     >,
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
-    for (action_state, facing, mut velocity, mut dashing, mut transitions, hitfreeze, grounded) in
+    for (facing, mut velocity, mut dashing, mut transitions, hitfreeze) in
         query.iter_mut()
     {
-        //can enter state and first frame jump not pressed if you tap
-        //i think this is related to the fixedtimestep input
-        // print!("{:?}", action_state.get_pressed());
-
         if dashing.is_added() {
             velocity.x = config.dash_velocity * facing.direction();
             velocity.y = 0.0;
@@ -364,11 +358,6 @@ pub fn player_dash(
         } else {
             dashing.duration += 1.0 / time.hz as f32;
             if dashing.duration > config.dash_duration {
-                println!("stopped dashing {}", dashing.duration);
-                println!(
-                    "stopped dashing {}",
-                    config.dash_duration
-                );
                 dashing.duration = 0.0;
                 transitions.push(Dashing::new_transition(CanDash::new(
                     &config,
@@ -380,13 +369,7 @@ pub fn player_dash(
                     transitions.push(Grounded::new_transition(Falling));
                 }
             }
-            //  if (velocity.y - deaccel_rate < 0.0) || action_state.released(&PlayerAction::Jump) {
-            //      transitions.push(Jumping::new_transition(Falling));
-            //  }
-            //  velocity.y -= deaccel_rate;
         }
-
-        //velocity.y = velocity.y.clamp(0., config.jump_vel_init);
     }
 }
 
@@ -532,7 +515,6 @@ pub fn player_collisions(
             }
         }
 
-        println!("vel: {}", projected_velocity.x);
         // if the final collision results in zero x velocity, cancel the active dash
         if projected_velocity.x.abs() < 0.00001 {
             if let Some(mut dashing) = dashing {
