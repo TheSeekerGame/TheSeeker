@@ -144,11 +144,12 @@ pub fn player_move(
             Option<&Grounded>,
             &Gent,
             &mut TransitionQueue,
+            Option<&Dashing>,
         ),
         (With<Player>),
     >,
 ) {
-    for (mut velocity, action_state, mut facing, grounded, gent, mut transition_queue) in
+    for (mut velocity, action_state, mut facing, grounded, gent, mut transition_queue, dashing) in
         q_gent.iter_mut()
     {
         let mut direction: f32 = 0.0;
@@ -180,10 +181,13 @@ pub fn player_move(
                 }
             }
         };
-        velocity.x = new_vel.clamp(
-            -config.max_move_vel,
-            config.max_move_vel,
-        );
+
+        if dashing.is_none() {
+            velocity.x = new_vel.clamp(
+                -config.max_move_vel,
+                config.max_move_vel,
+            );
+        }
 
         if direction > 0.0 {
             *facing = Facing::Right;
@@ -195,6 +199,8 @@ pub fn player_move(
             transition_queue.push(CanDash::new_transition(Dashing::new(
                 grounded.is_some(),
             )));
+            velocity.x = config.dash_velocity * facing.direction();
+            velocity.y = 0.0;
         }
     }
 }
@@ -313,7 +319,6 @@ pub fn player_dash(
         // print!("{:?}", action_state.get_pressed());
 
         if dashing.is_added() {
-            println!("started dashing");
             velocity.x = config.dash_velocity * facing.direction();
             velocity.y = 0.0;
         } else {
@@ -328,6 +333,7 @@ pub fn player_dash(
                 transitions.push(Dashing::new_transition(CanDash));
                 if dashing.was_grounded {
                     transitions.push(Falling::new_transition(Grounded));
+                    transitions.push(Running::new_transition(Idle));
                 } else {
                     transitions.push(Grounded::new_transition(Falling));
                 }
@@ -351,6 +357,7 @@ pub fn player_collisions(
             &mut LinearVelocity,
             &Collider,
             Option<&mut WallSlideTime>,
+            Option<&mut Dashing>,
         ),
         (With<Player>),
     >,
@@ -358,7 +365,7 @@ pub fn player_collisions(
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, mut pos, mut linear_velocity, collider, slide) in q_gent.iter_mut() {
+    for (entity, mut pos, mut linear_velocity, collider, slide, dashing) in q_gent.iter_mut() {
         let mut shape = collider.0.shared_shape().clone();
         // let mut tries = 0;
         let mut original_pos = pos.translation.xy();
@@ -390,7 +397,7 @@ pub fn player_collisions(
                 Some(entity),
             ) {
                 //If we are colliding with an enemy
-                if let Ok(enemy) = q_enemy.get(e) {
+                if q_enemy.get(e).is_ok() {
                     //change collision groups to only include ground so on the next loop we can
                     //ignore enemies/check our ground collision
                     interaction = InteractionGroups {
@@ -401,12 +408,15 @@ pub fn player_collisions(
                         //if we are not yet inside the enemy, collide, but not if we are falling
                         //from above
                         TOIStatus::Converged | TOIStatus::OutOfIterations => {
-                            let sliding_plane = into_vec2(first_hit.normal1);
-                            //configurable theshold for collision normal/sliding plane in case of physics instability
-                            let threshold = 0.000001;
-                            if !(1. - threshold..=1. + threshold).contains(&sliding_plane.y) {
-                                projected_velocity.x = linear_velocity.x
-                                    - sliding_plane.x * linear_velocity.xy().dot(sliding_plane);
+                            // if we are also dashing, ignore the collision entirely
+                            if dashing.is_none() {
+                                let sliding_plane = into_vec2(first_hit.normal1);
+                                //configurable theshold for collision normal/sliding plane in case of physics instability
+                                let threshold = 0.000001;
+                                if !(1. - threshold..=1. + threshold).contains(&sliding_plane.y) {
+                                    projected_velocity.x = linear_velocity.x
+                                        - sliding_plane.x * linear_velocity.xy().dot(sliding_plane);
+                                }
                             }
                         },
                         //if we are already inside, do nothing
@@ -422,7 +432,7 @@ pub fn player_collisions(
                             // the bounce helps prevent the player from getting stuck.
                             let sliding_plane = into_vec2(first_hit.normal1);
 
-                            let bounce_coefficient = 0.05;
+                            let bounce_coefficient = if dashing.is_some() { 0.0 } else { 0.05 };
                             let bounce_force = -sliding_plane
                                 * linear_velocity.dot(sliding_plane)
                                 * bounce_coefficient;
@@ -477,6 +487,14 @@ pub fn player_collisions(
                 pos.translation = possible_pos.extend(z);
             } else {
                 break;
+            }
+        }
+
+        println!("vel: {}", projected_velocity.x);
+        // if the final collision results in zero x velocity, cancel the active dash
+        if projected_velocity.x.abs() < 0.00001 {
+            if let Some(mut dashing) = dashing {
+                dashing.duration = f32::MAX;
             }
         }
 

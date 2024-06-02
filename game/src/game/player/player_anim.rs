@@ -151,7 +151,7 @@ fn player_attacking_animation(
 }
 
 fn player_dashing_animation(
-    f_query: Query<&Gent, Or<((Added<Dashing>),)>>,
+    f_query: Query<&Gent, Added<Dashing>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for gent in f_query.iter() {
