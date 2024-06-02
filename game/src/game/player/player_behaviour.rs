@@ -346,9 +346,7 @@ pub fn player_dash(
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
-    for (facing, mut velocity, mut dashing, mut transitions, hitfreeze) in
-        query.iter_mut()
-    {
+    for (facing, mut velocity, mut dashing, mut transitions, hitfreeze) in query.iter_mut() {
         if dashing.is_added() {
             velocity.x = config.dash_velocity * facing.direction();
             velocity.y = 0.0;
