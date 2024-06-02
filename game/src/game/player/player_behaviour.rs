@@ -1,3 +1,4 @@
+use crate::camera::CameraRig;
 use crate::game::attack::{Attack, Pushback};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
@@ -7,7 +8,7 @@ use crate::game::player::{
 };
 use crate::prelude::{
     any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
-    IntoSystemConfigs, Plugin, Query, Res, Transform, TransformBundle, With, Without,
+    IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle, With, Without,
 };
 use bevy::prelude::not;
 use bevy::transform::TransformSystem::TransformPropagate;
@@ -39,7 +40,8 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_idle.run_if(any_with_component::<Idle>),
                     add_attack,
                     player_attack.run_if(any_with_component::<Attacking>),
-                    player_move.run_if(not(any_with_component::<Dashing>)),
+                    player_move,
+                    player_can_dash.run_if(any_with_component::<CanDash>),
                     player_run.run_if(any_with_component::<Running>),
                     player_jump.run_if(any_with_component::<Jumping>),
                     player_dash.run_if(any_with_component::<Dashing>),
@@ -53,7 +55,7 @@ impl Plugin for PlayerBehaviorPlugin {
                 //consider a set for all movement/systems modify velocity, then collisions/move
                 //moves based on velocity
                 (
-                    hitfreeze,
+                    // hitfreeze,
                     set_movement_slots,
                     player_collisions,
                 )
@@ -143,24 +145,12 @@ pub fn player_move(
             &mut Facing,
             Option<&Grounded>,
             &Gent,
-            &mut TransitionQueue,
             Option<&Dashing>,
-            Option<&mut HitFreezeTime>,
         ),
         (With<Player>),
     >,
 ) {
-    for (
-        mut velocity,
-        action_state,
-        mut facing,
-        grounded,
-        gent,
-        mut transition_queue,
-        dashing,
-        hitfreeze,
-    ) in q_gent.iter_mut()
-    {
+    for (mut velocity, action_state, mut facing, grounded, gent, dashing) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
@@ -202,17 +192,6 @@ pub fn player_move(
             *facing = Facing::Right;
         } else if direction < 0.0 {
             *facing = Facing::Left;
-        }
-
-        if action_state.just_pressed(&PlayerAction::Dash) {
-            transition_queue.push(CanDash::new_transition(Dashing::new(
-                grounded.is_some(),
-            )));
-            velocity.x = config.dash_velocity * facing.direction();
-            velocity.y = 0.0;
-            if let Some(mut hitfreeze) = hitfreeze {
-                *hitfreeze = HitFreezeTime(u32::MAX, None)
-            }
         }
     }
 }
@@ -308,6 +287,51 @@ pub fn player_jump(
     }
 }
 
+pub fn player_can_dash(
+    mut q_gent: Query<
+        (
+            &ActionState<PlayerAction>,
+            &Facing,
+            &mut CanDash,
+            &mut LinearVelocity,
+            &mut TransitionQueue,
+            Option<&Grounded>,
+            Option<&mut HitFreezeTime>,
+        ),
+        (With<Player>, With<Gent>),
+    >,
+    time: Res<GameTime>,
+    config: Res<PlayerConfig>,
+    mut rig: ResMut<CameraRig>,
+) {
+    for (
+        action_state,
+        facing,
+        mut can_dash,
+        mut velocity,
+        mut transition_queue,
+        grounded,
+        hitfreeze,
+    ) in q_gent.iter_mut()
+    {
+        can_dash.remaining_cooldown -= 1.0 / time.hz as f32;
+        if action_state.just_pressed(&PlayerAction::Dash) {
+            if can_dash.remaining_cooldown <= 0.0 {
+                transition_queue.push(CanDash::new_transition(Dashing::new(
+                    grounded.is_some(),
+                )));
+                velocity.x = config.dash_velocity * facing.direction();
+                velocity.y = 0.0;
+                if let Some(mut hitfreeze) = hitfreeze {
+                    *hitfreeze = HitFreezeTime(u32::MAX, None)
+                }
+            } else {
+                rig.trauma += 0.23;
+            }
+        }
+    }
+}
+
 pub fn player_dash(
     mut query: Query<
         (
@@ -346,7 +370,9 @@ pub fn player_dash(
                     config.dash_duration
                 );
                 dashing.duration = 0.0;
-                transitions.push(Dashing::new_transition(CanDash));
+                transitions.push(Dashing::new_transition(CanDash::new(
+                    &config,
+                )));
                 if dashing.was_grounded {
                     transitions.push(Falling::new_transition(Grounded));
                     transitions.push(Running::new_transition(Idle));

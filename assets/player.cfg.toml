@@ -47,4 +47,4 @@ dash_duration = 0.125
 dash_velocity = 400.0
 
 # How long before the player can dash again?
-dash_cooldown_duration = 0.0
+dash_cooldown_duration = 1.5

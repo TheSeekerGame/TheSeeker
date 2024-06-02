@@ -251,6 +251,9 @@ fn setup_player(
                     .build(),
             },
             Falling,
+            CanDash {
+                remaining_cooldown: 0.0,
+            },
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
             TransitionQueue::default(),
@@ -375,7 +378,16 @@ impl Transitionable<CanDash> for Dashing {
 
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
-pub struct CanDash;
+pub struct CanDash {
+    remaining_cooldown: f32,
+}
+impl CanDash {
+    pub fn new(config: &PlayerConfig) -> Self {
+        Self {
+            remaining_cooldown: config.dash_cooldown_duration,
+        }
+    }
+}
 impl GentState for CanDash {}
 impl Transitionable<Dashing> for CanDash {
     type Removals = (
