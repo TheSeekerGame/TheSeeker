@@ -295,7 +295,6 @@ pub fn player_can_dash(
             &mut CanDash,
             &mut LinearVelocity,
             &mut TransitionQueue,
-            Option<&Grounded>,
             Option<&mut HitFreezeTime>,
         ),
         (With<Player>, With<Gent>),
@@ -304,22 +303,15 @@ pub fn player_can_dash(
     config: Res<PlayerConfig>,
     mut rig: ResMut<CameraRig>,
 ) {
-    for (
-        action_state,
-        facing,
-        mut can_dash,
-        mut velocity,
-        mut transition_queue,
-        grounded,
-        hitfreeze,
-    ) in q_gent.iter_mut()
+    for (action_state, facing, mut can_dash, mut velocity, mut transition_queue, hitfreeze) in
+        q_gent.iter_mut()
     {
         can_dash.remaining_cooldown -= 1.0 / time.hz as f32;
         if action_state.just_pressed(&PlayerAction::Dash) {
             if can_dash.remaining_cooldown <= 0.0 {
-                transition_queue.push(CanDash::new_transition(Dashing::new(
-                    grounded.is_some(),
-                )));
+                transition_queue.push(CanDash::new_transition(
+                    Dashing::default(),
+                ));
                 velocity.x = config.dash_velocity * facing.direction();
                 velocity.y = 0.0;
                 if let Some(mut hitfreeze) = hitfreeze {

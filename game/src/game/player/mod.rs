@@ -357,16 +357,12 @@ impl Transitionable<Attacking> for CanAttack {
     type Removals = (CanAttack);
 }
 
-#[derive(Component, Debug)]
+#[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
 pub struct Dashing {
     duration: f32,
 }
-impl Dashing {
-    pub fn new(was_grounded: bool) -> Self {
-        Self { duration: 0.0 }
-    }
-}
+
 impl GentState for Dashing {}
 impl Transitionable<CanDash> for Dashing {
     type Removals = (Dashing);
