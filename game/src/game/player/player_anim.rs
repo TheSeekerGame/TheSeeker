@@ -133,8 +133,16 @@ fn player_attacking_animation(
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
 ) {
-    for (gent, is_falling, is_jumping, is_running, hitfrozen) in r_query.iter() {
+    for (gent, is_falling, is_jumping, is_running, hitfrozen, whirl) in r_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            if let Some(whirl) = whirl {
+                if whirl.active {
+                    println!("playing whirling animationkey");
+                    player.play_key("anim.player.SwordWhirling");
+                    continue;
+                }
+            }
+
             let hitfrozen = hitfrozen
                 .map(|f| f.0 < config.hitfreeze_ticks)
                 .unwrap_or(false);

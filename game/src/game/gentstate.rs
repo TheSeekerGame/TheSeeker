@@ -16,6 +16,7 @@ pub fn transition(mut query: Query<(Entity, &mut TransitionQueue)>, mut commands
 
 pub trait Transitionable<T: GentState> {
     type Removals;
+    /// StartingState::new_transition(EndingState)
     fn new_transition(next: T) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>
     where
         Self: GentState + Component,

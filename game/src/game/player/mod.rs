@@ -249,7 +249,10 @@ fn setup_player(
                     .insert(PlayerAction::Attack, KeyCode::Enter)
                     .insert(PlayerAction::Attack, KeyCode::KeyJ)
                     .insert(PlayerAction::Dash, KeyCode::ShiftLeft)
-                    .insert(PlayerAction::Dash, KeyCode::ControlLeft)
+                    .insert(
+                        PlayerAction::Whirl,
+                        KeyCode::ControlLeft,
+                    )
                     .build(),
             },
             Falling,
@@ -258,6 +261,10 @@ fn setup_player(
             },
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
+            WhirlAbility {
+                active: false,
+                energy: 0.0,
+            },
             TransitionQueue::default(),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {

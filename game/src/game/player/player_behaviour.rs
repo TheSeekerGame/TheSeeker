@@ -93,12 +93,23 @@ pub fn player_whirl(
                         Attacking::default(),
                     ));
                 }
+                if whirl.active == false {
+                    println!("started whirling");
+                }
                 whirl.active = true;
-                whirl.energy += 1.0 / time.hz as f32;
+                whirl.energy -= 1.0 / time.hz as f32;
             } else {
+                if whirl.active == true {
+                    println!("stopped whirling");
+                    transition_queue.push(Attacking::new_transition(CanAttack));
+                }
                 whirl.active = false;
             }
         } else {
+            if whirl.active == true {
+                println!("stopped whirling");
+                transition_queue.push(Attacking::new_transition(CanAttack));
+            }
             whirl.active = false;
             whirl.energy += 1.0 / time.hz as f32;
         }
@@ -754,6 +765,11 @@ fn player_attack(
     mut commands: Commands,
 ) {
     for (entity, gent, facing, mut attacking, mut transitions, whirl) in query.iter_mut() {
+        let whirl_active = if let Some(whirl) = whirl {
+            whirl.active
+        } else {
+            false
+        };
         if attacking.ticks == Attacking::STARTUP * 8 {
             commands
                 .spawn((
@@ -763,7 +779,10 @@ fn player_attack(
                         PLAYER_ATTACK,
                         ENEMY,
                     )),
-                    Attack::new(16, entity),
+                    Attack::new(
+                        if whirl_active { u32::MAX } else { 16 },
+                        entity,
+                    ),
                     Pushback {
                         direction: facing.direction(),
                         strength: 10.,
@@ -774,10 +793,8 @@ fn player_attack(
         attacking.ticks += 1;
         if attacking.ticks == Attacking::MAX * 8 {
             // Keep attacking if whirl is ongoing
-            if let Some(whirl) = whirl {
-                if whirl.active {
-                    continue;
-                }
+            if whirl_active {
+                continue;
             }
             transitions.push(Attacking::new_transition(CanAttack));
         }
