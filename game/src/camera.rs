@@ -64,7 +64,7 @@ pub struct CameraRig {
     /// value decreases over time. To use, add some amount based on impact intensity.
     ///
     /// 10.0 is a lot; death? 1.0 minor impact
-    trauma: f32,
+    pub(crate) trauma: f32,
 }
 
 /// Limits to the viewable gameplay area.

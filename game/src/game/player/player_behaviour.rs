@@ -1,14 +1,17 @@
+use crate::camera::CameraRig;
 use crate::game::attack::{Attack, Pushback};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
-    Attacking, CanAttack, CoyoteTime, Falling, Grounded, HitFreezeTime, Idle, Jumping, Player,
-    PlayerAction, PlayerConfig, PlayerGfx, PlayerStateSet, Running, WallSlideTime,
+    Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded, HitFreezeTime, Idle,
+    Jumping, Player, PlayerAction, PlayerConfig, PlayerGfx, PlayerStateSet, Running, WallSlideTime,
 };
 use crate::prelude::{
     any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
-    IntoSystemConfigs, Plugin, Query, Res, Transform, TransformBundle, With, Without,
+    IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle, With, Without,
 };
+use bevy::prelude::Has;
+
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
@@ -27,7 +30,7 @@ use theseeker_engine::script::ScriptPlayer;
 ///Player behavior systems.
 ///Do stuff here in states and add transitions to other states by pushing
 ///to a TransitionQueue.
-pub struct PlayerBehaviorPlugin;
+pub(crate) struct PlayerBehaviorPlugin;
 
 impl Plugin for PlayerBehaviorPlugin {
     fn build(&self, app: &mut App) {
@@ -39,8 +42,10 @@ impl Plugin for PlayerBehaviorPlugin {
                     add_attack,
                     player_attack.run_if(any_with_component::<Attacking>),
                     player_move,
+                    player_can_dash.run_if(any_with_component::<CanDash>),
                     player_run.run_if(any_with_component::<Running>),
                     player_jump.run_if(any_with_component::<Jumping>),
+                    player_dash.run_if(any_with_component::<Dashing>),
                     player_grounded.run_if(any_with_component::<Grounded>),
                     player_falling.run_if(any_with_component::<Falling>),
                     player_sliding
@@ -141,11 +146,12 @@ fn player_move(
             &mut Facing,
             Option<&Grounded>,
             &Gent,
+            Option<&Dashing>,
         ),
         (With<Player>),
     >,
 ) {
-    for (mut velocity, action_state, mut facing, grounded, gent) in q_gent.iter_mut() {
+    for (mut velocity, action_state, mut facing, grounded, gent, dashing) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
@@ -175,10 +181,13 @@ fn player_move(
                 }
             }
         };
-        velocity.x = new_vel.clamp(
-            -config.max_move_vel,
-            config.max_move_vel,
-        );
+
+        if dashing.is_none() {
+            velocity.x = new_vel.clamp(
+                -config.max_move_vel,
+                config.max_move_vel,
+            );
+        }
 
         if direction > 0.0 {
             *facing = Facing::Right;
@@ -279,7 +288,83 @@ fn player_jump(
     }
 }
 
-fn player_collisions(
+pub fn player_can_dash(
+    mut q_gent: Query<
+        (
+            &ActionState<PlayerAction>,
+            &Facing,
+            &mut CanDash,
+            &mut LinearVelocity,
+            &mut TransitionQueue,
+            Option<&mut HitFreezeTime>,
+        ),
+        (With<Player>, With<Gent>),
+    >,
+    time: Res<GameTime>,
+    config: Res<PlayerConfig>,
+    mut rig: ResMut<CameraRig>,
+) {
+    for (action_state, facing, mut can_dash, mut velocity, mut transition_queue, hitfreeze) in
+        q_gent.iter_mut()
+    {
+        can_dash.remaining_cooldown -= 1.0 / time.hz as f32;
+        if action_state.just_pressed(&PlayerAction::Dash) {
+            if can_dash.remaining_cooldown <= 0.0 {
+                transition_queue.push(CanDash::new_transition(
+                    Dashing::default(),
+                ));
+                velocity.x = config.dash_velocity * facing.direction();
+                velocity.y = 0.0;
+                if let Some(mut hitfreeze) = hitfreeze {
+                    *hitfreeze = HitFreezeTime(u32::MAX, None)
+                }
+            } else {
+                rig.trauma += 0.23;
+            }
+        }
+    }
+}
+
+pub fn player_dash(
+    mut query: Query<
+        (
+            &Facing,
+            &mut LinearVelocity,
+            &mut Dashing,
+            &mut TransitionQueue,
+            Has<Grounded>,
+            Option<&mut HitFreezeTime>,
+        ),
+        With<Player>,
+    >,
+    config: Res<PlayerConfig>,
+    time: Res<GameTime>,
+) {
+    for (facing, mut velocity, mut dashing, mut transitions, is_grounded, hitfreeze) in
+        query.iter_mut()
+    {
+        if dashing.is_added() {
+            velocity.x = config.dash_velocity * facing.direction();
+            velocity.y = 0.0;
+            if let Some(mut hitfreeze) = hitfreeze {
+                *hitfreeze = HitFreezeTime(u32::MAX, None)
+            }
+        } else {
+            dashing.duration += 1.0 / time.hz as f32;
+            if dashing.duration > config.dash_duration {
+                dashing.duration = 0.0;
+                transitions.push(Dashing::new_transition(CanDash::new(
+                    &config,
+                )));
+                if is_grounded {
+                    transitions.push(Running::new_transition(Idle));
+                }
+            }
+        }
+    }
+}
+
+pub fn player_collisions(
     spatial_query: Res<PhysicsWorld>,
     mut q_gent: Query<
         (
@@ -288,6 +373,7 @@ fn player_collisions(
             &mut LinearVelocity,
             &Collider,
             Option<&mut WallSlideTime>,
+            Option<&mut Dashing>,
         ),
         (With<Player>),
     >,
@@ -295,7 +381,7 @@ fn player_collisions(
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, mut pos, mut linear_velocity, collider, slide) in q_gent.iter_mut() {
+    for (entity, mut pos, mut linear_velocity, collider, slide, dashing) in q_gent.iter_mut() {
         let mut shape = collider.0.shared_shape().clone();
         // let mut tries = 0;
         let mut original_pos = pos.translation.xy();
@@ -327,7 +413,7 @@ fn player_collisions(
                 Some(entity),
             ) {
                 //If we are colliding with an enemy
-                if let Ok(enemy) = q_enemy.get(e) {
+                if q_enemy.get(e).is_ok() {
                     //change collision groups to only include ground so on the next loop we can
                     //ignore enemies/check our ground collision
                     interaction = InteractionGroups {
@@ -338,12 +424,15 @@ fn player_collisions(
                         //if we are not yet inside the enemy, collide, but not if we are falling
                         //from above
                         TOIStatus::Converged | TOIStatus::OutOfIterations => {
-                            let sliding_plane = into_vec2(first_hit.normal1);
-                            //configurable theshold for collision normal/sliding plane in case of physics instability
-                            let threshold = 0.000001;
-                            if !(1. - threshold..=1. + threshold).contains(&sliding_plane.y) {
-                                projected_velocity.x = linear_velocity.x
-                                    - sliding_plane.x * linear_velocity.xy().dot(sliding_plane);
+                            // if we are also dashing, ignore the collision entirely
+                            if dashing.is_none() {
+                                let sliding_plane = into_vec2(first_hit.normal1);
+                                //configurable theshold for collision normal/sliding plane in case of physics instability
+                                let threshold = 0.000001;
+                                if !(1. - threshold..=1. + threshold).contains(&sliding_plane.y) {
+                                    projected_velocity.x = linear_velocity.x
+                                        - sliding_plane.x * linear_velocity.xy().dot(sliding_plane);
+                                }
                             }
                         },
                         //if we are already inside, do nothing
@@ -359,7 +448,7 @@ fn player_collisions(
                             // the bounce helps prevent the player from getting stuck.
                             let sliding_plane = into_vec2(first_hit.normal1);
 
-                            let bounce_coefficient = 0.05;
+                            let bounce_coefficient = if dashing.is_some() { 0.0 } else { 0.05 };
                             let bounce_force = -sliding_plane
                                 * linear_velocity.dot(sliding_plane)
                                 * bounce_coefficient;
@@ -417,6 +506,13 @@ fn player_collisions(
             }
         }
 
+        // if the final collision results in zero x velocity, cancel the active dash
+        if projected_velocity.x.abs() < 0.00001 {
+            if let Some(mut dashing) = dashing {
+                dashing.duration = f32::MAX;
+            }
+        }
+
         pos.translation =
             (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
 
@@ -447,7 +543,11 @@ fn player_grounded(
             &mut TransitionQueue,
             Option<&mut CoyoteTime>,
         ),
-        (With<Player>, With<Grounded>),
+        (
+            With<Player>,
+            With<Grounded>,
+            Without<Dashing>,
+        ),
     >,
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
@@ -513,7 +613,11 @@ fn player_falling(
             &ShapeCaster,
             &mut TransitionQueue,
         ),
-        (With<Player>, With<Falling>),
+        (
+            With<Player>,
+            With<Falling>,
+            Without<Dashing>,
+        ),
     >,
     time: Res<GameTime>,
     config: Res<PlayerConfig>,

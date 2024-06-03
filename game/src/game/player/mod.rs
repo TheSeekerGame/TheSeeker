@@ -106,6 +106,7 @@ pub enum PlayerAction {
     Move,
     Jump,
     Attack,
+    Dash,
 }
 
 fn debug_player_states(
@@ -116,13 +117,15 @@ fn debug_player_states(
             Ref<Falling>,
             Ref<Jumping>,
             Ref<Grounded>,
+            Ref<Dashing>,
+            Ref<CanDash>,
         )>,
         With<Player>,
     >,
 ) {
     for states in query.iter() {
         // println!("{:?}", states);
-        let (running, idle, falling, jumping, grounded) = states;
+        let (running, idle, falling, jumping, grounded, dashing, can_dash) = states;
         let mut states_string: String = String::new();
         if let Some(running) = running {
             if running.is_added() {
@@ -147,6 +150,16 @@ fn debug_player_states(
         if let Some(grounded) = grounded {
             if grounded.is_added() {
                 states_string.push_str("added grounded, ");
+            }
+        }
+        if let Some(dashing) = dashing {
+            if dashing.is_added() {
+                states_string.push_str("added dashing, ");
+            }
+        }
+        if let Some(can_dash) = can_dash {
+            if can_dash.is_added() {
+                states_string.push_str("added can_dash, ");
             }
         }
         if !states_string.is_empty() {
@@ -234,9 +247,13 @@ fn setup_player(
                     )
                     .insert(PlayerAction::Attack, KeyCode::Enter)
                     .insert(PlayerAction::Attack, KeyCode::KeyJ)
+                    .insert(PlayerAction::Dash, KeyCode::ShiftLeft)
                     .build(),
             },
             Falling,
+            CanDash {
+                remaining_cooldown: 0.0,
+            },
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
             TransitionQueue::default(),
@@ -340,13 +357,41 @@ impl Transitionable<Attacking> for CanAttack {
     type Removals = (CanAttack);
 }
 
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
+pub struct Dashing {
+    duration: f32,
+}
+
+impl GentState for Dashing {}
+impl Transitionable<CanDash> for Dashing {
+    type Removals = (Dashing);
+}
+
+#[derive(Component, Debug)]
+#[component(storage = "SparseSet")]
+pub struct CanDash {
+    remaining_cooldown: f32,
+}
+impl CanDash {
+    pub fn new(config: &PlayerConfig) -> Self {
+        Self {
+            remaining_cooldown: config.dash_cooldown_duration,
+        }
+    }
+}
+impl GentState for CanDash {}
+impl Transitionable<Dashing> for CanDash {
+    type Removals = (CanDash, Running, Jumping, Idle);
+}
+
 // Pseudo-States
 // Not quite the same as states, these components enable certain behaviours when attached,
 // and provide storage for that behaviours state
 
 /// If a player attack lands, locks their velocity for the configured number of ticks'
-//Tracks the attack entity which last caused the hirfreeze affect. (this way the same attack
-// doesn't trigger it muyltiple times)
+//Tracks the attack entity which last caused the hirfreeze affect. and ticks since triggered
+// (this way the same attack doesn't trigger it multiple times)
 #[derive(Component, Default, Debug)]
 pub struct HitFreezeTime(u32, Option<Entity>);
 
@@ -393,13 +438,13 @@ pub struct PlayerConfig {
 
     /// How fast does the player accelerate downward while holding down the jump button?
     ///
-    /// (in pixels/second^2)
+    /// (in pixels/tick^2)
     jump_fall_accel: f32,
 
     /// How fast does the player accelerate downward while in the falling state?
     /// (ie: after releasing the jump key)
     ///
-    /// (in pixels/second^2)
+    /// (in pixels/tick^2)
     /// Note: sets the games global_gravity! (affects projectiles and other things that fall)
     pub fall_accel: f32,
 
@@ -412,6 +457,15 @@ pub struct PlayerConfig {
 
     /// How many ticks is the players velocity locked to zero after landing an attack?
     hitfreeze_ticks: u32,
+
+    /// How many seconds does our character dash for?
+    dash_duration: f32,
+
+    /// How many pixels/s do they dash with?
+    dash_velocity: f32,
+
+    /// How long before the player can dash again?
+    dash_cooldown_duration: f32,
 }
 
 fn load_player_config(
@@ -469,6 +523,9 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "max_coyote_time", |val| config.max_coyote_time = val);
     update_field(&mut errors, &cfg.0, "sliding_friction", |val| config.sliding_friction = val);
     update_field(&mut errors, &cfg.0, "hitfreeze_ticks", |val| config.hitfreeze_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "dash_duration", |val| config.dash_duration = val);
+    update_field(&mut errors, &cfg.0, "dash_velocity", |val| config.dash_velocity = val);
+    update_field(&mut errors, &cfg.0, "dash_cooldown_duration", |val| config.dash_cooldown_duration = val);
 
    for error in errors{
        warn!("failed to load player cfg value: {}", error);

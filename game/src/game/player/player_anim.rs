@@ -1,7 +1,7 @@
 use crate::appstate::AppState;
 use crate::game::gentstate::Facing;
 use crate::game::player::{
-    Attacking, CanAttack, Falling, HitFreezeTime, Idle, Jumping, PlayerConfig, PlayerGfx,
+    Attacking, CanAttack, Dashing, Falling, HitFreezeTime, Idle, Jumping, PlayerConfig, PlayerGfx,
     PlayerStateSet, Running, WallSlideTime,
 };
 use crate::prelude::{
@@ -25,7 +25,8 @@ impl Plugin for PlayerAnimationPlugin {
                 player_jumping_animation,
                 player_running_animation,
                 player_attacking_animation,
-                sprite_flip.after(player_attacking_animation),
+                player_dashing_animation,
+                sprite_flip.after(player_dashing_animation),
             )
                 .in_set(PlayerStateSet::Animation)
                 .after(PlayerStateSet::Transition)
@@ -147,6 +148,17 @@ fn player_attacking_animation(
     }
     //have to check if first or 2nd attack, play diff anim
     //also check for up attack?
+}
+
+fn player_dashing_animation(
+    f_query: Query<&Gent, Added<Dashing>>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+) {
+    for gent in f_query.iter() {
+        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            player.play_key("anim.player.Dash")
+        }
+    }
 }
 
 fn sprite_flip(
