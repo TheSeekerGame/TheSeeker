@@ -74,10 +74,22 @@ pub struct EnemyBlueprintBundle {
 #[derive(Bundle, LdtkEntity, Default)]
 pub struct EnemySpawnerBundle {
     marker: EnemySpawner,
+    killed: Killed,
 }
 
-#[derive(Component, Default)]
+///Component used to track kills for each EnemySpawner
+///not the same as the overall KillCount resource
+#[derive(Component, Default, Debug, Deref, DerefMut)]
+struct Killed(usize);
+
+///Enemy spawner, each slot has its own spawn cooldown
+#[derive(Component, Default, Debug)]
 pub struct EnemySpawner {
+    pub slots: Vec<SpawnSlot>,
+}
+
+#[derive(Debug)]
+pub struct SpawnSlot {
     pub enemy: Option<Entity>,
     pub cooldown_ticks: u32,
 }
@@ -113,27 +125,50 @@ pub struct EnemyGfx {
 }
 
 fn spawn_enemy(
-    mut spawner_q: Query<(&Transform, &mut EnemySpawner)>,
+    mut spawner_q: Query<(
+        &Transform,
+        &mut EnemySpawner,
+        &mut Killed,
+    )>,
     enemy_q: Query<Entity, (With<Enemy>, Without<EnemySpawner>)>,
     mut commands: Commands,
 ) {
-    for (transform, mut spawner) in spawner_q.iter_mut() {
-        if let Some(enemy) = spawner.enemy {
-            if !enemy_q.get(enemy).is_ok() {
-                spawner.cooldown_ticks += 1;
-                if spawner.cooldown_ticks >= EnemySpawner::COOLDOWN {
-                    spawner.enemy = None;
+    for (transform, mut spawner, mut killed) in spawner_q.iter_mut() {
+        //if spawner is empty, add a slot with completed cooldown to spawn initial enemies
+        if spawner.slots.is_empty() {
+            spawner.slots.push(SpawnSlot {
+                enemy: None,
+                cooldown_ticks: EnemySpawner::COOLDOWN,
+            })
+        }
+        //if we have killed enough enemies from this spawner, add snother slot
+        if spawner.slots.len() < **killed {
+            spawner.slots.push(SpawnSlot {
+                enemy: None,
+                cooldown_ticks: 0,
+            })
+        }
+        // check if enemies are dead and update
+        for slot in spawner.slots.iter_mut() {
+            if let Some(enemy) = slot.enemy {
+                //clear dead enemies
+                if !enemy_q.get(enemy).is_ok() {
+                    slot.enemy = None;
+                    **killed += 1;
+                }
+            } else {
+                slot.cooldown_ticks += 1;
+                if slot.cooldown_ticks >= EnemySpawner::COOLDOWN {
+                    let id = commands
+                        .spawn((
+                            EnemyBlueprintBundle::default(),
+                            TransformBundle::from_transform(*transform),
+                        ))
+                        .id();
+                    slot.enemy = Some(id);
+                    slot.cooldown_ticks = 0;
                 }
             }
-        } else {
-            let id = commands
-                .spawn((
-                    EnemyBlueprintBundle::default(),
-                    TransformBundle::from_transform(*transform),
-                ))
-                .id();
-            spawner.enemy = Some(id);
-            spawner.cooldown_ticks = 0;
         }
     }
 }
