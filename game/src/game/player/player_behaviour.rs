@@ -10,6 +10,7 @@ use crate::prelude::{
     any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
     IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle, With, Without,
 };
+use bevy::prelude::Has;
 
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
@@ -331,7 +332,7 @@ pub fn player_dash(
             &mut LinearVelocity,
             &mut Dashing,
             &mut TransitionQueue,
-            Option<&Grounded>,
+            Has<Grounded>,
             Option<&mut HitFreezeTime>,
         ),
         With<Player>,
@@ -339,7 +340,7 @@ pub fn player_dash(
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
-    for (facing, mut velocity, mut dashing, mut transitions, grounded, hitfreeze) in
+    for (facing, mut velocity, mut dashing, mut transitions, is_grounded, hitfreeze) in
         query.iter_mut()
     {
         if dashing.is_added() {
@@ -355,7 +356,7 @@ pub fn player_dash(
                 transitions.push(Dashing::new_transition(CanDash::new(
                     &config,
                 )));
-                if grounded.is_some() {
+                if is_grounded {
                     transitions.push(Running::new_transition(Idle));
                 }
             }
