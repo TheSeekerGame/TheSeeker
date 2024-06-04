@@ -297,7 +297,6 @@ fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
     for (entity, attack) in query.iter() {
         if attack.current_lifetime >= attack.max_lifetime {
             commands.entity(entity).despawn();
-            println!("despawning from attack cleanup!");
         }
     }
 }
