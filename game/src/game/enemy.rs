@@ -96,6 +96,7 @@ pub struct SpawnSlot {
 
 impl EnemySpawner {
     const COOLDOWN: u32 = 620;
+    const RANGE: f32 = 80.;
 }
 
 #[derive(Component, Default)]
@@ -131,8 +132,10 @@ fn spawn_enemy(
         &mut Killed,
     )>,
     enemy_q: Query<Entity, (With<Enemy>, Without<EnemySpawner>)>,
+    player_query: Query<(&Transform), (Without<Enemy>, With<Player>)>,
     mut commands: Commands,
 ) {
+    let p_transform = player_query.get_single();
     for (transform, mut spawner, mut killed) in spawner_q.iter_mut() {
         //if spawner is empty, add a slot with completed cooldown to spawn initial enemies
         if spawner.slots.is_empty() {
@@ -156,9 +159,20 @@ fn spawn_enemy(
                     slot.enemy = None;
                     **killed += 1;
                 }
+            //if the slot is empty, cooldown finished and player out of range, spawn another enemy
             } else {
+                //if there is a player and it is close, dont spawn, otherwise spawn
+                let should_spawn = if let Ok(ptrans) = p_transform {
+                    let distance = transform
+                        .translation
+                        .truncate()
+                        .distance(ptrans.translation.truncate());
+                    distance > EnemySpawner::RANGE
+                } else {
+                    true
+                };
                 slot.cooldown_ticks += 1;
-                if slot.cooldown_ticks >= EnemySpawner::COOLDOWN {
+                if slot.cooldown_ticks >= EnemySpawner::COOLDOWN && should_spawn {
                     let id = commands
                         .spawn((
                             EnemyBlueprintBundle::default(),
