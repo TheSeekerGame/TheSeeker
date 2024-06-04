@@ -164,7 +164,6 @@ pub fn attack_damage(
     for (entity, pos, mut attack, attack_collider, maybe_pushback, maybe_projectile) in
         query.iter_mut()
     {
-        println!("attackign!");
         let colliding_entities = spatial_query.intersect(
             pos.translation().xy(),
             attack_collider.0.shape(),
@@ -180,7 +179,7 @@ pub fn attack_damage(
             let mut should_apply_damage = true;
             for (i, attack) in attack.damaged.iter_mut().enumerate() {
                 if attack.entity == *entity {
-                    //collided.push(i);
+                    collided.push(i);
                     if attack.contact == true {
                         should_apply_damage = false;
                     }
@@ -227,7 +226,7 @@ pub fn attack_damage(
 
         // Finds all stored prev attacks, sees if that target entity was attacked
         // and if not, marks its contact info as false.
-        /*
+
         collided.reverse();
         for (i, attack) in attack.damaged.iter_mut().enumerate() {
             if *collided.last().unwrap_or(&usize::MAX) == i {
@@ -235,7 +234,7 @@ pub fn attack_damage(
             } else {
                 attack.contact = false;
             }
-        }*/
+        }
 
         if maybe_projectile.is_some()
             && !colliding_entities.is_empty()
