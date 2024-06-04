@@ -97,7 +97,7 @@ pub fn player_whirl(
                 }
                 if whirl.active == false {}
                 whirl.active = true;
-                whirl.energy -= 1.0 / time.hz as f32;
+                whirl.energy -= config.whirl_cost / time.hz as f32;
             } else {
                 if whirl.active == true {
                     transition_queue.push(Attacking::new_transition(CanAttack));
@@ -110,16 +110,15 @@ pub fn player_whirl(
             }
         } else {
             if whirl.active == true {
-                println!("stopped whirling");
                 transition_queue.push(Attacking::new_transition(CanAttack));
             }
             if let Some(whirl_attack) = whirl.attack_entity {
                 command.entity(whirl_attack).despawn();
                 whirl.attack_entity = None;
-                println!("despawning from whirl cleanup b!");
             }
             whirl.active = false;
-            whirl.energy += 1.0 / time.hz as f32;
+            whirl.energy +=
+                (config.whirl_regen / time.hz as f32).clamp(0.0, config.max_whirl_energy);
         }
     }
 }
@@ -429,6 +428,7 @@ pub fn player_collisions(
             &Collider,
             Option<&mut WallSlideTime>,
             Option<&mut Dashing>,
+            Option<&WhirlAbility>,
         ),
         (With<Player>),
     >,
@@ -436,7 +436,8 @@ pub fn player_collisions(
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, mut pos, mut linear_velocity, collider, slide, dashing) in q_gent.iter_mut() {
+    for (entity, mut pos, mut linear_velocity, collider, slide, dashing, whirl) in q_gent.iter_mut()
+    {
         let mut shape = collider.0.shared_shape().clone();
         // let mut tries = 0;
         let mut original_pos = pos.translation.xy();
@@ -479,8 +480,10 @@ pub fn player_collisions(
                         //if we are not yet inside the enemy, collide, but not if we are falling
                         //from above
                         TOIStatus::Converged | TOIStatus::OutOfIterations => {
-                            // if we are also dashing, ignore the collision entirely
-                            if dashing.is_none() {
+                            // if we are also dashing, or whirling, ignore the collision entirely
+                            if dashing.is_none()
+                                && (whirl.is_none() || whirl.is_some_and(|w| !w.active))
+                            {
                                 let sliding_plane = into_vec2(first_hit.normal1);
                                 //configurable theshold for collision normal/sliding plane in case of physics instability
                                 let threshold = 0.000001;
