@@ -79,8 +79,9 @@ pub struct Attack {
     pub max_lifetime: u32,
     pub damage: u32,
     pub attacker: Entity,
-    /// (entity that got damaged, tick it was damaged, damage actually applied)
-    pub damaged: Vec<(Entity, u64, u32)>,
+    /// Includes every single instance of damage that was applied.
+    /// (even against the same enemy)
+    pub damaged: Vec<DamageInfo>,
 }
 impl Attack {
     /// Lifetime is in game ticks
@@ -93,6 +94,17 @@ impl Attack {
             damaged: Vec::new(),
         }
     }
+}
+
+pub struct DamageInfo {
+    /// Entity that got damaged
+    pub entity: Entity,
+    /// The tick it was damaged
+    pub tick: u64,
+    /// Amount of damage that was actually applied
+    pub amount: u32,
+    /// Is the attack collider currently contacting the damaged entity?
+    pub contact: bool,
 }
 
 ///Component added to attack entity to indicate it causes knockback
@@ -161,37 +173,69 @@ pub fn attack_damage(
                 .with_filter(attack_collider.0.collision_groups().filter | GROUND),
             Some(entity),
         );
-        for (entity, mut health, collider, gent, is_defending) in damageable_query.iter_mut() {
-            if colliding_entities.contains(&entity)
-                && attack.damaged.iter().find(|x| x.0 == entity).is_none()
-            {
-                let damage_dealt = if is_defending {
-                    attack.damage / 4
-                } else {
-                    attack.damage
-                };
-                health.current = health.current.saturating_sub(damage_dealt);
-                attack.damaged.push((entity, time.tick(), damage_dealt));
-                if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
-                    // is there any way to check if a slot is set?
-                    anim_player.set_slot("Damage", true);
-                    commands.entity(anim_entity).insert(DamageFlash {
-                        current_ticks: 0,
-                        max_ticks: 8,
+
+        let mut collided: Vec<usize> = Vec::new();
+        for entity in colliding_entities.iter() {
+            let mut should_apply_damage = true;
+            for (i, attack) in attack.damaged.iter_mut().enumerate() {
+                if attack.entity == *entity {
+                    if attack.contact == true {
+                        should_apply_damage = false;
+                    } else {
+                        collided.push(i)
+                    }
+                }
+            }
+            if should_apply_damage {
+                if let Ok((entity, mut health, collider, gent, is_defending)) =
+                    damageable_query.get_mut(*entity)
+                {
+                    let damage_dealt = if is_defending {
+                        attack.damage / 4
+                    } else {
+                        attack.damage
+                    };
+                    health.current = health.current.saturating_sub(damage_dealt);
+                    collided.push(attack.damaged.len());
+                    attack.damaged.push(DamageInfo {
+                        entity,
+                        tick: time.tick(),
+                        amount: damage_dealt,
+                        contact: true,
                     });
-                }
-                if health.current == 0 {
-                    commands.entity(entity).insert(Dead);
-                }
-                if let Some(pushback) = maybe_pushback {
-                    commands.entity(entity).insert(Knockback::new(
-                        pushback.direction,
-                        pushback.strength,
-                        16,
-                    ));
+                    if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
+                        // is there any way to check if a slot is set?
+                        anim_player.set_slot("Damage", true);
+                        commands.entity(anim_entity).insert(DamageFlash {
+                            current_ticks: 0,
+                            max_ticks: 8,
+                        });
+                    }
+                    if health.current == 0 {
+                        commands.entity(entity).insert(Dead);
+                    }
+                    if let Some(pushback) = maybe_pushback {
+                        commands.entity(entity).insert(Knockback::new(
+                            pushback.direction,
+                            pushback.strength,
+                            16,
+                        ));
+                    }
                 }
             }
         }
+
+        // Finds all stored prev attacks, sees if that target entity was attacked
+        // and if not, marks its contact info as false.
+        collided.reverse();
+        for (i, attack) in attack.damaged.iter_mut().enumerate() {
+            if *collided.last().unwrap_or(&usize::MAX) == i {
+                collided.pop();
+            } else {
+                attack.contact = false;
+            }
+        }
+
         if maybe_projectile.is_some()
             && !colliding_entities.is_empty()
             && attack.current_lifetime > 1
