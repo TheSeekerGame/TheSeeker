@@ -794,13 +794,15 @@ fn player_attack(
                         if whirl_active { u32::MAX } else { 16 },
                         entity,
                     ),
-                    Pushback {
-                        direction: facing.direction(),
-                        strength: 10.,
-                    },
                 ))
                 .set_parent(entity)
                 .id();
+            if !whirl_active {
+                commands.entity(id).insert(Pushback {
+                    direction: facing.direction(),
+                    strength: 10.,
+                });
+            }
             if let Some(mut whirl) = whirl {
                 if whirl.active {
                     whirl.attack_entity = Some(id)
