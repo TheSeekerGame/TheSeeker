@@ -264,6 +264,7 @@ fn setup_player(
             WhirlAbility {
                 active: false,
                 energy: 0.0,
+                attack_entity: None,
             },
             TransitionQueue::default(),
         ));
@@ -423,6 +424,7 @@ impl WallSlideTime {
 pub struct WhirlAbility {
     active: bool,
     energy: f32,
+    attack_entity: Option<Entity>,
 }
 
 #[derive(Resource, Debug, Default)]

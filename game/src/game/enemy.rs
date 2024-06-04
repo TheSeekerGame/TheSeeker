@@ -10,8 +10,8 @@ use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
-    into_vec2, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, GROUND,
-    PLAYER, SENSOR,
+    into_vec2, update_sprite_colliders, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
+    ENEMY_ATTACK, GROUND, PLAYER, SENSOR,
 };
 use theseeker_engine::script::ScriptPlayer;
 
@@ -232,7 +232,8 @@ impl Plugin for EnemyBehaviorPlugin {
                 )
                     .chain(),)
                     .run_if(in_state(AppState::InGame))
-                    .in_set(EnemyStateSet::Behavior),
+                    .in_set(EnemyStateSet::Behavior)
+                    .before(update_sprite_colliders),
                 move_collide.in_set(EnemyStateSet::Collisions),
             ),
         );

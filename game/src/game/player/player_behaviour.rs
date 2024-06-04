@@ -22,8 +22,8 @@ use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::condition::any_matching;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
-    into_vec2, AnimationCollider, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
-    GROUND, PLAYER, PLAYER_ATTACK,
+    into_vec2, update_sprite_colliders, AnimationCollider, Collider, LinearVelocity, PhysicsWorld,
+    ShapeCaster, ENEMY, GROUND, PLAYER, PLAYER_ATTACK,
 };
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
@@ -54,7 +54,8 @@ impl Plugin for PlayerBehaviorPlugin {
                         .before(player_jump)
                         .run_if(any_matching::<(With<Falling>,)>()),
                 )
-                    .in_set(PlayerStateSet::Behavior),
+                    .in_set(PlayerStateSet::Behavior)
+                    .before(update_sprite_colliders),
                 //consider a set for all movement/systems modify velocity, then collisions/move
                 //moves based on velocity
                 (
@@ -83,6 +84,7 @@ pub fn player_whirl(
         (With<Player>, With<Gent>),
     >,
     time: Res<GameTime>,
+    mut command: Commands,
     config: Res<PlayerConfig>,
 ) {
     for (action_state, mut whirl, mut transition_queue, grounded, attacking) in q_gent.iter_mut() {
@@ -93,15 +95,16 @@ pub fn player_whirl(
                         Attacking::default(),
                     ));
                 }
-                if whirl.active == false {
-                    println!("started whirling");
-                }
+                if whirl.active == false {}
                 whirl.active = true;
                 whirl.energy -= 1.0 / time.hz as f32;
             } else {
                 if whirl.active == true {
-                    println!("stopped whirling");
                     transition_queue.push(Attacking::new_transition(CanAttack));
+                }
+                if let Some(whirl_attack) = whirl.attack_entity {
+                    command.entity(whirl_attack).despawn();
+                    whirl.attack_entity = None;
                 }
                 whirl.active = false;
             }
@@ -109,6 +112,11 @@ pub fn player_whirl(
             if whirl.active == true {
                 println!("stopped whirling");
                 transition_queue.push(Attacking::new_transition(CanAttack));
+            }
+            if let Some(whirl_attack) = whirl.attack_entity {
+                command.entity(whirl_attack).despawn();
+                whirl.attack_entity = None;
+                println!("despawning from whirl cleanup b!");
             }
             whirl.active = false;
             whirl.energy += 1.0 / time.hz as f32;
@@ -758,20 +766,20 @@ fn player_attack(
             &Facing,
             &mut Attacking,
             &mut TransitionQueue,
-            Option<&WhirlAbility>,
+            Option<&mut WhirlAbility>,
         ),
         (With<Player>),
     >,
     mut commands: Commands,
 ) {
-    for (entity, gent, facing, mut attacking, mut transitions, whirl) in query.iter_mut() {
-        let whirl_active = if let Some(whirl) = whirl {
+    for (entity, gent, facing, mut attacking, mut transitions, mut whirl) in query.iter_mut() {
+        let whirl_active = if let Some(whirl) = &whirl {
             whirl.active
         } else {
             false
         };
         if attacking.ticks == Attacking::STARTUP * 8 {
-            commands
+            let id = commands
                 .spawn((
                     TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
                     AnimationCollider(gent.e_gfx),
@@ -788,7 +796,13 @@ fn player_attack(
                         strength: 10.,
                     },
                 ))
-                .set_parent(entity);
+                .set_parent(entity)
+                .id();
+            if let Some(mut whirl) = whirl {
+                if whirl.active {
+                    whirl.attack_entity = Some(id)
+                }
+            }
         }
         attacking.ticks += 1;
         if attacking.ticks == Attacking::MAX * 8 {
