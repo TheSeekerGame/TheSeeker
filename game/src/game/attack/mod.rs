@@ -12,7 +12,7 @@ use super::enemy::EnemyGfx;
 use super::player::PlayerGfx;
 use crate::game::attack::arc_attack::{arc_projectile, Projectile};
 use crate::game::attack::particles::AttackParticlesPlugin;
-use crate::game::enemy::{Defense, EnemyStateSet};
+use crate::game::enemy::{Defense, Enemy, EnemyStateSet};
 use crate::game::player::PlayerStateSet;
 use crate::prelude::*;
 
@@ -21,6 +21,7 @@ pub struct AttackPlugin;
 impl Plugin for AttackPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(AttackParticlesPlugin);
+        app.init_resource::<KillCount>();
         app.add_systems(
             GameTickUpdate,
             (
@@ -257,10 +258,23 @@ fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
     }
 }
 
+/// Resource which tracks total number of enemies killed
+/// incremented in despawn_dead()
+#[derive(Resource, Debug, Default, Deref, DerefMut)]
+pub struct KillCount(pub u32);
+
 //TODO: change to a gentstate Dying once we have death animations
-fn despawn_dead(query: Query<(Entity, &Gent), With<Dead>>, mut commands: Commands) {
-    for (entity, gent) in query.iter() {
+fn despawn_dead(
+    query: Query<(Entity, &Gent, Has<Enemy>), With<Dead>>,
+    mut commands: Commands,
+    mut kill_count: ResMut<KillCount>,
+) {
+    for (entity, gent, is_enemy) in query.iter() {
         commands.entity(gent.e_gfx).despawn_recursive();
         commands.entity(entity).despawn_recursive();
+        if is_enemy {
+            **kill_count += 1;
+            println!("{:?}", kill_count);
+        }
     }
 }
