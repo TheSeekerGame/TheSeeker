@@ -137,7 +137,6 @@ fn player_attacking_animation(
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             if let Some(whirl) = whirl {
                 if whirl.active {
-                    println!("playing whirling animationkey");
                     player.play_key("anim.player.SwordWhirling");
                     continue;
                 }
