@@ -81,7 +81,11 @@ pub fn player_whirl(
             Option<&Grounded>,
             Option<&Attacking>,
         ),
-        (With<Player>, With<Gent>),
+        (
+            With<Player>,
+            With<Gent>,
+            Without<Dashing>,
+        ),
     >,
     time: Res<GameTime>,
     mut command: Commands,
@@ -749,7 +753,11 @@ fn add_attack(
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
         ),
-        (Without<Attacking>, With<Player>),
+        (
+            Without<Attacking>,
+            Without<Dashing>,
+            With<Player>,
+        ),
     >,
 ) {
     for (mut transitions, action_state) in query.iter_mut() {

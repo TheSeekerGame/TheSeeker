@@ -392,7 +392,13 @@ impl CanDash {
 }
 impl GentState for CanDash {}
 impl Transitionable<Dashing> for CanDash {
-    type Removals = (CanDash, Running, Jumping, Idle);
+    type Removals = (
+        CanDash,
+        Running,
+        Jumping,
+        Idle,
+        Attacking,
+    );
 }
 
 // Pseudo-States
