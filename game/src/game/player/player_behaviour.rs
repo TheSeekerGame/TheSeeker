@@ -18,7 +18,6 @@ use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
 use rapier2d::geometry::{Group, InteractionGroups};
 use rapier2d::parry::query::TOIStatus;
-use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::condition::any_matching;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
@@ -27,6 +26,7 @@ use theseeker_engine::physics::{
 };
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
+use theseeker_engine::{assets::animation::SpriteAnimation, physics::ENEMY_INSIDE};
 
 ///Player behavior systems.
 ///Do stuff here in states and add transitions to other states by pushing
@@ -450,14 +450,15 @@ pub fn player_collisions(
         ),
         (With<Player>),
     >,
-    mut q_enemy: Query<Entity, With<Enemy>>,
+    //add collider, modify layers, to INSIDE
+    mut q_enemy: Query<(Entity, &mut Collider), (With<Enemy>, Without<Player>)>,
+    mut commands: Commands,
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
 ) {
     for (entity, mut pos, mut linear_velocity, collider, slide, dashing, whirl) in q_gent.iter_mut()
     {
         let mut shape = collider.0.shared_shape().clone();
-        // let mut tries = 0;
         let mut original_pos = pos.translation.xy();
         let mut possible_pos = pos.translation.xy();
         let z = pos.translation.z;
@@ -487,7 +488,7 @@ pub fn player_collisions(
                 Some(entity),
             ) {
                 //If we are colliding with an enemy
-                if q_enemy.get(e).is_ok() {
+                if let Ok((enemy, mut collider)) = q_enemy.get_mut(e) {
                     //change collision groups to only include ground so on the next loop we can
                     //ignore enemies/check our ground collision
                     interaction = InteractionGroups {
@@ -511,8 +512,15 @@ pub fn player_collisions(
                                 }
                             }
                         },
-                        //if we are already inside, do nothing
-                        TOIStatus::Penetrating => {},
+                        //if we are already inside, modify the enemies collision group and add
+                        //Inside so next frame we dont collide with them
+                        TOIStatus::Penetrating => {
+                            collider.0.set_collision_groups(InteractionGroups {
+                                memberships: ENEMY_INSIDE,
+                                filter: Group::all(),
+                            });
+                            commands.entity(enemy).insert(crate::game::enemy::Inside);
+                        },
                         //maybe failed never happens?
                         TOIStatus::Failed => println!("failed"),
                     }
