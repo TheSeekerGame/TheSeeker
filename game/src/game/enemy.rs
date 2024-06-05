@@ -83,7 +83,7 @@ pub struct EnemySpawner {
 }
 
 impl EnemySpawner {
-    const COOLDOWN: u32 = 620;
+    const COOLDOWN: u32 = 200;
 }
 
 #[derive(Component, Default)]
@@ -119,12 +119,12 @@ fn spawn_enemy(
 ) {
     for (transform, mut spawner) in spawner_q.iter_mut() {
         if let Some(enemy) = spawner.enemy {
-            if !enemy_q.get(enemy).is_ok() {
-                spawner.cooldown_ticks += 1;
-                if spawner.cooldown_ticks >= EnemySpawner::COOLDOWN {
-                    spawner.enemy = None;
-                }
+            //if !enemy_q.get(enemy).is_ok() {
+            spawner.cooldown_ticks += 1;
+            if spawner.cooldown_ticks >= EnemySpawner::COOLDOWN {
+                spawner.enemy = None;
             }
+            //}
         } else {
             let id = commands
                 .spawn((

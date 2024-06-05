@@ -790,10 +790,20 @@ fn player_attack(
                         PLAYER_ATTACK,
                         ENEMY,
                     )),
-                    Attack::new(
-                        if whirl_active { u32::MAX } else { 16 },
-                        entity,
-                    ),
+                    if whirl_active {
+                        Attack {
+                            current_lifetime: 0,
+                            max_lifetime: u32::MAX,
+                            damage: 20,
+                            max_targets: 1,
+                            attacker: entity,
+                            damaged: Vec::new(),
+                            collided: Default::default(),
+                            damaged_set: Default::default(),
+                        }
+                    } else {
+                        Attack::new(16, entity)
+                    },
                 ))
                 .set_parent(entity)
                 .id();
