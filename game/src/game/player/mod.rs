@@ -267,6 +267,7 @@ fn setup_player(
                 energy: 0.0,
                 attack_entity: None,
             },
+            Crits::new(2.0),
             TransitionQueue::default(),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
@@ -427,7 +428,6 @@ impl WallSlideTime {
     }
 }
 
-/// Indicates that sliding is tracked for this entity
 #[derive(Component, Default, Debug)]
 pub struct WhirlAbility {
     active: bool,

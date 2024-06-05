@@ -117,6 +117,7 @@ pub struct DamageInfo {
     pub tick: u64,
     /// Amount of damage that was actually applied
     pub amount: u32,
+    pub crit: bool,
 }
 
 ///Component added to attack entity to indicate it causes knockback
@@ -164,6 +165,7 @@ pub fn attack_damage(
         &GlobalTransform,
         Has<Defense>,
     )>,
+    mut crits: Query<(&mut Crits), Without<Attack>>,
     mut gfx_query: Query<
         (
             Entity,
@@ -226,16 +228,32 @@ pub fn attack_damage(
 
             attack.damaged_set.insert(entity);
 
-            let damage_dealt = if is_defending {
+            let mut damage_dealt = if is_defending {
                 attack.damage / 4
             } else {
                 attack.damage
             };
+
+            let mut was_critical = false;
+            if let Ok((mut crit)) = crits.get_mut(attack.attacker) {
+                if crit.next_hit_is_critical {
+                    damage_dealt = (damage_dealt as f32 * crit.crit_damage_multiplier) as u32;
+                    was_critical = true;
+                    println!("critical damage!")
+                }
+                if crit.new_group == true {
+                    crit.new_group = false;
+                    crit.counter += 1;
+                    println!("crit_counter_at_end: {}", crit.counter);
+                }
+            }
+
             health.current = health.current.saturating_sub(damage_dealt);
             attack.damaged.push(DamageInfo {
                 entity,
                 tick: time.tick(),
                 amount: damage_dealt,
+                crit: was_critical,
             });
             if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
                 // is there any way to check if a slot is set?
@@ -270,7 +288,22 @@ pub fn attack_damage(
         // Handle the edge case where newly collided *and* collided might not have damaged
         // set's contents
         if targets_empty {
-            damaged_set.clear()
+            damaged_set.clear();
+            if let Ok((mut crit)) = crits.get_mut(attack.attacker) {
+                if crit.new_group == false {
+                    crit.new_group = true;
+                    if crit.counter == 16 {
+                        crit.next_hit_is_critical = true;
+                    } else if crit.counter == 18 {
+                        crit.next_hit_is_critical = true;
+                    } else {
+                        crit.next_hit_is_critical = false;
+                        if crit.counter == 19 {
+                            crit.counter = 0;
+                        }
+                    }
+                }
+            }
         }
 
         if maybe_projectile.is_some() && !intersections_empty && attack.current_lifetime > 1 {
@@ -352,6 +385,32 @@ fn despawn_dead(
         if is_enemy {
             **kill_count += 1;
             println!("{:?}", kill_count);
+        }
+    }
+}
+
+/// Allows the entity to apply critical strikes.
+/// Crits in TheSeeker are special, and trigger once
+/// every 17th and 19th successful hits
+#[derive(Component, Default, Debug)]
+pub struct Crits {
+    next_hit_is_critical: bool,
+    /// Counts how many successful hits since the 19th hit
+    counter: u32,
+    /// Yes
+    crit_damage_multiplier: f32,
+    /// used to track if multiple hits are in the same attack or not
+    /// don't touch this unless you *really* know what you are doing.
+    new_group: bool,
+}
+
+impl Crits {
+    pub fn new(multiplier: f32) -> Self {
+        Self {
+            next_hit_is_critical: false,
+            counter: 0,
+            crit_damage_multiplier: multiplier,
+            new_group: false,
         }
     }
 }
