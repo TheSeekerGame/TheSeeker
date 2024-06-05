@@ -416,7 +416,10 @@ pub fn player_dash(
                 )));
                 if is_grounded {
                     transitions.push(Running::new_transition(Idle));
+                } else {
+                    transitions.push(Running::new_transition(Falling));
                 }
+                transitions.push(Attacking::new_transition(CanAttack));
             }
         }
     }

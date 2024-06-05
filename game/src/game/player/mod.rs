@@ -396,8 +396,10 @@ impl Transitionable<Dashing> for CanDash {
         CanDash,
         Running,
         Jumping,
+        Falling,
         Idle,
         Attacking,
+        CanAttack,
     );
 }
 
