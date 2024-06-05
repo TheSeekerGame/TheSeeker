@@ -89,9 +89,8 @@ pub struct Attack {
     /// different from the entities that damage is applied. (due to max_targets)
     pub collided: HashSet<Entity>,
 
-    /// Different from damaged, in that instead of tracking all damage instances
-    /// over the entire lifetime of this attack entity, it tracks
-    /// entities that where damaged while they remained in the collided set
+    /// Unique entities that where in contact with collider and took damage.
+    /// and are still in contact with the attack collider.
     pub damaged_set: HashSet<Entity>,
 }
 impl Attack {
@@ -177,7 +176,6 @@ pub fn attack_damage(
     for (entity, pos, mut attack, attack_collider, maybe_pushback, maybe_projectile) in
         query.iter_mut()
     {
-        // Vec<(entity, distance_to_attack)>
         let mut newly_collided: HashSet<Entity> = HashSet::default();
         let intersections = spatial_query.intersect(
             pos.translation().xy(),
@@ -187,7 +185,6 @@ pub fn attack_damage(
                 .collision_groups()
                 .with_filter(attack_collider.0.collision_groups().filter | GROUND),
             Some(entity),
-            // only consider
         );
         let intersections_empty = intersections.is_empty();
         let mut targets = intersections
@@ -214,14 +211,6 @@ pub fn attack_damage(
             .take(attack.max_targets as usize)
             .map(|(e, _)| e)
             .collect::<Vec<_>>();
-
-        // gets the amount of damage instances applied with this collider, that have not been
-        // reset
-        println!(
-            "top_n_len: {}, damaged_set_before: {:?}",
-            top_n.len(),
-            attack.damaged_set
-        );
 
         for entity in top_n.iter() {
             if attack.damaged_set.contains(entity) {
@@ -276,11 +265,9 @@ pub fn attack_damage(
         for e in collided.difference(&newly_collided) {
             damaged_set.remove(&*e);
         }
-        println!(
-            "damaged_set_after: {:?} collided: {:?} newly_collided: {:?}",
-            damaged_set, collided, &newly_collided
-        );
         *collided = newly_collided;
+        // Handle the edge case where newly collided *and* collided might not have damaged
+        // set's contents
         if targets_empty {
             damaged_set.clear()
         }
