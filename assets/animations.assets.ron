@@ -145,6 +145,18 @@
         rows: 1,
         columns: 20,
     ),
+    "anim.player.SwordWhirling": File (
+        path: "animations/player/sword/Whirling.anim.toml",
+    ),
+    "anim.player.SwordWhirling.image": File (
+        path: "animations/player/sword/WhirlingSheet.png",
+    ),
+    "anim.player.SwordWhirling.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 6,
+    ),
     "anim.spider.Idle": File (
         path: "animations/spider/Idle.anim.toml",
     ),

@@ -79,9 +79,20 @@ pub struct Attack {
     pub current_lifetime: u32,
     pub max_lifetime: u32,
     pub damage: u32,
+    /// Maximum number of targets that can be hit by this attack at once.
+    pub max_targets: u32,
     pub attacker: Entity,
-    /// (entity that got damaged, tick it was damaged, damage actually applied)
-    pub damaged: Vec<(Entity, u64, u32)>,
+    /// Includes every single instance of damage that was applied.
+    /// (even against the same enemy)
+    pub damaged: Vec<DamageInfo>,
+    /// Tracks which entities collided with the attack, and still remain in contact.
+    /// Not stored in damage info, because the collided entities might be
+    /// different from the entities that damage is applied. (due to max_targets)
+    pub collided: HashSet<Entity>,
+
+    /// Unique entities that where in contact with collider and took damage.
+    /// and are still in contact with the attack collider.
+    pub damaged_set: HashSet<Entity>,
 }
 impl Attack {
     /// Lifetime is in game ticks
@@ -90,10 +101,22 @@ impl Attack {
             current_lifetime: 0,
             max_lifetime: lifetime,
             damage: 20,
+            max_targets: 3,
             attacker,
             damaged: Vec::new(),
+            collided: Default::default(),
+            damaged_set: Default::default(),
         }
     }
+}
+
+pub struct DamageInfo {
+    /// Entity that got damaged
+    pub entity: Entity,
+    /// The tick it was damaged
+    pub tick: u64,
+    /// Amount of damage that was actually applied
+    pub amount: u32,
 }
 
 ///Component added to attack entity to indicate it causes knockback
@@ -138,6 +161,7 @@ pub fn attack_damage(
         &mut Health,
         &Collider,
         &Gent,
+        &GlobalTransform,
         Has<Defense>,
     )>,
     mut gfx_query: Query<
@@ -153,7 +177,8 @@ pub fn attack_damage(
     for (entity, pos, mut attack, attack_collider, maybe_pushback, maybe_projectile) in
         query.iter_mut()
     {
-        let colliding_entities = spatial_query.intersect(
+        let mut newly_collided: HashSet<Entity> = HashSet::default();
+        let intersections = spatial_query.intersect(
             pos.translation().xy(),
             attack_collider.0.shape(),
             attack_collider
@@ -162,41 +187,93 @@ pub fn attack_damage(
                 .with_filter(attack_collider.0.collision_groups().filter | GROUND),
             Some(entity),
         );
-        for (entity, mut health, collider, gent, is_defending) in damageable_query.iter_mut() {
-            if colliding_entities.contains(&entity)
-                && attack.damaged.iter().find(|x| x.0 == entity).is_none()
-            {
-                let damage_dealt = if is_defending {
-                    attack.damage / 4
+        let intersections_empty = intersections.is_empty();
+        let mut targets = intersections
+            .into_iter()
+            // Filters out everything that's not damageable or one of the nearest max_targets entities to attack
+            .filter_map(|colliding_entity| {
+                if let Ok((_, _, _, _, dmgbl_pos, _)) = damageable_query.get(colliding_entity) {
+                    newly_collided.insert(entity);
+                    let dist = dmgbl_pos
+                        .translation()
+                        .xy()
+                        .distance_squared(pos.translation().xy());
+                    Some((colliding_entity, dist))
                 } else {
-                    attack.damage
-                };
-                health.current = health.current.saturating_sub(damage_dealt);
-                attack.damaged.push((entity, time.tick(), damage_dealt));
-                if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
-                    // is there any way to check if a slot is set?
-                    anim_player.set_slot("Damage", true);
-                    commands.entity(anim_entity).insert(DamageFlash {
-                        current_ticks: 0,
-                        max_ticks: 8,
-                    });
+                    None
                 }
-                if health.current == 0 {
-                    commands.entity(entity).insert(Dead);
-                }
-                if let Some(pushback) = maybe_pushback {
-                    commands.entity(entity).insert(Knockback::new(
-                        pushback.direction,
-                        pushback.strength,
-                        16,
-                    ));
-                }
+            })
+            .collect::<Vec<_>>();
+        targets.sort_by(|(_, dist1), (_, dist2)| dist1.total_cmp(dist2));
+        let targets_empty = targets.is_empty();
+        // Get the closest ones
+        let top_n = targets
+            .into_iter()
+            .take(attack.max_targets as usize)
+            .map(|(e, _)| e)
+            .collect::<Vec<_>>();
+
+        for entity in top_n.iter() {
+            if attack.damaged_set.contains(entity) {
+                continue;
+            };
+
+            let Ok((entity, mut health, collider, gent, dmgbl_trnsfrm, is_defending)) =
+                damageable_query.get_mut(*entity)
+            else {
+                continue;
+            };
+
+            attack.damaged_set.insert(entity);
+
+            let damage_dealt = if is_defending {
+                attack.damage / 4
+            } else {
+                attack.damage
+            };
+            health.current = health.current.saturating_sub(damage_dealt);
+            attack.damaged.push(DamageInfo {
+                entity,
+                tick: time.tick(),
+                amount: damage_dealt,
+            });
+            if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
+                // is there any way to check if a slot is set?
+                anim_player.set_slot("Damage", true);
+                commands.entity(anim_entity).insert(DamageFlash {
+                    current_ticks: 0,
+                    max_ticks: 8,
+                });
+            }
+            if health.current == 0 {
+                commands.entity(entity).insert(Dead);
+            }
+            if let Some(pushback) = maybe_pushback {
+                commands.entity(entity).insert(Knockback::new(
+                    pushback.direction,
+                    pushback.strength,
+                    16,
+                ));
             }
         }
-        if maybe_projectile.is_some()
-            && !colliding_entities.is_empty()
-            && attack.current_lifetime > 1
-        {
+
+        // Removes entities from collided and damaged_set that are not in newly_collided
+        let Attack {
+            collided,
+            damaged_set,
+            ..
+        } = attack.as_mut();
+        for e in collided.difference(&newly_collided) {
+            damaged_set.remove(&*e);
+        }
+        *collided = newly_collided;
+        // Handle the edge case where newly collided *and* collided might not have damaged
+        // set's contents
+        if targets_empty {
+            damaged_set.clear()
+        }
+
+        if maybe_projectile.is_some() && !intersections_empty && attack.current_lifetime > 1 {
             // Note: purposefully does not despawn child entities, nor remove the
             // reference, so that child particle systems have the option of lingering
             commands.entity(entity).despawn();

@@ -107,6 +107,7 @@ pub enum PlayerAction {
     Jump,
     Attack,
     Dash,
+    Whirl,
 }
 
 fn debug_player_states(
@@ -248,6 +249,10 @@ fn setup_player(
                     .insert(PlayerAction::Attack, KeyCode::Enter)
                     .insert(PlayerAction::Attack, KeyCode::KeyJ)
                     .insert(PlayerAction::Dash, KeyCode::ShiftLeft)
+                    .insert(
+                        PlayerAction::Whirl,
+                        KeyCode::ControlLeft,
+                    )
                     .build(),
             },
             Falling,
@@ -256,6 +261,11 @@ fn setup_player(
             },
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
+            WhirlAbility {
+                active: false,
+                energy: 0.0,
+                attack_entity: None,
+            },
             TransitionQueue::default(),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
@@ -409,6 +419,14 @@ impl WallSlideTime {
     }
 }
 
+/// Indicates that sliding is tracked for this entity
+#[derive(Component, Default, Debug)]
+pub struct WhirlAbility {
+    active: bool,
+    energy: f32,
+    attack_entity: Option<Entity>,
+}
+
 #[derive(Resource, Debug, Default)]
 pub struct PlayerConfig {
     /// The maximum horizontal velocity the player can move at.
@@ -466,6 +484,14 @@ pub struct PlayerConfig {
 
     /// How long before the player can dash again?
     dash_cooldown_duration: f32,
+
+    max_whirl_energy: f32,
+
+    /// Spends this much energy per second when using whirl
+    whirl_cost: f32,
+
+    /// Spends this much energy per second when not using whirl
+    whirl_regen: f32,
 }
 
 fn load_player_config(
@@ -526,6 +552,9 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "dash_duration", |val| config.dash_duration = val);
     update_field(&mut errors, &cfg.0, "dash_velocity", |val| config.dash_velocity = val);
     update_field(&mut errors, &cfg.0, "dash_cooldown_duration", |val| config.dash_cooldown_duration = val);
+    update_field(&mut errors, &cfg.0, "max_whirl_energy", |val| config.max_whirl_energy = val);
+    update_field(&mut errors, &cfg.0, "whirl_cost", |val| config.whirl_cost = val);
+    update_field(&mut errors, &cfg.0, "whirl_regen", |val| config.whirl_regen = val);
 
    for error in errors{
        warn!("failed to load player cfg value: {}", error);
