@@ -248,10 +248,10 @@ fn setup_player(
                     )
                     .insert(PlayerAction::Attack, KeyCode::Enter)
                     .insert(PlayerAction::Attack, KeyCode::KeyJ)
-                    .insert(PlayerAction::Dash, KeyCode::ShiftLeft)
+                    .insert(PlayerAction::Dash, KeyCode::KeyK)
                     .insert(
                         PlayerAction::Whirl,
-                        KeyCode::ControlLeft,
+                        KeyCode::KeyL,
                     )
                     .build(),
             },
