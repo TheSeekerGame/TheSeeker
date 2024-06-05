@@ -1029,8 +1029,9 @@ fn chasing(
     >,
 ) {
     for (target, facing, role, range, mut nav, mut velocity, mut transitions) in query.iter_mut() {
+        //TODO: else transition back to waiting?
+        let mut continue_chasing = false;
         if let Some(p_entity) = target.0 {
-            let mut continue_chasing = false;
             //check if we need to transition
             match role {
                 Role::Ranged => match *range {
@@ -1082,6 +1083,12 @@ fn chasing(
             } else {
                 velocity.x = 0.;
             }
+        //if there is no target, stop chasing
+        } else {
+            velocity.x = 0.;
+            transitions.push(Chasing::new_transition(
+                Waiting::default(),
+            ));
         }
     }
 }
