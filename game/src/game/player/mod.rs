@@ -263,6 +263,7 @@ fn setup_player(
             HitFreezeTime(u32::MAX, None),
             WhirlAbility {
                 active: false,
+                active_ticks: 0,
                 energy: 0.0,
                 attack_entity: None,
             },
@@ -350,7 +351,6 @@ pub struct Attacking {
 }
 impl Attacking {
     const MAX: u32 = 4;
-    const STARTUP: u32 = 0;
 }
 impl GentState for Attacking {}
 
@@ -431,6 +431,7 @@ impl WallSlideTime {
 #[derive(Component, Default, Debug)]
 pub struct WhirlAbility {
     active: bool,
+    active_ticks: u32,
     energy: f32,
     attack_entity: Option<Entity>,
 }

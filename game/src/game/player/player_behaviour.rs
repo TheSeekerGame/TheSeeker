@@ -91,36 +91,47 @@ pub fn player_whirl(
     mut command: Commands,
     config: Res<PlayerConfig>,
 ) {
+    let min_ticks = 48.0;
     for (action_state, mut whirl, mut transition_queue, grounded, attacking) in q_gent.iter_mut() {
+        let mut stop_whirling = false;
         if action_state.pressed(&PlayerAction::Whirl) {
-            if whirl.energy > 0.0 && grounded.is_some() {
+            // only start if we have enough whirl energy for full rotation
+            if whirl.energy - (min_ticks * config.whirl_cost / time.hz as f32) > 0.0
+                && grounded.is_some()
+            {
                 if attacking.is_none() {
                     transition_queue.push(CanAttack::new_transition(
                         Attacking::default(),
                     ));
                 }
-                if whirl.active == false {}
                 whirl.active = true;
-                whirl.energy -= config.whirl_cost / time.hz as f32;
             } else {
-                if whirl.active == true {
-                    transition_queue.push(Attacking::new_transition(CanAttack));
-                }
-                if let Some(whirl_attack) = whirl.attack_entity {
-                    command.entity(whirl_attack).despawn();
-                    whirl.attack_entity = None;
-                }
-                whirl.active = false;
+                stop_whirling = true;
             }
         } else {
-            if whirl.active == true {
-                transition_queue.push(Attacking::new_transition(CanAttack));
+            stop_whirling = true;
+        }
+
+        if stop_whirling {
+            if whirl.active {
+                if whirl.active_ticks as f32 > min_ticks {
+                    if whirl.active {
+                        transition_queue.push(Attacking::new_transition(CanAttack));
+                    }
+                    if let Some(whirl_attack) = whirl.attack_entity {
+                        command.entity(whirl_attack).despawn();
+                        whirl.attack_entity = None;
+                    }
+                    whirl.active = false;
+                    whirl.active_ticks = 0;
+                };
             }
-            if let Some(whirl_attack) = whirl.attack_entity {
-                command.entity(whirl_attack).despawn();
-                whirl.attack_entity = None;
-            }
-            whirl.active = false;
+        }
+
+        if whirl.active {
+            whirl.active_ticks += 1;
+            whirl.energy -= config.whirl_cost / time.hz as f32;
+        } else {
             whirl.energy +=
                 (config.whirl_regen / time.hz as f32).clamp(0.0, config.max_whirl_energy);
         }
@@ -792,7 +803,8 @@ fn player_attack(
         } else {
             false
         };
-        if attacking.ticks == Attacking::STARTUP * 8 {
+        if attacking.ticks == 0 || (whirl_active && whirl.as_ref().unwrap().attack_entity.is_none())
+        {
             let id = commands
                 .spawn((
                     TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
