@@ -795,7 +795,7 @@ fn player_attack(
                             current_lifetime: 0,
                             max_lifetime: u32::MAX,
                             damage: 20,
-                            max_targets: 1,
+                            max_targets: 6,
                             attacker: entity,
                             damaged: Vec::new(),
                             collided: Default::default(),
