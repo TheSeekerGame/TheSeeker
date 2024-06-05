@@ -450,7 +450,6 @@ pub fn player_collisions(
         ),
         (With<Player>),
     >,
-    //add collider, modify layers, to INSIDE
     mut q_enemy: Query<(Entity, &mut Collider), (With<Enemy>, Without<Player>)>,
     mut commands: Commands,
     time: Res<GameTime>,
