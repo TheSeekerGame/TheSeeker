@@ -5,7 +5,6 @@ use rand::distributions::Standard;
 use rapier2d::geometry::SharedShape;
 use rapier2d::parry::query::TOIStatus;
 use rapier2d::prelude::{Group, InteractionGroups};
-use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
@@ -14,6 +13,7 @@ use theseeker_engine::physics::{
     ENEMY_ATTACK, GROUND, PLAYER, SENSOR,
 };
 use theseeker_engine::script::ScriptPlayer;
+use theseeker_engine::{animation::SpriteAnimationBundle, physics::ENEMY_INSIDE};
 
 use super::player::{Player, PlayerConfig};
 use crate::game::attack::arc_attack::Projectile;
@@ -283,7 +283,9 @@ impl Plugin for EnemyBehaviorPlugin {
                     .run_if(in_state(AppState::InGame))
                     .in_set(EnemyStateSet::Behavior)
                     .before(update_sprite_colliders),
-                move_collide.in_set(EnemyStateSet::Collisions),
+                (move_collide, remove_inside)
+                    .chain()
+                    .in_set(EnemyStateSet::Collisions),
             ),
         );
     }
@@ -451,6 +453,12 @@ impl Range {
     const DEAGGRO: f32 = 70.;
     const GROUPED: f32 = 30.;
 }
+
+/// Component that indicates that the player is inside of this enemy,
+/// and has its usual collision layer membership modified to ENEMY_INSIDE
+/// it is removed once the player stops intersecting in the remove_inside system
+#[derive(Component)]
+pub struct Inside;
 
 //Check how far the player is, set our range, set our target if applicable, turn to face player if
 //in range
@@ -1170,6 +1178,32 @@ fn move_collide(
 
         transform.translation =
             (transform.translation.xy() + projected_velocity * (1.0 / time.hz as f32)).extend(z);
+    }
+}
+
+fn remove_inside(
+    mut query: Query<(Entity, &GlobalTransform, &mut Collider), (With<Inside>, With<Enemy>)>,
+    mut commands: Commands,
+    spatial_query: Res<PhysicsWorld>,
+) {
+    for (entity, transform, mut collider) in query.iter_mut() {
+        let intersections = spatial_query.intersect(
+            transform.translation().xy(),
+            collider.0.shape(),
+            InteractionGroups {
+                memberships: ENEMY_INSIDE,
+                filter: PLAYER,
+            },
+            Some(entity),
+        );
+        if intersections.is_empty() {
+            println!("removed inside");
+            collider.0.set_collision_groups(InteractionGroups {
+                memberships: ENEMY,
+                filter: Group::all(),
+            });
+            commands.entity(entity).remove::<Inside>();
+        }
     }
 }
 
