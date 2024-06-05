@@ -207,8 +207,9 @@ pub fn attack_damage(
             })
             .collect::<Vec<_>>();
         targets.sort_by(|(_, dist1), (_, dist2)| dist1.total_cmp(dist2));
+        let targets_empty = targets.is_empty();
         // Get the closest ones
-        let mut top_n = targets
+        let top_n = targets
             .into_iter()
             .take(attack.max_targets as usize)
             .map(|(e, _)| e)
@@ -217,51 +218,52 @@ pub fn attack_damage(
         // gets the amount of damage instances applied with this collider, that have not been
         // reset
         println!(
-            "damaged_set_before: {:?}",
+            "top_n_len: {}, damaged_set_before: {:?}",
+            top_n.len(),
             attack.damaged_set
         );
-        let mut applied_damage_to: u32 = attack.damaged_set.len() as u32;
+
         for entity in top_n.iter() {
-            // Even though we filtered for only 3 targets, they might not be the *same* targets
-            // since colliders can move
-            if applied_damage_to >= attack.max_targets {
-                break;
-            }
+            if attack.damaged_set.contains(entity) {
+                continue;
+            };
 
-            if let Ok((entity, mut health, collider, gent, dmgbl_trnsfrm, is_defending)) =
+            let Ok((entity, mut health, collider, gent, dmgbl_trnsfrm, is_defending)) =
                 damageable_query.get_mut(*entity)
-            {
-                attack.damaged_set.insert(entity);
+            else {
+                continue;
+            };
 
-                let damage_dealt = if is_defending {
-                    attack.damage / 4
-                } else {
-                    attack.damage
-                };
-                health.current = health.current.saturating_sub(damage_dealt);
-                attack.damaged.push(DamageInfo {
-                    entity,
-                    tick: time.tick(),
-                    amount: damage_dealt,
+            attack.damaged_set.insert(entity);
+
+            let damage_dealt = if is_defending {
+                attack.damage / 4
+            } else {
+                attack.damage
+            };
+            health.current = health.current.saturating_sub(damage_dealt);
+            attack.damaged.push(DamageInfo {
+                entity,
+                tick: time.tick(),
+                amount: damage_dealt,
+            });
+            if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
+                // is there any way to check if a slot is set?
+                anim_player.set_slot("Damage", true);
+                commands.entity(anim_entity).insert(DamageFlash {
+                    current_ticks: 0,
+                    max_ticks: 8,
                 });
-                if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
-                    // is there any way to check if a slot is set?
-                    anim_player.set_slot("Damage", true);
-                    commands.entity(anim_entity).insert(DamageFlash {
-                        current_ticks: 0,
-                        max_ticks: 8,
-                    });
-                }
-                if health.current == 0 {
-                    commands.entity(entity).insert(Dead);
-                }
-                if let Some(pushback) = maybe_pushback {
-                    commands.entity(entity).insert(Knockback::new(
-                        pushback.direction,
-                        pushback.strength,
-                        16,
-                    ));
-                }
+            }
+            if health.current == 0 {
+                commands.entity(entity).insert(Dead);
+            }
+            if let Some(pushback) = maybe_pushback {
+                commands.entity(entity).insert(Knockback::new(
+                    pushback.direction,
+                    pushback.strength,
+                    16,
+                ));
             }
         }
 
@@ -274,11 +276,14 @@ pub fn attack_damage(
         for e in collided.difference(&newly_collided) {
             damaged_set.remove(&*e);
         }
-        *collided = newly_collided;
         println!(
-            "damaged_set_after: {:?}",
-            attack.damaged_set
+            "damaged_set_after: {:?} collided: {:?} newly_collided: {:?}",
+            damaged_set, collided, &newly_collided
         );
+        *collided = newly_collided;
+        if targets_empty {
+            damaged_set.clear()
+        }
 
         if maybe_projectile.is_some() && !intersections_empty && attack.current_lifetime > 1 {
             // Note: purposefully does not despawn child entities, nor remove the
