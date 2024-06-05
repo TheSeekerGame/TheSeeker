@@ -128,7 +128,7 @@ fn player_attacking_animation(
             Option<&HitFreezeTime>,
             Option<&WhirlAbility>,
         ),
-        Added<Attacking>,
+        With<Attacking>,
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
@@ -137,7 +137,10 @@ fn player_attacking_animation(
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             if let Some(whirl) = whirl {
                 if whirl.active {
-                    player.play_key("anim.player.SwordWhirling");
+                    //player.play_key("anim.player.SwordWhirling");
+                    if player.current_key().unwrap_or("") != "anim.player.SwordWhirling" {
+                        player.play_key("anim.player.SwordWhirling");
+                    }
                     continue;
                 }
             }
@@ -146,11 +149,20 @@ fn player_attacking_animation(
                 .map(|f| f.0 < config.hitfreeze_ticks)
                 .unwrap_or(false);
             if is_falling || is_jumping {
-                player.play_key("anim.player.SwordBasicAir")
+                if player.current_key().unwrap_or("") != "anim.player.SwordBasicAir" {
+                    player.play_key("anim.player.SwordBasicAir");
+                }
+                //player.play_key("anim.player.SwordBasicAir")
             } else if is_running && !hitfrozen {
-                player.play_key("anim.player.SwordBasicRun")
+                //player.play_key("anim.player.SwordBasicRun")
+                if player.current_key().unwrap_or("") != "anim.player.SwordBasicRun" {
+                    player.play_key("anim.player.SwordBasicRun");
+                }
             } else {
-                player.play_key("anim.player.SwordBasicIdle")
+                //player.play_key("anim.player.SwordBasicIdle")
+                if player.current_key().unwrap_or("") != "anim.player.SwordBasicIdle" {
+                    player.play_key("anim.player.SwordBasicIdle");
+                }
             }
         }
     }
