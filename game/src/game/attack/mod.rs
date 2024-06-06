@@ -10,6 +10,7 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::enemy::EnemyGfx;
 use super::player::PlayerGfx;
+use super::player::{FocusAbility, FocusState};
 use crate::game::attack::particles::AttackParticlesPlugin;
 use crate::game::enemy::{Defense, Enemy, EnemyStateSet};
 use crate::game::player::PlayerStateSet;
@@ -96,6 +97,8 @@ pub struct Attack {
     /// Unique entities that where in contact with collider and took damage.
     /// and are still in contact with the attack collider.
     pub damaged_set: HashSet<Entity>,
+    /// used to track if multiple hits are in the same attack or not
+    pub new_group: bool,
 }
 impl Attack {
     /// Lifetime is in game ticks
@@ -109,6 +112,7 @@ impl Attack {
             damaged: Vec::new(),
             collided: Default::default(),
             damaged_set: Default::default(),
+            new_group: false,
         }
     }
 }
@@ -170,6 +174,7 @@ pub fn attack_damage(
         Has<Enemy>,
     )>,
     mut crits: Query<(&mut Crits), Without<Attack>>,
+    mut focus: Query<(&mut FocusAbility), Without<Attack>>,
     mut gfx_query: Query<Entity, Or<(With<PlayerGfx>, With<EnemyGfx>)>>,
     mut commands: Commands,
     mut rig: ResMut<CameraRig>,
@@ -240,10 +245,15 @@ pub fn attack_damage(
                     was_critical = true;
                     println!("critical damage!")
                 }
-                if crit.new_group == true {
-                    crit.new_group = false;
+                if attack.new_group == true {
                     crit.counter += 1;
-                    println!("crit_counter_at_end: {}", crit.counter);
+                    println!("crit_counter: {}", crit.counter);
+                }
+            }
+            if let Ok((mut focus)) = focus.get_mut(attack.attacker) {
+                if focus.state != FocusState::InActive {
+                    damage_dealt = damage_dealt * 2;
+                    focus.state = FocusState::Applied
                 }
             }
 
@@ -278,6 +288,10 @@ pub fn attack_damage(
                     16,
                 ));
             }
+
+            if attack.new_group == true {
+                attack.new_group = false;
+            }
         }
 
         // Removes entities from collided and damaged_set that are not in newly_collided
@@ -294,9 +308,24 @@ pub fn attack_damage(
         // set's contents
         if targets_empty {
             damaged_set.clear();
-            if let Ok((mut crit)) = crits.get_mut(attack.attacker) {
-                if crit.new_group == false {
-                    crit.new_group = true;
+            if attack.new_group == false {
+                attack.new_group = true;
+
+                if let Ok((mut focus)) = focus.get_mut(attack.attacker) {
+                    if focus.state == FocusState::Applied {
+                        focus.state = FocusState::InActive;
+                        println!("focus_deactivated");
+                        if let Ok((crit)) = crits.get(attack.attacker) {
+                            if !crit.next_hit_is_critical {
+                                focus.recharge = 0.0;
+                            }
+                        } else {
+                            focus.recharge = 0.0;
+                        }
+                    }
+                }
+
+                if let Ok((mut crit)) = crits.get_mut(attack.attacker) {
                     if crit.counter == 16 {
                         crit.next_hit_is_critical = true;
                     } else if crit.counter == 18 {
@@ -399,9 +428,6 @@ pub struct Crits {
     counter: u32,
     /// Yes
     crit_damage_multiplier: f32,
-    /// used to track if multiple hits are in the same attack or not
-    /// don't touch this unless you *really* know what you are doing.
-    new_group: bool,
 }
 
 impl Crits {
@@ -410,7 +436,6 @@ impl Crits {
             next_hit_is_critical: false,
             counter: 0,
             crit_damage_multiplier: multiplier,
-            new_group: false,
         }
     }
 }

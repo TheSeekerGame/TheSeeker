@@ -108,6 +108,7 @@ pub enum PlayerAction {
     Attack,
     Dash,
     Whirl,
+    Focus,
 }
 
 fn debug_player_states(
@@ -249,10 +250,8 @@ fn setup_player(
                     .insert(PlayerAction::Attack, KeyCode::Enter)
                     .insert(PlayerAction::Attack, KeyCode::KeyJ)
                     .insert(PlayerAction::Dash, KeyCode::KeyK)
-                    .insert(
-                        PlayerAction::Whirl,
-                        KeyCode::KeyL,
-                    )
+                    .insert(PlayerAction::Whirl, KeyCode::KeyL)
+                    .insert(PlayerAction::Focus, KeyCode::KeyI)
                     .build(),
             },
             Falling,
@@ -268,6 +267,7 @@ fn setup_player(
                 attack_entity: None,
             },
             Crits::new(2.0),
+            FocusAbility::default(),
             TransitionQueue::default(),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
@@ -434,6 +434,31 @@ pub struct WhirlAbility {
     active_ticks: u32,
     energy: f32,
     attack_entity: Option<Entity>,
+}
+
+#[derive(Component, Debug)]
+pub struct FocusAbility {
+    /// Will the next attack apply double damage?
+    pub(crate) state: FocusState,
+    /// Once this reaches 10, ability can activate again.
+    pub(crate) recharge: f32,
+}
+
+impl Default for FocusAbility {
+    fn default() -> Self {
+        Self {
+            state: Default::default(),
+            recharge: 10.0,
+        }
+    }
+}
+
+#[derive(Default, Debug, PartialEq)]
+pub enum FocusState {
+    Active,
+    Applied,
+    #[default]
+    InActive,
 }
 
 #[derive(Resource, Debug, Default)]
