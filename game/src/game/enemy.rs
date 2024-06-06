@@ -9,8 +9,8 @@ use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
-    into_vec2, update_sprite_colliders, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
-    ENEMY_ATTACK, GROUND, PLAYER, SENSOR,
+    into_vec2, update_sprite_colliders, AnimationCollider, Collider, LinearVelocity, PhysicsWorld,
+    ShapeCaster, ENEMY, ENEMY_ATTACK, GROUND, PLAYER, SENSOR,
 };
 use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::{animation::SpriteAnimationBundle, physics::ENEMY_INSIDE};
@@ -204,7 +204,7 @@ fn setup_enemy(
                     //need to find a way to offset this one px toward back of enemys facing
                     //direction
                     collider: Collider::cuboid(
-                        22.0,
+                        16.0,
                         10.0,
                         InteractionGroups {
                             memberships: ENEMY,
@@ -447,7 +447,7 @@ enum Range {
 struct Target(Option<Entity>);
 
 impl Range {
-    const MELEE: f32 = 16.;
+    const MELEE: f32 = 12.;
     const AGGRO: f32 = 50.;
     const RANGED: f32 = 60.;
     const DEAGGRO: f32 = 70.;
@@ -627,6 +627,7 @@ fn pushback_attack(
         (
             Entity,
             &Facing,
+            &Gent,
             &mut PushbackAttack,
             &mut TransitionQueue,
         ),
@@ -634,24 +635,17 @@ fn pushback_attack(
     >,
     mut commands: Commands,
 ) {
-    for (entity, facing, mut attack, mut transitions) in query.iter_mut() {
+    for (entity, facing, gent, mut attack, mut transitions) in query.iter_mut() {
         attack.ticks += 1;
         if attack.ticks == PushbackAttack::STARTUP * 8 {
             commands
                 .spawn((
-                    TransformBundle::from_transform(Transform::from_xyz(
-                        10. * -facing.direction(),
-                        0.,
-                        0.,
-                    )),
-                    Collider::cuboid(
-                        10.,
-                        10.,
-                        InteractionGroups {
-                            memberships: ENEMY_ATTACK,
-                            filter: PLAYER,
-                        },
-                    ),
+                    Collider::empty(InteractionGroups {
+                        memberships: SENSOR,
+                        filter: PLAYER,
+                    }),
+                    TransformBundle::from_transform(Transform::default()),
+                    AnimationCollider(gent.e_gfx),
                     Attack::new(8, entity),
                     Pushback {
                         direction: -facing.direction(),
@@ -882,30 +876,24 @@ fn melee_attack(
             &mut MeleeAttack,
             &Facing,
             &mut TransitionQueue,
+            &Gent,
         ),
         With<Enemy>,
     >,
     mut commands: Commands,
 ) {
-    for (entity, mut attack, facing, mut trans_q) in query.iter_mut() {
+    for (entity, mut attack, facing, mut trans_q, gent) in query.iter_mut() {
         attack.ticks += 1;
         if attack.ticks == 8 * MeleeAttack::STARTUP {
             //spawn attack hitbox collider as child
             let collider = commands
                 .spawn((
-                    Collider::cuboid(
-                        10.,
-                        10.,
-                        InteractionGroups {
-                            memberships: SENSOR,
-                            filter: PLAYER,
-                        },
-                    ),
-                    TransformBundle::from_transform(Transform::from_xyz(
-                        10. * -facing.direction(),
-                        0.,
-                        0.,
-                    )),
+                    Collider::empty(InteractionGroups {
+                        memberships: SENSOR,
+                        filter: PLAYER,
+                    }),
+                    TransformBundle::from_transform(Transform::default()),
+                    AnimationCollider(gent.e_gfx),
                     Attack::new(8, entity),
                 ))
                 .set_parent(entity)
