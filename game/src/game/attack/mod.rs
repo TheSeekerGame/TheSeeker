@@ -164,13 +164,7 @@ pub fn attack_damage(
         &GlobalTransform,
         Has<Defense>,
     )>,
-    mut gfx_query: Query<
-        (
-            Entity,
-            &mut ScriptPlayer<SpriteAnimation>,
-        ),
-        Or<(With<PlayerGfx>, With<EnemyGfx>)>,
-    >,
+    mut gfx_query: Query<Entity, Or<(With<PlayerGfx>, With<EnemyGfx>)>>,
     mut commands: Commands,
     time: Res<GameTime>, //animation query to flash red?
 ) {
@@ -237,9 +231,8 @@ pub fn attack_damage(
                 tick: time.tick(),
                 amount: damage_dealt,
             });
-            if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
-                // is there any way to check if a slot is set?
-                anim_player.set_slot("Damage", true);
+            if let Ok(anim_entity) = gfx_query.get_mut(gent.e_gfx) {
+                //insert a DamageFlash to flash for 1 animation frame/8 ticks
                 commands.entity(anim_entity).insert(DamageFlash {
                     current_ticks: 0,
                     max_ticks: 8,
@@ -304,18 +297,13 @@ fn knockback(
     }
 }
 
-fn damage_flash(
-    mut query: Query<(
-        Entity,
-        &mut DamageFlash,
-        &mut ScriptPlayer<SpriteAnimation>,
-    )>,
-    mut commands: Commands,
-) {
-    for (entity, mut damage_flash, mut anim_player) in query.iter_mut() {
+fn damage_flash(mut query: Query<(Entity, &mut Sprite, &mut DamageFlash)>, mut commands: Commands) {
+    for (entity, mut sprite, mut damage_flash) in query.iter_mut() {
+        sprite.color = Color::rgb(2.5, 2.5, 2.5);
+
         if damage_flash.current_ticks == damage_flash.max_ticks {
             commands.entity(entity).remove::<DamageFlash>();
-            anim_player.set_slot("Damage", false);
+            sprite.color = Color::rgb(1., 1., 1.);
         }
         damage_flash.current_ticks += 1;
     }
