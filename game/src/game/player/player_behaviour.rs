@@ -18,15 +18,15 @@ use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
 use rapier2d::geometry::{Group, InteractionGroups};
 use rapier2d::parry::query::TOIStatus;
-use theseeker_engine::condition::any_matching;
+use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
     into_vec2, update_sprite_colliders, AnimationCollider, Collider, LinearVelocity, PhysicsWorld,
-    ShapeCaster, ENEMY, GROUND, PLAYER, PLAYER_ATTACK,
+    ShapeCaster, ENEMY_HURT, ENEMY_INSIDE, GROUND, PLAYER, PLAYER_ATTACK,
 };
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
-use theseeker_engine::{assets::animation::SpriteAnimation, physics::ENEMY_INSIDE};
+// use theseeker_engine::{condition::any_matching, ;
 
 ///Player behavior systems.
 ///Do stuff here in states and add transitions to other states by pushing
@@ -52,7 +52,7 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_falling.run_if(any_with_component::<Falling>),
                     player_sliding
                         .before(player_jump)
-                        .run_if(any_matching::<(With<Falling>,)>()),
+                        .run_if(any_with_component::<Falling>),
                 )
                     .in_set(PlayerStateSet::Behavior)
                     .before(update_sprite_colliders),
@@ -818,7 +818,7 @@ fn player_attack(
                     AnimationCollider(gent.e_gfx),
                     Collider::empty(InteractionGroups::new(
                         PLAYER_ATTACK,
-                        ENEMY,
+                        ENEMY_HURT,
                     )),
                     if whirl_active {
                         Attack {
