@@ -10,11 +10,14 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::enemy::EnemyGfx;
 use super::player::PlayerGfx;
-use crate::game::attack::arc_attack::{arc_projectile, Projectile};
 use crate::game::attack::particles::AttackParticlesPlugin;
 use crate::game::enemy::{Defense, Enemy, EnemyStateSet};
 use crate::game::player::PlayerStateSet;
 use crate::prelude::*;
+use crate::{
+    camera::CameraRig,
+    game::attack::arc_attack::{arc_projectile, Projectile},
+};
 
 pub struct AttackPlugin;
 
@@ -164,17 +167,13 @@ pub fn attack_damage(
         &Gent,
         &GlobalTransform,
         Has<Defense>,
+        Has<Enemy>,
     )>,
     mut crits: Query<(&mut Crits), Without<Attack>>,
-    mut gfx_query: Query<
-        (
-            Entity,
-            &mut ScriptPlayer<SpriteAnimation>,
-        ),
-        Or<(With<PlayerGfx>, With<EnemyGfx>)>,
-    >,
+    mut gfx_query: Query<Entity, Or<(With<PlayerGfx>, With<EnemyGfx>)>>,
     mut commands: Commands,
-    time: Res<GameTime>, //animation query to flash red?
+    mut rig: ResMut<CameraRig>,
+    time: Res<GameTime>,
 ) {
     for (entity, pos, mut attack, attack_collider, maybe_pushback, maybe_projectile) in
         query.iter_mut()
@@ -194,7 +193,7 @@ pub fn attack_damage(
             .into_iter()
             // Filters out everything that's not damageable or one of the nearest max_targets entities to attack
             .filter_map(|colliding_entity| {
-                if let Ok((_, _, _, _, dmgbl_pos, _)) = damageable_query.get(colliding_entity) {
+                if let Ok((_, _, _, _, dmgbl_pos, _, _)) = damageable_query.get(colliding_entity) {
                     newly_collided.insert(entity);
                     let dist = dmgbl_pos
                         .translation()
@@ -220,7 +219,7 @@ pub fn attack_damage(
                 continue;
             };
 
-            let Ok((entity, mut health, collider, gent, dmgbl_trnsfrm, is_defending)) =
+            let Ok((entity, mut health, collider, gent, dmgbl_trnsfrm, is_defending, is_enemy)) =
                 damageable_query.get_mut(*entity)
             else {
                 continue;
@@ -255,9 +254,8 @@ pub fn attack_damage(
                 amount: damage_dealt,
                 crit: was_critical,
             });
-            if let Ok((anim_entity, mut anim_player)) = gfx_query.get_mut(gent.e_gfx) {
-                // is there any way to check if a slot is set?
-                anim_player.set_slot("Damage", true);
+            if let Ok(anim_entity) = gfx_query.get_mut(gent.e_gfx) {
+                //insert a DamageFlash to flash for 1 animation frame/8 ticks
                 commands.entity(anim_entity).insert(DamageFlash {
                     current_ticks: 0,
                     max_ticks: 8,
@@ -265,6 +263,13 @@ pub fn attack_damage(
             }
             if health.current == 0 {
                 commands.entity(entity).insert(Dead);
+                //apply more screenshake if an enemies health becomes depleted by this attack
+                if is_enemy {
+                    rig.trauma = 0.4;
+                }
+            } else if rig.trauma < 0.3 && is_enemy {
+                //apply screenshake on damage to enemy
+                rig.trauma = 0.3
             }
             if let Some(pushback) = maybe_pushback {
                 commands.entity(entity).insert(Knockback::new(
@@ -337,18 +342,13 @@ fn knockback(
     }
 }
 
-fn damage_flash(
-    mut query: Query<(
-        Entity,
-        &mut DamageFlash,
-        &mut ScriptPlayer<SpriteAnimation>,
-    )>,
-    mut commands: Commands,
-) {
-    for (entity, mut damage_flash, mut anim_player) in query.iter_mut() {
+fn damage_flash(mut query: Query<(Entity, &mut Sprite, &mut DamageFlash)>, mut commands: Commands) {
+    for (entity, mut sprite, mut damage_flash) in query.iter_mut() {
+        sprite.color = Color::rgb(2.5, 2.5, 2.5);
+
         if damage_flash.current_ticks == damage_flash.max_ticks {
             commands.entity(entity).remove::<DamageFlash>();
-            anim_player.set_slot("Damage", false);
+            sprite.color = Color::rgb(1., 1., 1.);
         }
         damage_flash.current_ticks += 1;
     }

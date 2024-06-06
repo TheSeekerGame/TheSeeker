@@ -55,9 +55,14 @@ pub const PLAYER_ATTACK: Group = Group::from_bits_truncate(0b0100);
 pub const ENEMY_ATTACK: Group = Group::from_bits_truncate(0b1000);
 /// The ground collision group
 pub const GROUND: Group = Group::from_bits_truncate(0b10000);
-/// The for when the other two groups don't make sense,
+/// Use when the other groups don't make sense,
 /// and you just want to detect something
 pub const SENSOR: Group = Group::from_bits_truncate(0b100000);
+/// Applied to an enemy when player is inside it
+pub const ENEMY_INSIDE: Group = Group::from_bits_truncate(0b1000000);
+/// Combination of ENEMY and ENEMY_INSIDE,
+/// used for checking the players attacks
+pub const ENEMY_HURT: Group = Group::from_bits_truncate(0b1000010);
 
 #[derive(Resource, Default)]
 pub struct SpriteShapeMap {
