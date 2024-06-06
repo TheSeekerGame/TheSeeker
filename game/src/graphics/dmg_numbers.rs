@@ -81,7 +81,11 @@ fn instance(
                             TextStyle {
                                 font: asset_server.load("font/Tektur-Regular.ttf"),
                                 font_size: 42.0,
-                                color: Color::WHITE,
+                                color: if attack_info.crit {
+                                    Color::YELLOW * 1.1
+                                } else {
+                                    Color::WHITE
+                                },
                             },
                         )
                         .with_style(Style {

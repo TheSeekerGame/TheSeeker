@@ -3,9 +3,9 @@ use crate::game::attack::{Attack, Pushback};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
-    Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded, HitFreezeTime, Idle,
-    Jumping, Player, PlayerAction, PlayerConfig, PlayerGfx, PlayerStateSet, Running, WallSlideTime,
-    WhirlAbility,
+    Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, FocusAbility, FocusState,
+    Grounded, HitFreezeTime, Idle, Jumping, Player, PlayerAction, PlayerConfig, PlayerGfx,
+    PlayerStateSet, Running, WallSlideTime, WhirlAbility,
 };
 use crate::prelude::{
     any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
@@ -40,6 +40,7 @@ impl Plugin for PlayerBehaviorPlugin {
                 (
                     player_idle.run_if(any_with_component::<Idle>),
                     add_attack,
+                    player_focus,
                     player_whirl.before(player_attack),
                     player_attack.run_if(any_with_component::<Attacking>),
                     player_move,
@@ -68,6 +69,39 @@ impl Plugin for PlayerBehaviorPlugin {
             )
                 .chain(),
         );
+    }
+}
+
+pub fn player_focus(
+    mut query: Query<
+        (
+            &mut FocusAbility,
+            &ActionState<PlayerAction>,
+        ),
+        (With<Player>,),
+    >,
+    time: Res<GameTime>,
+) {
+    for (mut focus, action_state) in query.iter_mut() {
+        if action_state.just_pressed(&PlayerAction::Focus) {
+            if focus.recharge >= 10.0 {
+                if focus.state == FocusState::InActive {
+                    // can remove the printlns when visual affect is made
+                    println!("focus activated!");
+                    focus.state = FocusState::Active;
+                } else {
+                    println!("focus was already activated!");
+                }
+            } else {
+                println!(
+                    "focus not activated! energy: {}/10",
+                    focus.recharge
+                );
+            }
+        }
+        if focus.state == FocusState::InActive && focus.recharge < 10.0 {
+            focus.recharge = (focus.recharge + 1.0 / time.hz as f32).clamp(0.0, 10.0);
+        }
     }
 }
 
@@ -829,6 +863,7 @@ fn player_attack(
                             damaged: Vec::new(),
                             collided: Default::default(),
                             damaged_set: Default::default(),
+                            new_group: false,
                         }
                     } else {
                         Attack::new(16, entity)
