@@ -4,6 +4,7 @@ use crate::prelude::*;
 
 mod console;
 mod mainmenu;
+mod skill_toolbar;
 
 pub struct UiPlugin;
 
