@@ -204,9 +204,9 @@ pub(crate) fn update_camera_rig(
     let offset_x = 20.0 * shake * ran_f64_range(-1.0..=1.0) as f32;
     let offset_y = 20.0 * shake * ran_f64_range(-1.0..=1.0) as f32;
 
-    cam_xform.rotation.z = 0.0 + angle;
-    cam_xform.translation.x = rig.camera.x + offset_x;
-    cam_xform.translation.y = rig.camera.y + offset_y;
+    // cam_xform.rotation.z = 0.0 + angle;
+    cam_xform.translation.x = rig.camera.x;
+    cam_xform.translation.y = rig.camera.y;
 
     if let Some((bg_layer, bg_transform)) = backround_query.iter().next() {
         let bg_width = (bg_layer.c_wid * bg_layer.grid_size) as f32;
@@ -225,6 +225,17 @@ pub(crate) fn update_camera_rig(
             bg_transform.translation.xy(),
         );
 
+        let xy = cam_xform.translation.xy().clamp(
+            limit_rect.min + cam_rect.half_size(),
+            limit_rect.max - cam_rect.half_size(),
+        );
+        cam_xform.translation = xy.extend(cam_xform.translation.z);
+
+        // Apply screen shake after camera is clamped so that camera still shakes at the edges
+        cam_xform.translation.x = cam_xform.translation.x + offset_x;
+        cam_xform.translation.y = cam_xform.translation.y + offset_y;
+
+        // Apply another clamp so we don't show the edge of the level
         let xy = cam_xform.translation.xy().clamp(
             limit_rect.min + cam_rect.half_size(),
             limit_rect.max - cam_rect.half_size(),
