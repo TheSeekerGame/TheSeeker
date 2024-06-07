@@ -1,7 +1,9 @@
 use crate::assets::UiAssets;
 use crate::locale::L10nKey;
 use crate::prelude::*;
+use crate::ui::skill_toolbar::SkillToolbarPlugin;
 
+pub mod ability_widget;
 mod console;
 mod mainmenu;
 mod skill_toolbar;
@@ -14,6 +16,7 @@ impl Plugin for UiPlugin {
         app.add_plugins((
             self::console::UiConsolePlugin,
             self::mainmenu::MainMenuPlugin,
+            SkillToolbarPlugin,
         ));
     }
 }

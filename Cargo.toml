@@ -115,6 +115,9 @@ features = ["assets"]
 git = "https://github.com/IyesGames/iyes_ui"
 features = ["iyes_cli"]
 
+[dependencies.sickle_ui]
+git = "https://github.com/TheSeekerGame/sickle_ui.git"
+
 [dependencies.leafwing-input-manager]
 version = "0.13"
 
