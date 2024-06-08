@@ -1,7 +1,7 @@
 pub mod darkness;
 mod dmg_numbers;
 mod fog;
-mod hp_bar;
+pub mod hp_bar;
 pub(crate) mod particles_util;
 
 use crate::game::enemy::Enemy;

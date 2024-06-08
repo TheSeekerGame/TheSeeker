@@ -1,8 +1,9 @@
+use crate::graphics::hp_bar::HpBarUiMaterial;
 use crate::prelude::*;
 use bevy::ecs::system::{EntityCommand, EntityCommands};
 use sickle_ui::ui_builder::{UiBuilder, UiRoot};
 use sickle_ui::ui_style::*;
-use sickle_ui::widgets::prelude::UiContainerExt;
+use sickle_ui::widgets::prelude::{UiContainerExt, UiRowExt};
 
 #[derive(Component)]
 struct AbilityWidget;
@@ -20,17 +21,56 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
         config: AbilityWidgetConfig,
     ) -> UiBuilder<'w, 's, 'a, Entity> {
         self.container(
-            (ImageBundle::default(), AbilityWidget),
+            (
+                MaterialNodeBundle::<HpBarUiMaterial>::default(), /*{
+                                                                      style: Style {
+                                                                          width: Val::Percent(100.0),
+                                                                          height: Val::Percent(100.0),
+                                                                          align_self: AlignSelf::Center,
+                                                                          ..default()
+                                                                      },
+                                                                      //material: handle,
+                                                                      ..default()
+                                                                  },*/
+                AbilityWidget,
+            ),
             |ability_card| {
+                let entity = ability_card.context().clone();
+                // Someone tell me theres a better way then this. I mean it works at least
+                ability_card.commands().add(move |w: &mut World| {
+                    let Some(mut ui_materials) = w.get_resource_mut::<Assets<HpBarUiMaterial>>()
+                    else {
+                        return;
+                    };
+                    let handle = ui_materials.add(HpBarUiMaterial {
+                        factor: 1.0,
+                        background_color: Color::rgb(0.15, 0.15, 0.15).into(),
+                        filled_color: Color::rgb(0.8, 0.2, 0.2).into(),
+                    });
+                    w.entity_mut(entity).insert(handle);
+                });
                 ability_card.named("ability");
                 ability_card
                     .style()
                     .position_type(PositionType::Relative)
                     .width(Val::Px(96.0))
-                    .height(Val::Px(96.0))
-                    .image(config.image_path);
+                    .height(Val::Px(96.0));
             },
-        )
+        );
+        self.row(|children| {
+            children.container(
+                (ImageBundle::default(), AbilityWidget),
+                |ability_card| {
+                    ability_card.named("ability");
+                    ability_card
+                        .style()
+                        .position_type(PositionType::Relative)
+                        .width(Val::Px(96.0))
+                        .height(Val::Px(96.0))
+                        .image(config.image_path);
+                },
+            );
+        })
     }
 }
 
@@ -45,7 +85,34 @@ impl AbilityWidgetConfig {
         }
     }
 }
-//pub trait AbilityWidget
+
+struct SetFactor(f32);
+
+impl EntityCommand for SetFactor {
+    fn apply(self, entity: Entity, world: &mut World) {
+        let Some(handle) = world.entity(entity).get::<Handle<HpBarUiMaterial>>() else {
+            return;
+        };
+        let handle = handle.clone();
+        let Some(mut assets) = world.get_resource_mut::<Assets<HpBarUiMaterial>>() else {
+            return;
+        };
+        let Some(mut material) = assets.get_mut(handle) else {
+            return;
+        };
+        material.factor = self.0;
+    }
+}
+
+pub trait AbilityWidgetCommands<'a> {
+    fn factor(&'a mut self, factor: f32) -> &mut EntityCommands<'a>;
+}
+
+impl<'a> AbilityWidgetCommands<'a> for EntityCommands<'a> {
+    fn factor(&'a mut self, factor: f32) -> &mut EntityCommands<'a> {
+        self.add(SetFactor(factor))
+    }
+}
 
 // Examples for oneshot updates, and dynamic updates of widgets
 /*

@@ -179,7 +179,7 @@ fn update_visibility(
 
 #[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
 pub struct HpBarUiMaterial {
-    // A number between `0` and `1` indicating how much of the bar should be filled.
+    /// A number between `0` and `1` indicating how much of the bar should be filled.
     #[uniform(0)]
     pub factor: f32,
     #[uniform(1)]
