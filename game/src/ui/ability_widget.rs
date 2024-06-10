@@ -54,14 +54,17 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                             return;
                         };
                         let handle = ui_materials.add(HpBarUiMaterial {
-                            factor: 0.5,
+                            factor: 0.3,
                             background_color: Color::rgba(0.0, 0.0, 0.0, 0.0).into(),
                             filled_color: Color::rgba(0.0, 0.0, 0.0, 0.6).into(),
                         });
                         w.entity_mut(entity).insert(handle);
                         // Make the bar go from bottom to top
                         w.entity_mut(entity).insert(Transform::from_rotation(
-                            Quat::from_axis_angle(Vec3::Z, -PI * 0.5),
+                            Quat::from_axis_angle(
+                                Vec3::Z,
+                                if config.dir_up { -1.0 } else { 1.0 } * PI * 0.5,
+                            ),
                         ));
                     });
                     ability_card.named("ability");
@@ -79,13 +82,15 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
 pub struct AbilityWidgetConfig<T: Component> {
     pub image_path: String,
     pub tracking_component: T,
+    pub dir_up: bool,
 }
 
 impl<T: Component> AbilityWidgetConfig<T> {
-    pub fn from(image_path: impl Into<String>, tracking_component: T) -> Self {
+    pub fn from(image_path: impl Into<String>, tracking_component: T, dir_up: bool) -> Self {
         Self {
             image_path: image_path.into(),
             tracking_component,
+            dir_up,
         }
     }
 }

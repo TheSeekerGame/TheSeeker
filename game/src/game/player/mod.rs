@@ -432,7 +432,7 @@ impl WallSlideTime {
 pub struct WhirlAbility {
     active: bool,
     active_ticks: u32,
-    energy: f32,
+    pub energy: f32,
     attack_entity: Option<Entity>,
 }
 
@@ -519,7 +519,7 @@ pub struct PlayerConfig {
     /// How long before the player can dash again?
     pub dash_cooldown_duration: f32,
 
-    max_whirl_energy: f32,
+    pub max_whirl_energy: f32,
 
     /// Spends this much energy per second when using whirl
     whirl_cost: f32,

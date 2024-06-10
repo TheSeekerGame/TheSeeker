@@ -2,7 +2,7 @@ use crate::appstate::{AppState, StateDespawnMarker};
 use crate::assets::{MainMenuAssets, UiAssets};
 use crate::camera::MainCamera;
 use crate::game::attack::Health;
-use crate::game::player::{CanDash, Dashing, Player, PlayerConfig};
+use crate::game::player::{CanDash, Dashing, Player, PlayerConfig, WhirlAbility};
 use crate::graphics::hp_bar::HpBarUiMaterial;
 use crate::prelude::*;
 use crate::ui::ability_widget::{AbilityWidgetCommands, AbilityWidgetConfig, UiAbilityWidgetExt};
@@ -19,6 +19,7 @@ impl Plugin for SkillToolbarPlugin {
             spawn_toolbar.after(crate::camera::setup_main_camera),
         );
         app.add_systems(Update, update_dash_ability_ui);
+        app.add_systems(Update, update_whirl_ability_ui);
         app.add_systems(
             OnExit(AppState::InGame),
             despawn_toolbar,
@@ -75,18 +76,22 @@ fn spawn_toolbar(
         row.ability_widget(AbilityWidgetConfig::from(
             "ui/game/AttackSkillIcon.png",
             AttackAbilityUI,
+            true,
         ));
         row.ability_widget(AbilityWidgetConfig::from(
             "ui/game/DashSkillIcon.png",
             DashAbilityUI,
+            true,
         ));
         row.ability_widget(AbilityWidgetConfig::from(
             "ui/game/WhirlSkillIcon.png",
             WhirlAbilityUI,
+            false,
         ));
         row.ability_widget(AbilityWidgetConfig::from(
             "ui/game/FocusSkillIcon.png",
             FocusAbilityUI,
+            true,
         ));
     });
 }
@@ -103,16 +108,31 @@ pub struct WhirlAbilityUI;
 pub struct FocusAbilityUI;
 
 fn update_dash_ability_ui(
-    player: Query<(&CanDash, Option<&Dashing>), With<Player>>,
+    player: Query<(&CanDash), With<Player>>,
     ui: Query<Entity, With<DashAbilityUI>>,
     config: Res<PlayerConfig>,
     mut commands: Commands,
 ) {
-    let Ok((can_dash, dashing)) = player.get_single() else {
+    let Ok((can_dash)) = player.get_single() else {
         return;
     };
     for (entity) in ui.iter() {
         let factor = can_dash.remaining_cooldown / config.dash_cooldown_duration;
+        commands.entity(entity).factor(factor);
+    }
+}
+
+fn update_whirl_ability_ui(
+    player: Query<(&WhirlAbility), With<Player>>,
+    ui: Query<Entity, With<WhirlAbilityUI>>,
+    config: Res<PlayerConfig>,
+    mut commands: Commands,
+) {
+    let Ok((whirl)) = player.get_single() else {
+        return;
+    };
+    for (entity) in ui.iter() {
+        let factor = 1.0 - whirl.energy / config.max_whirl_energy;
         commands.entity(entity).factor(factor);
     }
 }
