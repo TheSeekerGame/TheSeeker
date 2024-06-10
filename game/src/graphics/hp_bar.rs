@@ -79,7 +79,7 @@ fn update_positions(
     entity_with_hp: Query<(
         &GlobalTransform,
         Option<&Collider>,
-        Option<&Player>,
+        Has<Player>,
     )>,
     mut hp_bar: Query<(Entity, &HpBackground, &mut Style)>,
     mut q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
@@ -89,12 +89,8 @@ fn update_positions(
     };
 
     for (bg_entity, hp_bg, mut style) in hp_bar.iter_mut() {
-        if let Ok((global_transform, collider, player)) = entity_with_hp.get(hp_bg.0) {
-            if player.is_some() {
-                // Update the position of the health bar UI
-                //style.left = Val::Px(20.0);
-                //style.top = Val::Px(20.0);
-                //style.position_type = PositionType::Absolute;
+        if let Ok((global_transform, collider, has_player)) = entity_with_hp.get(hp_bg.0) {
+            if has_player {
                 continue;
             }
 
