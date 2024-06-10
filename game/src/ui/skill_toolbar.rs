@@ -6,7 +6,7 @@ use crate::game::player::{
     Attacking, CanAttack, CanDash, Dashing, FocusAbility, FocusState, Player, PlayerConfig,
     WhirlAbility,
 };
-use crate::graphics::hp_bar::HpBarUiMaterial;
+use crate::graphics::hp_bar::{HpBackground, HpBar, HpBarUiMaterial};
 use crate::prelude::*;
 use crate::ui::ability_widget::{
     AbilityWidget, AbilityWidgetCommands, AbilityWidgetConfig, UiAbilityWidgetExt,
@@ -23,6 +23,7 @@ impl Plugin for SkillToolbarPlugin {
             OnEnter(AppState::InGame),
             spawn_toolbar.after(crate::camera::setup_main_camera),
         );
+        app.add_systems(GameTickUpdate, assign_hp_bar);
         app.add_systems(Update, update_attack_ability_ui);
         app.add_systems(Update, update_dash_ability_ui);
         app.add_systems(Update, update_whirl_ability_ui);
@@ -36,9 +37,8 @@ impl Plugin for SkillToolbarPlugin {
 
 fn spawn_toolbar(
     mut commands: Commands,
-    uiassets: Res<UiAssets>,
-    menuassets: Res<MainMenuAssets>,
     mut q_cam: Query<(Entity, &GlobalTransform, &Camera), With<MainCamera>>,
+    mut ui_materials: ResMut<Assets<HpBarUiMaterial>>,
 ) {
     println!("about to spawn toolbar");
     let Ok((cam_e, cam_pos, cam)) = q_cam.get_single() else {
@@ -71,6 +71,7 @@ fn spawn_toolbar(
                 .position_type(PositionType::Absolute)
                 .bottom(Val::Px(20.0))
                 .justify_content(JustifyContent::Center);
+            row.named("ability_bar_ui");
             ability_bar = row
                 .column(|column| {
                     //column.style().align_self(AlignSelf::Center);
@@ -79,6 +80,47 @@ fn spawn_toolbar(
         })
         .id();
 
+    commands.ui_builder(ability_bar).row(|row| {
+        // todo: after alpha, refactor this to be more generic; either a progress bar widget,
+        //  or proper health bar widget
+        row.container(
+            (
+                NodeBundle {
+                    style: Style {
+                        width: Val::Percent(100.0),
+                        height: Val::Px(20.0),
+                        padding: UiRect::all(Val::Px(3.0)),
+                        ..default()
+                    },
+                    background_color: Color::rgb(0.75, 0.75, 0.75).into(),
+                    ..default()
+                },
+                Name::new("hp_bg"),
+                HpBackground(Entity::PLACEHOLDER),
+            ),
+            |parent| {
+                parent.spawn((
+                    MaterialNodeBundle {
+                        style: Style {
+                            width: Val::Percent(100.0),
+                            height: Val::Percent(100.0),
+                            align_self: AlignSelf::Center,
+                            ..default()
+                        },
+                        material: ui_materials.add(HpBarUiMaterial {
+                            factor: 1.0,
+                            background_color: Color::rgb(0.15, 0.15, 0.15).into(),
+                            filled_color: Color::rgb(0.8, 0.2, 0.2).into(),
+                        }),
+                        ..default()
+                    },
+                    HpBar(Entity::PLACEHOLDER),
+                    Name::new("hp_bar"),
+                    PlayerHpUI,
+                ));
+            },
+        );
+    });
     commands.ui_builder(ability_bar).row(|row| {
         row.ability_widget(AbilityWidgetConfig::from(
             "ui/game/AttackSkillIcon.png",
@@ -101,9 +143,61 @@ fn spawn_toolbar(
             true,
         ));
     });
+    commands.ui_builder(ability_bar).row(|row| {
+        // The xp bar; placeholder until xp exists
+        row.container(
+            (
+                NodeBundle {
+                    style: Style {
+                        width: Val::Percent(100.0),
+                        height: Val::Px(20.0),
+                        padding: UiRect::all(Val::Px(3.0)),
+                        ..default()
+                    },
+                    background_color: Color::rgb(0.75, 0.75, 0.75).into(),
+                    ..default()
+                },
+                Name::new("xp_bg"),
+            ),
+            |parent| {
+                parent.spawn((
+                    MaterialNodeBundle {
+                        style: Style {
+                            width: Val::Percent(100.0),
+                            height: Val::Percent(100.0),
+                            align_self: AlignSelf::Center,
+                            ..default()
+                        },
+                        material: ui_materials.add(HpBarUiMaterial {
+                            factor: 1.0,
+                            background_color: Color::rgb(0.15, 0.15, 0.15).into(),
+                            filled_color: Color::rgb(0.1, 0.6, 0.1).into(),
+                        }),
+                        ..default()
+                    },
+                    Name::new("xp_bar"),
+                ));
+            },
+        );
+    });
 }
 
 fn despawn_toolbar() {}
+
+fn assign_hp_bar(
+    player: Query<Entity, Added<Player>>,
+    mut hp_bar_q: Query<&mut HpBar, With<PlayerHpUI>>,
+) {
+    let Some(player) = player.iter().next() else {
+        return;
+    };
+    for mut hp_bar in hp_bar_q.iter_mut() {
+        hp_bar.0 = player;
+    }
+}
+
+#[derive(Component, Clone)]
+pub struct PlayerHpUI;
 
 #[derive(Component, Clone)]
 pub struct AttackAbilityUI;
