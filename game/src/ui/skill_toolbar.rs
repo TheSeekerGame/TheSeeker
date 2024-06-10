@@ -1,10 +1,7 @@
-use crate::appstate::{AppState, StateDespawnMarker};
-use crate::assets::{MainMenuAssets, UiAssets};
+use crate::appstate::AppState;
 use crate::camera::MainCamera;
-use crate::game::attack::Health;
 use crate::game::player::{
-    Attacking, CanAttack, CanDash, Dashing, FocusAbility, FocusState, Player, PlayerConfig,
-    WhirlAbility,
+    Attacking, CanAttack, CanDash, FocusAbility, FocusState, Player, PlayerConfig, WhirlAbility,
 };
 use crate::graphics::hp_bar::{HpBackground, HpBar, HpBarUiMaterial};
 use crate::prelude::*;
@@ -37,16 +34,13 @@ impl Plugin for SkillToolbarPlugin {
 
 fn spawn_toolbar(
     mut commands: Commands,
-    mut q_cam: Query<(Entity, &GlobalTransform, &Camera), With<MainCamera>>,
+    q_cam: Query<Entity, With<MainCamera>>,
     mut ui_materials: ResMut<Assets<HpBarUiMaterial>>,
 ) {
-    println!("about to spawn toolbar");
-    let Ok((cam_e, cam_pos, cam)) = q_cam.get_single() else {
+    let Ok(cam_e) = q_cam.get_single() else {
         return;
     };
-    // Use the UI builder with plain bundles and direct setting of bundle props
-    let mut root_entity = Entity::PLACEHOLDER;
-    println!("spawning toolbar");
+
     commands.ui_builder(UiRoot).container(
         (
             NodeBundle {
@@ -60,7 +54,7 @@ fn spawn_toolbar(
             },
             TargetCamera(cam_e),
         ),
-        |container| {},
+        |_| {},
     );
     // Make a bar centered 20px from the bottom of the screen
     let mut ability_bar = Entity::PLACEHOLDER;
@@ -72,11 +66,7 @@ fn spawn_toolbar(
                 .bottom(Val::Px(20.0))
                 .justify_content(JustifyContent::Center);
             row.named("ability_bar_ui");
-            ability_bar = row
-                .column(|column| {
-                    //column.style().align_self(AlignSelf::Center);
-                })
-                .id();
+            ability_bar = row.column(|_| {}).id();
         })
         .id();
 
@@ -209,7 +199,7 @@ pub struct WhirlAbilityUI;
 pub struct FocusAbilityUI;
 
 fn update_attack_ability_ui(
-    player: Query<(Option<&Attacking>, Option<&CanAttack>), With<Player>>,
+    player: Query<(Option<&Attacking>, Has<CanAttack>), With<Player>>,
     ui: Query<
         Entity,
         (
@@ -222,10 +212,10 @@ fn update_attack_ability_ui(
     let Some((attack, can_attack)) = player.iter().next() else {
         return;
     };
-    for (entity) in ui.iter() {
+    for entity in ui.iter() {
         let factor = if let Some(attack) = attack {
             1.0 - attack.ticks as f32 / (Attacking::MAX * 8) as f32
-        } else if let Some(can_attack) = can_attack {
+        } else if can_attack {
             0.0
         } else {
             0.0
@@ -235,7 +225,7 @@ fn update_attack_ability_ui(
 }
 
 fn update_dash_ability_ui(
-    player: Query<(&CanDash), With<Player>>,
+    player: Query<&CanDash, With<Player>>,
     ui: Query<
         Entity,
         (
@@ -246,17 +236,17 @@ fn update_dash_ability_ui(
     config: Res<PlayerConfig>,
     mut commands: Commands,
 ) {
-    let Some((can_dash)) = player.iter().next() else {
+    let Some(can_dash) = player.iter().next() else {
         return;
     };
-    for (entity) in ui.iter() {
+    for entity in ui.iter() {
         let factor = can_dash.remaining_cooldown / config.dash_cooldown_duration;
         commands.entity(entity).factor(factor);
     }
 }
 
 fn update_whirl_ability_ui(
-    player: Query<(&WhirlAbility), With<Player>>,
+    player: Query<&WhirlAbility, With<Player>>,
     ui: Query<
         Entity,
         (
@@ -267,17 +257,17 @@ fn update_whirl_ability_ui(
     config: Res<PlayerConfig>,
     mut commands: Commands,
 ) {
-    let Some((whirl)) = player.iter().next() else {
+    let Some(whirl) = player.iter().next() else {
         return;
     };
-    for (entity) in ui.iter() {
+    for entity in ui.iter() {
         let factor = 1.0 - whirl.energy / config.max_whirl_energy;
         commands.entity(entity).factor(factor);
     }
 }
 
 fn update_focus_ability_ui(
-    player: Query<(&FocusAbility), With<Player>>,
+    player: Query<&FocusAbility, With<Player>>,
     focus_ui: Query<
         Entity,
         (
@@ -295,19 +285,19 @@ fn update_focus_ability_ui(
     mut commands: Commands,
     time: Res<Time>,
 ) {
-    let Some((focus)) = player.iter().next() else {
+    let Some(focus) = player.iter().next() else {
         return;
     };
     if focus.state == FocusState::InActive {
-        for (entity) in focus_ui.iter() {
+        for entity in focus_ui.iter() {
             let factor = 1.0 - focus.recharge / 10.0;
             commands.entity(entity).factor(factor);
         }
-        for (mut bg) in image_ui.iter_mut() {
+        for mut bg in image_ui.iter_mut() {
             bg.0 = Color::WHITE;
         }
     } else {
-        for (mut bg) in image_ui.iter_mut() {
+        for mut bg in image_ui.iter_mut() {
             // Makes the focus icon blink while focus is primed
             bg.0 =
                 Color::WHITE * (1.1 + 0.2 * (time.elapsed_seconds_wrapped() * 10.0).sin().signum());

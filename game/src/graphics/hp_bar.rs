@@ -3,11 +3,9 @@ use crate::game::attack::Health;
 use crate::game::player::Player;
 use crate::prelude::Update;
 use bevy::prelude::*;
-use bevy::prelude::*;
 use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
-use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
-use glam::{Vec2, Vec3Swizzles};
+use glam::Vec2;
 use theseeker_engine::physics::Collider;
 
 pub struct HpBarsPlugin;

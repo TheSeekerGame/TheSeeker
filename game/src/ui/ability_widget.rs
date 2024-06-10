@@ -1,8 +1,7 @@
 use crate::graphics::hp_bar::HpBarUiMaterial;
 use crate::prelude::*;
-use bevy::ecs::component::TableStorage;
 use bevy::ecs::system::{EntityCommand, EntityCommands};
-use sickle_ui::ui_builder::{UiBuilder, UiRoot};
+use sickle_ui::ui_builder::UiBuilder;
 use sickle_ui::ui_style::*;
 use sickle_ui::widgets::prelude::{UiContainerExt, UiRowExt};
 use std::f32::consts::PI;
@@ -109,7 +108,7 @@ impl EntityCommand for SetFactor {
         let Some(mut assets) = world.get_resource_mut::<Assets<HpBarUiMaterial>>() else {
             return;
         };
-        let Some(mut material) = assets.get_mut(handle) else {
+        let Some(material) = assets.get_mut(handle) else {
             return;
         };
         material.factor = self.0;
