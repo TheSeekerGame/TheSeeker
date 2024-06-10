@@ -348,10 +348,10 @@ impl Transitionable<Falling> for Grounded {
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
 pub struct Attacking {
-    ticks: u32,
+    pub ticks: u32,
 }
 impl Attacking {
-    const MAX: u32 = 4;
+    pub const MAX: u32 = 4;
 }
 impl GentState for Attacking {}
 

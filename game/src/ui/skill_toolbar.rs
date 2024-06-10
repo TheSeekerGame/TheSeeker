@@ -3,7 +3,8 @@ use crate::assets::{MainMenuAssets, UiAssets};
 use crate::camera::MainCamera;
 use crate::game::attack::Health;
 use crate::game::player::{
-    CanDash, Dashing, FocusAbility, FocusState, Player, PlayerConfig, WhirlAbility,
+    Attacking, CanAttack, CanDash, Dashing, FocusAbility, FocusState, Player, PlayerConfig,
+    WhirlAbility,
 };
 use crate::graphics::hp_bar::HpBarUiMaterial;
 use crate::prelude::*;
@@ -22,6 +23,7 @@ impl Plugin for SkillToolbarPlugin {
             OnEnter(AppState::InGame),
             spawn_toolbar.after(crate::camera::setup_main_camera),
         );
+        app.add_systems(Update, update_attack_ability_ui);
         app.add_systems(Update, update_dash_ability_ui);
         app.add_systems(Update, update_whirl_ability_ui);
         app.add_systems(Update, update_focus_ability_ui);
@@ -112,6 +114,32 @@ pub struct WhirlAbilityUI;
 #[derive(Component, Clone)]
 pub struct FocusAbilityUI;
 
+fn update_attack_ability_ui(
+    player: Query<(Option<&Attacking>, Option<&CanAttack>), With<Player>>,
+    ui: Query<
+        Entity,
+        (
+            With<AttackAbilityUI>,
+            Without<AbilityWidget>,
+        ),
+    >,
+    mut commands: Commands,
+) {
+    let Some((attack, can_attack)) = player.iter().next() else {
+        return;
+    };
+    for (entity) in ui.iter() {
+        let factor = if let Some(attack) = attack {
+            1.0 - attack.ticks as f32 / (Attacking::MAX * 8) as f32
+        } else if let Some(can_attack) = can_attack {
+            0.0
+        } else {
+            0.0
+        };
+        commands.entity(entity).factor(factor);
+    }
+}
+
 fn update_dash_ability_ui(
     player: Query<(&CanDash), With<Player>>,
     ui: Query<
@@ -163,7 +191,7 @@ fn update_focus_ability_ui(
             Without<AbilityWidget>,
         ),
     >,
-    mut ui: Query<
+    mut image_ui: Query<
         &mut BackgroundColor,
         (
             With<AbilityWidget>,
@@ -181,11 +209,12 @@ fn update_focus_ability_ui(
             let factor = 1.0 - focus.recharge / 10.0;
             commands.entity(entity).factor(factor);
         }
-        for (mut bg) in ui.iter_mut() {
+        for (mut bg) in image_ui.iter_mut() {
             bg.0 = Color::WHITE;
         }
     } else {
-        for (mut bg) in ui.iter_mut() {
+        for (mut bg) in image_ui.iter_mut() {
+            // Makes the focus icon blink while focus is primed
             bg.0 =
                 Color::WHITE * (1.1 + 0.2 * (time.elapsed_seconds_wrapped() * 10.0).sin().signum());
         }
