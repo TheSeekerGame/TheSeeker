@@ -165,8 +165,8 @@ pub fn player_whirl(
             whirl.active_ticks += 1;
             whirl.energy -= config.whirl_cost / time.hz as f32;
         } else {
-            whirl.energy +=
-                (config.whirl_regen / time.hz as f32).clamp(0.0, config.max_whirl_energy);
+            whirl.energy = (whirl.energy + config.whirl_regen / time.hz as f32)
+                .clamp(0.0, config.max_whirl_energy);
         }
     }
 }
