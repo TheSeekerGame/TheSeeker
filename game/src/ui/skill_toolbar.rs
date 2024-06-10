@@ -2,10 +2,14 @@ use crate::appstate::{AppState, StateDespawnMarker};
 use crate::assets::{MainMenuAssets, UiAssets};
 use crate::camera::MainCamera;
 use crate::game::attack::Health;
-use crate::game::player::{CanDash, Dashing, Player, PlayerConfig, WhirlAbility};
+use crate::game::player::{
+    CanDash, Dashing, FocusAbility, FocusState, Player, PlayerConfig, WhirlAbility,
+};
 use crate::graphics::hp_bar::HpBarUiMaterial;
 use crate::prelude::*;
-use crate::ui::ability_widget::{AbilityWidgetCommands, AbilityWidgetConfig, UiAbilityWidgetExt};
+use crate::ui::ability_widget::{
+    AbilityWidget, AbilityWidgetCommands, AbilityWidgetConfig, UiAbilityWidgetExt,
+};
 use sickle_ui::ui_builder::{UiBuilderExt, UiRoot};
 use sickle_ui::ui_style::*;
 use sickle_ui::widgets::prelude::*;
@@ -20,6 +24,7 @@ impl Plugin for SkillToolbarPlugin {
         );
         app.add_systems(Update, update_dash_ability_ui);
         app.add_systems(Update, update_whirl_ability_ui);
+        app.add_systems(Update, update_focus_ability_ui);
         app.add_systems(
             OnExit(AppState::InGame),
             despawn_toolbar,
@@ -98,22 +103,28 @@ fn spawn_toolbar(
 
 fn despawn_toolbar() {}
 
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct AttackAbilityUI;
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct DashAbilityUI;
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct WhirlAbilityUI;
-#[derive(Component)]
+#[derive(Component, Clone)]
 pub struct FocusAbilityUI;
 
 fn update_dash_ability_ui(
     player: Query<(&CanDash), With<Player>>,
-    ui: Query<Entity, With<DashAbilityUI>>,
+    ui: Query<
+        Entity,
+        (
+            With<DashAbilityUI>,
+            Without<AbilityWidget>,
+        ),
+    >,
     config: Res<PlayerConfig>,
     mut commands: Commands,
 ) {
-    let Ok((can_dash)) = player.get_single() else {
+    let Some((can_dash)) = player.iter().next() else {
         return;
     };
     for (entity) in ui.iter() {
@@ -124,15 +135,59 @@ fn update_dash_ability_ui(
 
 fn update_whirl_ability_ui(
     player: Query<(&WhirlAbility), With<Player>>,
-    ui: Query<Entity, With<WhirlAbilityUI>>,
+    ui: Query<
+        Entity,
+        (
+            With<WhirlAbilityUI>,
+            Without<AbilityWidget>,
+        ),
+    >,
     config: Res<PlayerConfig>,
     mut commands: Commands,
 ) {
-    let Ok((whirl)) = player.get_single() else {
+    let Some((whirl)) = player.iter().next() else {
         return;
     };
     for (entity) in ui.iter() {
         let factor = 1.0 - whirl.energy / config.max_whirl_energy;
         commands.entity(entity).factor(factor);
+    }
+}
+
+fn update_focus_ability_ui(
+    player: Query<(&FocusAbility), With<Player>>,
+    focus_ui: Query<
+        Entity,
+        (
+            With<FocusAbilityUI>,
+            Without<AbilityWidget>,
+        ),
+    >,
+    mut ui: Query<
+        &mut BackgroundColor,
+        (
+            With<AbilityWidget>,
+            With<FocusAbilityUI>,
+        ),
+    >,
+    mut commands: Commands,
+    time: Res<Time>,
+) {
+    let Some((focus)) = player.iter().next() else {
+        return;
+    };
+    if focus.state == FocusState::InActive {
+        for (entity) in focus_ui.iter() {
+            let factor = 1.0 - focus.recharge / 10.0;
+            commands.entity(entity).factor(factor);
+        }
+        for (mut bg) in ui.iter_mut() {
+            bg.0 = Color::WHITE;
+        }
+    } else {
+        for (mut bg) in ui.iter_mut() {
+            bg.0 =
+                Color::WHITE * (1.1 + 0.2 * (time.elapsed_seconds_wrapped() * 10.0).sin().signum());
+        }
     }
 }

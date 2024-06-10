@@ -8,10 +8,10 @@ use sickle_ui::widgets::prelude::{UiContainerExt, UiRowExt};
 use std::f32::consts::PI;
 
 #[derive(Component)]
-struct AbilityWidget;
+pub struct AbilityWidget;
 
 pub trait UiAbilityWidgetExt<'w, 's> {
-    fn ability_widget<'a, T: Component>(
+    fn ability_widget<'a, T: Component + Clone>(
         &'a mut self,
         config: AbilityWidgetConfig<T>,
     ) -> UiBuilder<'w, 's, 'a, Entity>;
@@ -20,13 +20,17 @@ pub trait UiAbilityWidgetExt<'w, 's> {
 impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
     /// Draws a 96.0x96.0 tile with a progress bar overlayed.
     /// modify
-    fn ability_widget<'a, T: Component>(
+    fn ability_widget<'a, T: Component + Clone>(
         &'a mut self,
         config: AbilityWidgetConfig<T>,
     ) -> UiBuilder<'w, 's, 'a, Entity> {
         self.row(|children| {
             children.container(
-                (ImageBundle::default(), AbilityWidget),
+                (
+                    ImageBundle::default(),
+                    AbilityWidget,
+                    config.tracking_component.clone(),
+                ),
                 |ability_card| {
                     ability_card.named("ability");
                     ability_card
@@ -40,7 +44,6 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
             children.container(
                 (
                     MaterialNodeBundle::<HpBarUiMaterial>::default(),
-                    AbilityWidget,
                     config.tracking_component,
                 ),
                 |ability_card| {
@@ -79,13 +82,13 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
     }
 }
 
-pub struct AbilityWidgetConfig<T: Component> {
+pub struct AbilityWidgetConfig<T: Component + Clone> {
     pub image_path: String,
     pub tracking_component: T,
     pub dir_up: bool,
 }
 
-impl<T: Component> AbilityWidgetConfig<T> {
+impl<T: Component + Clone> AbilityWidgetConfig<T> {
     pub fn from(image_path: impl Into<String>, tracking_component: T, dir_up: bool) -> Self {
         Self {
             image_path: image_path.into(),
