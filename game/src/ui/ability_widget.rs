@@ -1,62 +1,29 @@
 use crate::graphics::hp_bar::HpBarUiMaterial;
 use crate::prelude::*;
+use bevy::ecs::component::TableStorage;
 use bevy::ecs::system::{EntityCommand, EntityCommands};
 use sickle_ui::ui_builder::{UiBuilder, UiRoot};
 use sickle_ui::ui_style::*;
 use sickle_ui::widgets::prelude::{UiContainerExt, UiRowExt};
+use std::f32::consts::PI;
 
 #[derive(Component)]
 struct AbilityWidget;
 
 pub trait UiAbilityWidgetExt<'w, 's> {
-    fn ability_widget<'a>(
+    fn ability_widget<'a, T: Component>(
         &'a mut self,
-        config: AbilityWidgetConfig,
+        config: AbilityWidgetConfig<T>,
     ) -> UiBuilder<'w, 's, 'a, Entity>;
 }
 
 impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
-    fn ability_widget<'a>(
+    /// Draws a 96.0x96.0 tile with a progress bar overlayed.
+    /// modify
+    fn ability_widget<'a, T: Component>(
         &'a mut self,
-        config: AbilityWidgetConfig,
+        config: AbilityWidgetConfig<T>,
     ) -> UiBuilder<'w, 's, 'a, Entity> {
-        self.container(
-            (
-                MaterialNodeBundle::<HpBarUiMaterial>::default(), /*{
-                                                                      style: Style {
-                                                                          width: Val::Percent(100.0),
-                                                                          height: Val::Percent(100.0),
-                                                                          align_self: AlignSelf::Center,
-                                                                          ..default()
-                                                                      },
-                                                                      //material: handle,
-                                                                      ..default()
-                                                                  },*/
-                AbilityWidget,
-            ),
-            |ability_card| {
-                let entity = ability_card.context().clone();
-                // Someone tell me theres a better way then this. I mean it works at least
-                ability_card.commands().add(move |w: &mut World| {
-                    let Some(mut ui_materials) = w.get_resource_mut::<Assets<HpBarUiMaterial>>()
-                    else {
-                        return;
-                    };
-                    let handle = ui_materials.add(HpBarUiMaterial {
-                        factor: 1.0,
-                        background_color: Color::rgb(0.15, 0.15, 0.15).into(),
-                        filled_color: Color::rgb(0.8, 0.2, 0.2).into(),
-                    });
-                    w.entity_mut(entity).insert(handle);
-                });
-                ability_card.named("ability");
-                ability_card
-                    .style()
-                    .position_type(PositionType::Relative)
-                    .width(Val::Px(96.0))
-                    .height(Val::Px(96.0));
-            },
-        );
         self.row(|children| {
             children.container(
                 (ImageBundle::default(), AbilityWidget),
@@ -70,18 +37,55 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                         .image(config.image_path);
                 },
             );
+            children.container(
+                (
+                    MaterialNodeBundle::<HpBarUiMaterial>::default(),
+                    AbilityWidget,
+                    config.tracking_component,
+                ),
+                |ability_card| {
+                    let entity = ability_card.context().clone();
+                    // Adds the progress bar material to the ui node
+                    // Someone tell me theres a better way then this. I mean it works at least
+                    ability_card.commands().add(move |w: &mut World| {
+                        let Some(mut ui_materials) =
+                            w.get_resource_mut::<Assets<HpBarUiMaterial>>()
+                        else {
+                            return;
+                        };
+                        let handle = ui_materials.add(HpBarUiMaterial {
+                            factor: 0.5,
+                            background_color: Color::rgba(0.0, 0.0, 0.0, 0.0).into(),
+                            filled_color: Color::rgba(0.0, 0.0, 0.0, 0.6).into(),
+                        });
+                        w.entity_mut(entity).insert(handle);
+                        // Make the bar go from bottom to top
+                        w.entity_mut(entity).insert(Transform::from_rotation(
+                            Quat::from_axis_angle(Vec3::Z, -PI * 0.5),
+                        ));
+                    });
+                    ability_card.named("ability");
+                    ability_card
+                        .style()
+                        .position_type(PositionType::Absolute)
+                        .width(Val::Px(96.0))
+                        .height(Val::Px(96.0));
+                },
+            );
         })
     }
 }
 
-pub struct AbilityWidgetConfig {
+pub struct AbilityWidgetConfig<T: Component> {
     pub image_path: String,
+    pub tracking_component: T,
 }
 
-impl AbilityWidgetConfig {
-    pub fn from(image_path: impl Into<String>) -> Self {
+impl<T: Component> AbilityWidgetConfig<T> {
+    pub fn from(image_path: impl Into<String>, tracking_component: T) -> Self {
         Self {
             image_path: image_path.into(),
+            tracking_component,
         }
     }
 }

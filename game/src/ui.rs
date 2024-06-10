@@ -6,6 +6,7 @@ use crate::ui::skill_toolbar::SkillToolbarPlugin;
 pub mod ability_widget;
 mod console;
 mod mainmenu;
+mod progress_bar;
 mod skill_toolbar;
 
 pub struct UiPlugin;

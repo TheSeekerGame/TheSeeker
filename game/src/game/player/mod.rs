@@ -382,7 +382,7 @@ impl Transitionable<CanDash> for Dashing {
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
 pub struct CanDash {
-    remaining_cooldown: f32,
+    pub remaining_cooldown: f32,
 }
 impl CanDash {
     pub fn new(config: &PlayerConfig) -> Self {
@@ -517,7 +517,7 @@ pub struct PlayerConfig {
     dash_velocity: f32,
 
     /// How long before the player can dash again?
-    dash_cooldown_duration: f32,
+    pub dash_cooldown_duration: f32,
 
     max_whirl_energy: f32,
 

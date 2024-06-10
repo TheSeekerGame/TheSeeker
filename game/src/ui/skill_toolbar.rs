@@ -1,8 +1,11 @@
 use crate::appstate::{AppState, StateDespawnMarker};
 use crate::assets::{MainMenuAssets, UiAssets};
 use crate::camera::MainCamera;
+use crate::game::attack::Health;
+use crate::game::player::{CanDash, Dashing, Player, PlayerConfig};
+use crate::graphics::hp_bar::HpBarUiMaterial;
 use crate::prelude::*;
-use crate::ui::ability_widget::{AbilityWidgetConfig, UiAbilityWidgetExt};
+use crate::ui::ability_widget::{AbilityWidgetCommands, AbilityWidgetConfig, UiAbilityWidgetExt};
 use sickle_ui::ui_builder::{UiBuilderExt, UiRoot};
 use sickle_ui::ui_style::*;
 use sickle_ui::widgets::prelude::*;
@@ -15,6 +18,7 @@ impl Plugin for SkillToolbarPlugin {
             OnEnter(AppState::InGame),
             spawn_toolbar.after(crate::camera::setup_main_camera),
         );
+        app.add_systems(Update, update_dash_ability_ui);
         app.add_systems(
             OnExit(AppState::InGame),
             despawn_toolbar,
@@ -70,17 +74,45 @@ fn spawn_toolbar(
     commands.ui_builder(ability_bar).row(|row| {
         row.ability_widget(AbilityWidgetConfig::from(
             "ui/game/AttackSkillIcon.png",
+            AttackAbilityUI,
         ));
         row.ability_widget(AbilityWidgetConfig::from(
             "ui/game/DashSkillIcon.png",
-        ));
-        row.ability_widget(AbilityWidgetConfig::from(
-            "ui/game/FocusSkillIcon.png",
+            DashAbilityUI,
         ));
         row.ability_widget(AbilityWidgetConfig::from(
             "ui/game/WhirlSkillIcon.png",
+            WhirlAbilityUI,
+        ));
+        row.ability_widget(AbilityWidgetConfig::from(
+            "ui/game/FocusSkillIcon.png",
+            FocusAbilityUI,
         ));
     });
 }
 
 fn despawn_toolbar() {}
+
+#[derive(Component)]
+pub struct AttackAbilityUI;
+#[derive(Component)]
+pub struct DashAbilityUI;
+#[derive(Component)]
+pub struct WhirlAbilityUI;
+#[derive(Component)]
+pub struct FocusAbilityUI;
+
+fn update_dash_ability_ui(
+    player: Query<(&CanDash, Option<&Dashing>), With<Player>>,
+    ui: Query<Entity, With<DashAbilityUI>>,
+    config: Res<PlayerConfig>,
+    mut commands: Commands,
+) {
+    let Ok((can_dash, dashing)) = player.get_single() else {
+        return;
+    };
+    for (entity) in ui.iter() {
+        let factor = can_dash.remaining_cooldown / config.dash_cooldown_duration;
+        commands.entity(entity).factor(factor);
+    }
+}
