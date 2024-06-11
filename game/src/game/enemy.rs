@@ -681,6 +681,7 @@ fn pushback_attack(
 fn aggro(
     mut query: Query<
         (
+            &Role,
             &Range,
             &Target,
             Has<Grouped>,
@@ -695,7 +696,7 @@ fn aggro(
         ),
     >,
 ) {
-    for (range, target, is_grouped, mut transitions) in query.iter_mut() {
+    for (role, range, target, is_grouped, mut transitions) in query.iter_mut() {
         if target.0.is_some() {
             let mut rng = rand::thread_rng();
             //return to patrol if out of aggro range
@@ -708,9 +709,16 @@ fn aggro(
                 }));
             } else if is_grouped {
                 if matches!(range, Range::Melee) {
-                    transitions.push(Waiting::new_transition(
-                        MeleeAttack::default(),
-                    ));
+                    match role {
+                        Role::Melee => transitions.push(Waiting::new_transition(
+                            MeleeAttack::default(),
+                        )),
+                        Role::Ranged => {
+                            transitions.push(Waiting::new_transition(
+                                Defense::default(),
+                            ));
+                        },
+                    }
                 } else {
                     transitions.push(Waiting::new_transition(Chasing));
                 }
