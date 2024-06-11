@@ -325,15 +325,13 @@ pub fn attack_damage(
                 }
 
                 if let Ok((mut crit)) = crits.get_mut(attack.attacker) {
-                    if crit.counter == 16 {
+                    let next_hit_counter = crit.counter + 1;
+                    if next_hit_counter % 17 == 0 {
                         crit.next_hit_is_critical = true;
-                    } else if crit.counter == 18 {
+                    } else if next_hit_counter % 19 == 0 {
                         crit.next_hit_is_critical = true;
                     } else {
                         crit.next_hit_is_critical = false;
-                        if crit.counter == 19 {
-                            crit.counter = 0;
-                        }
                     }
                 }
             }
