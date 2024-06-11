@@ -74,11 +74,14 @@ fn instance(
 
 fn update_positions(
     mut commands: Commands,
-    entity_with_hp: Query<(
-        &GlobalTransform,
-        Option<&Collider>,
-        Has<Player>,
-    )>,
+    entity_with_hp: Query<
+        (
+            &GlobalTransform,
+            Option<&Collider>,
+            Has<Player>,
+        ),
+        With<Health>,
+    >,
     mut hp_bar: Query<(Entity, &HpBackground, &mut Style)>,
     mut q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
 ) {

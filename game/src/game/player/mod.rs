@@ -30,7 +30,7 @@ impl Plugin for PlayerPlugin {
         app.add_systems(GameTickUpdate, load_player_config);
         app.add_systems(
             GameTickUpdate,
-            (setup_player.run_if(in_state(GameState::Playing)))
+            ((setup_player, despawn_dead_player).run_if(in_state(GameState::Playing)))
                 .before(PlayerStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         );
@@ -283,6 +283,16 @@ fn setup_player(
             animation: Default::default(),
         },));
         // println!("player spawned")
+    }
+}
+
+fn despawn_dead_player(
+    query: Query<(Entity, &Gent), (With<Dead>, With<Player>)>,
+    mut commands: Commands,
+) {
+    for (entity, gent) in query.iter() {
+        commands.entity(gent.e_gfx).despawn_recursive();
+        commands.entity(entity).despawn_recursive();
     }
 }
 
