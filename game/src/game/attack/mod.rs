@@ -11,9 +11,9 @@ use theseeker_engine::script::ScriptPlayer;
 use super::enemy::EnemyGfx;
 use super::player::PlayerGfx;
 use super::player::{FocusAbility, FocusState};
-use crate::game::attack::particles::AttackParticlesPlugin;
 use crate::game::enemy::{Defense, Enemy, EnemyStateSet};
 use crate::game::player::PlayerStateSet;
+use crate::game::{attack::particles::AttackParticlesPlugin, gentstate::Dead};
 use crate::prelude::*;
 use crate::{
     camera::CameraRig,
@@ -43,15 +43,6 @@ impl Plugin for AttackPlugin {
                 .before(PlayerStateSet::Collisions)
                 .before(EnemyStateSet::Collisions),
         );
-        app.add_systems(
-            GameTickUpdate,
-            despawn_dead
-                //TODO: unify statesets?
-                .after(PlayerStateSet::Transition)
-                .after(EnemyStateSet::Transition)
-                //has to be before physics set or colliders sometimes linger
-                .before(PhysicsSet),
-        );
     }
 }
 #[derive(Component)]
@@ -66,11 +57,6 @@ pub struct DamageFlash {
     pub current_ticks: u32,
     pub max_ticks: u32,
 }
-
-//TODO: change to a gentstate once we have death animations
-///Component applied to an entity when its health was depleted
-#[derive(Component)]
-pub struct Dead;
 
 #[derive(Bundle)]
 pub struct AttackBundle {
@@ -272,7 +258,7 @@ pub fn attack_damage(
                 });
             }
             if health.current == 0 {
-                commands.entity(entity).insert(Dead);
+                commands.entity(entity).insert(Dead::default());
                 //apply more screenshake if an enemies health becomes depleted by this attack
                 if is_enemy {
                     rig.trauma = 0.4;
@@ -398,22 +384,6 @@ fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
 /// incremented in despawn_dead()
 #[derive(Resource, Debug, Default, Deref, DerefMut)]
 pub struct KillCount(pub u32);
-
-//TODO: change to a gentstate Dying once we have death animations
-fn despawn_dead(
-    query: Query<(Entity, &Gent, Has<Enemy>), With<Dead>>,
-    mut commands: Commands,
-    mut kill_count: ResMut<KillCount>,
-) {
-    for (entity, gent, is_enemy) in query.iter() {
-        commands.entity(gent.e_gfx).despawn_recursive();
-        commands.entity(entity).despawn_recursive();
-        if is_enemy {
-            **kill_count += 1;
-            println!("{:?}", kill_count);
-        }
-    }
-}
 
 /// Allows the entity to apply critical strikes.
 /// Crits in TheSeeker are special, and trigger once
