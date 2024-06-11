@@ -3,6 +3,7 @@ use crate::prelude::*;
 use bevy::ecs::system::{EntityCommand, EntityCommands};
 use sickle_ui::ui_builder::UiBuilder;
 use sickle_ui::ui_style::*;
+use sickle_ui::widgets::column::UiColumnExt;
 use sickle_ui::widgets::prelude::{UiContainerExt, UiRowExt};
 use std::f32::consts::PI;
 
@@ -23,8 +24,9 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
         &'a mut self,
         config: AbilityWidgetConfig<T>,
     ) -> UiBuilder<'w, 's, 'a, Entity> {
-        self.row(|children| {
-            children.container(
+        self.column(|column| {
+            column.style().justify_content(JustifyContent::Center);
+            column.container(
                 (
                     ImageBundle::default(),
                     AbilityWidget,
@@ -34,13 +36,12 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                     ability_card.named("ability");
                     ability_card
                         .style()
-                        .position_type(PositionType::Relative)
-                        .width(Val::Px(64.0))
-                        .height(Val::Px(64.0))
+                        .width(Val::Px(60.0))
+                        .height(Val::Px(60.0))
                         .image(config.image_path);
                 },
             );
-            children.container(
+            column.container(
                 (
                     MaterialNodeBundle::<HpBarUiMaterial>::default(),
                     config.tracking_component,
@@ -73,8 +74,8 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                     ability_card
                         .style()
                         .position_type(PositionType::Absolute)
-                        .width(Val::Px(64.0))
-                        .height(Val::Px(64.0));
+                        .width(Val::Px(60.0))
+                        .height(Val::Px(60.0));
                 },
             );
         })

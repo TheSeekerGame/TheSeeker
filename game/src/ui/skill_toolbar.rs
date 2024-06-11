@@ -79,7 +79,7 @@ fn spawn_toolbar(
                     style: Style {
                         width: Val::Percent(100.0),
                         height: Val::Px(14.0),
-                        padding: UiRect::all(Val::Px(1.0)),
+                        padding: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
                     background_color: Color::rgb(0.75, 0.75, 0.75).into(),
@@ -111,28 +111,36 @@ fn spawn_toolbar(
             },
         );
     });
-    commands.ui_builder(ability_bar).row(|row| {
-        row.ability_widget(AbilityWidgetConfig::from(
-            "ui/game/AttackSkillIcon.png",
-            AttackAbilityUI,
-            true,
-        ));
-        row.ability_widget(AbilityWidgetConfig::from(
-            "ui/game/DashSkillIcon.png",
-            DashAbilityUI,
-            true,
-        ));
-        row.ability_widget(AbilityWidgetConfig::from(
-            "ui/game/WhirlSkillIcon.png",
-            WhirlAbilityUI,
-            false,
-        ));
-        row.ability_widget(AbilityWidgetConfig::from(
-            "ui/game/FocusSkillIcon.png",
-            FocusAbilityUI,
-            true,
-        ));
-    });
+    commands
+        .ui_builder(ability_bar)
+        .container(ImageBundle::default(), |row| {
+            row.style()
+                .image("ui/game/ToolbarFrame.png")
+                .width(Val::Px(320.0))
+                .height(Val::Px(80.0))
+                .justify_content(JustifyContent::SpaceAround);
+            //.justify_content(JustifyContent::SpaceAround);
+            row.ability_widget(AbilityWidgetConfig::from(
+                "ui/game/AttackSkillIcon.png",
+                AttackAbilityUI,
+                true,
+            ));
+            row.ability_widget(AbilityWidgetConfig::from(
+                "ui/game/DashSkillIcon.png",
+                DashAbilityUI,
+                true,
+            ));
+            row.ability_widget(AbilityWidgetConfig::from(
+                "ui/game/WhirlSkillIcon.png",
+                WhirlAbilityUI,
+                false,
+            ));
+            row.ability_widget(AbilityWidgetConfig::from(
+                "ui/game/FocusSkillIcon.png",
+                FocusAbilityUI,
+                true,
+            ));
+        });
     commands.ui_builder(ability_bar).row(|row| {
         // The xp bar; placeholder until xp exists
         row.container(
@@ -140,8 +148,8 @@ fn spawn_toolbar(
                 NodeBundle {
                     style: Style {
                         width: Val::Percent(100.0),
-                        height: Val::Px(14.0),
-                        padding: UiRect::all(Val::Px(1.0)),
+                        height: Val::Px(7.0),
+                        padding: UiRect::all(Val::Px(2.0)),
                         ..default()
                     },
                     background_color: Color::rgb(0.75, 0.75, 0.75).into(),
