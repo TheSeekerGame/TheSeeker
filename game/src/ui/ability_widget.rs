@@ -35,8 +35,8 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                     ability_card
                         .style()
                         .position_type(PositionType::Relative)
-                        .width(Val::Px(96.0))
-                        .height(Val::Px(96.0))
+                        .width(Val::Px(64.0))
+                        .height(Val::Px(64.0))
                         .image(config.image_path);
                 },
             );
@@ -73,8 +73,8 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                     ability_card
                         .style()
                         .position_type(PositionType::Absolute)
-                        .width(Val::Px(96.0))
-                        .height(Val::Px(96.0));
+                        .width(Val::Px(64.0))
+                        .height(Val::Px(64.0));
                 },
             );
         })
