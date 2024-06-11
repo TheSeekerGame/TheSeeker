@@ -5,7 +5,6 @@ use rand::distributions::Standard;
 use rapier2d::geometry::SharedShape;
 use rapier2d::parry::query::TOIStatus;
 use rapier2d::prelude::{Group, InteractionGroups};
-use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
@@ -14,6 +13,7 @@ use theseeker_engine::physics::{
 };
 use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::{animation::SpriteAnimationBundle, physics::ENEMY_INSIDE};
+use theseeker_engine::{assets::animation::SpriteAnimation, physics::ENEMY_HURT};
 
 use super::player::{Player, PlayerConfig};
 use crate::game::attack::arc_attack::Projectile;
@@ -547,7 +547,7 @@ fn assign_group(
         let project_from = transform.translation().truncate();
         if let Some((other, projection)) = spatial_query.point_project(
             project_from,
-            InteractionGroups::new(SENSOR, ENEMY),
+            InteractionGroups::new(SENSOR, ENEMY_HURT),
             Some(entity),
         ) {
             let closest = project_from.distance([projection.point.x, projection.point.y].into());
