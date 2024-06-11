@@ -1,7 +1,7 @@
 [settings]
 time_base = "Relative"
 tick_quant = "8"
-ticks_per_frame = 128
+ticks_per_frame = 320
 frame_min = 1
 frame_max = 4
 frame_start = 1
