@@ -93,6 +93,8 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
             // TODO: manage this from somewhere
             limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
         },
+        // Needed so that depth buffers are stored so depth of field works
+        Camera3d::default(),
         DepthOfFieldSettings::default(),
         BloomSettings::NATURAL,
         DarknessSettings {
