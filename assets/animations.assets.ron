@@ -253,4 +253,28 @@
         rows: 1,
         columns: 10,
     ),
+    "anim.spider.Death": File (
+        path: "animations/spider/Death.anim.toml",
+    ),
+    "anim.spider.Death.image": File (
+        path: "animations/spider/Death.png",
+    ),
+    "anim.spider.Death.atlas": TextureAtlasLayout (
+        tile_size_x: 90.,
+        tile_size_y: 90.,
+        rows: 1,
+        columns: 7,
+    ),
+    "anim.spider.Decay": File (
+        path: "animations/spider/Decay.anim.toml",
+    ),
+    "anim.spider.Decay.image": File (
+        path: "animations/spider/Decay.png",
+    ),
+    "anim.spider.Decay.atlas": TextureAtlasLayout (
+        tile_size_x: 90.,
+        tile_size_y: 90.,
+        rows: 1,
+        columns: 4,
+    ),
 })
