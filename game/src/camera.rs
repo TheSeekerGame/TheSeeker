@@ -2,6 +2,7 @@
 
 use crate::game::player::Player;
 use crate::graphics::darkness::DarknessSettings;
+use crate::graphics::dof::DepthOfFieldSettings;
 use crate::level::MainBackround;
 use crate::parallax::Parallax;
 use crate::prelude::*;
@@ -79,7 +80,7 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
             hdr: true,
             ..default()
         },
-        tonemapping: Tonemapping::AcesFitted,
+        tonemapping: Tonemapping::ReinhardLuminance,
         ..default()
     };
     camera.projection.scale = 1.0 / 8.0;
@@ -92,6 +93,7 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
             // TODO: manage this from somewhere
             limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
         },
+        DepthOfFieldSettings::default(),
         BloomSettings::NATURAL,
         DarknessSettings {
             bg_light_level: 1.0,

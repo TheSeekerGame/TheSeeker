@@ -297,6 +297,10 @@ fn bokeh_pass_1(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let coc = calculate_circle_of_confusion(in.position);
     let output_0 = box_blur_a(in.position, coc, vec2(COS_NEG_FRAC_PI_6, SIN_NEG_FRAC_PI_6));
     let output_1 = box_blur_b(in.position, coc, vec2(COS_NEG_FRAC_PI_5_6, SIN_NEG_FRAC_PI_5_6));
-    return mix(output_0, output_1, 0.5);
+    //let raw_depth = textureLoad(depth_texture, in.position, 0);
+    //let depth = min(-depth_ndc_to_view_z(raw_depth), dof_params.max_depth);
+    let a = mix(output_0, output_1, 0.5);
+    return vec4(a.x, 0.0, 0.0, a.z);
+    //return a;
 }
 #endif

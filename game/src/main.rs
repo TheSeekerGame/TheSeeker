@@ -28,7 +28,7 @@ mod screens {
 
 mod ui;
 
-#[cfg(feature = "dev")]
+//#[cfg(feature = "dev")]
 mod dev;
 pub mod graphics;
 mod parallax;
@@ -110,7 +110,7 @@ fn main() {
         crate::graphics::GraphicsFxPlugin,
     ));
 
-    #[cfg(feature = "dev")]
+    //#[cfg(feature = "dev")]
     app.add_plugins(crate::dev::DevPlugin);
 
     app.run();

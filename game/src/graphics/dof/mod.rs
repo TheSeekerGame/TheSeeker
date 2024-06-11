@@ -15,12 +15,12 @@
 //!
 //! [Depth of field]: https://en.wikipedia.org/wiki/Depth_of_field
 
+use std::f32::consts::PI;
 use std::f32::INFINITY;
 
 use crate::prelude::*;
 use bevy::asset::{load_internal_asset, Handle};
-use bevy::core_pipeline::core_2d::graph::Core2d;
-use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
+use bevy::core_pipeline::core_2d::graph::{Core2d, Node2d};
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 use bevy::ecs::{
     component::Component,
@@ -59,14 +59,16 @@ use bevy::render::{
 use bevy::utils::{info_once, prelude::default, warn_once};
 use smallvec::SmallVec;
 
-const DOF_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(2031861180739216043);
+const DOF_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(2126671480739266443);
 
 /// A plugin that adds support for the depth of field effect to Bevy.
 pub struct DepthOfFieldPlugin;
 
 /// Depth of field settings.
-#[derive(Component, Clone, Copy)]
+#[derive(Component, Clone, Copy, Serialize, Deserialize, Reflect)]
+#[reflect(Component, Serialize, Deserialize)]
 pub struct DepthOfFieldSettings {
+    #[reflect(ignore)]
     /// The appearance of the effect.
     pub mode: DepthOfFieldMode,
 
@@ -108,7 +110,16 @@ pub struct DepthOfFieldSettings {
 }
 
 /// Controls the appearance of the effect.
-#[derive(Component, Clone, Copy, Default, PartialEq, Debug)]
+#[derive(
+    Component,
+    Clone,
+    Copy,
+    Default,
+    PartialEq,
+    Debug,
+    Serialize,
+    Deserialize
+)]
 pub enum DepthOfFieldMode {
     /// A more accurate simulation, in which circles of confusion generate
     /// "spots" of light.
@@ -172,7 +183,7 @@ pub struct DepthOfFieldPipelineKey {
 }
 
 /// Identifies a specific depth of field render pass.
-#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 enum DofPass {
     /// The first, horizontal, Gaussian blur pass.
     GaussianHorizontal,
@@ -186,18 +197,21 @@ enum DofPass {
 
 impl Plugin for DepthOfFieldPlugin {
     fn build(&self, app: &mut App) {
+        app.register_type::<DepthOfFieldSettings>();
         load_internal_asset!(
             app,
             DOF_SHADER_HANDLE,
             "dof.wgsl",
             Shader::from_wgsl
         );
+        info!("Loaded depth of field shader!");
 
         app.add_plugins(UniformComponentPlugin::<
             DepthOfFieldUniform,
         >::default());
 
         let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+            error!("couldn't get render app!");
             return;
         };
 
@@ -231,21 +245,22 @@ impl Plugin for DepthOfFieldPlugin {
                 prepare_depth_of_field_global_bind_group.in_set(RenderSet::PrepareBindGroups),
             )
             .add_render_graph_node::<ViewNodeRunner<DepthOfFieldNode>>(
-                Core3d,
+                Core2d,
                 DepthOfFieldPostProcessLabel,
             )
             .add_render_graph_edges(
                 Core2d,
                 (
-                    Node3d::Bloom,
+                    Node2d::Bloom,
                     DepthOfFieldPostProcessLabel,
-                    Node3d::Tonemapping,
+                    Node2d::Tonemapping,
                 ),
             );
     }
 
     fn finish(&self, app: &mut App) {
         let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+            error!("couldn't get render app in  finish!");
             return;
         };
 
@@ -351,6 +366,7 @@ impl ViewNode for DepthOfFieldNode {
         ): QueryItem<'w, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
+        info!("running depth of field node!");
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_uniforms = world.resource::<ViewUniforms>();
         let global_bind_group = world.resource::<DepthOfFieldGlobalBindGroup>();
@@ -819,13 +835,7 @@ impl SpecializedRenderPipeline for DepthOfFieldPipeline {
 fn extract_depth_of_field_settings(
     mut commands: Commands,
     msaa: Extract<Res<Msaa>>,
-    mut query: Extract<
-        Query<(
-            Entity,
-            &DepthOfFieldSettings,
-            &Projection,
-        )>,
-    >,
+    mut query: Extract<Query<(Entity, &DepthOfFieldSettings)>>,
 ) {
     if **msaa != Msaa::Off && !depth_textures_are_supported() {
         info_once!(
@@ -834,17 +844,9 @@ fn extract_depth_of_field_settings(
         return;
     }
 
-    for (entity, dof_settings, projection) in query.iter_mut() {
-        // Depth of field is nonsensical without a perspective projection.
-        let Projection::Perspective(ref perspective_projection) = *projection else {
-            continue;
-        };
-
-        let focal_length = calculate_focal_length(
-            dof_settings.sensor_height,
-            perspective_projection.fov,
-        );
-
+    for (entity, dof_settings) in query.iter_mut() {
+        let focal_length = calculate_focal_length(dof_settings.sensor_height, PI / 4.0);
+        info_once!("Depth of field running!");
         // Convert `DepthOfFieldSettings` to `DepthOfFieldUniform`.
         commands.get_or_spawn(entity).insert((
             *dof_settings,
