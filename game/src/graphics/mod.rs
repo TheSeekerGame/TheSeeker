@@ -1,5 +1,6 @@
 pub mod darkness;
 mod dmg_numbers;
+mod dof;
 mod fog;
 pub mod hp_bar;
 pub(crate) mod particles_util;

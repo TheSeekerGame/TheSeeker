@@ -63,6 +63,7 @@ bevy-inspector-egui = "0.24"
 # needed for moveble forcefields not availible in 0.10
 # (also has some wgsl fixes)
 bevy_hanabi = { git = "https://github.com/djeedai/bevy_hanabi", rev = "cabb3cb", default-features = false, features = ["2d"] }
+smallvec = "1.13.2"
 
 
 [dependencies.serde]
