@@ -73,7 +73,7 @@ pub struct CameraRig {
 #[derive(Component)]
 pub struct GameViewLimits(Rect);
 
-fn setup_main_camera(mut commands: Commands) {
+pub(crate) fn setup_main_camera(mut commands: Commands) {
     let mut camera = Camera2dBundle {
         camera: Camera {
             hdr: true,

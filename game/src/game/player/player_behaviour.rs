@@ -86,20 +86,12 @@ pub fn player_focus(
         if action_state.just_pressed(&PlayerAction::Focus) {
             if focus.recharge >= 10.0 {
                 if focus.state == FocusState::InActive {
-                    // can remove the printlns when visual affect is made
-                    println!("focus activated!");
                     focus.state = FocusState::Active;
-                } else {
-                    println!("focus was already activated!");
+                    focus.recharge = 0.0
                 }
-            } else {
-                println!(
-                    "focus not activated! energy: {}/10",
-                    focus.recharge
-                );
             }
         }
-        if focus.state == FocusState::InActive && focus.recharge < 10.0 {
+        if focus.recharge < 10.0 {
             focus.recharge = (focus.recharge + 1.0 / time.hz as f32).clamp(0.0, 10.0);
         }
     }
@@ -165,8 +157,8 @@ pub fn player_whirl(
             whirl.active_ticks += 1;
             whirl.energy -= config.whirl_cost / time.hz as f32;
         } else {
-            whirl.energy +=
-                (config.whirl_regen / time.hz as f32).clamp(0.0, config.max_whirl_energy);
+            whirl.energy = (whirl.energy + config.whirl_regen / time.hz as f32)
+                .clamp(0.0, config.max_whirl_energy);
         }
     }
 }

@@ -3,11 +3,9 @@ use crate::game::attack::Health;
 use crate::game::player::Player;
 use crate::prelude::Update;
 use bevy::prelude::*;
-use bevy::prelude::*;
 use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
-use bevy::sprite::{MaterialMesh2dBundle, Mesh2dHandle};
-use glam::{Vec2, Vec3Swizzles};
+use glam::Vec2;
 use theseeker_engine::physics::Collider;
 
 pub struct HpBarsPlugin;
@@ -23,32 +21,20 @@ impl Plugin for HpBarsPlugin {
 }
 
 #[derive(Component)]
-struct HpBar(Entity);
+pub struct HpBar(pub Entity);
 #[derive(Component)]
-struct HpBackground(Entity);
+pub struct HpBackground(pub Entity);
 
 fn instance(
     mut commands: Commands,
-    entity_with_hp: Query<(Entity, Ref<Health>, Option<&Player>), With<GlobalTransform>>,
+    entity_with_hp: Query<(Entity, Ref<Health>, Has<Player>), With<GlobalTransform>>,
     mut ui_materials: ResMut<Assets<HpBarUiMaterial>>,
 ) {
     for ((entity, health, player)) in entity_with_hp.iter() {
         if health.is_added() {
-            commands
-                .spawn((
-                    if player.is_some() {
-                        NodeBundle {
-                            style: Style {
-                                width: Val::Px(250.0),
-                                height: Val::Px(24.0),
-                                padding: UiRect::all(Val::Px(3.0)),
-                                ..default()
-                            },
-                            background_color: Color::rgb(0.75, 0.75, 0.75).into(),
-                            visibility: Visibility::Inherited,
-                            ..default()
-                        }
-                    } else {
+            if !player {
+                commands
+                    .spawn((
                         NodeBundle {
                             style: Style {
                                 width: Val::Px(75.0),
@@ -59,29 +45,29 @@ fn instance(
                             background_color: Color::rgb(0.75, 0.75, 0.75).into(),
                             visibility: Visibility::Hidden,
                             ..default()
-                        }
-                    },
-                    HpBackground(entity),
-                ))
-                .with_children(|parent| {
-                    parent.spawn((
-                        MaterialNodeBundle {
-                            style: Style {
-                                width: Val::Percent(100.0),
-                                height: Val::Percent(100.0),
-                                align_self: AlignSelf::Center,
+                        },
+                        HpBackground(entity),
+                    ))
+                    .with_children(|parent| {
+                        parent.spawn((
+                            MaterialNodeBundle {
+                                style: Style {
+                                    width: Val::Percent(100.0),
+                                    height: Val::Percent(100.0),
+                                    align_self: AlignSelf::Center,
+                                    ..default()
+                                },
+                                material: ui_materials.add(HpBarUiMaterial {
+                                    factor: 1.0,
+                                    background_color: Color::rgb(0.15, 0.15, 0.15).into(),
+                                    filled_color: Color::rgb(0.8, 0.2, 0.2).into(),
+                                }),
                                 ..default()
                             },
-                            material: ui_materials.add(HpBarUiMaterial {
-                                factor: 1.0,
-                                background_color: Color::rgb(0.15, 0.15, 0.15).into(),
-                                filled_color: Color::rgb(0.8, 0.2, 0.2).into(),
-                            }),
-                            ..default()
-                        },
-                        HpBar(entity),
-                    ));
-                });
+                            HpBar(entity),
+                        ));
+                    });
+            }
         }
     }
 }
@@ -91,7 +77,7 @@ fn update_positions(
     entity_with_hp: Query<(
         &GlobalTransform,
         Option<&Collider>,
-        Option<&Player>,
+        Has<Player>,
     )>,
     mut hp_bar: Query<(Entity, &HpBackground, &mut Style)>,
     mut q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
@@ -101,12 +87,8 @@ fn update_positions(
     };
 
     for (bg_entity, hp_bg, mut style) in hp_bar.iter_mut() {
-        if let Ok((global_transform, collider, player)) = entity_with_hp.get(hp_bg.0) {
-            if player.is_some() {
-                // Update the position of the health bar UI
-                style.left = Val::Px(20.0);
-                style.top = Val::Px(20.0);
-                style.position_type = PositionType::Absolute;
+        if let Ok((global_transform, collider, has_player)) = entity_with_hp.get(hp_bg.0) {
+            if has_player {
                 continue;
             }
 
@@ -137,7 +119,7 @@ fn update_positions(
             style.left = Val::Px(screen_position.x + offset.x);
             style.top = Val::Px(screen_position.y + offset.y);
             style.position_type = PositionType::Absolute;
-        } else {
+        } else if hp_bg.0 != Entity::PLACEHOLDER {
             commands.entity(bg_entity).despawn();
         }
     }
@@ -152,6 +134,10 @@ fn update_hp(
         if let Ok(health) = entity_with_hp.get(hpbar.0) {
             if let Some(mat) = ui_materials.get_mut(ui_mat_handle) {
                 mat.factor = 1.0 * (health.current as f32 / health.max as f32)
+            }
+        } else {
+            if let Some(mat) = ui_materials.get_mut(ui_mat_handle) {
+                mat.factor = 0.0;
             }
         }
     }
@@ -179,7 +165,7 @@ fn update_visibility(
 
 #[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
 pub struct HpBarUiMaterial {
-    // A number between `0` and `1` indicating how much of the bar should be filled.
+    /// A number between `0` and `1` indicating how much of the bar should be filled.
     #[uniform(0)]
     pub factor: f32,
     #[uniform(1)]

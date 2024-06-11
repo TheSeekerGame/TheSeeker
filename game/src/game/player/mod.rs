@@ -348,10 +348,10 @@ impl Transitionable<Falling> for Grounded {
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
 pub struct Attacking {
-    ticks: u32,
+    pub ticks: u32,
 }
 impl Attacking {
-    const MAX: u32 = 4;
+    pub const MAX: u32 = 4;
 }
 impl GentState for Attacking {}
 
@@ -382,7 +382,7 @@ impl Transitionable<CanDash> for Dashing {
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
 pub struct CanDash {
-    remaining_cooldown: f32,
+    pub remaining_cooldown: f32,
 }
 impl CanDash {
     pub fn new(config: &PlayerConfig) -> Self {
@@ -432,7 +432,7 @@ impl WallSlideTime {
 pub struct WhirlAbility {
     active: bool,
     active_ticks: u32,
-    energy: f32,
+    pub energy: f32,
     attack_entity: Option<Entity>,
 }
 
@@ -517,9 +517,9 @@ pub struct PlayerConfig {
     dash_velocity: f32,
 
     /// How long before the player can dash again?
-    dash_cooldown_duration: f32,
+    pub dash_cooldown_duration: f32,
 
-    max_whirl_energy: f32,
+    pub max_whirl_energy: f32,
 
     /// Spends this much energy per second when using whirl
     whirl_cost: f32,
