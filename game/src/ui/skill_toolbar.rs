@@ -283,32 +283,13 @@ fn update_focus_ability_ui(
             Without<AbilityWidget>,
         ),
     >,
-    mut image_ui: Query<
-        &mut BackgroundColor,
-        (
-            With<AbilityWidget>,
-            With<FocusAbilityUI>,
-        ),
-    >,
     mut commands: Commands,
-    time: Res<Time>,
 ) {
     let Some(focus) = player.iter().next() else {
         return;
     };
-    if focus.state == FocusState::InActive {
-        for entity in focus_ui.iter() {
-            let factor = 1.0 - focus.recharge / 10.0;
-            commands.entity(entity).factor(factor);
-        }
-        for mut bg in image_ui.iter_mut() {
-            bg.0 = Color::WHITE;
-        }
-    } else {
-        for mut bg in image_ui.iter_mut() {
-            // Makes the focus icon blink while focus is primed
-            bg.0 =
-                Color::WHITE * (1.1 + 0.2 * (time.elapsed_seconds_wrapped() * 10.0).sin().signum());
-        }
+    for entity in focus_ui.iter() {
+        let factor = 1.0 - focus.recharge / 10.0;
+        commands.entity(entity).factor(factor);
     }
 }

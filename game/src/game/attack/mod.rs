@@ -314,13 +314,12 @@ pub fn attack_damage(
                 if let Ok((mut focus)) = focus.get_mut(attack.attacker) {
                     if focus.state == FocusState::Applied {
                         focus.state = FocusState::InActive;
-                        println!("focus_deactivated");
                         if let Ok((crit)) = crits.get(attack.attacker) {
-                            if !crit.next_hit_is_critical {
-                                focus.recharge = 0.0;
+                            // If the hit *was* critical (since this runs before the
+                            // code that resets the critical hit indicator)
+                            if crit.next_hit_is_critical {
+                                focus.recharge = 10.0;
                             }
-                        } else {
-                            focus.recharge = 0.0;
                         }
                     }
                 }
