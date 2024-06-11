@@ -1,4 +1,5 @@
 use bevy::ecs::component::SparseStorage;
+use theseeker_engine::gent::Gent;
 
 use crate::prelude::*;
 
@@ -98,7 +99,14 @@ impl<T: GentState, N: GentState + GenericState> Transitionable<T> for N {
 #[component(storage = "SparseSet")]
 pub struct Idle;
 impl GentState for Idle {}
-//
+
+/// Pseudostate, currently when this is added to player it is despawned,
+/// when added to enemy it removes most components, plays a death animation and eventually despawns
+#[derive(Component, Default, Debug)]
+pub struct Dead {
+    pub ticks: u32,
+}
+
 // #[derive(Component, Default, Debug)]
 // #[component(storage = "SparseSet")]
 // pub struct Grounded;
