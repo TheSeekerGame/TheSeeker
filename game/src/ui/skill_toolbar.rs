@@ -79,7 +79,7 @@ fn spawn_toolbar(
                     style: Style {
                         width: Val::Percent(100.0),
                         height: Val::Px(14.0),
-                        padding: UiRect::all(Val::Px(2.0)),
+                        padding: UiRect::all(Val::Px(1.0)),
                         ..default()
                     },
                     background_color: Color::rgb(0.75, 0.75, 0.75).into(),
@@ -149,7 +149,7 @@ fn spawn_toolbar(
                     style: Style {
                         width: Val::Percent(100.0),
                         height: Val::Px(7.0),
-                        padding: UiRect::all(Val::Px(2.0)),
+                        padding: UiRect::all(Val::Px(1.0)),
                         ..default()
                     },
                     background_color: Color::rgb(0.75, 0.75, 0.75).into(),
