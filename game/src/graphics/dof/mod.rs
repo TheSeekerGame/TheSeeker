@@ -21,7 +21,7 @@ use std::f32::INFINITY;
 use crate::prelude::*;
 use bevy::asset::{load_internal_asset, Handle};
 use bevy::core_pipeline::core_2d::graph::{Core2d, Node2d};
-//use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
+use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 use bevy::ecs::{
     component::Component,

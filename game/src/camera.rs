@@ -7,6 +7,7 @@ use crate::level::MainBackround;
 use crate::parallax::Parallax;
 use crate::prelude::*;
 use bevy::core_pipeline::bloom::BloomSettings;
+use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use ran::ran_f64_range;
 
@@ -85,6 +86,9 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
     };
     camera.projection.scale = 1.0 / 8.0;
 
+    // TODO make tilemap write to depth buffer somehow.
+    // bring up in meeting!
+
     commands.spawn((
         MainCameraBundle {
             camera,
@@ -95,6 +99,7 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         },
         // Needed so that depth buffers are stored so depth of field works
         Camera3d::default(),
+        DepthPrepass,
         DepthOfFieldSettings::default(),
         BloomSettings::NATURAL,
         DarknessSettings {
