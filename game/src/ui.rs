@@ -1,10 +1,12 @@
 use crate::assets::UiAssets;
 use crate::locale::L10nKey;
 use crate::prelude::*;
+use crate::ui::kill_counter::KillCounterPlugin;
 use crate::ui::skill_toolbar::SkillToolbarPlugin;
 
 pub mod ability_widget;
 mod console;
+mod kill_counter;
 mod mainmenu;
 mod skill_toolbar;
 
@@ -17,6 +19,7 @@ impl Plugin for UiPlugin {
             self::console::UiConsolePlugin,
             self::mainmenu::MainMenuPlugin,
             SkillToolbarPlugin,
+            KillCounterPlugin,
         ));
     }
 }
