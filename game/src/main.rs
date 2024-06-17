@@ -10,6 +10,7 @@ mod prelude {
 use crate::prelude::*;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
+use iyes_perf_ui::PerfUiPlugin;
 use theseeker_engine::physics::PhysicsPlugin;
 
 mod appstate;
@@ -91,6 +92,7 @@ fn main() {
             .track_assets()
             .continue_to(AppState::MainMenu),
         PhysicsPlugin,
+        PerfUiPlugin,
     ));
 
     // our stuff

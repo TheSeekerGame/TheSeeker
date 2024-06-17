@@ -36,7 +36,7 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
     // TODO: per-level asset management instead of preloaded assets
     // TODO: when we have save files, use that to choose the level to init at
 
-    #[cfg(not(feature = "dev"))]
+    //#[cfg(not(feature = "dev"))]
     commands.spawn((
         StateDespawnMarker,
         LdtkWorldBundle {
@@ -46,7 +46,7 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
             ..Default::default()
         },
     ));
-    #[cfg(feature = "dev")]
+    /*#[cfg(feature = "dev")]
     commands.spawn((
         StateDespawnMarker,
         LdtkWorldBundle {
@@ -55,7 +55,7 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
                 .expect("Expected asset key 'level.dev'"),
             ..Default::default()
         },
-    ));
+    ));*/
 }
 
 /// An indicator component for when you want the main background without needing

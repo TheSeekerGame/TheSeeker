@@ -9,7 +9,7 @@ use bevy::render::extract_component::{
     ComponentUniforms, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
 };
 use bevy::render::render_graph::{
-    NodeRunError, RenderGraphApp, RenderGraphContext, ViewNode, ViewNodeRunner, RenderLabel
+    NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
 };
 use bevy::render::render_resource::{
     BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
@@ -201,7 +201,7 @@ fn darkness_parallax(
     children: Query<&Children>,
     mut sprites: Query<&mut bevy_ecs_tilemap::tiles::TileColor>,
 ) {
-    let Some(settings) = settings.iter().next() else {
+    /*let Some(settings) = settings.iter().next() else {
         return;
     };
     for (entity, paralax) in parallaxed_bgs.iter() {
@@ -213,7 +213,7 @@ fn darkness_parallax(
                 sprite.0 = color;
             };
         }
-    }
+    }*/
 }
 
 // Below is all boilerplate for setting up the post process.

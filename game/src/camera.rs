@@ -7,6 +7,7 @@ use crate::parallax::Parallax;
 use crate::prelude::*;
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::tonemapping::Tonemapping;
+use iyes_perf_ui::PerfUiCompleteBundle;
 use ran::ran_f64_range;
 
 pub struct CameraPlugin;
@@ -74,6 +75,7 @@ pub struct CameraRig {
 pub struct GameViewLimits(Rect);
 
 pub(crate) fn setup_main_camera(mut commands: Commands) {
+    commands.spawn(PerfUiCompleteBundle::default());
     let mut camera = Camera2dBundle {
         camera: Camera {
             hdr: true,
