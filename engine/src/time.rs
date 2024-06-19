@@ -170,7 +170,6 @@ pub fn run_gametickupdate_schedule(world: &mut World) {
         if gametime.tick >= gametime.total_ticks {
             break;
         }
-        world.run_schedule(GameTickPre);
         world.run_schedule(GameTickUpdate);
         world.run_schedule(GameTickPost);
         world.resource_mut::<GameTime>().tick += 1;
