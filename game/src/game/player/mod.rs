@@ -1,10 +1,6 @@
 mod player_anim;
 mod player_behaviour;
-
-use bevy::transform::TransformSystem::TransformPropagate;
 use leafwing_input_manager::axislike::VirtualAxis;
-use theseeker_engine::input::InputManagerPlugin;
-// use leafwing_input_manager::prelude::*;
 use leafwing_input_manager::{
     action_state::ActionState, input_map::InputMap, Actionlike, InputManagerBundle,
 };
@@ -16,6 +12,7 @@ use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
+use theseeker_engine::input::InputManagerPlugin;
 use theseeker_engine::physics::{
     into_vec2, AnimationCollider, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
     GROUND, PLAYER, PLAYER_ATTACK,
