@@ -11,22 +11,17 @@ use leafwing_input_manager::buttonlike::{MouseMotionDirection, MouseWheelDirecti
 use leafwing_input_manager::clashing_inputs::ClashStrategy;
 use leafwing_input_manager::input_map::InputMap;
 use leafwing_input_manager::input_processing::*;
-#[cfg(feature = "timing")]
-use leafwing_input_manager::timing::Timing;
 use leafwing_input_manager::user_input::{InputKind, Modifier, UserInput};
 use leafwing_input_manager::Actionlike;
 use std::fmt::Debug;
 
-use bevy::app::{App, Plugin, RunFixedMainLoop, Update};
+use bevy::app::{App, Plugin, Update};
 use bevy::ecs::prelude::*;
 use bevy::input::{ButtonState, InputSystem};
-use bevy::prelude::{FixedPostUpdate, PostUpdate, PreUpdate};
+use bevy::prelude::{PostUpdate, PreUpdate};
 use bevy::reflect::TypePath;
-use bevy::time::run_fixed_main_schedule;
-#[cfg(feature = "ui")]
-use bevy::ui::UiSystem;
 
-use crate::{time::GameTickPost, GameTickSet, GameTickUpdate};
+use crate::{time::GameTickPost, GameTickSet};
 
 /// A [`Plugin`] that collects [`ButtonInput`](bevy::input::ButtonInput) from disparate sources,
 /// producing an [`ActionState`] that can be conveniently checked
@@ -100,7 +95,7 @@ impl<A: Actionlike + TypePath> Plugin for InputManagerPlugin<A> {
 
         // FixedMain schedule
         app.add_systems(
-            RunFixedMainLoop,
+            Update,
             (
                 swap_to_fixed_update::<A>,
                 // we want to update the ActionState only once, even if the FixedMain schedule runs multiple times
@@ -108,24 +103,20 @@ impl<A: Actionlike + TypePath> Plugin for InputManagerPlugin<A> {
             )
                 .chain()
                 .in_set(GameTickSet::Pre),
-            // .before(run_fixed_main_schedule),
         );
 
         app.add_systems(
             GameTickPost,
-            // FixedPostUpdate,
             release_on_input_map_removed::<A>,
         );
         app.add_systems(
             GameTickPost,
-            // FixedPostUpdate,
             tick_action_state::<A>
                 .in_set(InputManagerSystem::Tick)
                 .before(InputManagerSystem::Update),
         );
         app.add_systems(
             Update,
-            // RunFixedMainLoop,
             swap_to_update::<A>.in_set(GameTickSet::Post),
         );
 

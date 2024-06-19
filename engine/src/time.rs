@@ -6,7 +6,6 @@ pub struct GameTimePlugin;
 
 impl Plugin for GameTimePlugin {
     fn build(&self, app: &mut App) {
-        app.init_schedule(GameTickPre);
         app.init_schedule(GameTickUpdate);
         app.init_schedule(GameTickPost);
         app.init_resource::<GameTime>();
@@ -70,9 +69,8 @@ fn minimal_event_update_system<T: Event>(mut events: ResMut<Events<T>>) {
 #[derive(ScheduleLabel, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GameTickUpdate;
 
-#[derive(ScheduleLabel, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub struct GameTickPre;
-
+/// Run after `GameTickUpdate`, matching run
+/// used for updating input state after each GameTickUpdate run before next GameTickUpdate
 #[derive(ScheduleLabel, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GameTickPost;
 
