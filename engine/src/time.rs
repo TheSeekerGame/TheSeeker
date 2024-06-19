@@ -6,7 +6,9 @@ pub struct GameTimePlugin;
 
 impl Plugin for GameTimePlugin {
     fn build(&self, app: &mut App) {
+        app.init_schedule(GameTickPre);
         app.init_schedule(GameTickUpdate);
+        app.init_schedule(GameTickPost);
         app.init_resource::<GameTime>();
         app.add_systems(
             Update,
@@ -67,6 +69,12 @@ fn minimal_event_update_system<T: Event>(mut events: ResMut<Events<T>>) {
 /// Our alternative to `FixedUpdate`
 #[derive(ScheduleLabel, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GameTickUpdate;
+
+#[derive(ScheduleLabel, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GameTickPre;
+
+#[derive(ScheduleLabel, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub struct GameTickPost;
 
 #[derive(Resource, Debug)]
 pub struct GameTime {
@@ -164,7 +172,9 @@ pub fn run_gametickupdate_schedule(world: &mut World) {
         if gametime.tick >= gametime.total_ticks {
             break;
         }
+        world.run_schedule(GameTickPre);
         world.run_schedule(GameTickUpdate);
+        world.run_schedule(GameTickPost);
         world.resource_mut::<GameTime>().tick += 1;
     }
 }

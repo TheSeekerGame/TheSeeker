@@ -62,7 +62,9 @@ bevy-inspector-egui = "0.24"
 # This specific rev was working main on may 28th.
 # needed for moveble forcefields not availible in 0.10
 # (also has some wgsl fixes)
-bevy_hanabi = { git = "https://github.com/djeedai/bevy_hanabi", rev = "cabb3cb", default-features = false, features = ["2d"] }
+bevy_hanabi = { git = "https://github.com/djeedai/bevy_hanabi", rev = "cabb3cb", default-features = false, features = [
+  "2d",
+] }
 
 
 [dependencies.serde]
@@ -119,7 +121,8 @@ features = ["iyes_cli"]
 git = "https://github.com/TheSeekerGame/sickle_ui.git"
 
 [dependencies.leafwing-input-manager]
-version = "0.13"
+git = "https://github.com/TheSeekerGame/leafwing-input-manager"
+branch = "fixed_update_0.13"
 
 [dependencies.rapier2d]
 version = "0.18"

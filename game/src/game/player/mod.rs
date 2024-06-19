@@ -3,7 +3,11 @@ mod player_behaviour;
 
 use bevy::transform::TransformSystem::TransformPropagate;
 use leafwing_input_manager::axislike::VirtualAxis;
-use leafwing_input_manager::prelude::*;
+use theseeker_engine::input::InputManagerPlugin;
+// use leafwing_input_manager::prelude::*;
+use leafwing_input_manager::{
+    action_state::ActionState, input_map::InputMap, Actionlike, InputManagerBundle,
+};
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
 use rapier2d::geometry::{Group, InteractionGroups};
@@ -236,23 +240,22 @@ fn setup_player(
             InputManagerBundle::<PlayerAction> {
                 action_state: ActionState::default(),
                 input_map: InputMap::default()
-                    .insert(PlayerAction::Jump, KeyCode::Space)
-                    .insert(PlayerAction::Jump, KeyCode::KeyW)
-                    .insert(PlayerAction::Jump, KeyCode::ArrowUp)
-                    .insert(
+                    .with(PlayerAction::Jump, KeyCode::Space)
+                    .with(PlayerAction::Jump, KeyCode::KeyW)
+                    .with(PlayerAction::Jump, KeyCode::ArrowUp)
+                    .with(
                         PlayerAction::Move,
                         VirtualAxis::from_keys(KeyCode::KeyA, KeyCode::KeyD),
                     )
-                    .insert(
+                    .with(
                         PlayerAction::Move,
                         VirtualAxis::from_keys(KeyCode::ArrowLeft, KeyCode::ArrowRight),
                     )
-                    .insert(PlayerAction::Attack, KeyCode::Enter)
-                    .insert(PlayerAction::Attack, KeyCode::KeyJ)
-                    .insert(PlayerAction::Dash, KeyCode::KeyK)
-                    .insert(PlayerAction::Whirl, KeyCode::KeyL)
-                    .insert(PlayerAction::Focus, KeyCode::KeyI)
-                    .build(),
+                    .with(PlayerAction::Attack, KeyCode::Enter)
+                    .with(PlayerAction::Attack, KeyCode::KeyJ)
+                    .with(PlayerAction::Dash, KeyCode::KeyK)
+                    .with(PlayerAction::Whirl, KeyCode::KeyL)
+                    .with(PlayerAction::Focus, KeyCode::KeyI),
             },
             Falling,
             CanDash {
