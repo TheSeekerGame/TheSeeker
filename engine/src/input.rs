@@ -93,7 +93,7 @@ impl<A: Actionlike + TypePath> Plugin for InputManagerPlugin<A> {
             InputManagerSystem::Update.after(InputSystem),
         );
 
-        // GameTickUpdate just_pressed
+        // GameTickUpdate just_pressed state fixes
         app.add_systems(
             Update,
             (
