@@ -93,12 +93,12 @@ impl<A: Actionlike + TypePath> Plugin for InputManagerPlugin<A> {
             InputManagerSystem::Update.after(InputSystem),
         );
 
-        // FixedMain schedule
+        // GameTickUpdate just_pressed
         app.add_systems(
             Update,
             (
                 swap_to_fixed_update::<A>,
-                // we want to update the ActionState only once, even if the FixedMain schedule runs multiple times
+                // we want to update the ActionState only once, even if the GameTickUpdate schedule runs multiple times
                 update_action_state::<A>,
             )
                 .chain()
@@ -110,6 +110,7 @@ impl<A: Actionlike + TypePath> Plugin for InputManagerPlugin<A> {
             release_on_input_map_removed::<A>,
         );
         app.add_systems(
+            // this needs to run between runs of GameTickUpdate
             GameTickPost,
             tick_action_state::<A>
                 .in_set(InputManagerSystem::Tick)
