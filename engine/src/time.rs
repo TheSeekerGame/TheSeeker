@@ -69,8 +69,8 @@ fn minimal_event_update_system<T: Event>(mut events: ResMut<Events<T>>) {
 #[derive(ScheduleLabel, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GameTickUpdate;
 
-/// Run after `GameTickUpdate`, matching run
-/// used for updating input state after each GameTickUpdate run before next GameTickUpdate
+/// Run after `GameTickUpdate`
+/// used for running systems which update input state between GameTickUpdate runs
 #[derive(ScheduleLabel, Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct GameTickPost;
 

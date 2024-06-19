@@ -1,5 +1,5 @@
-//! reimplementation of the leafwing_input_manager plugin
-
+/// reimplementation of the leafwing_input_manager plugin to allow for input state update systems
+/// in our custom fixed timestep
 use core::hash::Hash;
 use core::marker::PhantomData;
 use leafwing_input_manager::action_state::{ActionData, ActionState};
