@@ -36,6 +36,7 @@ pub mod ballistics_math;
 pub mod condition;
 pub mod data;
 pub mod gent;
+pub mod input;
 pub mod physics;
 pub mod script;
 pub mod time;

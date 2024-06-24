@@ -119,7 +119,8 @@ features = ["iyes_cli"]
 git = "https://github.com/TheSeekerGame/sickle_ui.git"
 
 [dependencies.leafwing-input-manager]
-version = "0.13"
+git = "https://github.com/TheSeekerGame/leafwing-input-manager"
+branch = "fixed_update_0.13"
 
 [dependencies.rapier2d]
 version = "0.18"
