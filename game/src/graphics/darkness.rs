@@ -9,7 +9,7 @@ use bevy::render::extract_component::{
     ComponentUniforms, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
 };
 use bevy::render::render_graph::{
-    NodeRunError, RenderGraphApp, RenderGraphContext, ViewNode, ViewNodeRunner, RenderLabel
+    NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
 };
 use bevy::render::render_resource::{
     BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
@@ -199,7 +199,7 @@ fn darkness_parallax(
     settings: Query<&DarknessSettings>,
     parallaxed_bgs: Query<(Entity, &Parallax)>,
     children: Query<&Children>,
-    mut sprites: Query<&mut bevy_ecs_tilemap::tiles::TileColor>,
+    mut sprites: Query<&mut seek_ecs_tilemap::tiles::TileColor>,
 ) {
     let Some(settings) = settings.iter().next() else {
         return;
