@@ -199,7 +199,7 @@ fn darkness_parallax(
     settings: Query<&DarknessSettings>,
     parallaxed_bgs: Query<(Entity, &Parallax)>,
     children: Query<&Children>,
-    mut sprites: Query<&mut bevy_ecs_tilemap::tiles::TileColor>,
+    mut sprites: Query<&mut seek_ecs_tilemap::tiles::TileColor>,
 ) {
     /*let Some(settings) = settings.iter().next() else {
         return;
