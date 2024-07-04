@@ -83,7 +83,7 @@ version = "0.10"
 features = ["toml", "ron"]
 
 [dependencies.bevy_ecs_ldtk]
-version = "0.9.2"
+version = "0.9.4"
 git = "https://github.com/destravous/bevy_ecs_ldtk"
 branch = "TheSeeker-SeekTilemap"
 
