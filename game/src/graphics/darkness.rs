@@ -201,7 +201,7 @@ fn darkness_parallax(
     children: Query<&Children>,
     mut sprites: Query<&mut seek_ecs_tilemap::tiles::TileColor>,
 ) {
-    /*let Some(settings) = settings.iter().next() else {
+    let Some(settings) = settings.iter().next() else {
         return;
     };
     for (entity, paralax) in parallaxed_bgs.iter() {
@@ -213,7 +213,7 @@ fn darkness_parallax(
                 sprite.0 = color;
             };
         }
-    }*/
+    }
 }
 
 // Below is all boilerplate for setting up the post process.
