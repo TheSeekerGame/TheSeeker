@@ -34,11 +34,9 @@ impl Plugin for PhysicsPlugin {
             ),
         );
         #[cfg(feature = "dev")]
-        app.init_gizmo_group::<PhsyicsCollidersGizmos>()
-            .add_systems(
-                GameTickUpdate,
-                debug_colliders.after(PhysicsSet),
-            );
+        app.init_gizmo_group::<PhsyicsCollidersGizmos>();
+        // #[cfg(feature = "dev")]
+        // app.add_systems(GameTickUpdate, debug_colliders.after(PhysicsSet));
     }
 }
 
