@@ -55,7 +55,7 @@ pub struct DarknessPlugin;
 impl Plugin for DarknessPlugin {
     fn build(&self, app: &mut App) {
         //app.add_systems(Update, darkness_dynamics);
-        app.add_systems(Update, darkness_parallax);
+        //app.add_systems(Update, darkness_parallax);
         app.add_plugins((
             // The settings will be a component that lives in the main world but will
             // be extracted to the render world every frame.
