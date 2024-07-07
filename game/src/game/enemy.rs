@@ -5,7 +5,6 @@ use rand::distributions::Standard;
 use rapier2d::geometry::SharedShape;
 use rapier2d::parry::query::TOIStatus;
 use rapier2d::prelude::{Group, InteractionGroups};
-use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
@@ -14,6 +13,7 @@ use theseeker_engine::physics::{
 };
 use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::{animation::SpriteAnimationBundle, physics::ENEMY_INSIDE};
+use theseeker_engine::{assets::animation::SpriteAnimation, physics::ENEMY_HURT};
 
 use super::player::{Player, PlayerConfig};
 use crate::game::attack::arc_attack::Projectile;
@@ -131,7 +131,14 @@ fn spawn_enemy(
         &mut EnemySpawner,
         &mut Killed,
     )>,
-    enemy_q: Query<Entity, (With<Enemy>, Without<EnemySpawner>)>,
+    enemy_q: Query<
+        Entity,
+        (
+            With<Enemy>,
+            With<Dead>,
+            Without<EnemySpawner>,
+        ),
+    >,
     player_query: Query<(&Transform), (Without<Enemy>, With<Player>)>,
     mut commands: Commands,
 ) {
@@ -155,7 +162,7 @@ fn spawn_enemy(
         for slot in spawner.slots.iter_mut() {
             if let Some(enemy) = slot.enemy {
                 //clear dead enemies
-                if !enemy_q.get(enemy).is_ok() {
+                if enemy_q.get(enemy).is_ok() {
                     slot.enemy = None;
                     **killed += 1;
                 }
@@ -261,25 +268,29 @@ impl Plugin for EnemyBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                ((
-                    assign_group,
-                    check_player_range,
+                (
+                    decay_despawn.run_if(any_with_component::<Decay>),
+                    dead.run_if(any_with_component::<Dead>),
                     (
-                        patrolling.run_if(any_with_component::<Patrolling>),
-                        aggro.run_if(any_with_component::<Aggroed>),
-                        waiting.run_if(any_with_component::<Waiting>),
-                        defense.run_if(any_with_component::<Defense>),
-                        ranged_attack.run_if(any_with_component::<RangedAttack>),
-                        melee_attack.run_if(any_with_component::<MeleeAttack>),
-                        pushback_attack.run_if(any_with_component::<PushbackAttack>),
-                    ),
-                    (
-                        walking.run_if(any_with_component::<Walking>),
-                        retreating.run_if(any_with_component::<Retreating>),
-                        chasing.run_if(any_with_component::<Chasing>),
-                    ),
+                        assign_group,
+                        check_player_range,
+                        (
+                            patrolling.run_if(any_with_component::<Patrolling>),
+                            aggro.run_if(any_with_component::<Aggroed>),
+                            waiting.run_if(any_with_component::<Waiting>),
+                            defense.run_if(any_with_component::<Defense>),
+                            ranged_attack.run_if(any_with_component::<RangedAttack>),
+                            melee_attack.run_if(any_with_component::<MeleeAttack>),
+                            pushback_attack.run_if(any_with_component::<PushbackAttack>),
+                        ),
+                        (
+                            walking.run_if(any_with_component::<Walking>),
+                            retreating.run_if(any_with_component::<Retreating>),
+                            chasing.run_if(any_with_component::<Chasing>),
+                        ),
+                    )
+                        .chain(),
                 )
-                    .chain(),)
                     .run_if(in_state(AppState::InGame))
                     .in_set(EnemyStateSet::Behavior)
                     .before(update_sprite_colliders),
@@ -460,6 +471,11 @@ impl Range {
 #[derive(Component)]
 pub struct Inside;
 
+/// Component added to Decaying enemy
+/// not a GentState because it shouldnt transition to or from anything else
+#[derive(Component)]
+struct Decay;
+
 //Check how far the player is, set our range, set our target if applicable, turn to face player if
 //in range
 fn check_player_range(
@@ -531,7 +547,7 @@ fn assign_group(
         let project_from = transform.translation().truncate();
         if let Some((other, projection)) = spatial_query.point_project(
             project_from,
-            InteractionGroups::new(SENSOR, ENEMY),
+            InteractionGroups::new(SENSOR, ENEMY_HURT),
             Some(entity),
         ) {
             let closest = project_from.distance([projection.point.x, projection.point.y].into());
@@ -665,6 +681,7 @@ fn pushback_attack(
 fn aggro(
     mut query: Query<
         (
+            &Role,
             &Range,
             &Target,
             Has<Grouped>,
@@ -679,7 +696,7 @@ fn aggro(
         ),
     >,
 ) {
-    for (range, target, is_grouped, mut transitions) in query.iter_mut() {
+    for (role, range, target, is_grouped, mut transitions) in query.iter_mut() {
         if target.0.is_some() {
             let mut rng = rand::thread_rng();
             //return to patrol if out of aggro range
@@ -692,9 +709,16 @@ fn aggro(
                 }));
             } else if is_grouped {
                 if matches!(range, Range::Melee) {
-                    transitions.push(Waiting::new_transition(
-                        MeleeAttack::default(),
-                    ));
+                    match role {
+                        Role::Melee => transitions.push(Waiting::new_transition(
+                            MeleeAttack::default(),
+                        )),
+                        Role::Ranged => {
+                            transitions.push(Waiting::new_transition(
+                                Defense::default(),
+                            ));
+                        },
+                    }
                 } else {
                     transitions.push(Waiting::new_transition(Chasing));
                 }
@@ -1195,6 +1219,38 @@ fn remove_inside(
     }
 }
 
+/// Increments the global KillCount, removes most components from the Enemy
+/// after a set amount of ticks transitions to the Decay state
+pub fn dead(
+    mut query: Query<(Entity, &mut Dead, &Gent), With<Enemy>>,
+    mut kill_count: ResMut<KillCount>,
+    mut commands: Commands,
+) {
+    for (entity, mut dead, gent) in query.iter_mut() {
+        if dead.ticks == 0 {
+            **kill_count += 1;
+            commands
+                .entity(entity)
+                .retain::<(TransformBundle, Gent, Dead, Enemy)>();
+        }
+        if dead.ticks == 8 * 7 {
+            commands.entity(entity).remove::<Dead>().insert(Decay);
+        }
+        dead.ticks += 1;
+    }
+}
+
+/// Despawns the gent after enemy enters Decay state
+/// the gfx entity if despawned with a script action after the decay animation finishes playing
+fn decay_despawn(
+    query: Query<Entity, (With<Enemy>, With<Gent>, With<Decay>)>,
+    mut commands: Commands,
+) {
+    for entity in query.iter() {
+        commands.entity(entity).despawn_recursive();
+    }
+}
+
 struct EnemyTransitionPlugin;
 
 impl Plugin for EnemyTransitionPlugin {
@@ -1229,6 +1285,8 @@ impl Plugin for EnemyAnimationPlugin {
                 enemy_ranged_attack_animation,
                 enemy_melee_attack_animation,
                 enemy_pushback_attack_animation,
+                enemy_death_animation,
+                enemy_decay_animation,
                 sprite_flip,
             )
                 .in_set(EnemyStateSet::Animation)
@@ -1322,6 +1380,28 @@ fn enemy_retreat_animation(
     for gent in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
             enemy.play_key("anim.spider.Retreat");
+        }
+    }
+}
+
+fn enemy_death_animation(
+    i_query: Query<&Gent, (Added<Dead>, With<Enemy>)>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+) {
+    for gent in i_query.iter() {
+        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
+            enemy.play_key("anim.spider.Death");
+        }
+    }
+}
+
+fn enemy_decay_animation(
+    i_query: Query<&Gent, (Added<Decay>, With<Enemy>)>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+) {
+    for gent in i_query.iter() {
+        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
+            enemy.play_key("anim.spider.Decay");
         }
     }
 }

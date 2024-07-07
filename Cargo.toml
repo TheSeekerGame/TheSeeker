@@ -33,12 +33,12 @@ opt-level = 3
 opt-level = 1
 debug = false
 lto = false
-codegen-units = 8
+#codegen-units = 8
 # release: Enable LTO and limit codegen units for better codegen
 [profile.release]
 opt-level = 3
-lto = true
-codegen-units = 1
+#lto = true
+#codegen-units = 1
 debug = false
 
 # Random little libraries
@@ -84,14 +84,13 @@ version = "0.10"
 features = ["toml", "ron"]
 
 [dependencies.bevy_ecs_ldtk]
-# version = "0.8"
+version = "0.9.8"
 git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
 branch = "TheSeeker"
 
-[dependencies.bevy_ecs_tilemap]
-# version = "0.13"
-git = "https://github.com/StarArawn/bevy_ecs_tilemap"
-rev = "25def41e029626bb5e84fe7aca1f16a1d6beccdc"
+[dependencies.seek_ecs_tilemap]
+version = "0.1.5"
+git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
 
 [dependencies.bevy_fluent]
 # version = "0.8"
