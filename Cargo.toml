@@ -13,6 +13,31 @@ edition = "2021"
 # bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
 # bevy_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
 # bevy_xpbd_2d = { git = "https://github.com/TheSeekerGame/bevy_xpbd", branch = "TheSeeker" }
+# seek_ecs_tilemap = { path = "../seek_ecs_tilemap" }
+
+# Need to fork bevy to enable everything to use the depth buffer
+# see https://github.com/bevyengine/bevy/issues/13265 for when we can switch back.
+# bevy = { path = "../bevy" }
+# bevy_app = { path = "../bevy/crates/bevy_app" }
+# bevy_asset = { path = "../bevy/crates/bevy_asset" }
+# bevy_core = { path = "../bevy/crates/bevy_core" }
+# bevy_core_pipeline = { path = "../bevy/crates/bevy_core_pipeline" }
+# bevy_ecs = { path = "../bevy/crates/bevy_ecs" }
+# bevy_gizmos = { path = "../bevy/crates/bevy_gizmos" }
+# bevy_hierarchy = { path = "../bevy/crates/bevy_hierarchy" }
+# bevy_input = { path = "../bevy/crates/bevy_input" }
+# bevy_log = { path = "../bevy/crates/bevy_log" }
+# bevy_math = { path = "../bevy/crates/bevy_math" }
+# bevy_pbr = { path = "../bevy/crates/bevy_pbr" }
+# bevy_reflect = { path = "../bevy/crates/bevy_reflect" }
+# bevy_render = { path = "../bevy/crates/bevy_render" }
+# bevy_sprite = { path = "../bevy/crates/bevy_sprite" }
+# bevy_text = { path = "../bevy/crates/bevy_text" }
+# bevy_time = { path = "../bevy/crates/bevy_time" }
+# bevy_transform = { path = "../bevy/crates/bevy_transform" }
+# bevy_ui = { path = "../bevy/crates/bevy_ui" }
+# bevy_window = { path = "../bevy/crates/bevy_window" }
+# bevy_winit = { path = "../bevy/crates/bevy_winit" }
 
 [lib]
 name = "theseeker_engine"
@@ -65,6 +90,8 @@ bevy-inspector-egui = "0.24"
 bevy_hanabi = { git = "https://github.com/djeedai/bevy_hanabi", rev = "cabb3cb", default-features = false, features = ["2d"] }
 smallvec = "1.13.2"
 
+bevy_sprite3d = "2.8"
+
 
 [dependencies.serde]
 version = "1.0.196"
@@ -84,13 +111,16 @@ version = "0.10"
 features = ["toml", "ron"]
 
 [dependencies.bevy_ecs_ldtk]
-version = "0.9.8"
-git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
-branch = "TheSeeker"
+version = "0.9.14"
+#git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
+#branch = "TheSeeker"
+path = "../bevy_ecs_ldtk"
 
 [dependencies.seek_ecs_tilemap]
-version = "0.1.5"
-git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
+version = "0.1.13"
+#git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
+path = "../seek_ecs_tilemap"
+features = ["default", "use_3d_pipeline"]
 
 [dependencies.bevy_fluent]
 # version = "0.8"

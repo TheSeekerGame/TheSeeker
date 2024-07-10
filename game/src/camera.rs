@@ -2,7 +2,7 @@
 
 use crate::game::player::Player;
 use crate::graphics::darkness::DarknessSettings;
-use crate::graphics::dof::DepthOfFieldSettings;
+use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
 use crate::level::MainBackround;
 use crate::parallax::Parallax;
 use crate::prelude::*;
@@ -44,7 +44,7 @@ impl Plugin for CameraPlugin {
 /// For spawning the main gameplay camera
 #[derive(Bundle)]
 struct MainCameraBundle {
-    camera: Camera2dBundle,
+    camera: Camera3dBundle,
     limits: GameViewLimits,
     marker: MainCamera,
     despawn: StateDespawnMarker,
@@ -75,7 +75,11 @@ pub struct CameraRig {
 #[derive(Component)]
 pub struct GameViewLimits(Rect);
 
-pub(crate) fn setup_main_camera(mut commands: Commands) {
+pub(crate) fn setup_main_camera(
+    mut commands: Commands,
+    mut meshes: ResMut<Assets<Mesh>>,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
     let mut camera = Camera2dBundle {
         camera: Camera {
             hdr: true,
@@ -86,21 +90,41 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
     };
     camera.projection.scale = 1.0 / 8.0;
 
+    let mut camera3d = Camera3dBundle {
+        camera: Camera {
+            hdr: true,
+            ..default()
+        },
+        tonemapping: Tonemapping::ReinhardLuminance,
+        ..default()
+    };
+
+    camera3d.projection = Projection::Orthographic(camera.projection);
+    camera3d.transform = camera.transform;
+    camera3d.frustum = camera.frustum;
+    camera3d.transform.translation.z = 4.25;
+
     // TODO make tilemap write to depth buffer somehow.
     // bring up in meeting!
 
     commands.spawn((
         MainCameraBundle {
-            camera,
+            camera: camera3d,
             marker: MainCamera,
             despawn: StateDespawnMarker,
             // TODO: manage this from somewhere
             limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
         },
         // Needed so that depth buffers are stored so depth of field works
-        Camera3d::default(),
         DepthPrepass,
-        DepthOfFieldSettings::default(),
+        DepthOfFieldSettings {
+            mode: DepthOfFieldMode::Bokeh,
+            focal_distance: 0.25,
+            sensor_height: 0.005,
+            aperture_f_stops: 1.0,
+            max_circle_of_confusion_diameter: 68.8,
+            max_depth: 500.0,
+        },
         BloomSettings::NATURAL,
         DarknessSettings {
             bg_light_level: 1.0,
@@ -110,6 +134,8 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
             bg_light_color: Vec3::new(0.761, 0.773, 0.8),
         },
     ));
+
+    let debug_material = materials.add(StandardMaterial { ..default() });
 }
 
 fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, With<MainCamera>>,
@@ -188,7 +214,7 @@ pub(crate) fn update_rig_trauma(
 /// Camera updates the camera position to smoothly interpolate to the
 /// rig location. also applies camera shake, and limits camera within the level boundaries
 pub(crate) fn update_camera_rig(
-    mut q_cam: Query<(&mut Transform, &OrthographicProjection), With<MainCamera>>,
+    mut q_cam: Query<(&mut Transform, &Projection), With<MainCamera>>,
     mut rig: ResMut<CameraRig>,
     backround_query: Query<
         (&LayerMetadata, &Transform),
@@ -196,7 +222,11 @@ pub(crate) fn update_camera_rig(
     >,
     time: Res<Time>,
 ) {
-    let Ok((mut cam_xform, ortho_projection)) = q_cam.get_single_mut() else {
+    let Ok((mut cam_xform, projection)) = q_cam.get_single_mut() else {
+        return;
+    };
+
+    let Projection::Orthographic(ortho_projection) = projection else {
         return;
     };
 

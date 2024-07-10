@@ -246,15 +246,15 @@ impl Plugin for DepthOfFieldPlugin {
                 prepare_depth_of_field_global_bind_group.in_set(RenderSet::PrepareBindGroups),
             )
             .add_render_graph_node::<ViewNodeRunner<DepthOfFieldNode>>(
-                Core2d,
+                Core3d,
                 DepthOfFieldPostProcessLabel,
             )
             .add_render_graph_edges(
-                Core2d,
+                Core3d,
                 (
-                    Node2d::Bloom,
+                    Node3d::Bloom,
                     DepthOfFieldPostProcessLabel,
-                    Node2d::Tonemapping,
+                    Node3d::Tonemapping,
                 ),
             );
     }

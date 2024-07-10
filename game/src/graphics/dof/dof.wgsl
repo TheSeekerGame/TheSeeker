@@ -1,5 +1,5 @@
 //Source: https://github.com/pcwalton/bevy/blob/a3e06b1165a794cc9aef6984c9a2ace2efd729e0/crates/bevy_core_pipeline/src/dof/dof.wgsl
-//Performs depth of field postprocessing, with both Gaussian and bokeh kernels.
+// Performs depth of field postprocessing, with both Gaussian and bokeh kernels.
 //
 // Gaussian blur is performed as a separable convolution: first blurring in the
 // X direction, and then in the Y direction. This is asymptotically more
@@ -123,16 +123,16 @@ fn calculate_circle_of_confusion(in_frag_coord: vec4<f32>) -> f32 {
     let frag_coord = vec2<i32>(floor(in_frag_coord.xy));
     let raw_depth = textureLoad(depth_texture, frag_coord, 0);
     let depth = min(-depth_ndc_to_view_z(raw_depth), dof_params.max_depth);
-    return depth;
+
     // Calculate the circle of confusion.
     //
     // This is just the formula from Wikipedia [1].
     //
     // [1]: https://en.wikipedia.org/wiki/Circle_of_confusion#Determining_a_circle_of_confusion_diameter_from_the_object_field
-    //let candidate_coc = scale * abs(depth - focus) / (depth * (focus - f));
+    let candidate_coc = scale * abs(depth - focus) / (depth * (focus - f));
 
-    //let framebuffer_size = vec2<f32>(textureDimensions(color_texture_a));
-    //return clamp(candidate_coc * framebuffer_size.y, 0.0, max_coc_diameter);
+    let framebuffer_size = vec2<f32>(textureDimensions(color_texture_a));
+    return clamp(candidate_coc * framebuffer_size.y, 0.0, max_coc_diameter);
 }
 
 // Performs a single direction of the separable Gaussian blur kernel.
@@ -280,8 +280,8 @@ fn bokeh_pass_0(in: FullscreenVertexOutput) -> DualOutput {
 
     // Note that the diagonal part is pre-mixed with the vertical component.
     var output: DualOutput;
-    output.output_0 = vec4(0.0, coc, sqrt(coc), 1.0);
-    output.output_1 = vec4(0.0, coc, sqrt(coc), 1.0);
+    output.output_0 = vertical;
+    output.output_1 = mix(vertical, diagonal, 0.5);
     return output;
 }
 
@@ -297,7 +297,6 @@ fn bokeh_pass_1(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let coc = calculate_circle_of_confusion(in.position);
     let output_0 = box_blur_a(in.position, coc, vec2(COS_NEG_FRAC_PI_6, SIN_NEG_FRAC_PI_6));
     let output_1 = box_blur_b(in.position, coc, vec2(COS_NEG_FRAC_PI_5_6, SIN_NEG_FRAC_PI_5_6));
-
-    return vec4(0.0, coc, sqrt(coc), 1.0);
+    return mix(output_0, output_1, 0.5);
 }
 #endif

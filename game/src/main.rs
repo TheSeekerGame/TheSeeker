@@ -10,6 +10,7 @@ mod prelude {
 use crate::prelude::*;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
+use bevy_sprite3d::Sprite3dPlugin;
 use theseeker_engine::physics::PhysicsPlugin;
 
 mod appstate;
@@ -80,6 +81,7 @@ fn main() {
 
     // and custom "engine"
     app.add_plugins(theseeker_engine::EnginePlugins);
+    //app.add_plugin(Sprite3dPlugin);
 
     // external plugins
     app.add_plugins((
