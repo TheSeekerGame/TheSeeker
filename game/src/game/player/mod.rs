@@ -2,6 +2,7 @@ mod player_anim;
 mod player_behaviour;
 
 use bevy::transform::TransformSystem::TransformPropagate;
+use bevy_sprite3d::{AtlasSprite3dBundle, Sprite3d, Sprite3dParams};
 use leafwing_input_manager::axislike::VirtualAxis;
 use leafwing_input_manager::prelude::*;
 use player_anim::PlayerAnimationPlugin;
@@ -86,7 +87,7 @@ pub struct PlayerGentBundle {
 pub struct PlayerGfxBundle {
     marker: PlayerGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteSheetBundle,
+    sprite: Sprite3d,
     animation: SpriteAnimationBundle,
 }
 
@@ -188,6 +189,7 @@ fn debug_player(world: &World, query: Query<Entity, With<Player>>) {
 fn setup_player(
     mut q: Query<(&mut Transform, Entity), Added<PlayerBlueprint>>,
     mut commands: Commands,
+    mut sprite_params: Sprite3dParams,
 ) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
         //TODO: proper way of ensuring z is correct
@@ -270,16 +272,24 @@ fn setup_player(
             FocusAbility::default(),
             TransitionQueue::default(),
         ));
+        // Can't get a texture atlas easily.
+        let texture_atlas = TextureAtlas {
+            layout: Default::default(),
+            index: 0,
+        };
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
             gent2gfx: TransformGfxFromGent {
                 pixel_aligned: false,
                 gent: e_gent,
             },
-            sprite: SpriteSheetBundle {
+            sprite: Sprite3d {
                 transform: *xf_gent,
+                pixels_per_metre: 4.0,
+                double_sided: true,
+                unlit: true,
                 ..Default::default()
-            },
+            }.bundle_with_atlas(&mut sprite_params, texture_atlas),
             animation: Default::default(),
         },));
         // println!("player spawned")

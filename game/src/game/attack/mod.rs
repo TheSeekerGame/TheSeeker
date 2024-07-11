@@ -1,6 +1,7 @@
 pub mod arc_attack;
 pub mod particles;
 
+use bevy_sprite3d::Sprite3dComponent;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
@@ -354,15 +355,21 @@ fn knockback(
     }
 }
 
-fn damage_flash(mut query: Query<(Entity, &mut Sprite, &mut DamageFlash)>, mut commands: Commands) {
-    for (entity, mut sprite, mut damage_flash) in query.iter_mut() {
-        sprite.color = Color::rgb(2.5, 2.5, 2.5);
+fn damage_flash(
+    mut query: Query<(Entity, &mut DamageFlash, &Handle<StandardMaterial>), With<Sprite3dComponent>>,
+    mut commands: Commands,
+    mut materials: ResMut<Assets<StandardMaterial>>,
+) {
+    for (entity, mut damage_flash, mat_handle) in query.iter_mut() {
+        if let Some(material) = materials.get_mut(&mat_handle) {
+            material.base_color = Color::rgb(2.5, 2.5, 2.5);
 
-        if damage_flash.current_ticks == damage_flash.max_ticks {
-            commands.entity(entity).remove::<DamageFlash>();
-            sprite.color = Color::rgb(1., 1., 1.);
+            if damage_flash.current_ticks == damage_flash.max_ticks {
+                commands.entity(entity).remove::<DamageFlash>();
+                material.base_color = Color::rgb(1., 1., 1.);
+            }
+            damage_flash.current_ticks += 1;
         }
-        damage_flash.current_ticks += 1;
     }
 }
 

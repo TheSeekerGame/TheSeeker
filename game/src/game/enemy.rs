@@ -1,6 +1,7 @@
 use bevy_hanabi::{ParticleEffect, ParticleEffectBundle};
 #[cfg(feature = "dev")]
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
+use bevy_sprite3d::{AtlasSprite3dBundle, Sprite3d};
 use rand::distributions::Standard;
 use rapier2d::geometry::SharedShape;
 use rapier2d::parry::query::TOIStatus;
@@ -116,7 +117,7 @@ pub struct Enemy;
 pub struct EnemyGfxBundle {
     marker: EnemyGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteSheetBundle,
+    sprite: Sprite3d,
     animation: SpriteAnimationBundle,
 }
 
@@ -252,8 +253,11 @@ fn setup_enemy(
                 pixel_aligned: false,
                 gent: e_gent,
             },
-            sprite: SpriteSheetBundle {
+            sprite: Sprite3d {
                 transform: *xf_gent,
+                pixels_per_metre: 4.0,
+                double_sided: true,
+                unlit: true,
                 ..Default::default()
             },
             animation: Default::default(),
