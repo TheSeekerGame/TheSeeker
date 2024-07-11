@@ -102,7 +102,7 @@ pub(crate) fn setup_main_camera(
     camera3d.projection = Projection::Orthographic(camera.projection);
     camera3d.transform = camera.transform;
     camera3d.frustum = camera.frustum;
-    camera3d.transform.translation.z = 4.25;
+    camera3d.transform.translation.z = 0.25;
 
     // TODO make tilemap write to depth buffer somehow.
     // bring up in meeting!
@@ -120,7 +120,7 @@ pub(crate) fn setup_main_camera(
         DepthOfFieldSettings {
             mode: DepthOfFieldMode::Bokeh,
             focal_distance: 0.25,
-            sensor_height: 0.005,
+            sensor_height: 0.008,
             aperture_f_stops: 1.0,
             max_circle_of_confusion_diameter: 68.8,
             max_depth: 500.0,

@@ -191,7 +191,7 @@ fn setup_player(
 ) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
         //TODO: proper way of ensuring z is correct
-        xf_gent.translation.z = 15.;
+        xf_gent.translation.z = 15.0 * 0.000001;
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
