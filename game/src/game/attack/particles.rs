@@ -145,7 +145,7 @@ impl crate::graphics::particles_util::BuildParticles for EntityCommands<'_> {
                 .spawn((
                     ParticleEffectBundle {
                         // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
-                        effect: ParticleEffect::new(handle.clone()).with_z_layer_2d(Some(4.5)),
+                        effect: ParticleEffect::new(handle.clone()),
                         ..default()
                     },
                     SystemLifetime(MAX_LIFETIME),
