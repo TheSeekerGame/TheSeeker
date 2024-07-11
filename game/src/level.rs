@@ -104,6 +104,9 @@ fn attach_parallax(
                 use_parallax = false;
                 -transform.translation.z * 0.000001
             },
+            "Entities" => {
+                continue
+            }
             _ => {
                 commands.entity(entity).insert(OtherBackround);
                 use_parallax = false;

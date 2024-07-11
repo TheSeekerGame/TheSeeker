@@ -8,13 +8,12 @@ use bevy::prelude::{default, BuildChildren, Color, Entity, Name, Query, Transfor
 use bevy::sprite::MaterialMesh2dBundle;
 use bevy::utils::smallvec::SmallVec;
 use bevy_hanabi::{
-    AccelModifier, Attribute, ColorOverLifetimeModifier, EffectAsset, EffectProperties, ExprWriter,
-    Gradient, Module, ParticleEffect, ParticleEffectBundle, SetAttributeModifier,
-    SetPositionCircleModifier, SetPositionSphereModifier, SetVelocityCircleModifier,
-    SetVelocitySphereModifier, ShapeDimension, SizeOverLifetimeModifier, Spawner, Value,
+    Attribute, ColorOverLifetimeModifier, EffectAsset, EffectProperties, ExprWriter,
+    Gradient, ParticleEffect, ParticleEffectBundle, SetAttributeModifier,
+    SetPositionCircleModifier, AlphaMode, ShapeDimension, SizeOverLifetimeModifier, Spawner
 };
 use glam::{Vec2, Vec2Swizzles, Vec3, Vec4};
-use theseeker_engine::physics::LinearVelocity;
+
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 
 pub struct AttackParticlesPlugin;
@@ -129,7 +128,8 @@ fn attack_particles_setup(mut commands: Commands, mut effects: ResMut<Assets<Eff
                 gradient: Gradient::constant(Vec2::splat(1.0)),
                 screen_space_size: false,
             })
-            .render(ColorOverLifetimeModifier { gradient }),
+            .render(ColorOverLifetimeModifier { gradient })
+            .with_alpha_mode(AlphaMode::Mask(ExprWriter::new().lit(0.001).expr())),
     );
 
     commands.insert_resource(ArcParticleEffectHandle(effect.clone()));

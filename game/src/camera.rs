@@ -133,6 +133,7 @@ pub(crate) fn setup_main_camera(
             lantern_color: Vec3::new(0.965, 0.882, 0.678),
             bg_light_color: Vec3::new(0.761, 0.773, 0.8),
         },
+        Name::new("MainCamera"),
     ));
 
     let debug_material = materials.add(StandardMaterial { ..default() });
