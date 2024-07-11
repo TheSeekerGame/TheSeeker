@@ -83,7 +83,7 @@ pub fn update_sprite_colliders(
         (
             &Handle<Image>,
             &TextureAtlas,
-            &Transform,
+            &Sprite,
         ),
         (
             Or<(
@@ -96,7 +96,7 @@ pub fn update_sprite_colliders(
 ) {
     for (mut collider, anim_entity) in &mut q_collider {
         match q_sprite.get(anim_entity.0) {
-            Ok((h_image, atlas, transform)) => {
+            Ok((h_image, atlas, sprite)) => {
                 let Some(shapes_i) = shape_map
                     .map
                     .get(&h_image.id())
@@ -110,9 +110,8 @@ pub fn update_sprite_colliders(
                     continue;
                 };
                 let convex_hull = &shape_map.shapes[*shapes_i];
-                let flip_x = transform.scale.x <= -0.0;
-                let flip_y = transform.scale.y <= -0.0;
-                match (flip_x, flip_y) {
+
+                match (sprite.flip_x, sprite.flip_y) {
                     (false, false) => { collider.0.set_shape(convex_hull.0.clone()); },
                     (true , false) => { collider.0.set_shape(convex_hull.1.clone()); },
                     (false, true ) => { collider.0.set_shape(convex_hull.2.clone()); },

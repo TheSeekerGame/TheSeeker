@@ -1,12 +1,12 @@
+use bevy::ecs::system::lifetimeless::*;
+use bevy::ecs::system::SystemParam;
+
 use crate::assets::animation::*;
 use crate::assets::script::*;
 use crate::data::OneOrMany;
 use crate::prelude::*;
 use crate::script::common::ExtendedScriptTracker;
 use crate::script::*;
-use bevy::ecs::system::lifetimeless::*;
-use bevy::ecs::system::SystemParam;
-use bevy_sprite3d::{Sprite3d, Sprite3dComponent};
 
 pub struct SpriteAnimationPlugin;
 
@@ -143,15 +143,11 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
 impl ScriptAction for SpriteAnimationScriptAction {
     type ActionParams = SpriteAnimationScriptParams;
     type Param = (
-        SQuery<
-            (
-                &'static mut TextureAtlas,
-                &'static Handle<StandardMaterial>,
-                &'static mut Transform,
-            ),
-            With<Sprite3dComponent>,
-        >,
-        ResMut<'static, Assets<StandardMaterial>>,
+        SQuery<(
+            &'static mut TextureAtlas,
+            &'static mut Sprite,
+            &'static mut Transform,
+        )>,
     );
     type Tracker = SpriteAnimationTracker;
 
@@ -160,9 +156,9 @@ impl ScriptAction for SpriteAnimationScriptAction {
         entity: Entity,
         actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
-        (q, ref mut materials): &mut <Self::Param as SystemParam>::Item<'w, '_>,
+        (q,): &mut <Self::Param as SystemParam>::Item<'w, '_>,
     ) -> ScriptUpdateResult {
-        let (mut atlas, mat_handle, mut xf) = q
+        let (mut atlas, mut sprite, mut xf) = q
             .get_mut(entity)
             .expect("Entity is missing sprite animation components!");
 
@@ -191,25 +187,15 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetSpriteColor { color } => {
-                if let Some(material) = materials.get_mut(mat_handle) {
-                    material.base_color = (*color).into();
-                }
+                sprite.color = (*color).into();
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetSpriteFlip { flip_x, flip_y } => {
                 if let Some(flip_x) = flip_x {
-                    if *flip_x {
-                        xf.scale.x = -xf.scale.x;
-                    } else {
-                        xf.scale.x = xf.scale.x.abs();
-                    }
+                    sprite.flip_x = *flip_x;
                 }
                 if let Some(flip_y) = flip_y {
-                    if *flip_y {
-                        xf.scale.y = -xf.scale.y
-                    } else {
-                        xf.scale.y = xf.scale.y.abs();
-                    }
+                    sprite.flip_y = *flip_y;
                 }
                 ScriptUpdateResult::NormalRun
             },
@@ -252,8 +238,8 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::TransformSetScale { x, y } => {
-                xf.scale.x = xf.scale.x.signum() * f32::from(*x);
-                xf.scale.y = xf.scale.y.signum() * f32::from(*y);
+                xf.scale.x = f32::from(*x);
+                xf.scale.y = f32::from(*y);
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::TransformRotateDegrees { degrees } => {
@@ -394,7 +380,8 @@ impl ScriptAsset for SpriteAnimation {
         SQuery<(
             &'static mut Handle<Image>,
             &'static mut TextureAtlas,
-        ), With<Sprite3dComponent>>,
+            &'static mut Sprite,
+        )>,
         SRes<PreloadedAssets>,
     );
     type RunIf = ExtendedScriptRunIf<SpriteAnimationScriptRunIf>;
@@ -411,7 +398,7 @@ impl ScriptAsset for SpriteAnimation {
         entity: Entity,
         (q_atlas, preloaded): &mut <Self::BuildParam as SystemParam>::Item<'w, '_>,
     ) -> ScriptRuntimeBuilder<Self> {
-        let (mut image, mut atlas) = q_atlas
+        let (mut image, mut atlas, mut _sprite) = q_atlas
             .get_mut(entity)
             .expect("Animation entity must have Texture Atlas components");
 
