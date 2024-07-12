@@ -90,7 +90,7 @@ pub(crate) fn setup_main_camera(
         tonemapping: Tonemapping::ReinhardLuminance,
         ..default()
     };
-    camera.projection.scale = 1.0 / 8.0;
+    camera.projection.scale = 1.0 / 6.0;
 
     let mut camera3d = Camera3dBundle {
         camera: Camera {
