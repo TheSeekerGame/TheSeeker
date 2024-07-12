@@ -60,7 +60,7 @@ fn instance(
                                 material: ui_materials.add(HpBarUiMaterial {
                                     factor: 1.0,
                                     background_color: Color::rgb(0.15, 0.15, 0.15).into(),
-                                    filled_color: Color::rgb(0.8, 0.2, 0.2).into(),
+                                    filled_color: Color::rgb(0.635, 0.196, 0.306).into(),
                                 }),
                                 ..default()
                             },
