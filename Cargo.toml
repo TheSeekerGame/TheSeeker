@@ -13,6 +13,29 @@ edition = "2021"
 # bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
 # bevy_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
 # bevy_xpbd_2d = { git = "https://github.com/TheSeekerGame/bevy_xpbd", branch = "TheSeeker" }
+# seek_ecs_tilemap = { path = "../seek_ecs_tilemap" }
+
+bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_asset = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_core = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_core_pipeline = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_ecs = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_gizmos = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_hierarchy = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_input = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_math = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_pbr = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_reflect = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_render = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_sprite = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_text = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_time = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_transform = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_ui = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_window = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy_winit = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
 
 [lib]
 name = "theseeker_engine"
@@ -62,7 +85,10 @@ bevy-inspector-egui = "0.24"
 # This specific rev was working main on may 28th.
 # needed for moveble forcefields not availible in 0.10
 # (also has some wgsl fixes)
-bevy_hanabi = { git = "https://github.com/djeedai/bevy_hanabi", rev = "cabb3cb", default-features = false, features = ["2d"] }
+bevy_hanabi = { git = "https://github.com/djeedai/bevy_hanabi", rev = "cabb3cb", default-features = false, features = ["3d"] }
+smallvec = "1.13.2"
+
+bevy_sprite3d = "2.8"
 iyes_perf_ui = "0.2.3"
 
 [dependencies.serde]
@@ -83,13 +109,14 @@ version = "0.10"
 features = ["toml", "ron"]
 
 [dependencies.bevy_ecs_ldtk]
-version = "0.9.8"
+version = "0.9.15"
 git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
-branch = "TheSeeker"
 
 [dependencies.seek_ecs_tilemap]
-version = "0.1.5"
+version = "0.1.14"
 git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
+#path = "../seek_ecs_tilemap"
+features = ["default", "use_3d_pipeline"]
 
 [dependencies.bevy_fluent]
 # version = "0.8"

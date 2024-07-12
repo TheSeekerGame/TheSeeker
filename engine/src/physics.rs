@@ -504,7 +504,7 @@ pub fn debug_colliders(
         if let Some(cube) = collider.shared_shape().as_cuboid() {
             let half_extents = Vec2::new(cube.half_extents.x, cube.half_extents.y);
             collider_gizmos.rect(
-                pos.extend(0.0),
+                pos.extend(0.0002),
                 Quat::from_rotation_z(rotation - PI),
                 half_extents * 2.0,
                 Color::GREEN,
@@ -518,9 +518,9 @@ pub fn debug_colliders(
                 // modulo wraps around the first point when we get to the end
                 let end = points[(i + 1) % num_points];
 
-                collider_gizmos.line_2d(
-                    Vec2::new(pos.x + start.x, pos.y + start.y),
-                    Vec2::new(pos.x + end.x, pos.y + end.y),
+                collider_gizmos.line(
+                    Vec2::new(pos.x + start.x, pos.y + start.y).extend(0.0002),
+                    Vec2::new(pos.x + end.x, pos.y + end.y).extend(0.0002),
                     Color::GREEN,
                 );
             }
