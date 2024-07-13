@@ -22,7 +22,9 @@ use crate::prelude::*;
 use bevy::asset::{load_internal_asset, Handle};
 use bevy::core_pipeline::core_2d::graph::{Core2d, Node2d};
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
+use bevy::core_pipeline::core_3d::{AlphaMask3d, Camera3dDepthLoadOp, CORE_3D_DEPTH_FORMAT, Opaque3d, Transmissive3d, Transparent3d};
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
+use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::ecs::{
     component::Component,
     entity::Entity,
@@ -57,6 +59,10 @@ use bevy::render::{
     },
     Extract, ExtractSchedule, Render, RenderApp, RenderSet,
 };
+use bevy::render::camera::{CameraMainTextureUsages, ExtractedCamera};
+use bevy::render::render_phase::RenderPhase;
+use bevy::render::render_resource::{Extent3d, ImageCopyTexture, Origin3d, TextureAspect};
+use bevy::render::render_resource::binding_types::texture_2d_multisampled;
 use bevy::utils::{info_once, prelude::default, warn_once};
 use smallvec::SmallVec;
 
@@ -234,6 +240,11 @@ impl Plugin for DepthOfFieldPlugin {
             )
             .add_systems(
                 Render,
+                configure_depth_of_field_view_targets_2
+                    .before(prepare_view_targets).in_set(RenderSet::ManageViews),
+            )
+            .add_systems(
+                Render,
                 (
                     prepare_depth_of_field_view_bind_group_layouts,
                     prepare_depth_of_field_pipelines,
@@ -252,9 +263,11 @@ impl Plugin for DepthOfFieldPlugin {
             .add_render_graph_edges(
                 Core3d,
                 (
-                    Node3d::Bloom,
+                    Node3d::MainOpaquePass,
+                    //Node3d::Bloom,
                     DepthOfFieldPostProcessLabel,
-                    Node3d::Tonemapping,
+                    Node3d::MainTransmissivePass,
+                    //Node3d::Tonemapping,
                 ),
             );
     }
@@ -367,6 +380,7 @@ impl ViewNode for DepthOfFieldNode {
         ): QueryItem<'w, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
+        //println!("DepthOfFieldNode is running!");
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_uniforms = world.resource::<ViewUniforms>();
         let global_bind_group = world.resource::<DepthOfFieldGlobalBindGroup>();
@@ -389,6 +403,12 @@ impl ViewNode for DepthOfFieldNode {
             // to manage a secondary *auxiliary* texture alongside the textures
             // managed by the postprocessing logic.
             let postprocess = view_target.post_process_write();
+            //let src = view_target.main_texture_view();
+            //let src = view_target.sampled_main_texture_view().unwrap();
+            let src = postprocess.source;
+            //let dst = view_target.main_texture_other_view();
+            //let dst = view_target.sampled_main_texture_view().unwrap();
+            let dst = postprocess.destination;
 
             let view_bind_group = if pipeline_render_info.is_dual_input {
                 let (Some(auxiliary_dof_texture), Some(dual_input_bind_group_layout)) = (
@@ -404,7 +424,7 @@ impl ViewNode for DepthOfFieldNode {
                     &BindGroupEntries::sequential((
                         view_uniforms_binding,
                         view_depth_texture.view(),
-                        postprocess.source,
+                        src,
                         &auxiliary_dof_texture.default_view,
                     )),
                 )
@@ -415,7 +435,7 @@ impl ViewNode for DepthOfFieldNode {
                     &BindGroupEntries::sequential((
                         view_uniforms_binding,
                         view_depth_texture.view(),
-                        postprocess.source,
+                        src,
                     )),
                 )
             };
@@ -423,7 +443,7 @@ impl ViewNode for DepthOfFieldNode {
             // Push the first input attachment.
             let mut color_attachments: SmallVec<[_; 2]> = SmallVec::new();
             color_attachments.push(Some(RenderPassColorAttachment {
-                view: postprocess.destination,
+                view: view_target.sampled_main_texture_view().unwrap(),
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(default()),
@@ -450,6 +470,24 @@ impl ViewNode for DepthOfFieldNode {
                 }));
             }
 
+            {
+                // take the main passes multisampled texture, and copy it to the src post process texture
+                let render_pass = render_context.command_encoder().begin_render_pass(&RenderPassDescriptor {
+                    label: Some("resolve_from_multisampled_texture"),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view: view_target.sampled_main_texture_view().unwrap(),
+                        resolve_target: Some(src),
+                        ops: Operations {
+                            load: LoadOp::Load,
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+            }
+
             let render_pass_descriptor = RenderPassDescriptor {
                 label: Some(pipeline_render_info.pass_label),
                 color_attachments: &color_attachments,
@@ -474,6 +512,16 @@ impl ViewNode for DepthOfFieldNode {
             );
             // Render the full-screen pass.
             render_pass.draw(0..3, 0..1);
+
+
+            //render_context.command_encoder().clear_texture(view_target.sampled_main_texture().unwrap(), &Default::default());
+            //render_context.command_encoder().clear_texture(view_target.main_texture(), &Default::default());
+            /*render_context.command_encoder().copy_texture_to_texture(
+                view_target.main_texture_other().as_image_copy(),
+                view_target.main_texture().as_image_copy(),
+                view_target.main_texture().size(),
+            );*/
+            //let postprocess = view_target.post_process_write();
         }
 
         Ok(())
@@ -613,12 +661,96 @@ pub fn prepare_depth_of_field_view_bind_group_layouts(
 /// need to set the appropriate flag to tell Bevy to make samplable depth
 /// buffers.
 pub fn configure_depth_of_field_view_targets(
-    mut view_targets: Query<&mut Camera3d, With<DepthOfFieldSettings>>,
+    mut view_targets: Query<(&mut Camera3d, &mut CameraMainTextureUsages), With<DepthOfFieldSettings>>,
 ) {
-    for mut camera_3d in view_targets.iter_mut() {
+    for (mut camera_3d, mut texture_usages) in view_targets.iter_mut() {
         let mut depth_texture_usages = TextureUsages::from(camera_3d.depth_texture_usages);
         depth_texture_usages |= TextureUsages::TEXTURE_BINDING;
         camera_3d.depth_texture_usages = depth_texture_usages.into();
+
+        texture_usages.0 = texture_usages.0.union(TextureUsages::COPY_DST);
+    }
+}
+
+pub fn configure_depth_of_field_view_targets_2(
+    mut view_targets: Query<(&mut Camera3d, &mut CameraMainTextureUsages), With<DepthOfFieldSettings>>,
+) {
+    for (mut camera_3d, mut texture_usages) in view_targets.iter_mut() {
+        texture_usages.0 = texture_usages.0.union(TextureUsages::COPY_DST);
+    }
+}
+
+pub fn prepare_core_3d_depth_textures(
+    mut commands: Commands,
+    mut texture_cache: ResMut<TextureCache>,
+    msaa: Res<Msaa>,
+    render_device: Res<RenderDevice>,
+    views_3d: Query<
+        (Entity, &ExtractedCamera, Option<&DepthPrepass>, &Camera3d),
+        (
+            With<RenderPhase<Opaque3d>>,
+            With<RenderPhase<AlphaMask3d>>,
+            With<RenderPhase<Transmissive3d>>,
+            With<RenderPhase<Transparent3d>>,
+        ),
+    >,
+) {
+    let mut render_target_usage = HashMap::default();
+    for (_, camera, depth_prepass, camera_3d) in &views_3d {
+        // Default usage required to write to the depth texture
+        let mut usage: TextureUsages = camera_3d.depth_texture_usages.into();
+        if depth_prepass.is_some() {
+            // Required to read the output of the prepass
+            usage |= TextureUsages::COPY_SRC;
+        }
+        render_target_usage
+            .entry(camera.target.clone())
+            .and_modify(|u| *u |= usage)
+            .or_insert_with(|| usage);
+    }
+
+    let mut textures = HashMap::default();
+    for (entity, camera, _, camera_3d) in &views_3d {
+        let Some(physical_target_size) = camera.physical_target_size else {
+            continue;
+        };
+
+        let cached_texture = textures
+            .entry(camera.target.clone())
+            .or_insert_with(|| {
+                // The size of the depth texture
+                let size = Extent3d {
+                    depth_or_array_layers: 1,
+                    width: physical_target_size.x,
+                    height: physical_target_size.y,
+                };
+
+                let usage = *render_target_usage
+                    .get(&camera.target.clone())
+                    .expect("The depth texture usage should already exist for this target");
+
+                let descriptor = TextureDescriptor {
+                    label: Some("view_depth_texture"),
+                    size,
+                    mip_level_count: 1,
+                    sample_count: msaa.samples(),
+                    dimension: TextureDimension::D2,
+                    format: CORE_3D_DEPTH_FORMAT,
+                    usage,
+                    view_formats: &[],
+                };
+
+                texture_cache.get(&render_device, descriptor)
+            })
+            .clone();
+
+        commands.entity(entity).insert(ViewDepthTexture::new(
+            cached_texture,
+            match camera_3d.depth_load_op {
+                Camera3dDepthLoadOp::Clear(v) => Some(v),
+                Camera3dDepthLoadOp::Load => None,
+            },
+        ));
     }
 }
 
@@ -665,11 +797,11 @@ pub fn prepare_auxiliary_depth_of_field_textures(
         // The texture matches the main view target texture.
         let texture_descriptor = TextureDescriptor {
             label: Some("depth of field auxiliary texture"),
-            size: view_target.main_texture().size(),
+            size: view_target.sampled_main_texture().unwrap().size(),
             mip_level_count: 1,
-            sample_count: view_target.main_texture().sample_count(),
+            sample_count: view_target.sampled_main_texture().unwrap().sample_count(),
             dimension: TextureDimension::D2,
-            format: view_target.main_texture_format(),
+            format: view_target.sampled_main_texture().unwrap().format(),
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         };
