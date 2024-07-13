@@ -320,6 +320,11 @@ fn set_movement_slots(
             } else {
                 player.set_slot("MovingDown", false);
             }
+            if velocity.x.abs() > 50.0 {
+                player.set_slot("MovingSideways", true);
+            } else {
+                player.set_slot("MovingSideways", false);
+            }
         }
     }
 }

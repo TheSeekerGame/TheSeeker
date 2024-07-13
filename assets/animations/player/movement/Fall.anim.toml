@@ -10,7 +10,7 @@ frame_start = 1
 # INITIALIZE FALL STRAIGHT
 [[script]]
 run_on_playback_control = "Start"
-forbid_slots_all = ["MovingHorizontally"]
+forbid_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 1
 
@@ -18,32 +18,32 @@ frame_index = 1
 #SWITCH FROM FORWARD TO STRAIGHT
 [[script]]
 run_at_frame = 7
-forbid_slots_all = ["MovingHorizontally"]
+forbid_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 1
 [[script]]
 run_at_frame = 8
-forbid_slots_all = ["MovingHorizontally"]
+forbid_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 2
 [[script]]
 run_at_frame = 9
-forbid_slots_all = ["MovingHorizontally"]
+forbid_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 3
 [[script]]
 run_at_frame = 10
-forbid_slots_all = ["MovingHorizontally"]
+forbid_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 4
 [[script]]
 run_at_frame = 11
-forbid_slots_all = ["MovingHorizontally"]
+forbid_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 5
 [[script]]
 run_at_frame = 12
-forbid_slots_all = ["MovingHorizontally"]
+forbid_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 6
 
@@ -58,39 +58,39 @@ frame_index = 3
 # INITIALIZE FALL FORWARD
 [[script]]
 run_on_playback_control = "Start"
-require_slots_all = ["MovingHorizontally"]
+require_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 7
 
 #SWITCH FROM STRAIGHT TO FORWARD
 [[script]]
 run_at_frame = 1
-require_slots_all = ["MovingHorizontally"]
+require_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 7
 [[script]]
 run_at_frame = 2
-require_slots_all = ["MovingHorizontally"]
+require_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 8
 [[script]]
 run_at_frame = 3
-require_slots_all = ["MovingHorizontally"]
+require_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 9
 [[script]]
 run_at_frame = 4
-require_slots_all = ["MovingHorizontally"]
+require_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 10
 [[script]]
 run_at_frame = 5
-require_slots_all = ["MovingHorizontally"]
+require_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 11
 [[script]]
 run_at_frame = 6
-require_slots_all = ["MovingHorizontally"]
+require_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 12
 
