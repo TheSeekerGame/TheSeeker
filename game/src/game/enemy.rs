@@ -96,7 +96,7 @@ pub struct SpawnSlot {
 
 impl EnemySpawner {
     const COOLDOWN: u32 = 620;
-    const RANGE: f32 = 80.;
+    const RANGE: f32 = 500.;
 }
 
 #[derive(Component, Default)]
