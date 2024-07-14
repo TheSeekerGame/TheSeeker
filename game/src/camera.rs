@@ -248,7 +248,7 @@ pub(crate) fn update_camera_rig(
     cam_xform.translation.x = rig.camera.x;
     cam_xform.translation.y = rig.camera.y;
 
-    /*if let Some((bg_layer, bg_transform)) = backround_query.iter().next() {
+    if let Some((bg_layer, bg_transform)) = backround_query.iter().next() {
         let bg_width = (bg_layer.c_wid * bg_layer.grid_size) as f32;
         let bg_height = (bg_layer.c_hei * bg_layer.grid_size) as f32;
 
@@ -281,7 +281,7 @@ pub(crate) fn update_camera_rig(
             limit_rect.max - cam_rect.half_size(),
         );
         cam_xform.translation = xy.extend(cam_xform.translation.z);
-    }*/
+    }
 }
 
 fn cli_camera_at(In(args): In<Vec<String>>, mut q_cam: Query<&mut Transform, With<MainCamera>>) {

@@ -514,29 +514,19 @@ impl ViewNode for DepthOfFieldNode {
                 render_pass.draw(0..3, 0..1);
             }
 
-            /*{
-                // take the main passes multisampled texture, and copy it to the src post process texture
-                let render_pass = render_context.command_encoder().begin_render_pass(&RenderPassDescriptor {
-                    label: Some("resolve_to_multisampled_texture"),
-                    color_attachments: &[Some(RenderPassColorAttachment {
-                        view: view_target.sampled_main_texture_view().unwrap(),
-                        resolve_target: Some(src),
-                        ops: Operations {
-                            load: LoadOp::Clear(default()),
-                            store: StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });
-            }*/
-
-            render_context.command_encoder().copy_texture_to_texture(
-                view_target.main_texture().as_image_copy(),
-                view_target.main_texture_other().as_image_copy(),
-                view_target.main_texture().size(),
-            );
+            if view_target.main_texture_view().id() != dst.id() {
+                render_context.command_encoder().copy_texture_to_texture(
+                    view_target.main_texture_other().as_image_copy(),
+                    view_target.main_texture().as_image_copy(),
+                    view_target.main_texture().size(),
+                );
+            } else {
+                render_context.command_encoder().copy_texture_to_texture(
+                    view_target.main_texture().as_image_copy(),
+                    view_target.main_texture_other().as_image_copy(),
+                    view_target.main_texture().size(),
+                );
+            }
 
             //render_context.command_encoder().clear_texture(view_target.sampled_main_texture().unwrap(), &Default::default());
             //render_context.command_encoder().clear_texture(view_target.main_texture(), &Default::default());

@@ -5,8 +5,8 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-[patch."https://github.com/TheSeekerGame/seek_ecs_tilemap"]
-seek_ecs_tilemap = { path = "../seek_ecs_tilemap" }
+#[patch."https://github.com/TheSeekerGame/seek_ecs_tilemap"]
+#seek_ecs_tilemap = { path = "../seek_ecs_tilemap" }
 
 [patch.crates-io]
 # bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
@@ -16,7 +16,6 @@ seek_ecs_tilemap = { path = "../seek_ecs_tilemap" }
 # bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
 # bevy_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
 # bevy_xpbd_2d = { git = "https://github.com/TheSeekerGame/bevy_xpbd", branch = "TheSeeker" }
-seek_ecs_tilemap = { path = "../seek_ecs_tilemap" }
 
 bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
 bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
@@ -112,14 +111,13 @@ version = "0.10"
 features = ["toml", "ron"]
 
 [dependencies.bevy_ecs_ldtk]
-version = "0.9.15"
+version = "0.9.16"
 git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
 
 [dependencies.seek_ecs_tilemap]
-version = "0.1.14"
+version = "0.1.15"
 git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
-#path = "../seek_ecs_tilemap"
-features = ["default", "use_3d_pipeline"]
+features = ["default", "use_3d_pipeline", "background_tiles"]
 
 [dependencies.bevy_fluent]
 # version = "0.8"

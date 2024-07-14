@@ -129,7 +129,7 @@ fn attack_particles_setup(mut commands: Commands, mut effects: ResMut<Assets<Eff
                 screen_space_size: false,
             })
             .render(ColorOverLifetimeModifier { gradient })
-            .with_alpha_mode(AlphaMode::Mask(ExprWriter::new().lit(0.001).expr())),
+        //.with_alpha_mode(AlphaMode::Mask(ExprWriter::new().lit(0.001).expr())),
     );
 
     commands.insert_resource(ArcParticleEffectHandle(effect.clone()));
