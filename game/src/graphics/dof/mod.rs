@@ -443,7 +443,7 @@ impl ViewNode for DepthOfFieldNode {
             // Push the first input attachment.
             let mut color_attachments: SmallVec<[_; 2]> = SmallVec::new();
             color_attachments.push(Some(RenderPassColorAttachment {
-                view: view_target.sampled_main_texture_view().unwrap(),
+                view: dst,
                 resolve_target: None,
                 ops: Operations {
                     load: LoadOp::Clear(default()),
@@ -472,7 +472,7 @@ impl ViewNode for DepthOfFieldNode {
 
             {
                 // take the main passes multisampled texture, and copy it to the src post process texture
-                let render_pass = render_context.command_encoder().begin_render_pass(&RenderPassDescriptor {
+                /*let render_pass = render_context.command_encoder().begin_render_pass(&RenderPassDescriptor {
                     label: Some("resolve_from_multisampled_texture"),
                     color_attachments: &[Some(RenderPassColorAttachment {
                         view: view_target.sampled_main_texture_view().unwrap(),
@@ -485,41 +485,65 @@ impl ViewNode for DepthOfFieldNode {
                     depth_stencil_attachment: None,
                     timestamp_writes: None,
                     occlusion_query_set: None,
-                });
+                });*/
+            }
+            {
+                let render_pass_descriptor = RenderPassDescriptor {
+                    label: Some(pipeline_render_info.pass_label),
+                    color_attachments: &color_attachments,
+                    ..default()
+                };
+
+                let mut render_pass = render_context
+                    .command_encoder()
+                    .begin_render_pass(&render_pass_descriptor);
+                render_pass.set_pipeline(render_pipeline);
+                // Set the per-view bind group.
+                render_pass.set_bind_group(
+                    0,
+                    &view_bind_group,
+                    &[view_uniform_offset.offset],
+                );
+                // Set the global bind group shared among all invocations of the shader.
+                render_pass.set_bind_group(
+                    1,
+                    global_bind_group,
+                    &[dof_settings_uniform_index.index()],
+                );
+                // Render the full-screen pass.
+                render_pass.draw(0..3, 0..1);
             }
 
-            let render_pass_descriptor = RenderPassDescriptor {
-                label: Some(pipeline_render_info.pass_label),
-                color_attachments: &color_attachments,
-                ..default()
-            };
+            /*{
+                // take the main passes multisampled texture, and copy it to the src post process texture
+                let render_pass = render_context.command_encoder().begin_render_pass(&RenderPassDescriptor {
+                    label: Some("resolve_to_multisampled_texture"),
+                    color_attachments: &[Some(RenderPassColorAttachment {
+                        view: view_target.sampled_main_texture_view().unwrap(),
+                        resolve_target: Some(src),
+                        ops: Operations {
+                            load: LoadOp::Clear(default()),
+                            store: StoreOp::Store,
+                        },
+                    })],
+                    depth_stencil_attachment: None,
+                    timestamp_writes: None,
+                    occlusion_query_set: None,
+                });
+            }*/
 
-            let mut render_pass = render_context
-                .command_encoder()
-                .begin_render_pass(&render_pass_descriptor);
-            render_pass.set_pipeline(render_pipeline);
-            // Set the per-view bind group.
-            render_pass.set_bind_group(
-                0,
-                &view_bind_group,
-                &[view_uniform_offset.offset],
+            render_context.command_encoder().copy_texture_to_texture(
+                view_target.main_texture().as_image_copy(),
+                view_target.main_texture_other().as_image_copy(),
+                view_target.main_texture().size(),
             );
-            // Set the global bind group shared among all invocations of the shader.
-            render_pass.set_bind_group(
-                1,
-                global_bind_group,
-                &[dof_settings_uniform_index.index()],
-            );
-            // Render the full-screen pass.
-            render_pass.draw(0..3, 0..1);
-
 
             //render_context.command_encoder().clear_texture(view_target.sampled_main_texture().unwrap(), &Default::default());
             //render_context.command_encoder().clear_texture(view_target.main_texture(), &Default::default());
             /*render_context.command_encoder().copy_texture_to_texture(
                 view_target.main_texture_other().as_image_copy(),
-                view_target.main_texture().as_image_copy(),
-                view_target.main_texture().size(),
+                view_target.sampled_main_texture().unwrap().as_image_copy(),
+                view_target.sampled_main_texture().unwrap().size(),
             );*/
             //let postprocess = view_target.post_process_write();
         }
@@ -797,11 +821,11 @@ pub fn prepare_auxiliary_depth_of_field_textures(
         // The texture matches the main view target texture.
         let texture_descriptor = TextureDescriptor {
             label: Some("depth of field auxiliary texture"),
-            size: view_target.sampled_main_texture().unwrap().size(),
+            size: view_target.main_texture().size(),
             mip_level_count: 1,
-            sample_count: view_target.sampled_main_texture().unwrap().sample_count(),
+            sample_count: view_target.main_texture().sample_count(),
             dimension: TextureDimension::D2,
-            format: view_target.sampled_main_texture().unwrap().format(),
+            format: view_target.main_texture_format(),
             usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         };

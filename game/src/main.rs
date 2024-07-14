@@ -74,6 +74,7 @@ fn main() {
         level: bevy::log::Level::INFO,
         update_subscriber: None,
     });
+    app.insert_resource(Msaa::Off);
     app.add_plugins(bevy_plugins);
 
     // configure our app states
