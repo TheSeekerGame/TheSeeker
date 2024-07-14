@@ -282,6 +282,8 @@ fn bokeh_pass_0(in: FullscreenVertexOutput) -> DualOutput {
     var output: DualOutput;
     output.output_0 = vertical;
     output.output_1 = mix(vertical, diagonal, 0.5);
+    //output.output_0 = vec4(0.0, 1.0, 0.0, 1.0);
+    //output.output_1 = vec4(0.0, 1.0, 0.0, 1.0);
     return output;
 }
 
@@ -298,5 +300,6 @@ fn bokeh_pass_1(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let output_0 = box_blur_a(in.position, coc, vec2(COS_NEG_FRAC_PI_6, SIN_NEG_FRAC_PI_6));
     let output_1 = box_blur_b(in.position, coc, vec2(COS_NEG_FRAC_PI_5_6, SIN_NEG_FRAC_PI_5_6));
     return mix(output_0, output_1, 0.5);
+    //return vec4(0.0, 1.0, 0.0, 1.0);
 }
 #endif
