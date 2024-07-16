@@ -320,6 +320,11 @@ fn set_movement_slots(
             } else {
                 player.set_slot("MovingDown", false);
             }
+            if velocity.x.abs() > 50.0 {
+                player.set_slot("MovingSideways", true);
+            } else {
+                player.set_slot("MovingSideways", false);
+            }
         }
     }
 }
@@ -595,13 +600,10 @@ pub fn player_collisions(
 
                             possible_pos =
                                 (pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01)));
-                            println!("converged");
                         },
                         TOIStatus::Penetrating => {
                             let depenetration = -linear_velocity.0;
                             projected_velocity += depenetration;
-                            dbg!(projected_velocity);
-                            println!("penetrating");
                             possible_pos = original_pos;
                         },
                         TOIStatus::Failed => println!("failed"),

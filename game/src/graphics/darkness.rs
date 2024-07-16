@@ -9,7 +9,7 @@ use bevy::render::extract_component::{
     ComponentUniforms, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
 };
 use bevy::render::render_graph::{
-    NodeRunError, RenderGraphApp, RenderGraphContext, ViewNode, ViewNodeRunner, RenderLabel
+    NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
 };
 use bevy::render::render_resource::{
     BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
@@ -54,11 +54,8 @@ pub struct DarknessPlugin;
 
 impl Plugin for DarknessPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(Update, darkness_dynamics);
-        app.add_systems(
-            Update,
-            darkness_parallax.after(darkness_dynamics),
-        );
+        //app.add_systems(Update, darkness_dynamics);
+        //app.add_systems(Update, darkness_parallax);
         app.add_plugins((
             // The settings will be a component that lives in the main world but will
             // be extracted to the render world every frame.
@@ -199,7 +196,7 @@ fn darkness_parallax(
     settings: Query<&DarknessSettings>,
     parallaxed_bgs: Query<(Entity, &Parallax)>,
     children: Query<&Children>,
-    mut sprites: Query<&mut bevy_ecs_tilemap::tiles::TileColor>,
+    mut sprites: Query<&mut seek_ecs_tilemap::tiles::TileColor>,
 ) {
     let Some(settings) = settings.iter().next() else {
         return;

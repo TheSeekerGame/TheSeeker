@@ -277,4 +277,28 @@
         rows: 1,
         columns: 4,
     ),
+    "anim.merchant.Idle": File (
+        path: "animations/merchant/Idle.anim.toml",
+    ),
+    "anim.merchant.Idle.image": File (
+        path: "animations/merchant/Idle.png",
+    ),
+    "anim.merchant.Idle.atlas": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 46,
+    ),
+    "anim.yak.Idle": File (
+        path: "animations/yak/Idle.anim.toml",
+    ),
+    "anim.yak.Idle.image": File (
+        path: "animations/yak/Idle.png",
+    ),
+    "anim.yak.Idle.atlas": TextureAtlasLayout (
+        tile_size_x: 96.,
+        tile_size_y: 96.,
+        rows: 1,
+        columns: 32,
+    ),
 })

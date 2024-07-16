@@ -28,6 +28,7 @@ impl Plugin for LevelManagerPlugin {
             game_level_init,
         );
         app.add_systems(Update, attach_parallax);
+        app.add_systems(Update, hide_level_0);
     }
 }
 
@@ -36,7 +37,7 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
     // TODO: per-level asset management instead of preloaded assets
     // TODO: when we have save files, use that to choose the level to init at
 
-    #[cfg(not(feature = "dev"))]
+    //#[cfg(not(feature = "dev"))]
     commands.spawn((
         StateDespawnMarker,
         LdtkWorldBundle {
@@ -46,7 +47,7 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
             ..Default::default()
         },
     ));
-    #[cfg(feature = "dev")]
+    /*#[cfg(feature = "dev")]
     commands.spawn((
         StateDespawnMarker,
         LdtkWorldBundle {
@@ -55,7 +56,24 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
                 .expect("Expected asset key 'level.dev'"),
             ..Default::default()
         },
-    ));
+    ));*/
+}
+
+/// level_0 is a giant grey object that blocks all our backgrounds, so we hide it.
+fn hide_level_0(
+    mut commands: Commands,
+    mut query: Query<(&Name, &mut Visibility)>,
+    mut ran: Local<bool>,
+) {
+    if *ran { return; }
+    for (name, mut visbility) in query.iter_mut() {
+        if name.as_str() == "Level_0" {
+            *visbility = Visibility::Hidden;
+            println!("Made 'level_0' invisible");
+            *ran = true;
+            break;
+        }
+    }
 }
 
 /// An indicator component for when you want the main background without needing
@@ -63,34 +81,53 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
 #[derive(Component)]
 pub struct MainBackround;
 
+#[derive(Component)]
+pub struct OtherBackround;
+
 /// attaches parallax components to the different LdtkWorldBundle layers
 fn attach_parallax(
     mut commands: Commands,
-    query: Query<(Entity, &LayerMetadata, &Transform), Without<Parallax>>,
+    mut query: Query<
+        (Entity, &LayerMetadata, &mut Transform),
+        (Without<Parallax>, Without<OtherBackround>, Without<MainBackround>)
+    >,
 ) {
-    for (entity, layer_metadata, transform) in query.iter() {
+    for (entity, layer_metadata, mut transform) in query.iter_mut() {
+        let mut use_parallax = true;
         let amount = match &*layer_metadata.identifier {
-            "Background" => 0.3,
+            "Background" => 0.4,
             "FarBackground" => 0.3,
             "MiddleBackground" => 0.2,
             "NearBackground" => 0.1,
             "Main" => {
                 commands.entity(entity).insert(MainBackround);
-                continue;
+                use_parallax = false;
+                -transform.translation.z * 0.000001
             },
+            "Entities" => {
+                continue
+            }
             _ => {
-                continue;
+                commands.entity(entity).insert(OtherBackround);
+                use_parallax = false;
+                -transform.translation.z * 0.000001
             },
         };
 
-        commands.entity(entity).insert((
-            Parallax {
-                depth: 1.0 + amount,
-            },
-            ParallaxOffset(Vec2::new(
-                (layer_metadata.c_wid * layer_metadata.grid_size) as f32 * 0.5,
-                (layer_metadata.c_hei * layer_metadata.grid_size) as f32 * 0.5,
-            )),
-        ));
+        println!("{:?}: {amount}", layer_metadata.identifier);
+
+        transform.translation.z = 0.0 - amount;
+
+        if use_parallax {
+            commands.entity(entity).insert((
+                Parallax {
+                    depth: 1.0 + amount,
+                },
+                ParallaxOffset(Vec2::new(
+                    (layer_metadata.c_wid * layer_metadata.grid_size) as f32 * 0.5,
+                    (layer_metadata.c_hei * layer_metadata.grid_size) as f32 * 0.5,
+                )),
+            ));
+        }
     }
 }

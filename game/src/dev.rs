@@ -28,9 +28,9 @@ impl Plugin for DevPlugin {
             LogDiagnosticsPlugin::default(),
             // FilterQueryInspectorPlugin::<(With<Enemy>)>::default(),
             // WorldInspectorPlugin::new(),
-            SteppingEguiPlugin::default().add_schedule(GameTickUpdate),
+            //SteppingEguiPlugin::default().add_schedule(GameTickUpdate),
         ));
-        app.add_plugins(WorldInspectorPlugin::default());
+        //app.add_plugins(WorldInspectorPlugin::default());
     }
 }
 

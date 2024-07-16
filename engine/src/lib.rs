@@ -4,7 +4,6 @@ pub mod prelude {
     pub use bevy::utils::{Duration, HashMap, HashSet, Instant};
     pub use bevy_asset_loader::prelude::*;
     pub use bevy_ecs_ldtk::prelude::*;
-    pub use bevy_ecs_tilemap::prelude::*;
     pub use iyes_bevy_extras::prelude::*;
     pub use iyes_cli::prelude::*;
     pub use iyes_progress::prelude::*;

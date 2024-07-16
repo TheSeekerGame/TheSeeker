@@ -96,7 +96,7 @@ pub struct SpawnSlot {
 
 impl EnemySpawner {
     const COOLDOWN: u32 = 620;
-    const RANGE: f32 = 80.;
+    const RANGE: f32 = 500.;
 }
 
 #[derive(Component, Default)]
@@ -200,7 +200,7 @@ fn setup_enemy(
 ) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
         //TODO: ensure propper z order
-        xf_gent.translation.z = 14.;
+        xf_gent.translation.z = 14.0 * 0.000001;
         let e_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
             Name::new("Enemy"),

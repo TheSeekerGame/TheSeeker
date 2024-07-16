@@ -10,6 +10,8 @@ mod prelude {
 use crate::prelude::*;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
+use iyes_perf_ui::PerfUiPlugin;
+use bevy_sprite3d::Sprite3dPlugin;
 use theseeker_engine::physics::PhysicsPlugin;
 
 mod appstate;
@@ -28,7 +30,7 @@ mod screens {
 
 mod ui;
 
-#[cfg(feature = "dev")]
+//#[cfg(feature = "dev")]
 mod dev;
 pub mod graphics;
 mod parallax;
@@ -73,6 +75,7 @@ fn main() {
         level: bevy::log::Level::INFO,
         update_subscriber: None,
     });
+    app.insert_resource(Msaa::Off);
     app.add_plugins(bevy_plugins);
 
     // configure our app states
@@ -80,6 +83,7 @@ fn main() {
 
     // and custom "engine"
     app.add_plugins(theseeker_engine::EnginePlugins);
+    //app.add_plugin(Sprite3dPlugin);
 
     // external plugins
     app.add_plugins((
@@ -91,6 +95,7 @@ fn main() {
             .track_assets()
             .continue_to(AppState::MainMenu),
         PhysicsPlugin,
+        PerfUiPlugin,
     ));
 
     // our stuff
@@ -110,7 +115,7 @@ fn main() {
         crate::graphics::GraphicsFxPlugin,
     ));
 
-    #[cfg(feature = "dev")]
+    //#[cfg(feature = "dev")]
     app.add_plugins(crate::dev::DevPlugin);
 
     app.run();
