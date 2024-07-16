@@ -100,7 +100,10 @@ impl EnemySpawner {
 }
 
 #[derive(Component, Default)]
-pub struct EnemyBlueprint;
+pub struct EnemyBlueprint {
+    /// Hp added from spawner due to number of enemies killed.
+    bonus_hp: u32,
+}
 
 #[derive(Bundle)]
 pub struct EnemyGentBundle {
@@ -151,7 +154,7 @@ fn spawn_enemy(
                 cooldown_ticks: EnemySpawner::COOLDOWN,
             })
         }
-        //if we have killed enough enemies from this spawner, add snother slot
+        //if we have killed enough enemies from this spawner, adds another slot
         if spawner.slots.len() < **killed {
             spawner.slots.push(SpawnSlot {
                 enemy: None,
@@ -182,7 +185,11 @@ fn spawn_enemy(
                 if slot.cooldown_ticks >= EnemySpawner::COOLDOWN && should_spawn {
                     let id = commands
                         .spawn((
-                            EnemyBlueprintBundle::default(),
+                            EnemyBlueprintBundle {
+                                marker: EnemyBlueprint {
+                                    bonus_hp: 20 * killed.0 as u32
+                                },
+                            },
                             TransformBundle::from_transform(*transform),
                         ))
                         .id();
@@ -195,10 +202,11 @@ fn spawn_enemy(
 }
 
 fn setup_enemy(
-    mut q: Query<(&mut Transform, Entity), Added<EnemyBlueprint>>,
+    mut q: Query<(&mut Transform, Entity, Ref<EnemyBlueprint>)>,
     mut commands: Commands,
 ) {
-    for (mut xf_gent, e_gent) in q.iter_mut() {
+    for (mut xf_gent, e_gent, bp) in q.iter_mut() {
+        if !bp.is_added() { continue; }
         //TODO: ensure propper z order
         xf_gent.translation.z = 14.0 * 0.000001;
         let e_gfx = commands.spawn(()).id();
@@ -235,8 +243,8 @@ fn setup_enemy(
             Range::None,
             Target(None),
             Health {
-                current: 100,
-                max: 100,
+                current: 100 + bp.bonus_hp,
+                max: 100 + bp.bonus_hp,
             },
             Role::random(),
             Facing::Right,
@@ -258,6 +266,7 @@ fn setup_enemy(
             },
             animation: Default::default(),
         },));
+        commands.entity(e_gfx).remove::<EnemyBlueprint>();
     }
 }
 
