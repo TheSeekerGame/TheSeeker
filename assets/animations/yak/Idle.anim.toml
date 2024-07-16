@@ -1,0 +1,15 @@
+atlas_asset_key = "anim.yak.Idle.sprite"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 32
+frame_start = 1
+
+# Loop
+[[script]]
+run_at_frame = 32
+action = "SetFrameNext"
+frame_index = 1
