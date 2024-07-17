@@ -100,6 +100,7 @@ impl EnemySpawner {
 }
 
 #[derive(Component, Default)]
+#[component(storage = "SparseSet")]
 pub struct EnemyBlueprint {
     /// Hp added from spawner due to number of enemies killed.
     bonus_hp: u32,
