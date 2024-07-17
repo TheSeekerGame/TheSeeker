@@ -8,6 +8,12 @@ frame_min = 1
 frame_max = 46
 frame_start = 1
 
+# INITIALIZE AND FLIP
+[[script]]
+run_on_playback_control = "Start"
+action = "SetSpriteFlip"
+flip_x = true
+
 # Loop
 [[script]]
 run_at_frame = 46
