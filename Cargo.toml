@@ -84,6 +84,8 @@ ran = "2.0.1"            #for lighter weight/easier use random noise then using 
 
 bevy_egui = "0.27"
 bevy-inspector-egui = "0.24"
+bevy_fluent = "0.9.0"
+
 # This specific rev was working main on may 28th.
 # needed for moveble forcefields not availible in 0.10
 # (also has some wgsl fixes)
@@ -118,11 +120,6 @@ git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
 version = "0.1.15"
 git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
 features = ["default", "use_3d_pipeline", "background_tiles"]
-
-[dependencies.bevy_fluent]
-# version = "0.8"
-git = "https://github.com/brandon-reinhart/bevy_fluent"
-rev = "13d56c0e8e0d54fdd1ca6acba434c55529a99c62"
 
 [dependencies.bevy_tweening]
 version = "0.10"
