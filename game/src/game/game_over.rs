@@ -1,11 +1,12 @@
 use crate::camera::MainCamera;
+use crate::game::attack::KillCount;
 use crate::game::gentstate::Dead;
 use crate::game::player::{Player, PlayerStateSet};
 use crate::gamestate::GameState;
 use crate::prelude::{
     default, AlignItems, App, AppState, AssetServer, BackgroundColor, Commands, Component, Entity,
     FlexDirection, Has, IntoSystemConfigs, JustifyContent, NodeBundle, Plugin, PositionType, Query,
-    Res, Style, TargetCamera, Text, TextBundle, TextStyle, Time, UiRect, Update, Val, With,
+    Res, Style, TargetCamera, Text, TextBundle, TextStyle, Time, UiRect, Update, Val, With, ZIndex,
 };
 use sickle_ui::ui_builder::{UiBuilderExt, UiRoot};
 use sickle_ui::ui_style::{
@@ -14,7 +15,7 @@ use sickle_ui::ui_style::{
 };
 use sickle_ui::widgets::prelude::*;
 use theseeker_engine::gent::Gent;
-use theseeker_engine::prelude::{in_state, Color, GameTickUpdate};
+use theseeker_engine::prelude::{in_state, Color, GameTickUpdate, GameTime};
 
 /// A plugin that handles when the player has a game over
 pub struct GameOverPlugin;
@@ -33,6 +34,7 @@ impl Plugin for GameOverPlugin {
 }
 
 #[derive(Component)]
+#[component(storage = "SparseSet")]
 pub struct FadeIn {
     progress: f32,
 }
@@ -61,6 +63,8 @@ pub fn on_game_over(
     q_cam: Query<Entity, With<MainCamera>>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
+    kill_count: Res<KillCount>,
+    time: Res<GameTime>,
 ) {
     let Ok(cam_e) = q_cam.get_single() else {
         return;
@@ -88,6 +92,8 @@ pub fn on_game_over(
                     blue: 0.0,
                     alpha: 0.0,
                 }),
+                // This ensures we draw the ui above all other uis
+                z_index: ZIndex::Global(i32::MAX - 1000),
                 ..default()
             },
             FadeIn { progress: 0.0 },
@@ -97,6 +103,7 @@ pub fn on_game_over(
     );
 
     commands.ui_builder(UiRoot).column(|column| {
+        column.insert(ZIndex::Global(i32::MAX - 999));
         column
             .style()
             .position_type(PositionType::Absolute)
@@ -106,7 +113,7 @@ pub fn on_game_over(
             .width(Val::Percent(100.0));
         column.named("Game Over UI");
 
-        let base_style = TextStyle {
+        let mut base_style = TextStyle {
             font: asset_server.load("font/Tektur-Regular.ttf"),
             font_size: 42.0,
             color: Default::default(),
@@ -119,17 +126,33 @@ pub fn on_game_over(
         // Spacer
         column.spawn(NodeBundle {
             style: Style {
-                height: Val::Px(100.0),
+                height: Val::Percent(10.0),
                 ..default()
             },
             ..default()
         });
+
+        base_style.font_size = 24.0;
         column.spawn(TextBundle::from_section(
             "You were killed by an Ice Crawler",
-            TextStyle {
-                font_size: 24.0,
-                ..base_style
-            },
+            base_style.clone(),
         ));
+        column.spawn(TextBundle::from_section(
+            format!("Kills: {}", kill_count.0),
+            base_style.clone(),
+        ));
+        let score = (kill_count.0 as f64 / time.time_in_seconds()) * 100.0;
+        column.spawn(TextBundle::from_section(
+            format!("Score: {}", score as u32),
+            base_style.clone(),
+        ));
+
+        column.spawn(NodeBundle {
+            style: Style {
+                height: Val::Percent(10.0),
+                ..default()
+            },
+            ..default()
+        });
     });
 }
