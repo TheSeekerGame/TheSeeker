@@ -8,6 +8,8 @@ use crate::prelude::{
     FlexDirection, Has, IntoSystemConfigs, JustifyContent, NodeBundle, Plugin, PositionType, Query,
     Res, Style, TargetCamera, Text, TextBundle, TextStyle, Time, UiRect, Update, Val, With, ZIndex,
 };
+use crate::ui::button;
+use iyes_ui::prelude::OnClick;
 use sickle_ui::ui_builder::{UiBuilderExt, UiRoot};
 use sickle_ui::ui_style::{
     SetNodeAlignItemsExt, SetNodeBottomExt, SetNodeJustifyContentsExt, SetNodePositionTypeExt,
@@ -113,7 +115,7 @@ pub fn on_game_over(
             .width(Val::Percent(100.0));
         column.named("Game Over UI");
 
-        let mut base_style = TextStyle {
+        let mut style = TextStyle {
             font: asset_server.load("font/Tektur-Regular.ttf"),
             font_size: 42.0,
             color: Default::default(),
@@ -121,7 +123,7 @@ pub fn on_game_over(
 
         column.spawn(TextBundle::from_section(
             "GAME OVER",
-            base_style.clone(),
+            style.clone(),
         ));
         // Spacer
         column.spawn(NodeBundle {
@@ -132,19 +134,19 @@ pub fn on_game_over(
             ..default()
         });
 
-        base_style.font_size = 24.0;
+        style.font_size = 24.0;
         column.spawn(TextBundle::from_section(
             "You were killed by an Ice Crawler",
-            base_style.clone(),
+            style.clone(),
         ));
         column.spawn(TextBundle::from_section(
             format!("Kills: {}", kill_count.0),
-            base_style.clone(),
+            style.clone(),
         ));
         let score = (kill_count.0 as f64 / time.time_in_seconds()) * 100.0;
         column.spawn(TextBundle::from_section(
             format!("Score: {}", score as u32),
-            base_style.clone(),
+            style.clone(),
         ));
 
         column.spawn(NodeBundle {
@@ -154,5 +156,32 @@ pub fn on_game_over(
             },
             ..default()
         });
+
+        column.row(|row| {
+            row.style().justify_content(JustifyContent::Center);
+            button(
+                row,
+                OnClick::new().system(quit_game),
+                "Abandon Planet?",
+                style.clone(),
+            );
+            row.spawn(TextBundle::from_section(
+                "|",
+                style.clone(),
+            ));
+            button(
+                row,
+                OnClick::new().system(new_game),
+                "New Expedition!",
+                style.clone(),
+            );
+        });
     });
+}
+
+pub fn quit_game(mut commands: Commands) {
+    println!("Game exited. Trust me.");
+}
+pub fn new_game(mut commands: Commands) {
+    println!("Game restarted. Trust me.");
 }
