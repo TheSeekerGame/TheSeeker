@@ -15,6 +15,7 @@
 
 use crate::parallax::{Parallax, ParallaxOffset};
 use crate::prelude::*;
+use seek_ecs_tilemap::tiles::TilePos;
 
 pub struct LevelManagerPlugin;
 
@@ -29,6 +30,7 @@ impl Plugin for LevelManagerPlugin {
         );
         app.add_systems(Update, attach_parallax);
         app.add_systems(Update, hide_level_0);
+        app.add_systems(Update, game_tile_init);
     }
 }
 
@@ -38,15 +40,12 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
     // TODO: when we have save files, use that to choose the level to init at
 
     //#[cfg(not(feature = "dev"))]
-    commands.spawn((
-        StateDespawnMarker,
-        LdtkWorldBundle {
-            ldtk_handle: preloaded
-                .get_single_asset("level.01")
-                .expect("Expected asset key 'level.01'"),
-            ..Default::default()
-        },
-    ));
+    commands.spawn((LdtkWorldBundle {
+        ldtk_handle: preloaded
+            .get_single_asset("level.01")
+            .expect("Expected asset key 'level.01'"),
+        ..Default::default()
+    },));
     /*#[cfg(feature = "dev")]
     commands.spawn((
         StateDespawnMarker,
@@ -59,13 +58,23 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
     ));*/
 }
 
+/// System to make sure tile entities get removed with the levels, since they have no parents.
+fn game_tile_init(mut commands: Commands, query: Query<Entity, Added<TilePos>>) {
+    for e in query.iter() {
+        commands.entity(e).insert(StateDespawnMarker);
+        commands.entity(e).despawn();
+    }
+}
+
 /// level_0 is a giant grey object that blocks all our backgrounds, so we hide it.
 fn hide_level_0(
     mut commands: Commands,
     mut query: Query<(&Name, &mut Visibility)>,
     mut ran: Local<bool>,
 ) {
-    if *ran { return; }
+    if *ran {
+        return;
+    }
     for (name, mut visbility) in query.iter_mut() {
         if name.as_str() == "Level_0" {
             *visbility = Visibility::Hidden;
@@ -89,7 +98,11 @@ fn attach_parallax(
     mut commands: Commands,
     mut query: Query<
         (Entity, &LayerMetadata, &mut Transform),
-        (Without<Parallax>, Without<OtherBackround>, Without<MainBackround>)
+        (
+            Without<Parallax>,
+            Without<OtherBackround>,
+            Without<MainBackround>,
+        ),
     >,
 ) {
     for (entity, layer_metadata, mut transform) in query.iter_mut() {
@@ -104,9 +117,7 @@ fn attach_parallax(
                 use_parallax = false;
                 -transform.translation.z * 0.000001
             },
-            "Entities" => {
-                continue
-            }
+            "Entities" => continue,
             _ => {
                 commands.entity(entity).insert(OtherBackround);
                 use_parallax = false;
@@ -114,7 +125,11 @@ fn attach_parallax(
             },
         };
 
-        println!("{:?}: {amount}", layer_metadata.identifier);
+        println!(
+            "{:?}: {amount}",
+            layer_metadata.identifier
+        );
+        commands.entity(entity).try_insert(StateDespawnMarker);
 
         transform.translation.z = 0.0 - amount;
 

@@ -269,6 +269,7 @@ fn setup_player(
             Crits::new(2.0),
             FocusAbility::default(),
             TransitionQueue::default(),
+            StateDespawnMarker,
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },

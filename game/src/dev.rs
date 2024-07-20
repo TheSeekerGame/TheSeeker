@@ -27,10 +27,10 @@ impl Plugin for DevPlugin {
             FrameTimeDiagnosticsPlugin,
             LogDiagnosticsPlugin::default(),
             // FilterQueryInspectorPlugin::<(With<Enemy>)>::default(),
-            // WorldInspectorPlugin::new(),
             //SteppingEguiPlugin::default().add_schedule(GameTickUpdate),
         ));
-        //app.add_plugins(WorldInspectorPlugin::default());
+        #[cfg(feature = "dev")]
+        app.add_plugins(WorldInspectorPlugin::new());
     }
 }
 

@@ -5,8 +5,9 @@ use crate::game::player::{Player, PlayerStateSet};
 use crate::gamestate::GameState;
 use crate::prelude::{
     default, AlignItems, App, AppState, AssetServer, BackgroundColor, Commands, Component, Entity,
-    FlexDirection, Has, IntoSystemConfigs, JustifyContent, NodeBundle, Plugin, PositionType, Query,
-    Res, Style, TargetCamera, Text, TextBundle, TextStyle, Time, UiRect, Update, Val, With, ZIndex,
+    FlexDirection, Has, IntoSystemConfigs, JustifyContent, NextState, NodeBundle, Plugin,
+    PositionType, Query, Res, ResMut, StateDespawnMarker, Style, TargetCamera, Text, TextBundle,
+    TextStyle, Time, UiRect, Update, Val, With, ZIndex,
 };
 use crate::ui::button;
 use iyes_ui::prelude::OnClick;
@@ -100,12 +101,14 @@ pub fn on_game_over(
             },
             FadeIn { progress: 0.0 },
             TargetCamera(cam_e),
+            StateDespawnMarker,
         ),
         |_| {},
     );
 
     commands.ui_builder(UiRoot).column(|column| {
         column.insert(ZIndex::Global(i32::MAX - 999));
+        column.insert(StateDespawnMarker);
         column
             .style()
             .position_type(PositionType::Absolute)
@@ -161,7 +164,7 @@ pub fn on_game_over(
             row.style().justify_content(JustifyContent::Center);
             button(
                 row,
-                OnClick::new().system(quit_game),
+                OnClick::new().cli("AppState MainMenu"),
                 "Abandon Planet?",
                 style.clone(),
             );
@@ -179,9 +182,7 @@ pub fn on_game_over(
     });
 }
 
-pub fn quit_game(mut commands: Commands) {
-    println!("Game exited. Trust me.");
-}
+pub fn quit_game(mut commands: Commands, mut next_state: ResMut<NextState<AppState>>) {}
 pub fn new_game(mut commands: Commands) {
     println!("Game restarted. Trust me.");
 }

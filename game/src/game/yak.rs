@@ -1,9 +1,9 @@
+use crate::prelude::*;
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::TransformGfxFromGent;
 use theseeker_engine::prelude::*;
 use theseeker_engine::script::ScriptPlayer;
-use crate::prelude::*;
 
 pub struct YakPlugin;
 
@@ -47,22 +47,23 @@ pub fn setup_yak(
         xf_gent.translation.y += 5.0;
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
-        commands.entity(e_gent).insert((
-            Name::new("Yak"),
-        ));
+        commands.entity(e_gent).insert((Name::new("Yak"),));
         let mut player = ScriptPlayer::<SpriteAnimation>::default();
         player.play_key("anim.yak.Idle");
-        commands.entity(e_gfx).insert((YakGfxBundle {
-            marker: YakGfx { e_gent },
-            gent2gfx: TransformGfxFromGent {
-                pixel_aligned: false,
-                gent: e_gent,
+        commands.entity(e_gfx).insert((
+            YakGfxBundle {
+                marker: YakGfx { e_gent },
+                gent2gfx: TransformGfxFromGent {
+                    pixel_aligned: false,
+                    gent: e_gent,
+                },
+                sprite: SpriteSheetBundle {
+                    transform: *xf_gent,
+                    ..Default::default()
+                },
+                animation: SpriteAnimationBundle { player },
             },
-            sprite: SpriteSheetBundle {
-                transform: *xf_gent,
-                ..Default::default()
-            },
-            animation: SpriteAnimationBundle { player },
-        },));
+            StateDespawnMarker,
+        ));
     }
 }

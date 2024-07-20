@@ -188,7 +188,7 @@ fn spawn_enemy(
                         .spawn((
                             EnemyBlueprintBundle {
                                 marker: EnemyBlueprint {
-                                    bonus_hp: 20 * killed.0 as u32
+                                    bonus_hp: 20 * killed.0 as u32,
                                 },
                             },
                             TransformBundle::from_transform(*transform),
@@ -203,11 +203,17 @@ fn spawn_enemy(
 }
 
 fn setup_enemy(
-    mut q: Query<(&mut Transform, Entity, Ref<EnemyBlueprint>)>,
+    mut q: Query<(
+        &mut Transform,
+        Entity,
+        Ref<EnemyBlueprint>,
+    )>,
     mut commands: Commands,
 ) {
     for (mut xf_gent, e_gent, bp) in q.iter_mut() {
-        if !bp.is_added() { continue; }
+        if !bp.is_added() {
+            continue;
+        }
         //TODO: ensure propper z order
         xf_gent.translation.z = 14.0 * 0.000001;
         let e_gfx = commands.spawn(()).id();
@@ -254,19 +260,23 @@ fn setup_enemy(
             Waiting::new(12),
             AddQueue::default(),
             TransitionQueue::default(), // },
+            StateDespawnMarker,
         ));
-        commands.entity(e_gfx).insert((EnemyGfxBundle {
-            marker: EnemyGfx { e_gent },
-            gent2gfx: TransformGfxFromGent {
-                pixel_aligned: false,
-                gent: e_gent,
+        commands.entity(e_gfx).insert((
+            EnemyGfxBundle {
+                marker: EnemyGfx { e_gent },
+                gent2gfx: TransformGfxFromGent {
+                    pixel_aligned: false,
+                    gent: e_gent,
+                },
+                sprite: SpriteSheetBundle {
+                    transform: *xf_gent,
+                    ..Default::default()
+                },
+                animation: Default::default(),
             },
-            sprite: SpriteSheetBundle {
-                transform: *xf_gent,
-                ..Default::default()
-            },
-            animation: Default::default(),
-        },));
+            StateDespawnMarker,
+        ));
         commands.entity(e_gfx).remove::<EnemyBlueprint>();
     }
 }

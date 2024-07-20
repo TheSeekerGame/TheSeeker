@@ -53,6 +53,7 @@ fn spawn_toolbar(
                 ..default()
             },
             TargetCamera(cam_e),
+            StateDespawnMarker,
         ),
         |_| {},
     );
@@ -68,6 +69,7 @@ fn spawn_toolbar(
             row.named("ability_bar_ui");
             ability_bar = row.column(|_| {}).id();
         })
+        .insert(StateDespawnMarker)
         .id();
 
     commands.ui_builder(ability_bar).row(|row| {

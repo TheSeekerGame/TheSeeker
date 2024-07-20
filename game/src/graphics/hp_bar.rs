@@ -1,3 +1,4 @@
+use crate::appstate::StateDespawnMarker;
 use crate::camera::MainCamera;
 use crate::game::attack::Health;
 use crate::game::player::Player;
@@ -47,6 +48,7 @@ fn instance(
                             ..default()
                         },
                         HpBackground(entity),
+                        StateDespawnMarker,
                     ))
                     .with_children(|parent| {
                         parent.spawn((
