@@ -66,7 +66,7 @@ pub fn on_game_over(
     q_cam: Query<Entity, With<MainCamera>>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    kill_count: Res<KillCount>,
+    mut kill_count: ResMut<KillCount>,
     time: Res<GameTime>,
 ) {
     let Ok(cam_e) = q_cam.get_single() else {
@@ -174,15 +174,11 @@ pub fn on_game_over(
             ));
             button(
                 row,
-                OnClick::new().system(new_game),
+                OnClick::new().cli("AppState Restart"),
                 "New Expedition!",
                 style.clone(),
             );
         });
     });
-}
-
-pub fn quit_game(mut commands: Commands, mut next_state: ResMut<NextState<AppState>>) {}
-pub fn new_game(mut commands: Commands) {
-    println!("Game restarted. Trust me.");
+    kill_count.0 = 0;
 }

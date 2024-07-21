@@ -113,11 +113,11 @@ version = "0.10"
 features = ["toml", "ron"]
 
 [dependencies.bevy_ecs_ldtk]
-version = "0.9.16"
+version = "0.9.17"
 git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
 
 [dependencies.seek_ecs_tilemap]
-version = "0.1.15"
+version = "0.1.16"
 git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
 features = ["default", "use_3d_pipeline", "background_tiles"]
 

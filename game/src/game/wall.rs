@@ -189,6 +189,7 @@ pub fn spawn_wall_collision(
                             10.,
                         ),
                         GlobalTransform::default(),
+                        StateDespawnMarker,
                     ));
                 }
             });

@@ -14,6 +14,7 @@ impl Plugin for AppStatesPlugin {
                 despawn_all_recursive::<With<StateDespawnMarker>>,
             );
         }
+        app.add_systems(OnEnter(AppState::Restart), restart);
         app.register_clicommand_args("AppState", cli_appstate);
     }
 }
@@ -30,6 +31,7 @@ pub enum AppState {
     MainMenu,
     /// Gameplay
     InGame,
+    Restart,
 }
 
 /// Marker for entities that should be despawned on `AppState` transition.
@@ -52,4 +54,7 @@ fn cli_appstate(In(args): In<Vec<String>>, mut next: ResMut<NextState<AppState>>
     } else {
         error!("Invalid app state: {}", args[0]);
     }
+}
+pub fn restart(mut next_state: ResMut<NextState<AppState>>) {
+    next_state.set(AppState::InGame);
 }

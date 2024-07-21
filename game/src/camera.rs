@@ -83,7 +83,10 @@ pub(crate) fn setup_main_camera(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    commands.spawn(PerfUiCompleteBundle::default());
+    commands.spawn((
+        PerfUiCompleteBundle::default(),
+        StateDespawnMarker,
+    ));
     let mut camera = Camera2dBundle {
         camera: Camera {
             hdr: true,
