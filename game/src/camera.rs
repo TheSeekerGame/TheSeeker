@@ -87,7 +87,7 @@ pub(crate) fn setup_main_camera(
             hdr: true,
             ..default()
         },
-        tonemapping: Tonemapping::ReinhardLuminance,
+        tonemapping: Tonemapping::None,
         ..default()
     };
     camera.projection.scale = 1.0 / 6.0;
@@ -97,7 +97,7 @@ pub(crate) fn setup_main_camera(
             hdr: true,
             ..default()
         },
-        tonemapping: Tonemapping::ReinhardLuminance,
+        tonemapping: Tonemapping::None,
         ..default()
     };
 
