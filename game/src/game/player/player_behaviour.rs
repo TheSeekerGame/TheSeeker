@@ -809,7 +809,7 @@ fn add_attack(
     >,
 ) {
     for (mut transitions, action_state) in query.iter_mut() {
-        if action_state.pressed(&PlayerAction::Attack) {
+        if action_state.just_pressed(&PlayerAction::Attack) {
             transitions.push(CanAttack::new_transition(
                 Attacking::default(),
             ));
