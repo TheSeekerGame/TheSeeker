@@ -32,10 +32,6 @@ pub trait Transitionable<T: GentState> {
     }
 }
 
-//Box<dyn Transition>
-//imp Transition
-//apply
-
 //make not component, make field of state machine
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct TransitionQueue(Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>);
