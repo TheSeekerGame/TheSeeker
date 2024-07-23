@@ -46,6 +46,7 @@ fn spawn_killcounter(
                 ..default()
             },
             TargetCamera(cam_e),
+            StateDespawnMarker,
         ),
         |row| {
             let style = TextStyle {

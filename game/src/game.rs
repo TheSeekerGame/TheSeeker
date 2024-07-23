@@ -16,6 +16,7 @@ pub mod attack;
 mod wall;
 mod merchant;
 mod yak;
+mod game_over;
 
 pub struct GameplayPlugin;
 
@@ -39,6 +40,7 @@ impl Plugin for GameplayPlugin {
             yak::YakPlugin,
             attack::AttackPlugin,
             wall::WallPlugin,
+            game_over::GameOverPlugin,
         ));
     }
 }

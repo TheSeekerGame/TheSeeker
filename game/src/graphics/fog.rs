@@ -73,6 +73,7 @@ pub fn setup_fog(
                 }),
                 ..default()
             },
+            StateDespawnMarker,
         ));
     }
 }

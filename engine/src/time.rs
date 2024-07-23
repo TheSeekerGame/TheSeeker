@@ -156,6 +156,16 @@ impl GameTime {
         self.overstep = new_ticks.fract();
         self.new_ticks = self.total_ticks - self.tick;
     }
+
+    /// returns the amount of time since start; ie: ticks * tick length
+    pub fn time_in_seconds(&self) -> f64 {
+        self.tick() as f64 * self.seconds_per_tick()
+    }
+
+    /// Convenience function to save you the math
+    pub fn seconds_per_tick(&self) -> f64 {
+        1.0 / self.hz
+    }
 }
 
 /// Update `GameTime` every frame

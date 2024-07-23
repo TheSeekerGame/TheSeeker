@@ -1,5 +1,6 @@
 //! Everything to do with the in-game camera(s)
 
+use crate::game::gentstate::Dead;
 use crate::game::player::Player;
 use crate::graphics::darkness::DarknessSettings;
 use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
@@ -11,6 +12,7 @@ use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use iyes_perf_ui::PerfUiCompleteBundle;
 use ran::ran_f64_range;
+use theseeker_engine::gent::Gent;
 
 pub struct CameraPlugin;
 
@@ -81,7 +83,10 @@ pub(crate) fn setup_main_camera(
     mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
-    commands.spawn(PerfUiCompleteBundle::default());
+    commands.spawn((
+        PerfUiCompleteBundle::default(),
+        StateDespawnMarker,
+    ));
     let mut camera = Camera2dBundle {
         camera: Camera {
             hdr: true,
@@ -189,6 +194,8 @@ pub(crate) fn update_rig_trauma(
     mut rig: ResMut<CameraRig>,
     time: Res<Time>,
     keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut commands: Commands,
+    player_q: Query<Entity, (With<Gent>, With<Player>)>,
 ) {
     rig.trauma = (rig.trauma - 1.75 * time.delta_seconds()).max(0.0);
     #[cfg(feature = "dev")]
@@ -209,6 +216,11 @@ pub(crate) fn update_rig_trauma(
         for (i, key) in number_keys.iter().enumerate() {
             if keyboard_input.pressed(*key) {
                 rig.trauma = (i as f32 + 1.0) * 0.1;
+            }
+        }
+        if keyboard_input.pressed(KeyCode::Delete) || keyboard_input.pressed(KeyCode::Backspace) {
+            if let Some(e) = player_q.iter().next() {
+                commands.entity(e).try_insert(Dead::default());
             }
         }
     }
