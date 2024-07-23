@@ -15,7 +15,7 @@ use bevy::prelude::Has;
 
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
-use leafwing_input_manager::action_state::ActionState;
+use leafwing_input_manager::action_state::{self, ActionState};
 use rapier2d::geometry::{Group, InteractionGroups};
 use rapier2d::parry::query::TOIStatus;
 use theseeker_engine::assets::animation::SpriteAnimation;
@@ -141,7 +141,9 @@ pub fn player_whirl(
             if whirl.active {
                 if whirl.active_ticks as f32 > min_ticks {
                     if whirl.active {
-                        transition_queue.push(Attacking::new_transition(CanAttack));
+                        transition_queue.push(Attacking::new_transition(
+                            CanAttack::default(),
+                        ));
                     }
                     if let Some(whirl_attack) = whirl.attack_entity {
                         command.entity(whirl_attack).despawn();
@@ -460,7 +462,9 @@ pub fn player_dash(
                 } else {
                     transitions.push(Running::new_transition(Falling));
                 }
-                transitions.push(Attacking::new_transition(CanAttack));
+                transitions.push(Attacking::new_transition(
+                    CanAttack::default(),
+                ));
             }
         }
     }
@@ -800,6 +804,7 @@ fn add_attack(
         (
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
+            Option<&CanAttack>,
         ),
         (
             Without<Attacking>,
@@ -808,11 +813,17 @@ fn add_attack(
         ),
     >,
 ) {
-    for (mut transitions, action_state) in query.iter_mut() {
+    for (mut transitions, action_state, maybe_immediate) in query.iter_mut() {
         if action_state.just_pressed(&PlayerAction::Attack) {
             transitions.push(CanAttack::new_transition(
                 Attacking::default(),
             ));
+        } else if let Some(can_attack) = maybe_immediate {
+            if can_attack.immediate {
+                transitions.push(CanAttack::new_transition(
+                    Attacking::default(),
+                ));
+            }
         }
     }
 }
@@ -825,13 +836,16 @@ fn player_attack(
             &Facing,
             &mut Attacking,
             &mut TransitionQueue,
+            &ActionState<PlayerAction>,
             Option<&mut WhirlAbility>,
         ),
         (With<Player>),
     >,
     mut commands: Commands,
 ) {
-    for (entity, gent, facing, mut attacking, mut transitions, mut whirl) in query.iter_mut() {
+    for (entity, gent, facing, mut attacking, mut transitions, action_state, mut whirl) in
+        query.iter_mut()
+    {
         let whirl_active = if let Some(whirl) = &whirl {
             whirl.active
         } else {
@@ -878,12 +892,27 @@ fn player_attack(
             }
         }
         attacking.ticks += 1;
+        //if we are in the later half of attacking and another attack input was pressed,
+        //indicate an immediate follow up on animation end
+        if attacking.ticks >= Attacking::MAX * 8 - 8
+            && action_state.just_pressed(&PlayerAction::Attack)
+        {
+            attacking.followup = true;
+        }
         if attacking.ticks == Attacking::MAX * 8 {
             // Keep attacking if whirl is ongoing
             if whirl_active {
                 continue;
             }
-            transitions.push(Attacking::new_transition(CanAttack));
+            if attacking.followup {
+                transitions.push(Attacking::new_transition(CanAttack {
+                    immediate: true,
+                }));
+            } else {
+                transitions.push(Attacking::new_transition(
+                    CanAttack::default(),
+                ));
+            }
         }
     }
 }
