@@ -359,6 +359,7 @@ impl Transitionable<Falling> for Grounded {
 #[component(storage = "SparseSet")]
 pub struct Attacking {
     pub ticks: u32,
+    followup: bool,
 }
 impl Attacking {
     pub const MAX: u32 = 4;
@@ -371,7 +372,9 @@ impl Transitionable<CanAttack> for Attacking {
 
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
-pub struct CanAttack;
+pub struct CanAttack {
+    pub immediate: bool,
+}
 impl GentState for CanAttack {}
 
 impl Transitionable<Attacking> for CanAttack {
