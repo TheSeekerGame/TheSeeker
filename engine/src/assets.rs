@@ -149,7 +149,7 @@ impl PreloadedAssets {
         None
     }
 
-    pub fn get_multi_asset<T: Asset>(&self, key: &str) -> Option<&[UntypedHandle]> {
+    pub fn get_multi_asset(&self, key: &str) -> Option<&[UntypedHandle]> {
         if let Some(d) = self.get_asset(key) {
             if let DynamicAssetType::Collection(handles) = d {
                 return Some(handles.as_slice());
