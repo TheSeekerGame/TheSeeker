@@ -3,7 +3,6 @@ use std::sync::{atomic::{AtomicBool, AtomicI32, Ordering as MemOrdering}, Mutex}
 use rodio::{Sample, Source};
 use cpal::FromSample;
 
-use crate::data::TimeSpec;
 use crate::prelude::*;
 
 pub(super) type MySample = f32;
