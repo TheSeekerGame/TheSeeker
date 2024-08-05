@@ -32,6 +32,7 @@ pub struct SpriteAnimationTracker {
     ticks_per_frame: u32,
     ticks_remain: u32,
     bookmarks: HashMap<String, FrameId>,
+    q_extra: Vec<QueuedAction>,
 }
 
 impl SpriteAnimationTracker {
@@ -154,6 +155,7 @@ impl ScriptAction for SpriteAnimationScriptAction {
     fn run<'w>(
         &self,
         entity: Entity,
+        timing: ScriptActionTiming,
         actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
         (q,): &mut <Self::Param as SystemParam>::Item<'w, '_>,
@@ -179,7 +181,13 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 let index = frame_index.unwrap_or_default() + bm_offset;
                 atlas.index = index.as_sprite_index();
                 tracker.set_auto_next_frame(index);
-                ScriptUpdateResult::Loop
+                if let Some(actions) = tracker.frame_actions.get(&index) {
+                    tracker.q_extra.extend(actions.iter().map(|&action| QueuedAction {
+                        timing,
+                        action,
+                    }));
+                }
+                ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetTicksPerFrame { ticks_per_frame } => {
                 tracker.ticks_per_frame = *ticks_per_frame;
@@ -266,7 +274,10 @@ impl ScriptTracker for SpriteAnimationTracker {
     type InitParam = (SQuery<&'static mut TextureAtlas>,);
     type RunIf = SpriteAnimationScriptRunIf;
     type Settings = SpriteAnimationSettings;
-    type UpdateParam = (SQuery<&'static mut TextureAtlas>,);
+    type UpdateParam = (
+        SRes<GameTime>,
+        SQuery<&'static mut TextureAtlas>,
+    );
     type ActionParams = SpriteAnimationScriptParams;
 
     fn init<'w>(
@@ -340,8 +351,8 @@ impl ScriptTracker for SpriteAnimationTracker {
         &mut self,
         entity: Entity,
         _settings: &Self::Settings,
-        (q,): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
-        queue: &mut Vec<ActionId>,
+        (gt, q,): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        queue: &mut Vec<QueuedAction>,
     ) -> ScriptUpdateResult {
         let mut atlas = q
             .get_mut(entity)
@@ -352,11 +363,17 @@ impl ScriptTracker for SpriteAnimationTracker {
                 return ScriptUpdateResult::Finished;
             };
             if let Some(actions) = self.frame_actions.get(&next_frame) {
-                queue.extend_from_slice(&actions);
+                queue.extend(actions.iter().map(|&action| QueuedAction {
+                    timing: ScriptActionTiming::Tick(gt.tick()),
+                    action,
+                }));
             }
             for (quant, action_id) in &self.framequant_actions {
                 if quant.check(next_frame.as_sprite_index() as i64) {
-                    queue.push(*action_id);
+                    queue.push(QueuedAction {
+                        timing: ScriptActionTiming::Tick(gt.tick()),
+                        action: *action_id,
+                    });
                 }
             }
             atlas.index = next_frame.as_sprite_index();
@@ -369,7 +386,12 @@ impl ScriptTracker for SpriteAnimationTracker {
         ScriptUpdateResult::NormalRun
     }
 
-    fn set_slot(&mut self, _slot: &str, _state: bool) {
+    fn queue_extra_actions(
+        &mut self,
+        _settings: &Self::Settings,
+        queue: &mut Vec<QueuedAction>,
+    ) {
+        queue.append(&mut self.q_extra);
     }
 }
 

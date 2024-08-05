@@ -31,6 +31,7 @@ use crate::prelude::*;
 
 pub mod animation;
 pub mod assets;
+pub mod audio;
 pub mod ballistics_math;
 pub mod condition;
 pub mod data;
@@ -48,6 +49,7 @@ impl PluginGroup for EnginePlugins {
             .add(crate::time::GameTimePlugin)
             .add(crate::script::ScriptPlugin)
             .add(crate::animation::SpriteAnimationPlugin)
+            .add(crate::audio::AudioPlugin)
             .add(crate::gent::GentPlugin)
     }
 }

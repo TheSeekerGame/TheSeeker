@@ -25,6 +25,11 @@ if_previous_script_key = "testtt"
 action = "SetFrameNext"
 frame_index = 1
 
+[[script]]
+run_at_frame = 5
+action = "PlayAudio"
+asset_key = "audio.game.Footstep"
+
 # LOOP
 [[script]]
 run_at_frame = 10
