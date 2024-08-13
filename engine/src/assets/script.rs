@@ -157,6 +157,12 @@ pub enum CommonScriptAction {
     SlotToggle {
         slot: String,
     },
+    /// Play a sound (precise timing based on action's trigger condition)
+    PlayAudio {
+        asset_key: String,
+        volume: Option<f32>,
+        pan: Option<f32>,
+    },
 }
 
 #[derive(Debug, Clone)]

@@ -47,6 +47,14 @@ pub struct LevelLoadTime {
     pub tick: u64,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ScriptActionTiming {
+    Unknown,
+    UnknownTick,
+    Time(Duration),
+    Tick(u64),
+}
+
 pub trait ScriptAppExt {
     fn add_script_runtime<T: ScriptAsset>(&mut self) -> &mut Self;
 }
@@ -120,32 +128,43 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         entity: Entity,
         settings: &Self::Settings,
         param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
-        queue: &mut Vec<ActionId>,
+        queue: &mut Vec<QueuedAction>,
     ) -> ScriptUpdateResult;
     fn queue_extra_actions(
         &mut self,
         _settings: &Self::Settings,
-        _queue: &mut Vec<ActionId>,
+        _queue: &mut Vec<QueuedAction>,
     ) {}
-    fn set_slot(&mut self, _slot: &str, _state: bool) {}
+    fn set_slot(
+        &mut self,
+        _timing: ScriptActionTiming,
+        _slot: &str,
+        _state: bool,
+    ) {}
     fn has_slot(&self, _slot: &str) -> bool { false }
-    fn take_slots(&mut self) -> HashSet<String> {
+    fn take_slots(
+        &mut self,
+        _timing: ScriptActionTiming,
+    ) -> HashSet<String> {
         Default::default()
     }
-    fn clear_slots(&mut self) {}
+    fn clear_slots(
+        &mut self,
+        _timing: ScriptActionTiming,
+    ) {}
     fn do_start<'w>(
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
         _param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
-        _queue: &mut Vec<ActionId>,
+        _queue: &mut Vec<QueuedAction>,
     ) {}
     fn do_stop<'w>(
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
         _param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
-        _queue: &mut Vec<ActionId>,
+        _queue: &mut Vec<QueuedAction>,
     ) {}
 }
 
@@ -160,6 +179,7 @@ pub trait ScriptAction: Clone + Send + Sync + 'static {
     fn run<'w>(
         &self,
         entity: Entity,
+        timing: ScriptActionTiming,
         actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
         param: &mut <Self::Param as SystemParam>::Item<'w, '_>,
@@ -286,8 +306,14 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QueuedAction {
+    pub timing: ScriptActionTiming,
+    pub action: ActionId,
+}
+
 #[derive(Resource)]
-struct ScriptActionQueue<T: ScriptAsset>(Vec<ActionId>, PhantomData<T>);
+struct ScriptActionQueue<T: ScriptAsset>(Vec<QueuedAction>, PhantomData<T>);
 
 impl<T: ScriptAsset> Default for ScriptActionQueue<T> {
     fn default() -> Self {
@@ -328,17 +354,18 @@ fn script_changeover_system<T: ScriptAsset>(
         };
         // Need to sort to ensure actions run in the order they were
         // originally defined in the script asset.
-        action_queue.0.sort_unstable();
-        for action_id in action_queue.0.drain(..) {
-            let action = &script_rt.actions[action_id];
+        action_queue.0.sort_unstable_by_key(|qa| qa.action);
+        for qa in action_queue.0.drain(..) {
+            let action = &script_rt.actions[qa.action];
             {
                 let mut shouldrun_param = params.p2().into_inner();
-                action.0.should_run(e, &mut script_rt.tracker, action_id, &mut shouldrun_param)
+                action.0.should_run(e, &mut script_rt.tracker, qa.action, &mut shouldrun_param)
             }.err().unwrap_or_else(|| {
                 let mut action_param = params.p1().into_inner();
-                script_rt.actions[action_id].1.run(
+                script_rt.actions[qa.action].1.run(
                     e,
-                    &script_rt.actions[action_id].0,
+                    qa.timing,
+                    &script_rt.actions[qa.action].0,
                     &mut script_rt.tracker,
                     &mut action_param,
                 )
@@ -426,17 +453,18 @@ fn script_driver_system<T: ScriptAsset>(
                 }
                 // Need to sort to ensure actions run in the order they were
                 // originally defined in the script asset.
-                action_queue.0.sort_unstable();
-                for action_id in action_queue.0.drain(..) {
-                    let action = &script_rt.actions[action_id];
+                action_queue.0.sort_unstable_by_key(|qa| qa.action);
+                for qa in action_queue.0.drain(..) {
+                    let action = &script_rt.actions[qa.action];
                     let r = {
                         let mut shouldrun_param = params.p2().into_inner();
-                        action.0.should_run(e, &mut script_rt.tracker, action_id, &mut shouldrun_param)
+                        action.0.should_run(e, &mut script_rt.tracker, qa.action, &mut shouldrun_param)
                     }.err().unwrap_or_else(|| {
                         let mut action_param = params.p1().into_inner();
-                        script_rt.actions[action_id].1.run(
+                        script_rt.actions[qa.action].1.run(
                             e,
-                            &script_rt.actions[action_id].0,
+                            qa.timing,
+                            &script_rt.actions[qa.action].0,
                             &mut script_rt.tracker,
                             &mut action_param,
                         )
@@ -468,6 +496,7 @@ fn script_driver_system<T: ScriptAsset>(
 }
 
 fn script_init_system<T: ScriptAsset>(
+    gt: Res<GameTime>,
     preloaded: Res<PreloadedAssets>,
     ass_script: Res<Assets<T>>,
     mut runcounts: ResMut<ScriptRunCounts<T>>,
@@ -528,9 +557,10 @@ fn script_init_system<T: ScriptAsset>(
                     ScriptPlayerState::PrePlayKey { old_runtime, .. } => old_runtime,
                     _ => None,
                 };
-                let slots = old_runtime.map(|mut rt| rt.tracker.take_slots()).unwrap_or_default();
+                let timing = ScriptActionTiming::Tick(gt.tick());
+                let slots = old_runtime.map(|mut rt| rt.tracker.take_slots(timing)).unwrap_or_default();
                 for slot in slots.iter() {
-                    runtime.tracker.set_slot(slot, true);
+                    runtime.tracker.set_slot(timing, slot, true);
                 }
             }
             player.state = ScriptPlayerState::Starting {
@@ -661,53 +691,55 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
         }
     }
     pub fn clear_slots(&mut self) {
+        let timing = ScriptActionTiming::UnknownTick;
         match &mut self.state {
             ScriptPlayerState::Playing { ref mut runtime } => {
-                runtime.tracker.clear_slots();
+                runtime.tracker.clear_slots(timing);
             }
             ScriptPlayerState::Starting { ref mut runtime } => {
-                runtime.tracker.clear_slots();
+                runtime.tracker.clear_slots(timing);
             }
             ScriptPlayerState::Stopping { ref mut runtime } => {
-                runtime.tracker.clear_slots();
+                runtime.tracker.clear_slots(timing);
             }
             ScriptPlayerState::PrePlayHandle { old_runtime: Some(ref mut old_runtime), .. } => {
-                old_runtime.tracker.clear_slots();
+                old_runtime.tracker.clear_slots(timing);
             }
             ScriptPlayerState::PrePlayKey { old_runtime: Some(ref mut old_runtime), .. } => {
-                old_runtime.tracker.clear_slots();
+                old_runtime.tracker.clear_slots(timing);
             }
             ScriptPlayerState::ChangingHandle { old_runtime, .. } => {
-                old_runtime.tracker.clear_slots();
+                old_runtime.tracker.clear_slots(timing);
             }
             ScriptPlayerState::ChangingKey { old_runtime, .. } => {
-                old_runtime.tracker.clear_slots();
+                old_runtime.tracker.clear_slots(timing);
             }
             _ => {}
         }
     }
     pub fn set_slot(&mut self, slot: &str, state: bool) {
+        let timing = ScriptActionTiming::UnknownTick;
         match &mut self.state {
             ScriptPlayerState::Playing { ref mut runtime } => {
-                runtime.tracker.set_slot(slot, state);
+                runtime.tracker.set_slot(timing, slot, state);
             }
             ScriptPlayerState::Starting { ref mut runtime } => {
-                runtime.tracker.set_slot(slot, state);
+                runtime.tracker.set_slot(timing, slot, state);
             }
             ScriptPlayerState::Stopping { ref mut runtime } => {
-                runtime.tracker.set_slot(slot, state);
+                runtime.tracker.set_slot(timing, slot, state);
             }
             ScriptPlayerState::PrePlayHandle { old_runtime: Some(ref mut old_runtime), .. } => {
-                old_runtime.tracker.set_slot(slot, state);
+                old_runtime.tracker.set_slot(timing, slot, state);
             }
             ScriptPlayerState::PrePlayKey { old_runtime: Some(ref mut old_runtime), .. } => {
-                old_runtime.tracker.set_slot(slot, state);
+                old_runtime.tracker.set_slot(timing, slot, state);
             }
             ScriptPlayerState::ChangingHandle { old_runtime, .. } => {
-                old_runtime.tracker.set_slot(slot, state);
+                old_runtime.tracker.set_slot(timing, slot, state);
             }
             ScriptPlayerState::ChangingKey { old_runtime, .. } => {
-                old_runtime.tracker.set_slot(slot, state);
+                old_runtime.tracker.set_slot(timing, slot, state);
             }
             _ => {}
         }
