@@ -1,7 +1,7 @@
 use crate::appstate::AppState;
 use crate::camera::MainCamera;
 use crate::game::player::{
-    Attacking, CanAttack, CanDash, FocusAbility, FocusState, Player, PlayerConfig, WhirlAbility,
+    Attacking, CanAttack, CanDash, CanStealth, Player, PlayerConfig, WhirlAbility,
 };
 use crate::graphics::hp_bar::{HpBackground, HpBar, HpBarUiMaterial};
 use crate::prelude::*;
@@ -24,7 +24,7 @@ impl Plugin for SkillToolbarPlugin {
         app.add_systems(Update, update_attack_ability_ui);
         app.add_systems(Update, update_dash_ability_ui);
         app.add_systems(Update, update_whirl_ability_ui);
-        app.add_systems(Update, update_focus_ability_ui);
+        app.add_systems(Update, update_stealth_ability_ui);
         app.add_systems(
             OnExit(AppState::InGame),
             despawn_toolbar,
@@ -138,8 +138,8 @@ fn spawn_toolbar(
                 false,
             ));
             row.ability_widget(AbilityWidgetConfig::from(
-                "ui/game/FocusSkillIcon.png",
-                FocusAbilityUI,
+                "ui/game/StealthSkillIcon.png",
+                StealthAbilityUI,
                 true,
             ));
         });
@@ -206,7 +206,7 @@ pub struct DashAbilityUI;
 #[derive(Component, Clone)]
 pub struct WhirlAbilityUI;
 #[derive(Component, Clone)]
-pub struct FocusAbilityUI;
+pub struct StealthAbilityUI;
 
 fn update_attack_ability_ui(
     player: Query<(Option<&Attacking>, Has<CanAttack>), With<Player>>,
@@ -276,22 +276,23 @@ fn update_whirl_ability_ui(
     }
 }
 
-fn update_focus_ability_ui(
-    player: Query<&FocusAbility, With<Player>>,
-    focus_ui: Query<
+fn update_stealth_ability_ui(
+    player: Query<&CanStealth, With<Player>>,
+    stealth_ui: Query<
         Entity,
         (
-            With<FocusAbilityUI>,
+            With<StealthAbilityUI>,
             Without<AbilityWidget>,
         ),
     >,
     mut commands: Commands,
+    config: Res<PlayerConfig>,
 ) {
-    let Some(focus) = player.iter().next() else {
+    let Some(stealth) = player.iter().next() else {
         return;
     };
-    for entity in focus_ui.iter() {
-        let factor = 1.0 - focus.recharge / 10.0;
+    for entity in stealth_ui.iter() {
+        let factor = stealth.remaining_cooldown / config.stealth_cooldown;
         commands.entity(entity).factor(factor);
     }
 }

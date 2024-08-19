@@ -1,16 +1,14 @@
 pub mod arc_attack;
 pub mod particles;
 
-use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
-    update_sprite_colliders, Collider, LinearVelocity, PhysicsSet, PhysicsWorld, GROUND,
+    update_sprite_colliders, Collider, LinearVelocity, PhysicsWorld, GROUND,
 };
-use theseeker_engine::script::ScriptPlayer;
 
 use super::enemy::EnemyGfx;
 use super::player::PlayerGfx;
-use super::player::{FocusAbility, FocusState};
+use super::player::{CanDash, CanStealth, Player, PlayerConfig, WhirlAbility};
 use crate::game::enemy::{Defense, Enemy, EnemyStateSet};
 use crate::game::player::PlayerStateSet;
 use crate::game::{attack::particles::AttackParticlesPlugin, gentstate::Dead};
@@ -85,6 +83,7 @@ pub struct Attack {
     pub damaged_set: HashSet<Entity>,
     /// used to track if multiple hits are in the same attack or not
     pub new_group: bool,
+    pub stealthed: bool,
 }
 impl Attack {
     /// Lifetime is in game ticks
@@ -99,6 +98,7 @@ impl Attack {
             collided: Default::default(),
             damaged_set: Default::default(),
             new_group: false,
+            stealthed: false,
         }
     }
 }
@@ -150,9 +150,9 @@ pub fn attack_damage(
         Option<&Pushback>,
         Option<&Projectile>,
     )>,
+    mut health_query: Query<&mut Health>,
     mut damageable_query: Query<(
         Entity,
-        &mut Health,
         &Collider,
         &Gent,
         &GlobalTransform,
@@ -160,13 +160,21 @@ pub fn attack_damage(
         Has<Enemy>,
     )>,
     mut crits: Query<(&mut Crits), Without<Attack>>,
-    mut focus: Query<(&mut FocusAbility), Without<Attack>>,
+    mut player_skills: Query<
+        (
+            Option<&mut CanDash>,
+            Option<&mut WhirlAbility>,
+            Option<&mut CanStealth>,
+        ),
+        With<Player>,
+    >,
     mut gfx_query: Query<Entity, Or<(With<PlayerGfx>, With<EnemyGfx>)>>,
     mut commands: Commands,
     mut rig: ResMut<CameraRig>,
     time: Res<GameTime>,
+    config: Res<PlayerConfig>,
 ) {
-    for (entity, pos, mut attack, attack_collider, maybe_pushback, maybe_projectile) in
+    for (attacker_entity, pos, mut attack, attack_collider, maybe_pushback, maybe_projectile) in
         query.iter_mut()
     {
         let mut newly_collided: HashSet<Entity> = HashSet::default();
@@ -177,15 +185,15 @@ pub fn attack_damage(
                 .0
                 .collision_groups()
                 .with_filter(attack_collider.0.collision_groups().filter | GROUND),
-            Some(entity),
+            Some(attacker_entity),
         );
         let intersections_empty = intersections.is_empty();
         let mut targets = intersections
             .into_iter()
             // Filters out everything that's not damageable or one of the nearest max_targets entities to attack
             .filter_map(|colliding_entity| {
-                if let Ok((_, _, _, _, dmgbl_pos, _, _)) = damageable_query.get(colliding_entity) {
-                    newly_collided.insert(entity);
+                if let Ok((_, _, _, dmgbl_pos, _, _)) = damageable_query.get(colliding_entity) {
+                    newly_collided.insert(attacker_entity);
                     let dist = dmgbl_pos
                         .translation()
                         .xy()
@@ -210,14 +218,13 @@ pub fn attack_damage(
                 continue;
             };
 
-            let Ok((entity, mut health, collider, gent, dmgbl_trnsfrm, is_defending, is_enemy)) =
+            let Ok((damaged_entity, _, gent, _, is_defending, is_enemy)) =
                 damageable_query.get_mut(*entity)
             else {
                 continue;
             };
 
-            attack.damaged_set.insert(entity);
-
+            attack.damaged_set.insert(damaged_entity);
             let mut damage_dealt = if is_defending {
                 attack.damage / 4
             } else {
@@ -225,6 +232,7 @@ pub fn attack_damage(
             };
 
             let mut was_critical = false;
+            let was_stealthed = attack.stealthed;
             if let Ok((mut crit)) = crits.get_mut(attack.attacker) {
                 if crit.next_hit_is_critical {
                     damage_dealt = (damage_dealt as f32 * crit.crit_damage_multiplier) as u32;
@@ -236,16 +244,40 @@ pub fn attack_damage(
                     println!("crit_counter: {}", crit.counter);
                 }
             }
-            if let Ok((mut focus)) = focus.get_mut(attack.attacker) {
-                if focus.state != FocusState::InActive {
-                    damage_dealt = damage_dealt * 2;
-                    focus.state = FocusState::Applied
+            // Stealth Effects
+            let stealth_lifesteal = if was_critical { 1. } else { 0.2 };
+            if was_stealthed {
+                if let Ok(mut attacker_health) = health_query.get_mut(attack.attacker) {
+                    attacker_health.current = u32::min(
+                        attacker_health
+                            .current
+                            .saturating_add((damage_dealt as f32 * stealth_lifesteal) as u32),
+                        config.max_health,
+                    );
                 }
             }
+            if was_stealthed && was_critical {
+                if let Ok((mut maybe_can_dash, mut maybe_whirl_ability, mut maybe_can_stealth)) =
+                    player_skills.get_single_mut()
+                {
+                    if let Some(ref mut can_dash) = maybe_can_dash {
+                        can_dash.remaining_cooldown = 0.;
+                    }
+                    if let Some(ref mut whirl_ability) = maybe_whirl_ability {
+                        whirl_ability.energy = config.max_whirl_energy;
+                    }
+                    if let Some(ref mut can_stealth) = maybe_can_stealth {
+                        can_stealth.remaining_cooldown = 0.;
+                    }
+                }
+            }
+            let mut damaged_health = health_query
+                .get_mut(damaged_entity)
+                .expect("damaged have health");
 
-            health.current = health.current.saturating_sub(damage_dealt);
+            damaged_health.current = damaged_health.current.saturating_sub(damage_dealt);
             attack.damaged.push(DamageInfo {
-                entity,
+                entity: damaged_entity,
                 tick: time.tick(),
                 amount: damage_dealt,
                 crit: was_critical,
@@ -257,8 +289,8 @@ pub fn attack_damage(
                     max_ticks: 8,
                 });
             }
-            if health.current == 0 {
-                commands.entity(entity).insert(Dead::default());
+            if damaged_health.current == 0 {
+                commands.entity(damaged_entity).insert(Dead::default());
                 //apply more screenshake if an enemies health becomes depleted by this attack
                 if is_enemy {
                     rig.trauma = 0.4;
@@ -268,7 +300,7 @@ pub fn attack_damage(
                 rig.trauma = 0.3
             }
             if let Some(pushback) = maybe_pushback {
-                commands.entity(entity).insert(Knockback::new(
+                commands.entity(damaged_entity).insert(Knockback::new(
                     pushback.direction,
                     pushback.strength,
                     16,
@@ -297,19 +329,6 @@ pub fn attack_damage(
             if attack.new_group == false {
                 attack.new_group = true;
 
-                if let Ok((mut focus)) = focus.get_mut(attack.attacker) {
-                    if focus.state == FocusState::Applied {
-                        focus.state = FocusState::InActive;
-                        if let Ok((crit)) = crits.get(attack.attacker) {
-                            // If the hit *was* critical (since this runs before the
-                            // code that resets the critical hit indicator)
-                            if crit.next_hit_is_critical {
-                                focus.recharge = 10.0;
-                            }
-                        }
-                    }
-                }
-
                 if let Ok((mut crit)) = crits.get_mut(attack.attacker) {
                     let next_hit_counter = crit.counter + 1;
                     if next_hit_counter % 17 == 0 {
@@ -326,7 +345,7 @@ pub fn attack_damage(
         if maybe_projectile.is_some() && !intersections_empty && attack.current_lifetime > 1 {
             // Note: purposefully does not despawn child entities, nor remove the
             // reference, so that child particle systems have the option of lingering
-            commands.entity(entity).despawn();
+            commands.entity(attacker_entity).despawn();
         }
     }
 }
