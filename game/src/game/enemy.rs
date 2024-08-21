@@ -15,7 +15,7 @@ use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::{animation::SpriteAnimationBundle, physics::ENEMY_INSIDE};
 use theseeker_engine::{assets::animation::SpriteAnimation, physics::ENEMY_HURT};
 
-use super::player::{Player, PlayerConfig};
+use super::player::{Player, PlayerConfig, Stealthing};
 use crate::game::attack::arc_attack::Projectile;
 use crate::game::attack::particles::ArcParticleEffectHandle;
 use crate::game::attack::*;
@@ -510,10 +510,22 @@ fn check_player_range(
         ),
         With<Enemy>,
     >,
-    player_query: Query<(Entity, &GlobalTransform), (Without<Enemy>, With<Player>)>,
+    player_query: Query<
+        (
+            Entity,
+            &GlobalTransform,
+            Option<&Stealthing>,
+        ),
+        (Without<Enemy>, With<Player>),
+    >,
 ) {
     for (mut range, mut target, mut facing, trans, is_aggroed, is_meleeing) in query.iter_mut() {
-        if let Ok((player_e, player_trans)) = player_query.get_single() {
+        if let Ok((player_e, player_trans, player_stealth)) = player_query.get_single() {
+            if player_stealth.is_some() {
+                *range = Range::Deaggro;
+                target.0 = None;
+                continue;
+            }
             let distance = trans
                 .translation()
                 .truncate()

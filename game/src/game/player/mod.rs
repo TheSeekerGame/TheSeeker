@@ -109,7 +109,7 @@ pub enum PlayerAction {
     Attack,
     Dash,
     Whirl,
-    Focus,
+    Stealth,
 }
 
 fn debug_player_states(
@@ -189,6 +189,7 @@ fn debug_player(world: &World, query: Query<Entity, With<Player>>) {
 fn setup_player(
     mut q: Query<(&mut Transform, Entity), Added<PlayerBlueprint>>,
     mut commands: Commands,
+    config: Res<PlayerConfig>,
 ) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
         //TODO: proper way of ensuring z is correct
@@ -229,8 +230,8 @@ fn setup_player(
             },
             Facing::Right,
             Health {
-                current: 1600,
-                max: 1600,
+                current: config.max_health,
+                max: config.max_health,
             },
             //have to use builder here *i think* because of different types between keycode and
             //axis
@@ -252,10 +253,13 @@ fn setup_player(
                     .with(PlayerAction::Attack, KeyCode::KeyJ)
                     .with(PlayerAction::Dash, KeyCode::KeyK)
                     .with(PlayerAction::Whirl, KeyCode::KeyL)
-                    .with(PlayerAction::Focus, KeyCode::KeyI),
+                    .with(PlayerAction::Stealth, KeyCode::KeyI),
             },
             Falling,
             CanDash {
+                remaining_cooldown: 0.0,
+            },
+            CanStealth {
                 remaining_cooldown: 0.0,
             },
             WallSlideTime(f32::MAX),
@@ -267,7 +271,6 @@ fn setup_player(
                 attack_entity: None,
             },
             Crits::new(2.0),
-            FocusAbility::default(),
             TransitionQueue::default(),
             StateDespawnMarker,
         ));
@@ -418,6 +421,33 @@ impl Transitionable<Dashing> for CanDash {
     );
 }
 
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
+pub struct Stealthing {
+    duration: f32,
+}
+
+impl GentState for Stealthing {}
+impl Transitionable<CanStealth> for Stealthing {
+    type Removals = (Stealthing);
+}
+#[derive(Component, Debug)]
+#[component(storage = "SparseSet")]
+pub struct CanStealth {
+    pub remaining_cooldown: f32,
+}
+impl CanStealth {
+    pub fn new(config: &PlayerConfig) -> Self {
+        Self {
+            remaining_cooldown: config.stealth_cooldown,
+        }
+    }
+}
+impl GentState for CanStealth {}
+impl Transitionable<Stealthing> for CanStealth {
+    type Removals = (CanStealth,);
+}
+
 // Pseudo-States
 // Not quite the same as states, these components enable certain behaviours when attached,
 // and provide storage for that behaviours state
@@ -448,31 +478,6 @@ pub struct WhirlAbility {
     active_ticks: u32,
     pub energy: f32,
     attack_entity: Option<Entity>,
-}
-
-#[derive(Component, Debug)]
-pub struct FocusAbility {
-    /// Will the next attack apply double damage?
-    pub(crate) state: FocusState,
-    /// Once this reaches 10, ability can activate again.
-    pub(crate) recharge: f32,
-}
-
-impl Default for FocusAbility {
-    fn default() -> Self {
-        Self {
-            state: Default::default(),
-            recharge: 10.0,
-        }
-    }
-}
-
-#[derive(Default, Debug, PartialEq)]
-pub enum FocusState {
-    Active,
-    Applied,
-    #[default]
-    InActive,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -527,6 +532,12 @@ pub struct PlayerConfig {
     /// How many seconds does our character dash for?
     dash_duration: f32,
 
+    /// How many seconds does our character stealth for?
+    stealth_duration: f32,
+
+    /// How many seconds does our character stealth for?
+    pub stealth_cooldown: f32,
+
     /// How many pixels/s do they dash with?
     dash_velocity: f32,
 
@@ -540,6 +551,9 @@ pub struct PlayerConfig {
 
     /// Spends this much energy per second when not using whirl
     whirl_regen: f32,
+
+    /// How much max health the player has
+    pub max_health: u32,
 }
 
 fn load_player_config(
@@ -600,9 +614,12 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "dash_duration", |val| config.dash_duration = val);
     update_field(&mut errors, &cfg.0, "dash_velocity", |val| config.dash_velocity = val);
     update_field(&mut errors, &cfg.0, "dash_cooldown_duration", |val| config.dash_cooldown_duration = val);
+    update_field(&mut errors, &cfg.0, "stealth_duration", |val| config.stealth_duration = val);
+    update_field(&mut errors, &cfg.0, "stealth_cooldown", |val| config.stealth_cooldown = val);
     update_field(&mut errors, &cfg.0, "max_whirl_energy", |val| config.max_whirl_energy = val);
     update_field(&mut errors, &cfg.0, "whirl_cost", |val| config.whirl_cost = val);
     update_field(&mut errors, &cfg.0, "whirl_regen", |val| config.whirl_regen = val);
+    update_field(&mut errors, &cfg.0, "max_health", |val| config.max_health = val as u32);
 
    for error in errors{
        warn!("failed to load player cfg value: {}", error);

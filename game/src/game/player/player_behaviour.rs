@@ -3,9 +3,9 @@ use crate::game::attack::{Attack, Pushback};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
-    Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, FocusAbility, FocusState,
-    Grounded, HitFreezeTime, Idle, Jumping, Player, PlayerAction, PlayerConfig, PlayerGfx,
-    PlayerStateSet, Running, WallSlideTime, WhirlAbility,
+    Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded, HitFreezeTime, Idle,
+    Jumping, Player, PlayerAction, PlayerConfig, PlayerGfx, PlayerStateSet, Running, WallSlideTime,
+    WhirlAbility,
 };
 use crate::prelude::{
     any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
@@ -13,9 +13,10 @@ use crate::prelude::{
 };
 use bevy::prelude::Has;
 
+use bevy::sprite::Sprite;
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
-use leafwing_input_manager::action_state::{self, ActionState};
+use leafwing_input_manager::action_state::ActionState;
 use rapier2d::geometry::{Group, InteractionGroups};
 use rapier2d::parry::query::TOIStatus;
 use theseeker_engine::assets::animation::SpriteAnimation;
@@ -26,6 +27,8 @@ use theseeker_engine::physics::{
 };
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
+
+use super::{CanStealth, Stealthing};
 
 ///Player behavior systems.
 ///Do stuff here in states and add transitions to other states by pushing
@@ -40,11 +43,12 @@ impl Plugin for PlayerBehaviorPlugin {
                 (
                     player_idle.run_if(any_with_component::<Idle>),
                     add_attack,
-                    player_focus,
+                    player_stealth,
                     player_whirl.before(player_attack),
                     player_attack.run_if(any_with_component::<Attacking>),
                     player_move,
                     player_can_dash.run_if(any_with_component::<CanDash>),
+                    player_can_stealth.run_if(any_with_component::<CanStealth>),
                     player_run.run_if(any_with_component::<Running>),
                     player_jump.run_if(any_with_component::<Jumping>),
                     player_dash.run_if(any_with_component::<Dashing>),
@@ -72,31 +76,68 @@ impl Plugin for PlayerBehaviorPlugin {
     }
 }
 
-pub fn player_focus(
+pub fn player_stealth(
     mut query: Query<
         (
-            &mut FocusAbility,
-            &ActionState<PlayerAction>,
+            &mut Stealthing,
+            &mut TransitionQueue,
+            &Gent,
         ),
-        (With<Player>,),
+        With<Player>,
     >,
+    mut sprites: Query<&mut Sprite>,
+    config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
-    for (mut focus, action_state) in query.iter_mut() {
-        if action_state.just_pressed(&PlayerAction::Focus) {
-            if focus.recharge >= 10.0 {
-                if focus.state == FocusState::InActive {
-                    focus.state = FocusState::Active;
-                    focus.recharge = 0.0
-                }
+    for (mut stealthing, mut transitions, gent) in query.iter_mut() {
+        let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
+        if stealthing.is_added() {
+            // turn player stealth
+            sprite.color = sprite.color.with_a(0.5);
+        } else {
+            stealthing.duration += 1.0 / time.hz as f32;
+            if stealthing.duration > config.stealth_duration {
+                sprite.color = sprite.color.with_a(1.);
+
+                stealthing.duration = 0.0;
+                transitions.push(Stealthing::new_transition(
+                    CanStealth::new(&config),
+                ));
             }
-        }
-        if focus.recharge < 10.0 {
-            focus.recharge = (focus.recharge + 1.0 / time.hz as f32).clamp(0.0, 10.0);
         }
     }
 }
-
+pub fn player_can_stealth(
+    mut q_gent: Query<
+        (
+            &ActionState<PlayerAction>,
+            &mut CanStealth,
+            &mut TransitionQueue,
+            &Gent,
+        ),
+        (With<Player>, With<Gent>),
+    >,
+    mut sprites: Query<&mut Sprite, With<PlayerGfx>>,
+    time: Res<GameTime>,
+    mut rig: ResMut<CameraRig>,
+) {
+    for (action_state, mut can_stealth, mut transition_queue, gent) in q_gent.iter_mut() {
+        can_stealth.remaining_cooldown -= 1.0 / time.hz as f32;
+        if can_stealth.is_added() {
+            let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
+            sprite.color = sprite.color.with_a(1.0);
+        }
+        if action_state.just_pressed(&PlayerAction::Stealth) {
+            if can_stealth.remaining_cooldown <= 0.0 {
+                transition_queue.push(CanStealth::new_transition(
+                    Stealthing::default(),
+                ));
+            } else {
+                rig.trauma += 0.23;
+            }
+        }
+    }
+}
 pub fn player_whirl(
     mut q_gent: Query<
         (
@@ -241,13 +282,13 @@ fn player_move(
             &ActionState<PlayerAction>,
             &mut Facing,
             Option<&Grounded>,
-            &Gent,
+            Option<&Stealthing>,
             Option<&Dashing>,
         ),
         (With<Player>),
     >,
 ) {
-    for (mut velocity, action_state, mut facing, grounded, gent, dashing) in q_gent.iter_mut() {
+    for (mut velocity, action_state, mut facing, grounded, stealth, dashing) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
@@ -257,12 +298,12 @@ fn player_move(
         // What "%" does our character get slowed down per game tick.
         // Todo: Have this value be determined by tile type at some point?
         let ground_friction = 0.7;
-
+        let stealth_boost = if stealth.is_some() { 1.15 } else { 1.0 };
         direction = action_state.value(&PlayerAction::Move);
         let new_vel = if action_state.just_pressed(&PlayerAction::Move) {
-            velocity.x + accel * direction * ground_friction
+            (velocity.x + accel * direction * ground_friction) * stealth_boost
         } else if action_state.pressed(&PlayerAction::Move) {
-            velocity.x + initial_accel * direction * ground_friction
+            (velocity.x + initial_accel * direction * ground_friction) * stealth_boost
         } else {
             // de-acceleration profile
             if grounded.is_some() {
@@ -280,11 +321,10 @@ fn player_move(
 
         if dashing.is_none() {
             velocity.x = new_vel.clamp(
-                -config.max_move_vel,
-                config.max_move_vel,
+                -config.max_move_vel * stealth_boost,
+                config.max_move_vel * stealth_boost,
             );
         }
-
         if direction > 0.0 {
             *facing = Facing::Right;
         } else if direction < 0.0 {
@@ -838,13 +878,24 @@ fn player_attack(
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
             Option<&mut WhirlAbility>,
+            Option<&Stealthing>,
         ),
         (With<Player>),
     >,
+    mut sprites: Query<&mut Sprite>,
     mut commands: Commands,
+    config: Res<PlayerConfig>,
 ) {
-    for (entity, gent, facing, mut attacking, mut transitions, action_state, mut whirl) in
-        query.iter_mut()
+    for (
+        entity,
+        gent,
+        facing,
+        mut attacking,
+        mut transitions,
+        action_state,
+        mut whirl,
+        maybe_stealthing,
+    ) in query.iter_mut()
     {
         let whirl_active = if let Some(whirl) = &whirl {
             whirl.active
@@ -872,9 +923,16 @@ fn player_attack(
                             collided: Default::default(),
                             damaged_set: Default::default(),
                             new_group: false,
+                            stealthed: maybe_stealthing.is_some(),
                         }
                     } else {
-                        Attack::new(16, entity)
+                        let mut att = Attack::new(16, entity);
+                        if maybe_stealthing.is_some() {
+                            att.damage = att.damage * 2;
+                            att.stealthed = true;
+                        }
+
+                        att
                     },
                 ))
                 .set_parent(entity)
@@ -889,6 +947,13 @@ fn player_attack(
                 if whirl.active {
                     whirl.attack_entity = Some(id)
                 }
+            }
+            if maybe_stealthing.is_some() {
+                let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
+                sprite.color = sprite.color.with_a(1.0);
+                transitions.push(Stealthing::new_transition(
+                    CanStealth::new(&config),
+                ));
             }
         }
         attacking.ticks += 1;
