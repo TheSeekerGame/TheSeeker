@@ -117,7 +117,7 @@ pub fn player_can_stealth(
         ),
         (With<Player>, With<Gent>),
     >,
-    mut sprites: Query<&mut Sprite>,
+    mut sprites: Query<&mut Sprite, With<PlayerGfx>>,
     time: Res<GameTime>,
     mut rig: ResMut<CameraRig>,
 ) {
