@@ -1,4 +1,4 @@
-use std::sync::{atomic::{AtomicBool, AtomicI32, Ordering as MemOrdering}, Mutex};
+use std::sync::{atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering as MemOrdering}, Mutex};
 
 use rodio::{Sample, Source};
 use cpal::FromSample;
@@ -21,9 +21,9 @@ pub struct PrecisionMixer {
 }
 
 pub struct PrecisionMixerController {
-    reset_triggered: AtomicBool,
-    reset_offset: AtomicI32,
     has_pending: AtomicBool,
+    has_playing: AtomicBool,
+    sample_count: AtomicI64,
     tick_rate: f32,
     sample_rate: u32,
     channels: u16,
@@ -57,14 +57,26 @@ impl PrecisionMixerController {
             panic!("PrecisionMixer does not support > 2 audio channels!");
         }
         Arc::new(PrecisionMixerController {
-            reset_triggered: AtomicBool::new(false),
-            reset_offset: AtomicI32::new(0),
             has_pending: AtomicBool::new(false),
+            has_playing: AtomicBool::new(false),
+            sample_count: AtomicI64::new(0),
             pending: Mutex::new(Vec::with_capacity(16)),
             channels,
             sample_rate,
             tick_rate,
         })
+    }
+    pub fn has_playing(&self) -> bool {
+        self.has_playing.load(MemOrdering::Relaxed)
+    }
+    pub fn reset_sample_counter(&self, new: i64) {
+        self.sample_count.store(new, MemOrdering::Relaxed);
+    }
+    pub fn sample_count(&self) -> i64 {
+        self.sample_count.load(MemOrdering::Relaxed)
+    }
+    pub fn sample_rate(&self) -> u32 {
+        self.sample_rate
     }
     fn play_at_sample_number<T, S>(&self, start_at_sample_number: Option<i64>, source: T, volume: f32, pan: f32)
     where
@@ -123,32 +135,25 @@ impl PrecisionMixerController {
         ) as i64;
         self.play_at_sample_number(Some(start_at_sample_number), source, volume, pan);
     }
-
-    pub fn trigger_reset(&self, delay_ms: i32) {
-        let sample_offset = -delay_ms as i64 * self.sample_rate as i64 / 1000;
-        self.reset_offset.store(sample_offset as i32, MemOrdering::SeqCst);
-        self.reset_triggered.store(true, MemOrdering::SeqCst);
-    }
 }
 
 impl Iterator for PrecisionMixer {
     type Item = MySample;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.controller.reset_triggered.swap(false, MemOrdering::SeqCst) {
-            self.sample_count = self.controller.reset_offset.load(MemOrdering::SeqCst) as i64;
-        }
+        self.sample_count = self.controller.sample_count.load(MemOrdering::Relaxed);
         if self.controller.has_pending.load(MemOrdering::SeqCst) {
             self.process_pending();
         }
-
         let value = self.mix();
 
         self.current_channel += 1;
         if self.current_channel >= self.channels() {
             self.current_channel = 0;
-            self.sample_count += 1;
+            self.sample_count = self.controller.sample_count.fetch_add(1, MemOrdering::Relaxed);
         }
+
+        self.controller.has_playing.store(!self.playing.is_empty(), MemOrdering::Relaxed);
 
         if self.playing.is_empty() {
             Some(MySample::zero_value())
@@ -180,8 +185,8 @@ impl Source for PrecisionMixer {
 impl PrecisionMixer {
     pub fn new(controller: Arc<PrecisionMixerController>) -> Self {
         PrecisionMixer {
-            sample_count: 0,
             current_channel: 0,
+            sample_count: 0,
             playing: Vec::with_capacity(16),
             controller: controller.clone(),
         }
@@ -295,6 +300,9 @@ impl PrecisionMixer {
 
             // if we are already late, we have to skip ahead into the source
             let missed_by = self.sample_count - start_at_sample_number;
+            if missed_by > 0 {
+                eprintln!("AUDIO MISSED BY {}", missed_by);
+            }
             for _ in 0..(missed_by * source.channels() as i64) {
                 if let Some(value) = source.next() {
                     track.first_sample = value;
