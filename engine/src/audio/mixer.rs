@@ -247,6 +247,10 @@ impl PrecisionMixer {
                             sum = sum.saturating_add(track.next_sample * track.volume * pan_l);
                             if let Some(value) = track.source.next() {
                                 track.next_sample = value;
+                                track.current_channel += 1;
+                                if track.current_channel >= track.source.channels() {
+                                    track.current_channel = 0;
+                                }
                             } else {
                                 track.done = true;
                             }
@@ -256,6 +260,10 @@ impl PrecisionMixer {
                             sum = sum.saturating_add(track.next_sample * track.volume * pan_r);
                             if let Some(value) = track.source.next() {
                                 track.next_sample = value;
+                                track.current_channel += 1;
+                                if track.current_channel >= track.source.channels() {
+                                    track.current_channel = 0;
+                                }
                             } else {
                                 track.done = true;
                             }
