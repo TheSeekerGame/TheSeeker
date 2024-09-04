@@ -366,7 +366,7 @@ pub struct Attacking {
     followup: bool,
 }
 impl Attacking {
-    pub const MAX: u32 = 4;
+    pub const MAX: u32 = 3;
 }
 impl GentState for Attacking {}
 

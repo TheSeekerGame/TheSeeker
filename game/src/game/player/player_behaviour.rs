@@ -940,7 +940,7 @@ fn player_attack(
             if !whirl_active {
                 commands.entity(id).insert(Pushback {
                     direction: facing.direction(),
-                    strength: 10.,
+                    strength: 5.,
                 });
             }
             if let Some(mut whirl) = whirl {

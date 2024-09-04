@@ -2,7 +2,7 @@
 
 # The maximum horizontal velocity the player can move at.
 # (in pixels/second)
-max_move_vel = 60.0
+max_move_vel = 65.0
 
 # The maximum downward velocity the player can fall at.
 # (in pixels/second)
@@ -64,4 +64,4 @@ whirl_cost = 2.0
 whirl_regen = 0.7
 
 # How much max health the player has
-max_health = 1600.0
+max_health = 150.0

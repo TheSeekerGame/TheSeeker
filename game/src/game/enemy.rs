@@ -482,7 +482,7 @@ impl Range {
     const AGGRO: f32 = 50.;
     const RANGED: f32 = 60.;
     const DEAGGRO: f32 = 70.;
-    const GROUPED: f32 = 30.;
+    const GROUPED: f32 = 100.;
 }
 
 /// Component that indicates that the player is inside of this enemy,

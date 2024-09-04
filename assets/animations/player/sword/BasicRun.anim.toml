@@ -19,6 +19,11 @@ if_runcount_quant = "2"
 action = "SetFrameNow"
 frame_index = 5
 
+[[script]]
+run_at_frame = [2, 6, 10]
+action = "PlayAudio"
+asset_key = "audio.game.HammerImpact"
+
 # Support left/right flipping
 [[script]]
 run_on_slot_enable = "DirectionLeft"

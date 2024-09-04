@@ -226,7 +226,7 @@ pub fn attack_damage(
 
             attack.damaged_set.insert(damaged_entity);
             let mut damage_dealt = if is_defending {
-                attack.damage / 4
+                attack.damage / 10000
             } else {
                 attack.damage
             };

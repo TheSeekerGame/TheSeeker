@@ -9,7 +9,7 @@ frame_start = 1
 [[script]]
 run_at_frame = [2, 7, 12]
 action = "PlayAudio"
-asset_key = "audio.game.HammerWhoosh"
+asset_key = "audio.game.HammerImpact"
 
 # VARIANT 1 INIT
 [[script]]
