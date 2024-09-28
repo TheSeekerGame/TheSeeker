@@ -7,7 +7,7 @@ use theseeker_engine::physics::{
 };
 
 use super::enemy::EnemyGfx;
-use super::player::PlayerGfx;
+use super::player::{PlayerGfx, PlayerPushback};
 use super::player::{CanDash, CanStealth, Player, PlayerConfig, WhirlAbility};
 use crate::game::enemy::{Defense, Enemy, EnemyStateSet};
 use crate::game::player::PlayerStateSet;
@@ -33,6 +33,7 @@ impl Plugin for AttackPlugin {
                 attack_cleanup,
                 damage_flash,
                 knockback,
+                on_hit_player_pushback.after(attack_damage),
             )
                 .chain()
                 .after(update_sprite_colliders)
@@ -84,6 +85,9 @@ pub struct Attack {
     /// used to track if multiple hits are in the same attack or not
     pub new_group: bool,
     pub stealthed: bool,
+
+    pub pushback: Option<PlayerPushback>,
+    pub pushback_applied: bool,
 }
 impl Attack {
     /// Lifetime is in game ticks
@@ -99,6 +103,8 @@ impl Attack {
             damaged_set: Default::default(),
             new_group: false,
             stealthed: false,
+            pushback: None,
+            pushback_applied: false,
         }
     }
 }
@@ -349,6 +355,26 @@ pub fn attack_damage(
         }
     }
 }
+
+fn on_hit_player_pushback(
+    mut commands: Commands,
+    mut query: Query<
+        (Entity, &mut Attack), 
+        (Changed<Attack>)
+    >,
+) {
+    for (entity, mut attack) in query.iter_mut() {
+
+        if !attack.pushback_applied && attack.pushback.is_some() {
+            if !attack.damaged.is_empty() {
+                commands.entity(attack.attacker).insert(attack.pushback.unwrap());
+                attack.pushback_applied = true;
+            }
+        }
+
+    }
+}
+
 
 //maybe should not modify velocity directly but add knockback, but this makes it behave differently
 //in states which dont set velocity every frame

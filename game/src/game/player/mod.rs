@@ -466,7 +466,7 @@ pub struct CoyoteTime(f32);
 pub struct JumpCount(u8);
 
 /// Pushback applied to the player for movement effects. Velocity is applied once and then blocks horizontal player movement.
-#[derive(Component, Default, Debug)]
+#[derive(Component, Default, Clone, Copy, Debug)]
 pub struct PlayerPushback {
     pub ticks: u32,
     pub max_ticks: u32,
@@ -587,7 +587,13 @@ pub struct PlayerConfig {
     wall_pushback: f32,
 
     /// Ticks for wall pushback velocity; determines how long movement is locked for 
-    wall_pushback_ticks :u32,
+    wall_pushback_ticks: u32,
+
+    /// Pushback velocity on basic melee hits
+    melee_pushback: f32,
+    
+    /// Ticks for melee pushback velocity; determines how long movement is locked for 
+    melee_pushback_ticks: u32,
 }
 
 fn load_player_config(
@@ -656,6 +662,8 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "max_health", |val| config.max_health = val as u32);
     update_field(&mut errors, &cfg.0, "wall_pushback", |val| config.wall_pushback = val);
     update_field(&mut errors, &cfg.0, "wall_pushback_ticks", |val| config.wall_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
+    update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
     
     for error in errors{
        warn!("failed to load player cfg value: {}", error);

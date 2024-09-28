@@ -71,3 +71,9 @@ wall_pushback = 50.0
 
 # Ticks for wall pushback velocity; determines how long movement is locked for 
 wall_pushback_ticks = 5.0
+
+# Pushback velocity on basic melee hits
+melee_pushback = 60.0
+
+# Ticks for melee pushback velocity; determines how long movement is locked for 
+melee_pushback_ticks = 10.0
