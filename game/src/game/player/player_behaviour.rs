@@ -866,8 +866,6 @@ fn player_sliding(
                     config.wall_pushback_ticks,
                 ));
 
-                println!("wall time: {}", wall_slide_time.0);
-
                 jump_count.0 = 2;
                 transitions.push(Falling::new_transition(Jumping))
             }
