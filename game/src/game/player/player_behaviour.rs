@@ -28,7 +28,7 @@ use theseeker_engine::physics::{
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
 
-use super::{CanStealth, Stealthing};
+use super::{CanStealth, JumpCount, Stealthing};
 
 ///Player behavior systems.
 ///Do stuff here in states and add transitions to other states by pushing
@@ -696,6 +696,7 @@ fn player_grounded(
             &mut Transform,
             &mut TransitionQueue,
             Option<&mut CoyoteTime>,
+            &mut JumpCount,
         ),
         (
             With<Player>,
@@ -716,6 +717,7 @@ fn player_grounded(
         mut position,
         mut transitions,
         coyote_time,
+        mut jump_count,
     ) in query.iter_mut()
     {
         let mut time_of_impact = 0.0;
@@ -747,9 +749,11 @@ fn player_grounded(
         //jump continuously if held
         //known issue https://github.com/bevyengine/bevy/issues/6183
         if action_state.just_pressed(&PlayerAction::Jump) {
+            jump_count.0 = 1;
             transitions.push(Grounded::new_transition(Jumping))
         } else if is_falling {
             if !in_c_time {
+                jump_count.0 = 1;
                 transitions.push(Grounded::new_transition(Falling))
             }
         }
@@ -766,6 +770,7 @@ fn player_falling(
             &ActionState<PlayerAction>,
             &ShapeCaster,
             &mut TransitionQueue,
+            &mut JumpCount,
         ),
         (
             With<Player>,
@@ -776,7 +781,7 @@ fn player_falling(
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, mut transform, mut velocity, action_state, hits, mut transitions) in
+    for (entity, mut transform, mut velocity, action_state, hits, mut transitions, mut jump_count) in
         query.iter_mut()
     {
         let fall_accel = config.fall_accel;
@@ -797,6 +802,14 @@ fn player_falling(
             }
         }
         if falling {
+            if action_state.just_pressed(&PlayerAction::Jump) && jump_count.0 > 0 {
+                velocity.y = 0.0;
+                jump_count.0 -= 1;
+                
+                //println!("air jump: {}", jump_count.0);
+                transitions.push(Falling::new_transition(Jumping))
+
+            }   
             if velocity.y > 0.0 {
                 velocity.y = velocity.y / 1.2;
             }
@@ -816,15 +829,19 @@ fn player_sliding(
         &mut TransitionQueue,
         &mut WallSlideTime,
         &mut LinearVelocity,
+        &mut JumpCount,
     )>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
 ) {
-    for (gent, action_state, mut transitions, mut wall_slide_time, mut lin_vel) in query.iter_mut()
+    for (gent, action_state, mut transitions, mut wall_slide_time, mut lin_vel, mut jump_count) in query.iter_mut()
     {
         let mut direction: f32 = 0.0;
         if action_state.pressed(&PlayerAction::Move) {
             direction = action_state.value(&PlayerAction::Move);
+        }
+        if wall_slide_time.sliding(&config) {
+            jump_count.0 = 1;
         }
         if let Ok(player) = gfx_query.get_mut(gent.e_gfx) {
             if wall_slide_time.sliding(&config) && action_state.just_pressed(&PlayerAction::Jump) {

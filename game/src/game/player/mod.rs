@@ -264,6 +264,7 @@ fn setup_player(
             },
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
+            JumpCount(0),
             WhirlAbility {
                 active: false,
                 active_ticks: 0,
@@ -460,6 +461,9 @@ pub struct HitFreezeTime(u32, Option<Entity>);
 
 #[derive(Component, Default, Debug)]
 pub struct CoyoteTime(f32);
+
+#[derive(Component, Default, Debug)]
+pub struct JumpCount(u8);
 
 /// Indicates that sliding is tracked for this entity
 #[derive(Component, Default, Debug)]
