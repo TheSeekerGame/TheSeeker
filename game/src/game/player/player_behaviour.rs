@@ -29,8 +29,8 @@ use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
 
 use super::{
-    player_new_stats_mod, CanStealth, JumpCount, Knockback, PlayerPushback, PlayerStats, StatType,
-    Stealthing,
+    dash_icon_fx, player_dash_fx, player_new_stats_mod, CanStealth, DashIcon, JumpCount, Knockback,
+    PlayerPushback, PlayerStats, StatType, Stealthing,
 };
 
 ///Player behavior systems.
@@ -56,6 +56,12 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_run.run_if(any_with_component::<Running>),
                     player_jump.run_if(any_with_component::<Jumping>),
                     player_dash.run_if(any_with_component::<Dashing>),
+                    player_dash_fx
+                        .after(player_dash)
+                        .run_if(any_with_component::<Dashing>),
+                    dash_icon_fx
+                        .after(player_dash_fx)
+                        .run_if(any_with_component::<DashIcon>),
                     player_grounded.run_if(any_with_component::<Grounded>),
                     player_falling.run_if(any_with_component::<Falling>),
                     player_pushback.run_if(any_with_component::<PlayerPushback>),
@@ -1078,4 +1084,3 @@ fn player_pushback(
         }
     }
 }
-
