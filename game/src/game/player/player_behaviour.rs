@@ -28,7 +28,10 @@ use theseeker_engine::physics::{
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
 
-use super::{CanStealth, JumpCount, Knockback, PlayerPushback, Stealthing};
+use super::{
+    player_new_stats_mod, CanStealth, JumpCount, Knockback, PlayerPushback, PlayerStats, StatType,
+    Stealthing,
+};
 
 ///Player behavior systems.
 ///Do stuff here in states and add transitions to other states by pushing
@@ -42,6 +45,7 @@ impl Plugin for PlayerBehaviorPlugin {
             (
                 (
                     player_idle.run_if(any_with_component::<Idle>),
+                    player_new_stats_mod,
                     add_attack,
                     player_stealth,
                     player_whirl.before(player_attack),
@@ -277,6 +281,7 @@ fn player_idle(
 
 fn player_move(
     config: Res<PlayerConfig>,
+    stats: Res<PlayerStats>,
     mut q_gent: Query<
         (
             &mut LinearVelocity,
@@ -286,18 +291,15 @@ fn player_move(
             Option<&Stealthing>,
             Option<&Dashing>,
         ),
-        (
-            Without<PlayerPushback>,
-            With<Player>,
-        ),
+        (Without<PlayerPushback>, With<Player>),
     >,
 ) {
     for (mut velocity, action_state, mut facing, grounded, stealth, dashing) in q_gent.iter_mut() {
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
-        let initial_accel = config.move_accel_init;
-        let accel = config.move_accel;
+        let initial_accel = stats.get(StatType::MoveAccelInit);
+        let accel = stats.get(StatType::MoveAccel);
 
         // What "%" does our character get slowed down per game tick.
         // Todo: Have this value be determined by tile type at some point?
@@ -329,8 +331,8 @@ fn player_move(
 
         if dashing.is_none() {
             velocity.x = new_vel.clamp(
-                -config.max_move_vel * stealth_boost,
-                config.max_move_vel * stealth_boost,
+                -stats.get(StatType::MoveVelMax) * stealth_boost,
+                stats.get(StatType::MoveVelMax) * stealth_boost,
             );
         }
         if direction > 0.0 {
@@ -789,8 +791,15 @@ fn player_falling(
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, mut transform, mut velocity, action_state, hits, mut transitions, mut jump_count) in
-        query.iter_mut()
+    for (
+        entity,
+        mut transform,
+        mut velocity,
+        action_state,
+        hits,
+        mut transitions,
+        mut jump_count,
+    ) in query.iter_mut()
     {
         let fall_accel = config.fall_accel;
         let mut falling = true;
@@ -813,11 +822,10 @@ fn player_falling(
             if action_state.just_pressed(&PlayerAction::Jump) && jump_count.0 > 0 {
                 velocity.y = 0.0;
                 jump_count.0 -= 1;
-                
+
                 //println!("air jump: {}", jump_count.0);
                 transitions.push(Falling::new_transition(Jumping))
-
-            }   
+            }
             if velocity.y > 0.0 {
                 velocity.y = velocity.y / 1.2;
             }
@@ -844,7 +852,15 @@ fn player_sliding(
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, gent, action_state, mut transitions, mut wall_slide_time, mut lin_vel, mut jump_count) in query.iter_mut()
+    for (
+        entity,
+        gent,
+        action_state,
+        mut transitions,
+        mut wall_slide_time,
+        mut lin_vel,
+        mut jump_count,
+    ) in query.iter_mut()
     {
         let mut direction: f32 = 0.0;
         if action_state.pressed(&PlayerAction::Move) {
@@ -855,8 +871,12 @@ fn player_sliding(
         }
         if let Ok(player) = gfx_query.get_mut(gent.e_gfx) {
             if wall_slide_time.sliding(&config) && action_state.just_pressed(&PlayerAction::Jump) {
-                
-                let jump_direction = direction * if wall_slide_time.strict_sliding(&config) {-1.0} else {1.0};
+                let jump_direction = direction
+                    * if wall_slide_time.strict_sliding(&config) {
+                        -1.0
+                    } else {
+                        1.0
+                    };
 
                 wall_slide_time.0 = f32::MAX;
                 // Move away from the wall a bit so that friction stops
@@ -964,15 +984,16 @@ fn player_attack(
                             stealthed: maybe_stealthing.is_some(),
                             pushback: None,
                             pushback_applied: false,
+                            status_mod: None,
                         }
                     } else {
-                        let mut att = Attack::new(16, entity); 
+                        let mut att = Attack::new(16, entity);
                         att.pushback = Some(PlayerPushback::new(
                             -facing.direction(),
                             Vec2::new(config.melee_pushback, 0.),
                             config.melee_pushback_ticks,
                         ));
-                        
+
                         if maybe_stealthing.is_some() {
                             att.damage = att.damage * 2;
                             att.stealthed = true;
@@ -988,12 +1009,11 @@ fn player_attack(
                     direction: facing.direction(),
                     strength: 5.,
                 });
-//                commands.entity(entity).insert(PlayerPushback::new(
-//                    -facing.direction(),
-//                    Vec2::new(config.melee_pushback, 0.),
-//                config.melee_pushback_ticks,
-//                ));
-
+                //                commands.entity(entity).insert(PlayerPushback::new(
+                //                    -facing.direction(),
+                //                    Vec2::new(config.melee_pushback, 0.),
+                //                config.melee_pushback_ticks,
+                //                ));
             }
             if let Some(mut whirl) = whirl {
                 if whirl.active {
@@ -1034,7 +1054,6 @@ fn player_attack(
     }
 }
 
-
 fn player_pushback(
     mut query: Query<(
         Entity,
@@ -1047,16 +1066,16 @@ fn player_pushback(
         knockback.ticks += 1;
 
         if knockback.is_added() {
-
             velocity.x = knockback.x_direction * knockback.strength.x;
             velocity.y = knockback.strength.y;
         }
-            
+
         if knockback.ticks > knockback.max_ticks {
             velocity.x = 0.;
             //velocity.y = 0.;
-            
+
             commands.entity(entity).remove::<PlayerPushback>();
         }
     }
 }
+

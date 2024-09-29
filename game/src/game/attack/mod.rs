@@ -7,8 +7,8 @@ use theseeker_engine::physics::{
 };
 
 use super::enemy::EnemyGfx;
-use super::player::{PlayerGfx, PlayerPushback};
 use super::player::{CanDash, CanStealth, Player, PlayerConfig, WhirlAbility};
+use super::player::{PlayerGfx, PlayerPushback, StatusModifier};
 use crate::game::enemy::{Defense, Enemy, EnemyStateSet};
 use crate::game::player::PlayerStateSet;
 use crate::game::{attack::particles::AttackParticlesPlugin, gentstate::Dead};
@@ -88,6 +88,7 @@ pub struct Attack {
 
     pub pushback: Option<PlayerPushback>,
     pub pushback_applied: bool,
+    pub status_mod: Option<StatusModifier>,
 }
 impl Attack {
     /// Lifetime is in game ticks
@@ -105,7 +106,13 @@ impl Attack {
             stealthed: false,
             pushback: None,
             pushback_applied: false,
+            status_mod: None,
         }
+    }
+
+    pub fn set_stat_mod(mut self, modif: StatusModifier) -> Self {
+        self.status_mod = Some(modif);
+        self
     }
 }
 
@@ -229,6 +236,13 @@ pub fn attack_damage(
             else {
                 continue;
             };
+
+            // Apply Stat Modifier (if exists)
+            if let Some(stat_modifier) = &attack.status_mod {
+                commands
+                    .entity(damaged_entity)
+                    .insert(stat_modifier.clone());
+            }
 
             attack.damaged_set.insert(damaged_entity);
             let mut damage_dealt = if is_defending {
@@ -358,23 +372,19 @@ pub fn attack_damage(
 
 fn on_hit_player_pushback(
     mut commands: Commands,
-    mut query: Query<
-        (Entity, &mut Attack), 
-        (Changed<Attack>)
-    >,
+    mut query: Query<(Entity, &mut Attack), (Changed<Attack>)>,
 ) {
     for (entity, mut attack) in query.iter_mut() {
-
         if !attack.pushback_applied && attack.pushback.is_some() {
             if !attack.damaged.is_empty() {
-                commands.entity(attack.attacker).insert(attack.pushback.unwrap());
+                commands
+                    .entity(attack.attacker)
+                    .insert(attack.pushback.unwrap());
                 attack.pushback_applied = true;
             }
         }
-
     }
 }
-
 
 //maybe should not modify velocity directly but add knockback, but this makes it behave differently
 //in states which dont set velocity every frame
