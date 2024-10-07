@@ -304,9 +304,13 @@ fn player_move(
         let ground_friction = 0.7;
         let stealth_boost = if stealth.is_some() { 1.15 } else { 1.0 };
         direction = action_state.value(&PlayerAction::Move);
-        let new_vel = if action_state.just_pressed(&PlayerAction::Move) {
+        let new_vel = if action_state.just_pressed(&PlayerAction::Move)
+            && action_state.value(&PlayerAction::Move) != 0.0
+        {
             (velocity.x + accel * direction * ground_friction) * stealth_boost
-        } else if action_state.pressed(&PlayerAction::Move) {
+        } else if action_state.pressed(&PlayerAction::Move)
+            && action_state.value(&PlayerAction::Move) != 0.0
+        {
             (velocity.x + initial_accel * direction * ground_friction) * stealth_boost
         } else {
             // de-acceleration profile
