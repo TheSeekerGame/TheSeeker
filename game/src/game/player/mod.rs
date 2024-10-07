@@ -1,5 +1,6 @@
 mod player_anim;
 mod player_behaviour;
+use bevy::utils::hashbrown::HashMap;
 use leafwing_input_manager::axislike::VirtualAxis;
 use leafwing_input_manager::{
     action_state::ActionState, input_map::InputMap, Actionlike, InputManagerBundle,
@@ -28,7 +29,13 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(PlayerConfig::default());
-        app.add_systems(GameTickUpdate, load_player_config);
+        app.add_systems(GameTickUpdate, (
+            load_player_config,
+            load_player_stats
+                .before(PlayerStateSet::Behavior)
+                .after(load_player_config)
+                .run_if(resource_changed::<PlayerConfig>),
+        ));
         app.add_systems(
             GameTickUpdate,
             ((setup_player, despawn_dead_player).run_if(in_state(GameState::Playing)))
@@ -668,4 +675,142 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     for error in errors{
        warn!("failed to load player cfg value: {}", error);
    }
+}
+
+fn load_player_stats(
+    mut commands: Commands,
+    player_config: Res<PlayerConfig>
+) {
+    commands.insert_resource(PlayerStats::init_from_config(&player_config));
+
+}
+
+/// Extend with additional parameter Stats
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+pub enum StatType {
+    MoveVelMax,
+    MoveAccelInit,
+    MoveAccel,
+}
+/// For now, Status Modifier is implemented so that only one Status Modifier is active at a time.
+/// However, a single Status Modifier can modify multiple Stats.
+/// scalar and delta will use the same coefficient for all Stats if there is only one.
+#[derive(Component, Clone)]
+pub struct StatusModifier {
+
+    status_types: Vec<StatType>,
+
+    /// Multiplying Factor on Stat, e.g. 102.0 * 0.5 = 51.0
+    scalar: Vec<f32>,
+    /// Offseting Value on Stat, e.g. 100.0 - 10.0 = 90.0
+    delta: Vec<f32>,
+
+    effect_col: Color,
+
+    time_remaining: f32,
+}
+
+impl StatusModifier {
+    pub fn basic_ice_spider() -> Self {
+        Self {
+            status_types: vec![
+                StatType::MoveVelMax,
+                StatType::MoveAccel,
+                StatType::MoveAccelInit,
+            ],
+            scalar: vec![0.5],
+            delta: vec![], 
+//            effect_col: Color::hex("C2C9C9").unwrap(),
+            effect_col: Color::hex("0099CC").unwrap(), // For More Visible Effect
+            time_remaining: 2.0, 
+        }
+    }
+}
+
+#[derive(Resource)]
+pub struct PlayerStats {
+    pub base_stats: HashMap<StatType, f32>,
+    pub effective_stats: HashMap<StatType, f32>,
+}
+
+impl PlayerStats {
+    pub fn init_from_config(config: &PlayerConfig) -> Self {
+        let stats = HashMap::from_iter(
+            vec![
+                (StatType::MoveVelMax, config.max_move_vel),
+                (StatType::MoveAccel, config.move_accel),
+                (StatType::MoveAccelInit, config.move_accel_init),
+            ]
+        );
+
+        Self {
+            base_stats: stats.clone(),
+            effective_stats: stats, 
+        }
+    }
+
+    pub fn get(&self, stat: StatType) -> f32 {
+        self.effective_stats[&stat]
+    }
+
+    pub fn reset_stats(&mut self) {
+        self.effective_stats = self.base_stats.clone();
+    }
+
+    pub fn update_stats(&mut self, modifier: &StatusModifier) {
+
+        self.effective_stats.clear();
+
+        let base_scalar = match modifier.scalar.len() {
+            0 => {Some(1.0)}
+            1 => {Some(modifier.scalar[0])}
+            _ => {None}
+        };
+        let base_delta = match modifier.delta.len() {
+            0 => {Some(0.0)}
+            1 => {Some(modifier.delta[0])}
+            _ => {None}
+        };
+
+        for (i, stat) in modifier.status_types.iter().enumerate() {
+
+            let val = self.base_stats[stat]
+            * base_scalar.unwrap_or_else(|| modifier.scalar[i])
+            + base_delta.unwrap_or_else(|| modifier.delta[i]);
+
+            self.effective_stats.insert(*stat, val);
+        }
+
+        println!("{:?}",self.effective_stats);
+    }
+
+}
+
+fn player_new_stats_mod (
+    mut query: Query<(Entity, &mut StatusModifier)>,
+    mut gfx_query: Query<(&PlayerGfx, &mut Sprite)>,
+    mut player_stats: ResMut<PlayerStats>,
+    time: Res<Time<Virtual>>,
+    mut commands: Commands,
+) {
+
+    for (p_gfx, mut sprite) in gfx_query.iter_mut() {
+        let Ok((entity, mut modifier)) = query.get_mut(p_gfx.e_gent) else {return};
+
+        if modifier.is_changed() {
+            player_stats.update_stats(&modifier);
+        }
+
+        sprite.color = modifier.effect_col.clone();
+
+        modifier.time_remaining -= time.delta_seconds();
+
+        if modifier.time_remaining < 0. {
+            commands.entity(entity).remove::<StatusModifier>();
+            player_stats.reset_stats();
+
+            sprite.color = Color::WHITE;
+        }
+    } 
+
 }
