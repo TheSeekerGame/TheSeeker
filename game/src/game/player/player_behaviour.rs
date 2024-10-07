@@ -962,9 +962,17 @@ fn player_attack(
                             damaged_set: Default::default(),
                             new_group: false,
                             stealthed: maybe_stealthing.is_some(),
+                            pushback: None,
+                            pushback_applied: false,
                         }
                     } else {
-                        let mut att = Attack::new(16, entity);
+                        let mut att = Attack::new(16, entity); 
+                        att.pushback = Some(PlayerPushback::new(
+                            -facing.direction(),
+                            Vec2::new(config.melee_pushback, 0.),
+                            config.melee_pushback_ticks,
+                        ));
+                        
                         if maybe_stealthing.is_some() {
                             att.damage = att.damage * 2;
                             att.stealthed = true;
@@ -980,6 +988,12 @@ fn player_attack(
                     direction: facing.direction(),
                     strength: 5.,
                 });
+//                commands.entity(entity).insert(PlayerPushback::new(
+//                    -facing.direction(),
+//                    Vec2::new(config.melee_pushback, 0.),
+//                config.melee_pushback_ticks,
+//                ));
+
             }
             if let Some(mut whirl) = whirl {
                 if whirl.active {
