@@ -264,6 +264,7 @@ fn setup_player(
             },
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
+            JumpCount(0),
             WhirlAbility {
                 active: false,
                 active_ticks: 0,
@@ -461,6 +462,30 @@ pub struct HitFreezeTime(u32, Option<Entity>);
 #[derive(Component, Default, Debug)]
 pub struct CoyoteTime(f32);
 
+#[derive(Component, Default, Debug)]
+pub struct JumpCount(u8);
+
+/// Pushback applied to the player for movement effects. Velocity is applied once and then blocks horizontal player movement.
+#[derive(Component, Default, Debug)]
+pub struct PlayerPushback {
+    pub ticks: u32,
+    pub max_ticks: u32,
+    pub x_direction: f32,
+//    pub y_direction: f32,
+    pub strength: Vec2,
+}
+
+impl PlayerPushback {
+    pub fn new(x_direction: f32, strength: Vec2, max_ticks: u32) -> Self {
+        Self {
+            ticks: 0,
+            max_ticks,
+            x_direction,
+            strength,
+        }
+    }
+}
+
 /// Indicates that sliding is tracked for this entity
 #[derive(Component, Default, Debug)]
 pub struct WallSlideTime(f32);
@@ -469,6 +494,9 @@ impl WallSlideTime {
     /// f32 starts incrementing when the player stops pressing into the wall
     fn sliding(&self, cfg: &PlayerConfig) -> bool {
         self.0 <= cfg.max_coyote_time * 2.0
+    }
+    fn strict_sliding(&self, cfg: &PlayerConfig) -> bool {
+        self.0 <= cfg.max_coyote_time * 1.0
     }
 }
 
@@ -554,6 +582,12 @@ pub struct PlayerConfig {
 
     /// How much max health the player has
     pub max_health: u32,
+
+    /// Pushback velocity on wall jumps
+    wall_pushback: f32,
+
+    /// Ticks for wall pushback velocity; determines how long movement is locked for 
+    wall_pushback_ticks :u32,
 }
 
 fn load_player_config(
@@ -620,8 +654,10 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "whirl_cost", |val| config.whirl_cost = val);
     update_field(&mut errors, &cfg.0, "whirl_regen", |val| config.whirl_regen = val);
     update_field(&mut errors, &cfg.0, "max_health", |val| config.max_health = val as u32);
-
-   for error in errors{
+    update_field(&mut errors, &cfg.0, "wall_pushback", |val| config.wall_pushback = val);
+    update_field(&mut errors, &cfg.0, "wall_pushback_ticks", |val| config.wall_pushback_ticks = val as u32);
+    
+    for error in errors{
        warn!("failed to load player cfg value: {}", error);
    }
 }

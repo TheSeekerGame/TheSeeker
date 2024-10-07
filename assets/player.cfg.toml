@@ -65,3 +65,9 @@ whirl_regen = 0.7
 
 # How much max health the player has
 max_health = 150.0
+
+# Pushback velocity on wall jumps
+wall_pushback = 50.0
+
+# Ticks for wall pushback velocity; determines how long movement is locked for 
+wall_pushback_ticks = 5.0
