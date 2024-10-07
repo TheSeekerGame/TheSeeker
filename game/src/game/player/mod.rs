@@ -29,13 +29,17 @@ pub struct PlayerPlugin;
 impl Plugin for PlayerPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(PlayerConfig::default());
-        app.add_systems(GameTickUpdate, (
-            load_player_config,
-            load_player_stats
-                .before(PlayerStateSet::Behavior)
-                .after(load_player_config)
-                .run_if(resource_changed::<PlayerConfig>),
-        ));
+        app.add_systems(
+            GameTickUpdate,
+            (
+                load_player_config,
+                load_player_stats
+                    .before(PlayerStateSet::Behavior)
+                    .after(load_player_config)
+                    .run_if(resource_changed::<PlayerConfig>),
+            ),
+        );
+        app.add_systems(Startup, load_dash_asset);
         app.add_systems(
             GameTickUpdate,
             ((setup_player, despawn_dead_player).run_if(in_state(GameState::Playing)))
@@ -478,7 +482,7 @@ pub struct PlayerPushback {
     pub ticks: u32,
     pub max_ticks: u32,
     pub x_direction: f32,
-//    pub y_direction: f32,
+    //    pub y_direction: f32,
     pub strength: Vec2,
 }
 
@@ -593,13 +597,13 @@ pub struct PlayerConfig {
     /// Pushback velocity on wall jumps
     wall_pushback: f32,
 
-    /// Ticks for wall pushback velocity; determines how long movement is locked for 
+    /// Ticks for wall pushback velocity; determines how long movement is locked for
     wall_pushback_ticks: u32,
 
     /// Pushback velocity on basic melee hits
     melee_pushback: f32,
-    
-    /// Ticks for melee pushback velocity; determines how long movement is locked for 
+
+    /// Ticks for melee pushback velocity; determines how long movement is locked for
     melee_pushback_ticks: u32,
 }
 
@@ -677,12 +681,10 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
    }
 }
 
-fn load_player_stats(
-    mut commands: Commands,
-    player_config: Res<PlayerConfig>
-) {
-    commands.insert_resource(PlayerStats::init_from_config(&player_config));
-
+fn load_player_stats(mut commands: Commands, player_config: Res<PlayerConfig>) {
+    commands.insert_resource(PlayerStats::init_from_config(
+        &player_config,
+    ));
 }
 
 /// Extend with additional parameter Stats
@@ -697,7 +699,6 @@ pub enum StatType {
 /// scalar and delta will use the same coefficient for all Stats if there is only one.
 #[derive(Component, Clone)]
 pub struct StatusModifier {
-
     status_types: Vec<StatType>,
 
     /// Multiplying Factor on Stat, e.g. 102.0 * 0.5 = 51.0
@@ -719,10 +720,10 @@ impl StatusModifier {
                 StatType::MoveAccelInit,
             ],
             scalar: vec![0.5],
-            delta: vec![], 
-//            effect_col: Color::hex("C2C9C9").unwrap(),
+            delta: vec![],
+            //            effect_col: Color::hex("C2C9C9").unwrap(),
             effect_col: Color::hex("0099CC").unwrap(), // For More Visible Effect
-            time_remaining: 2.0, 
+            time_remaining: 2.0,
         }
     }
 }
@@ -735,17 +736,21 @@ pub struct PlayerStats {
 
 impl PlayerStats {
     pub fn init_from_config(config: &PlayerConfig) -> Self {
-        let stats = HashMap::from_iter(
-            vec![
-                (StatType::MoveVelMax, config.max_move_vel),
-                (StatType::MoveAccel, config.move_accel),
-                (StatType::MoveAccelInit, config.move_accel_init),
-            ]
-        );
+        let stats = HashMap::from_iter(vec![
+            (
+                StatType::MoveVelMax,
+                config.max_move_vel,
+            ),
+            (StatType::MoveAccel, config.move_accel),
+            (
+                StatType::MoveAccelInit,
+                config.move_accel_init,
+            ),
+        ]);
 
         Self {
             base_stats: stats.clone(),
-            effective_stats: stats, 
+            effective_stats: stats,
         }
     }
 
@@ -758,44 +763,41 @@ impl PlayerStats {
     }
 
     pub fn update_stats(&mut self, modifier: &StatusModifier) {
-
         self.effective_stats.clear();
 
         let base_scalar = match modifier.scalar.len() {
-            0 => {Some(1.0)}
-            1 => {Some(modifier.scalar[0])}
-            _ => {None}
+            0 => Some(1.0),
+            1 => Some(modifier.scalar[0]),
+            _ => None,
         };
         let base_delta = match modifier.delta.len() {
-            0 => {Some(0.0)}
-            1 => {Some(modifier.delta[0])}
-            _ => {None}
+            0 => Some(0.0),
+            1 => Some(modifier.delta[0]),
+            _ => None,
         };
 
         for (i, stat) in modifier.status_types.iter().enumerate() {
-
-            let val = self.base_stats[stat]
-            * base_scalar.unwrap_or_else(|| modifier.scalar[i])
-            + base_delta.unwrap_or_else(|| modifier.delta[i]);
+            let val = self.base_stats[stat] * base_scalar.unwrap_or_else(|| modifier.scalar[i])
+                + base_delta.unwrap_or_else(|| modifier.delta[i]);
 
             self.effective_stats.insert(*stat, val);
         }
 
-        println!("{:?}",self.effective_stats);
+        println!("{:?}", self.effective_stats);
     }
-
 }
 
-fn player_new_stats_mod (
+fn player_new_stats_mod(
     mut query: Query<(Entity, &mut StatusModifier)>,
     mut gfx_query: Query<(&PlayerGfx, &mut Sprite)>,
     mut player_stats: ResMut<PlayerStats>,
     time: Res<Time<Virtual>>,
     mut commands: Commands,
 ) {
-
     for (p_gfx, mut sprite) in gfx_query.iter_mut() {
-        let Ok((entity, mut modifier)) = query.get_mut(p_gfx.e_gent) else {return};
+        let Ok((entity, mut modifier)) = query.get_mut(p_gfx.e_gent) else {
+            return;
+        };
 
         if modifier.is_changed() {
             player_stats.update_stats(&modifier);
@@ -811,6 +813,98 @@ fn player_new_stats_mod (
 
             sprite.color = Color::WHITE;
         }
-    } 
+    }
+}
+#[derive(Component)]
+pub struct DashIcon {
+    time: f32,
+    init_a: f32,
+}
 
+#[derive(Resource)]
+pub struct DashIconAssetHandle(Handle<Image>);
+
+pub fn load_dash_asset(assets: Res<AssetServer>, mut commands: Commands) {
+    let tex: Handle<Image> = assets.load("animations/player/movement/Dash.png");
+
+    commands.insert_resource(DashIconAssetHandle(tex));
+}
+
+pub fn player_dash_fx(
+    mut query: Query<
+        (
+            &GlobalTransform,
+            &Facing,
+            //            &LinearVelocity,
+            Ref<Dashing>,
+            Option<&Stealthing>,
+        ),
+        With<Player>,
+    >,
+    config: Res<PlayerConfig>,
+    time: Res<GameTime>,
+    mut commands: Commands,
+    asset: Res<DashIconAssetHandle>,
+) {
+    for (global_tr, facing, dashing, stealthing_maybe) in query.iter() {
+        let pos = global_tr.translation();
+
+        // Code for potentially interpolating position
+        // Not deemed necessary due to sufficient sprite overlap
+        //let dir = Vec3::new(
+        //    config.dash_velocity * facing.direction(),
+        //    0.0,
+        //    0.0,
+        //);
+        //let lpos = pos + dir * 0.5;
+        //if dashing.is_added() {
+        //
+        //} else
+        {
+            //let dir = Vec2::new(
+            //    config.dash_velocity * facing.direction(),
+            //    0.0,
+            //);
+
+            let tex: Handle<Image> = asset.0.clone();
+            let t = time.time_in_seconds() as f32 + config.dash_duration;
+
+            let init_a = match stealthing_maybe {
+                Some(_) => 0.2,
+                None => 0.5,
+            };
+
+            commands.spawn((
+                SpriteBundle {
+                    sprite: Sprite {
+                        flip_x: facing.direction() < 0.,
+                        ..default()
+                    },
+                    transform: Transform::from_translation(pos),
+                    texture: tex.clone(),
+                    ..default()
+                },
+                DashIcon { time: t, init_a },
+            ));
+        }
+    }
+}
+
+pub fn dash_icon_fx(
+    mut commands: Commands,
+    mut query: Query<(Entity, &DashIcon, &mut Sprite)>,
+    time: Res<GameTime>,
+    config: Res<PlayerConfig>,
+) {
+    for (entity, icon, mut sprite) in query.iter_mut() {
+        let d = time.time_in_seconds() as f32 - icon.time;
+
+        let r = d / config.dash_duration;
+
+        if r >= 1.0 {
+            commands.entity(entity).despawn();
+        } else {
+            sprite.color.set_a((1.0 - r) * icon.init_a);
+        }
+    }
 }
