@@ -64,7 +64,10 @@ impl Plugin for PlayerBehaviorPlugin {
                         .run_if(any_with_component::<DashIcon>),
                     player_grounded.run_if(any_with_component::<Grounded>),
                     player_falling.run_if(any_with_component::<Falling>),
-                    player_pushback.run_if(any_with_component::<PlayerPushback>),
+                    player_pushback
+                        .run_if(any_with_component::<PlayerPushback>)
+                        .before(player_jump)
+                        .after(player_sliding),
                     player_sliding
                         .before(player_jump)
                         .run_if(any_with_component::<Falling>),
