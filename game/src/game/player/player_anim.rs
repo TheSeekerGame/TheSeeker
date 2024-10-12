@@ -9,6 +9,7 @@ use crate::prelude::{
 };
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
+use theseeker_engine::physics::LinearVelocity;
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
 
@@ -54,7 +55,11 @@ fn player_idle_animation(
 
 fn player_falling_animation(
     f_query: Query<
-        (&Gent, Option<&WallSlideTime>),
+        (
+            &Gent,
+            &LinearVelocity,
+            Option<&WallSlideTime>,
+        ),
         Or<(
             (With<Falling>, Without<Attacking>),
             (With<Falling>, Added<CanAttack>),
@@ -63,7 +68,7 @@ fn player_falling_animation(
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
 ) {
-    for (gent, sliding) in f_query.iter() {
+    for (gent, velocity, sliding) in f_query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             if let Some(sliding) = sliding {
                 if sliding.sliding(&config) {
@@ -71,12 +76,12 @@ fn player_falling_animation(
                         player.play_key("anim.player.WallSlide");
                     }
                 } else {
-                    if player.current_key().unwrap_or("") != "anim.player.Fall" {
+                    if velocity.y < 0. && player.current_key().unwrap_or("") != "anim.player.Fall" {
                         player.play_key("anim.player.Fall");
                     }
                 }
             } else {
-                if player.current_key().unwrap_or("") != "anim.player.Fall" {
+                if velocity.y < 0. && player.current_key().unwrap_or("") != "anim.player.Fall" {
                     player.play_key("anim.player.Fall");
                 }
             }
