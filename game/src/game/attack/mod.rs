@@ -6,7 +6,7 @@ use std::mem;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{update_sprite_colliders, Collider, PhysicsWorld, GROUND};
 
-use super::enemy::{Defense, EnemyGfx, EnemyStateSet};
+use super::enemy::{Defense, EnemyGfx, EnemyStateSet, JustGotHitMarker};
 use super::gentstate::{Dead, Facing};
 use super::physics::Knockback;
 use super::player::{
@@ -336,6 +336,9 @@ pub fn apply_attack_damage(
                 if let Some(stat_modifier) = &attack.status_mod {
                     commands.entity(t_entity).insert(stat_modifier.clone());
                 }
+
+                //apply JustGotHitMarker TODO: switch hitspark to damage_info events
+                commands.entity(damaged_entity).insert(JustGotHitMarker);
 
                 //apply damage to the targets health
                 health.current = health.current.saturating_sub(damage);

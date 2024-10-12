@@ -252,11 +252,15 @@ fn setup_player(
         xf_gent.translation.z = 15.0 * 0.000001;
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
+        let e_effects_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
             Name::new("Player"),
             PlayerGentBundle {
                 player: Player,
-                marker: Gent { e_gfx },
+                marker: Gent {
+                    e_gfx,
+                    e_effects_gfx,
+                },
                 phys: GentPhysicsBundle {
                     collider: Collider::cuboid(
                         4.0,
