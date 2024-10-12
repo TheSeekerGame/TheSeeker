@@ -23,6 +23,7 @@ pub struct GentPhysicsBundle {
 #[derive(Component)]
 pub struct Gent {
     pub e_gfx: Entity,
+    pub e_effects_gfx: Entity,
 }
 
 #[derive(Component)]

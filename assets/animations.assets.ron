@@ -241,6 +241,18 @@
         rows: 1,
         columns: 5,
     ),
+     "anim.spider.Sparks": File (
+        path: "animations/spider/Sparks.anim.toml",
+    ),
+     "anim.spider.Sparks.image": File (
+        path: "animations/spider/Sparks.png",
+    ),
+    "anim.spider.Sparks.atlas": TextureAtlasLayout (
+        tile_size_x: 36.,
+        tile_size_y: 36.,
+        rows: 1,
+        columns: 18,
+    ),
     "anim.spider.Retreat": File (
         path: "animations/spider/Retreat.anim.toml",
     ),
