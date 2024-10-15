@@ -6,7 +6,7 @@ use theseeker_engine::physics::{
     update_sprite_colliders, Collider, LinearVelocity, PhysicsWorld, GROUND,
 };
 
-use super::enemy::EnemyGfx;
+use super::enemy::{EnemyGfx, JustGotHitMarker};
 use super::player::{CanDash, CanStealth, Player, PlayerConfig, WhirlAbility};
 use super::player::{PlayerGfx, PlayerPushback, StatusModifier};
 use crate::game::enemy::{Defense, Enemy, EnemyStateSet};
@@ -308,6 +308,7 @@ pub fn attack_damage(
                     current_ticks: 0,
                     max_ticks: 8,
                 });
+                commands.entity(damaged_entity).insert(JustGotHitMarker);
             }
             if damaged_health.current == 0 {
                 commands.entity(damaged_entity).insert(Dead::default());
