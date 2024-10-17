@@ -692,4 +692,39 @@ Runs the given script asset. Will create a new Bevy entity for it.
 
 </details>
 
+<details>
+  <summary>
+  <code>PlayAudio</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+run_on_slot_enable = "Play"
+action = "PlayAudio"
+asset_key = "sound.example"
+```
+
+```toml
+[[script]]
+run_at_tick = 500
+action = "PlayAudio"
+asset_key = "sound.example"
+volume = 0.5
+pan = -0.25
+```
+
+Plays the given audio asset in a manner that is precisely timed according
+to the script action's trigger condition.
+
+The sound timing is carefully enforced. For example, you could use this
+action as a sort of "musical sequencer" to play sounds at specific time
+intervals to form rhythmic patterns.
+
+The `volume` and `pan` options default to `1.0` and `0.0`, respectively.
+Pan ranges from `-1.0` (fully to the left) to `1.0` (fully to the right).
+
+</details>
+
 [`EntityLabels`]: https://theseekergame.github.io/api/theseeker_engine/script/label/struct.EntityLabels.html
