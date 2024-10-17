@@ -1,5 +1,5 @@
 use crate::camera::MainCamera;
-use crate::game::attack::{attack_damage, Attack};
+use crate::game::attack::{apply_attack_damage, Attack};
 use crate::game::player::Player;
 use crate::prelude::Update;
 use bevy::prelude::*;
@@ -13,7 +13,8 @@ impl Plugin for DmgNumbersPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             GameTickUpdate,
-            instance.after(attack_damage),
+            // instance.after(attack_damage),
+            instance.after(apply_attack_damage),
         );
         app.add_systems(Update, update_number);
     }
@@ -44,7 +45,7 @@ fn instance(
         for attack_info in attack.damaged.iter() {
             if attack_info.tick == game_time.tick() {
                 // only spawn in a floating number for a new attack damage instance
-                if let Ok((transform, collider, player)) = entity_with_hp.get(attack_info.entity) {
+                if let Ok((transform, collider, player)) = entity_with_hp.get(attack_info.target) {
                     // Don't display damage numbers at all for the player
                     if player.is_some() {
                         continue;

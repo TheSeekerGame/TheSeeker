@@ -9,6 +9,8 @@ use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
 use rapier2d::geometry::{Group, InteractionGroups};
 use rapier2d::parry::query::TOIStatus;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
@@ -121,6 +123,53 @@ pub enum PlayerAction {
     Dash,
     Whirl,
     Stealth,
+}
+
+#[derive(Component, Debug, Deref, DerefMut)]
+pub struct Passives {
+    #[deref]
+    pub current: HashSet<Passive>,
+    pub locked: Vec<Passive>,
+}
+
+impl Default for Passives {
+    fn default() -> Self {
+        let passives: Vec<Passive> = Passive::iter().collect();
+        Passives {
+            current: HashSet::with_capacity(5),
+            locked: passives,
+        }
+    }
+}
+
+impl Passives {
+    //TODO: pass in slice of passives, filter the locked passives on it
+    fn new_with(passive: Passive) -> Self {
+        Passives::default()
+    }
+    fn gain(&mut self) {
+        //TODO: add checks for no passives remaining
+        //TODO add limit on gaining past max passive slots?
+        //does nothing if there are no more passives to gain
+        let mut rng = rand::thread_rng();
+        if !self.locked.is_empty() {
+            let i = rng.gen_range(0..self.locked.len());
+            let passive = self.locked.swap_remove(i);
+            self.current.insert(passive);
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, EnumIter)]
+pub enum Passive {
+    /// Heal when killing an enemy
+    Absorption,
+    /// Crit every 3rd and 5th hit when low health
+    CritResolve,
+    Backstab,
+    CrowdCtrl,
+    Unmoving,
+    Speedy,
 }
 
 fn debug_player_states(
@@ -276,15 +325,18 @@ fn setup_player(
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
             JumpCount(0),
-            WhirlAbility {
-                active: false,
-                active_ticks: 0,
-                energy: 0.0,
-                attack_entity: None,
-            },
+            // WhirlAbility {
+            //     active: false,
+            //     active_ticks: 0,
+            //     energy: 0.0,
+            //     attack_entity: None,
+            // },
             Crits::new(2.0),
             TransitionQueue::default(),
             StateDespawnMarker,
+            Passives::default(),
+            // Passives::new_with(Passive::CritResolve(true)),
+            // Passives::new_with(Passive::Absorption),
         ));
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
@@ -395,6 +447,24 @@ impl GentState for CanAttack {}
 
 impl Transitionable<Attacking> for CanAttack {
     type Removals = (CanAttack);
+}
+impl Transitionable<Whirling> for CanAttack {
+    type Removals = (CanAttack);
+}
+
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
+pub struct Whirling {
+    pub attack_entity: Option<Entity>,
+    pub ticks: u32,
+}
+impl GentState for Whirling {}
+
+impl Transitionable<CanAttack> for Whirling {
+    type Removals = (Whirling, Attacking);
+}
+impl Whirling {
+    const MIN_TICKS: u32 = 48;
 }
 
 #[derive(Component, Debug, Default)]
@@ -511,6 +581,7 @@ impl WallSlideTime {
     }
 }
 
+//TODO: remove, migrate anything necessary to the Whirling state
 #[derive(Component, Default, Debug)]
 pub struct WhirlAbility {
     active: bool,
@@ -605,6 +676,9 @@ pub struct PlayerConfig {
 
     /// Ticks for melee pushback velocity; determines how long movement is locked for
     melee_pushback_ticks: u32,
+
+    /// How many kills to trigger a passive gain
+    passive_gain_rate: u32,
 }
 
 fn load_player_config(
@@ -675,6 +749,7 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "wall_pushback_ticks", |val| config.wall_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
     update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "passive_gain_rate", |val| config.passive_gain_rate = val as u32);
     
     for error in errors{
        warn!("failed to load player cfg value: {}", error);

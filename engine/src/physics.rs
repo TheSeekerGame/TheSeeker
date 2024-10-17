@@ -35,8 +35,11 @@ impl Plugin for PhysicsPlugin {
         );
         #[cfg(feature = "dev")]
         app.init_gizmo_group::<PhsyicsCollidersGizmos>();
-        // #[cfg(feature = "dev")]
-        // app.add_systems(GameTickUpdate, debug_colliders.after(PhysicsSet));
+        #[cfg(feature = "dev")]
+        app.add_systems(
+            GameTickUpdate,
+            debug_colliders.after(PhysicsSet),
+        );
     }
 }
 
@@ -71,6 +74,15 @@ pub struct SpriteShapeMap {
         SharedShape,
         SharedShape,
     )>,
+    // pub shapes: Option<
+    //     Vec<(
+    //         SharedShape,
+    //         SharedShape,
+    //         SharedShape,
+    //         SharedShape,
+    //     )>,
+    // >,
+    ///Image and frame?
     pub map: HashMap<AssetId<Image>, Vec<usize>>,
 }
 
