@@ -70,7 +70,6 @@ pub struct DamageFlash {
 pub struct AttackBundle {
     pub attack: Attack,
     pub collider: Collider,
-    //transform?
 }
 
 #[derive(Component)]
@@ -82,35 +81,22 @@ pub struct Attack {
     pub max_targets: u32,
     pub attacker: Entity,
 
-    /// Tracks which entities collided with the attack, and still remain in contact.
-    /// Not stored in damage info, because the collided entities might be
-    /// different from the entities that damage is applied. (due to max_targets)
-    pub collided: HashSet<Entity>,
-
-    /// Unique entities that were in contact with collider and took damage.
-    /// and are still in contact with the attack collider.
+    /// Unique entities damaged by this attack.
     pub damaged_set: HashSet<Entity>,
 
-    /// Unique entities that were in contact with collider and were valid targets.
-    /// and are still in contact with the attack collider.
+    /// Unique entities that are in contact this tick and are valid targets.
     pub target_set: HashSet<Entity>,
 
-    ///TODO: multiple hits should be multiple attacks...
-    /// used to track if multiple hits are in the same attack or not
-    // pub new_group: bool,
     pub stealthed: bool,
 
     pub pushback: Option<PlayerPushback>,
     pub pushback_applied: bool,
     pub status_mod: Option<StatusModifier>,
 
-    ///
+    ///TODO:
     pub can_backstab: bool,
 
-    /// set true if the hit can crit
-    /// if the attack can crit, it will be Some, if the crit has been applied/tracked already it is
-    /// True, if not False
-    /// if the attack can not crit it will be None
+    ///TODO:
     pub crit: Option<Crit>,
 }
 impl Attack {
@@ -122,7 +108,6 @@ impl Attack {
             damage: 20,
             max_targets: 3,
             attacker,
-            collided: Default::default(),
             damaged_set: Default::default(),
             target_set: Default::default(),
             stealthed: false,
