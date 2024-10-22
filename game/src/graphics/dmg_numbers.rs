@@ -1,5 +1,5 @@
 use crate::camera::MainCamera;
-use crate::game::attack::{apply_attack_damage, Attack};
+use crate::game::attack::{apply_attack_damage, Attack, DamageInfo};
 use crate::game::player::Player;
 use crate::prelude::Update;
 use bevy::prelude::*;
@@ -28,12 +28,8 @@ struct DmgNumber(Vec3, f64);
 fn instance(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    entity_with_hp: Query<(
-        &GlobalTransform,
-        Option<&Collider>,
-        Option<&Player>,
-    )>,
-    attacks: Query<&Attack, With<GlobalTransform>>,
+    entity_with_hp: Query<(&GlobalTransform, Option<&Collider>), Without<Player>>,
+    mut damage_events: EventReader<DamageInfo>,
     game_time: Res<GameTime>,
     q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
 ) {
@@ -41,63 +37,55 @@ fn instance(
         return;
     };
 
-    for attack in attacks.iter() {
-        for attack_info in attack.damaged.iter() {
-            if attack_info.tick == game_time.tick() {
-                // only spawn in a floating number for a new attack damage instance
-                if let Ok((transform, collider, player)) = entity_with_hp.get(attack_info.target) {
-                    // Don't display damage numbers at all for the player
-                    if player.is_some() {
-                        continue;
-                    }
+    //TODO: switch to damage events
+    // for attack in attacks.iter() {
+    // for attack_info in attack.damaged.iter() {
+    for damage_info in damage_events.read() {
+        if let Ok((transform, collider)) = entity_with_hp.get(damage_info.target) {
+            let mut world_position = transform.translation();
 
-                    let mut world_position = transform.translation();
+            // Makes the number start above the collider, if it exists
+            world_position += match collider {
+                Some(collider) => {
+                    let above_hb_offset = 11.0;
+                    let collider_height = collider.0.compute_aabb().half_extents().y;
+                    Vec3::new(
+                        1.0,
+                        collider_height + above_hb_offset,
+                        0.0,
+                    )
+                },
+                None => Vec3::ZERO,
+            };
 
-                    // Makes the number start above the collider, if it exists
-                    world_position += match collider {
-                        Some(collider) => {
-                            let above_hb_offset = 11.0;
-                            let collider_height = collider.0.compute_aabb().half_extents().y;
-                            Vec3::new(
-                                1.0,
-                                collider_height + above_hb_offset,
-                                0.0,
-                            )
+            let screen_position = camera
+                .world_to_viewport(camera_transform, world_position)
+                .unwrap_or_default();
+
+            commands.spawn((
+                DmgNumber(
+                    world_position,
+                    game_time.tick() as f64 / game_time.hz + game_time.last_update().as_secs_f64(),
+                ),
+                TextBundle::from_section(
+                    format!("{}", damage_info.amount),
+                    TextStyle {
+                        font: asset_server.load("font/Tektur-Regular.ttf"),
+                        font_size: 42.0,
+                        color: if damage_info.crit {
+                            Color::YELLOW * 1.1
+                        } else {
+                            Color::WHITE
                         },
-                        None => Vec3::ZERO,
-                    };
-
-                    let screen_position = camera
-                        .world_to_viewport(camera_transform, world_position)
-                        .unwrap_or_default();
-
-                    commands.spawn((
-                        DmgNumber(
-                            world_position,
-                            game_time.tick() as f64 / game_time.hz
-                                + game_time.last_update().as_secs_f64(),
-                        ),
-                        TextBundle::from_section(
-                            format!("{}", attack_info.amount),
-                            TextStyle {
-                                font: asset_server.load("font/Tektur-Regular.ttf"),
-                                font_size: 42.0,
-                                color: if attack_info.crit {
-                                    Color::YELLOW * 1.1
-                                } else {
-                                    Color::WHITE
-                                },
-                            },
-                        )
-                        .with_style(Style {
-                            position_type: PositionType::Absolute,
-                            left: Val::Px(screen_position.x),
-                            top: Val::Px(screen_position.y),
-                            ..default()
-                        }),
-                    ));
-                }
-            }
+                    },
+                )
+                .with_style(Style {
+                    position_type: PositionType::Absolute,
+                    left: Val::Px(screen_position.x),
+                    top: Val::Px(screen_position.y),
+                    ..default()
+                }),
+            ));
         }
     }
 }

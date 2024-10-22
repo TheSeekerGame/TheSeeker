@@ -3,30 +3,19 @@ pub mod particles;
 
 use std::mem;
 
-use bevy::log::tracing_subscriber::filter::targets;
-use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
     update_sprite_colliders, Collider, LinearVelocity, PhysicsWorld, GROUND,
 };
 
-use super::enemy::EnemyGfx;
-use super::player::{CanDash, CanStealth, Player, PlayerConfig, Stealthing, WhirlAbility};
-use super::player::{PlayerGfx, PlayerPushback, StatusModifier};
-// use crate::game::player::PlayerStateSet;
-use super::gentstate::Facing;
-// use super::player::PlayerGfx;
-use crate::game::player::{Passive, PlayerStateSet};
-use crate::game::{attack::particles::AttackParticlesPlugin, gentstate::Dead};
-use crate::game::{
-    enemy::{Defense, Enemy, EnemyStateSet},
-    player::Passives,
+use super::enemy::{Defense, EnemyGfx, EnemyStateSet};
+use super::gentstate::{Dead, Facing};
+use super::player::{
+    Passive, Passives, PlayerGfx, PlayerPushback, PlayerStateSet, StatusModifier, Stealthing,
 };
+use crate::game::attack::arc_attack::{arc_projectile, Projectile};
+use crate::game::attack::particles::AttackParticlesPlugin;
 use crate::prelude::*;
-use crate::{
-    camera::CameraRig,
-    game::attack::arc_attack::{arc_projectile, Projectile},
-};
 
 pub struct AttackPlugin;
 
@@ -92,10 +81,6 @@ pub struct Attack {
     /// Maximum number of targets that can be hit by this attack at once.
     pub max_targets: u32,
     pub attacker: Entity,
-    /// Includes every single instance of damage that was applied.
-    /// (even against the same enemy)
-    // pub damaged: HashSet<(Entity, DamageInfo)>,
-    pub damaged: Vec<DamageInfo>,
 
     /// Tracks which entities collided with the attack, and still remain in contact.
     /// Not stored in damage info, because the collided entities might be
@@ -112,7 +97,7 @@ pub struct Attack {
 
     ///TODO: multiple hits should be multiple attacks...
     /// used to track if multiple hits are in the same attack or not
-    pub new_group: bool,
+    // pub new_group: bool,
     pub stealthed: bool,
 
     pub pushback: Option<PlayerPushback>,
@@ -123,7 +108,6 @@ pub struct Attack {
     pub can_backstab: bool,
 
     /// set true if the hit can crit
-    /// is_crit
     /// if the attack can crit, it will be Some, if the crit has been applied/tracked already it is
     /// True, if not False
     /// if the attack can not crit it will be None
@@ -138,11 +122,9 @@ impl Attack {
             damage: 20,
             max_targets: 3,
             attacker,
-            damaged: Default::default(),
             collided: Default::default(),
             damaged_set: Default::default(),
             target_set: Default::default(),
-            new_group: false,
             stealthed: false,
             pushback: None,
             pushback_applied: false,
@@ -323,9 +305,9 @@ pub fn apply_attack_modifications(
                 //move to application of damage?
                 //increase crit_counter if the attack hit something new... but should it only
                 //increase the hit once per swing?
-                if attack.new_group {
-                    crit.counter += 1;
-                }
+                // if attack.new_group {
+                //     crit.counter += 1;
+                // }
             }
 
             //focus multiplier
@@ -454,7 +436,7 @@ pub fn apply_attack_damage(
                     crit,
                 };
                 //send a damage event and add the damage info to the attack
-                attack.damaged.push(damage_info);
+                // attack.damaged.push(damage_info);
                 // attack.damaged.insert((t_entity, damage_info));
                 attack.damaged_set.insert(t_entity);
                 damage_events.send(damage_info);
@@ -508,7 +490,7 @@ fn on_hit_player_pushback(
 ) {
     for (entity, mut attack) in query.iter_mut() {
         if !attack.pushback_applied && attack.pushback.is_some() {
-            if !attack.damaged.is_empty() {
+            if !attack.damaged_set.is_empty() {
                 commands
                     .entity(attack.attacker)
                     .insert(attack.pushback.unwrap());
@@ -598,16 +580,28 @@ fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
 #[derive(Resource, Debug, Default, Deref, DerefMut)]
 pub struct KillCount(pub u32);
 
-fn track_crits(mut query: Query<&mut Crits>, mut damage_events: EventReader<DamageInfo>) {
+fn track_crits(
+    mut query: Query<&mut Crits>,
+    mut attack_query: Query<&mut Attack>,
+    mut damage_events: EventReader<DamageInfo>,
+) {
     for damage_info in damage_events.read() {
-        if let Ok(mut crits) = query.get_mut(damage_info.source) {
-            if damage_info.crit {
-                crits.counter += 1;
+        if let Ok(mut attack) = attack_query.get_mut(damage_info.source) {
+            if let Some(crit) = &mut attack.crit {
+                if !crit.applied {
+                    crit.applied = true;
+                    if let Ok(mut crits) = query.get_mut(attack.attacker) {
+                        crits.hit_count += 1;
+                    }
+                }
             }
+            // if damage_info.crit {
+            //     crits.hit_count += 1;
+            // }
         }
     }
 
-    //if this attacker hit something this tick +1 the crit counter
+    //if this attack hit something for the first time, +1 the crit counter
     //if the attack crits, it should know not to crit again
 }
 
@@ -618,7 +612,7 @@ fn track_crits(mut query: Query<&mut Crits>, mut damage_events: EventReader<Dama
 pub struct Crits {
     next_hit_is_critical: bool,
     /// Counts how many successful hits since the 19th hit
-    counter: u32,
+    hit_count: u32,
     /// Yes
     crit_damage_multiplier: f32,
 }
@@ -634,7 +628,7 @@ impl Crits {
     pub fn new(multiplier: f32) -> Self {
         Self {
             next_hit_is_critical: false,
-            counter: 0,
+            hit_count: 0,
             crit_damage_multiplier: multiplier,
         }
     }

@@ -8,19 +8,13 @@ use leafwing_input_manager::{
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
 use rapier2d::geometry::{Group, InteractionGroups};
-use rapier2d::parry::query::TOIStatus;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use theseeker_engine::animation::SpriteAnimationBundle;
-use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::input::InputManagerPlugin;
-use theseeker_engine::physics::{
-    into_vec2, AnimationCollider, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
-    GROUND, PLAYER, PLAYER_ATTACK,
-};
-use theseeker_engine::script::ScriptPlayer;
+use theseeker_engine::physics::{Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER};
 
 use crate::game::attack::*;
 use crate::game::gentstate::*;

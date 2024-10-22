@@ -11,7 +11,7 @@ use crate::prelude::{
     any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
     IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle, With, Without,
 };
-use bevy::prelude::{default, resource_changed, Changed, Has};
+use bevy::prelude::{resource_changed, Has};
 
 use bevy::sprite::Sprite;
 use bevy::transform::TransformSystem::TransformPropagate;
@@ -330,7 +330,7 @@ fn hitfreeze(
 ) {
     // Track if we need to initialize a hitfreeze affect
     for ((attack_entity, attack)) in attack_q.iter() {
-        if !attack.damaged.is_empty() {
+        if !attack.damaged_set.is_empty() {
             // Make sure the entity doing the attack is actually the player
             if let Ok((entity, mut hitfreeze, _)) = player_q.get_mut(attack.attacker) {
                 // If its the same exact attack entity as the last time the affect was activated.
