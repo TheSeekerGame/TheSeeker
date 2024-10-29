@@ -314,22 +314,20 @@ fn setup_player(
                     .with(PlayerAction::Whirl, KeyCode::KeyL)
                     .with(PlayerAction::Stealth, KeyCode::KeyI),
             },
-            Falling,
-            CanDash {
-                remaining_cooldown: 0.0,
-            },
-            CanStealth {
-                remaining_cooldown: 0.0,
-            },
+            //bundling things up becuase we reached max tuple
+            (
+                Falling,
+                CanDash {
+                    remaining_cooldown: 0.0,
+                },
+                CanStealth {
+                    remaining_cooldown: 0.0,
+                },
+            ),
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
             JumpCount(0),
-            // WhirlAbility {
-            //     active: false,
-            //     active_ticks: 0,
-            //     energy: 0.0,
-            //     attack_entity: None,
-            // },
+            WhirlAbility::default(),
             Crits::new(2.0),
             TransitionQueue::default(),
             StateDespawnMarker,
@@ -587,10 +585,7 @@ impl WallSlideTime {
 //TODO: remove, migrate anything necessary to the Whirling state
 #[derive(Component, Default, Debug)]
 pub struct WhirlAbility {
-    active: bool,
-    active_ticks: u32,
     pub energy: f32,
-    attack_entity: Option<Entity>,
 }
 
 #[derive(Resource, Debug, Default)]
