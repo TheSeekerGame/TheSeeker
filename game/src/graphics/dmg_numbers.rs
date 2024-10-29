@@ -77,6 +77,8 @@ fn instance(
                         } else {
                             Color::WHITE
                         },
+                        //TODO:
+                        //if backstab, red?
                     },
                 )
                 .with_style(Style {

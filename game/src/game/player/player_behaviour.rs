@@ -1,5 +1,5 @@
 use crate::camera::CameraRig;
-use crate::game::attack::{Attack, Pushback};
+use crate::game::attack::Attack;
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
@@ -152,6 +152,7 @@ pub fn player_can_stealth(
 ) {
     for (action_state, mut can_stealth, mut transition_queue, gent) in q_gent.iter_mut() {
         can_stealth.remaining_cooldown -= 1.0 / time.hz as f32;
+        //Return to base sprite color when exiting stealth
         if can_stealth.is_added() {
             let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
             sprite.color = sprite.color.with_a(1.0);
@@ -370,13 +371,10 @@ fn player_idle(
     >,
 ) {
     for (action_state, mut transitions) in query.iter_mut() {
-        // println!("is idle");
         // check for direction input
         let mut direction: f32 = 0.0;
-        // println!("idleing, {:?}", action_state.get_pressed());
         if action_state.pressed(&PlayerAction::Move) {
             direction = action_state.value(&PlayerAction::Move);
-            // println!("moving??")
         }
         if direction != 0.0 {
             transitions.push(Idle::new_transition(Running));
@@ -525,10 +523,6 @@ fn player_jump(
     config: Res<PlayerConfig>,
 ) {
     for (action_state, mut velocity, mut jumping, mut transitions) in query.iter_mut() {
-        //can enter state and first frame jump not pressed if you tap
-        //i think this is related to the fixedtimestep input
-        // print!("{:?}", action_state.get_pressed());
-
         let deaccel_rate = config.jump_fall_accel;
 
         if jumping.is_added() {
@@ -635,7 +629,7 @@ pub fn player_collisions(
             &Collider,
             Option<&mut WallSlideTime>,
             Option<&mut Dashing>,
-            Option<&WhirlAbility>,
+            Option<&mut Whirling>,
         ),
         (With<Player>),
     >,
@@ -644,15 +638,14 @@ pub fn player_collisions(
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, mut pos, mut linear_velocity, collider, slide, dashing, whirl) in q_gent.iter_mut()
+    for (entity, mut pos, mut linear_velocity, collider, slide, dashing, whirling) in
+        q_gent.iter_mut()
     {
         let mut shape = collider.0.shared_shape().clone();
         let mut original_pos = pos.translation.xy();
         let mut possible_pos = pos.translation.xy();
         let z = pos.translation.z;
         let mut projected_velocity = linear_velocity.xy();
-        // println!("initial projected_velocity");
-        // dbg!(projected_velocity);
         let mut interaction = InteractionGroups {
             memberships: PLAYER,
             filter: Group::from_bits_truncate(0b10010),
@@ -688,9 +681,7 @@ pub fn player_collisions(
                         //from above
                         TOIStatus::Converged | TOIStatus::OutOfIterations => {
                             // if we are also dashing, or whirling, ignore the collision entirely
-                            if dashing.is_none()
-                                && (whirl.is_none() || whirl.is_some_and(|w| !w.active))
-                            {
+                            if dashing.is_none() && whirling.is_none() {
                                 let sliding_plane = into_vec2(first_hit.normal1);
                                 //configurable theshold for collision normal/sliding plane in case of physics instability
                                 let threshold = 0.000001;
@@ -807,7 +798,6 @@ fn player_grounded(
             Entity,
             &ShapeCaster,
             &ActionState<PlayerAction>,
-            &LinearVelocity,
             &mut Transform,
             &mut TransitionQueue,
             Option<&mut CoyoteTime>,
@@ -828,7 +818,6 @@ fn player_grounded(
         entity,
         ray_cast_info,
         action_state,
-        liner_vel,
         mut position,
         mut transitions,
         coyote_time,
@@ -945,27 +934,21 @@ fn player_falling(
 
 fn player_sliding(
     mut commands: Commands,
-    mut query: Query<(
-        Entity,
-        &Gent,
-        &ActionState<PlayerAction>,
-        &mut TransitionQueue,
-        &mut WallSlideTime,
-        &mut LinearVelocity,
-        &mut JumpCount,
-    )>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    mut query: Query<
+        (
+            Entity,
+            &ActionState<PlayerAction>,
+            &mut TransitionQueue,
+            &mut WallSlideTime,
+            &mut LinearVelocity,
+            &mut JumpCount,
+        ),
+        With<Gent>,
+    >,
     config: Res<PlayerConfig>,
 ) {
-    for (
-        entity,
-        gent,
-        action_state,
-        mut transitions,
-        mut wall_slide_time,
-        mut lin_vel,
-        mut jump_count,
-    ) in query.iter_mut()
+    for (entity, action_state, mut transitions, mut wall_slide_time, mut lin_vel, mut jump_count) in
+        query.iter_mut()
     {
         let mut direction: f32 = 0.0;
         if action_state.pressed(&PlayerAction::Move) {
@@ -974,30 +957,28 @@ fn player_sliding(
         if wall_slide_time.sliding(&config) {
             jump_count.0 = 1;
         }
-        if let Ok(player) = gfx_query.get_mut(gent.e_gfx) {
-            if wall_slide_time.sliding(&config) && action_state.just_pressed(&PlayerAction::Jump) {
-                let jump_direction = direction
-                    * if wall_slide_time.strict_sliding(&config) {
-                        -1.0
-                    } else {
-                        1.0
-                    };
+        if wall_slide_time.sliding(&config) && action_state.just_pressed(&PlayerAction::Jump) {
+            let jump_direction = direction
+                * if wall_slide_time.strict_sliding(&config) {
+                    -1.0
+                } else {
+                    1.0
+                };
 
-                wall_slide_time.0 = f32::MAX;
-                // Move away from the wall a bit so that friction stops
-                lin_vel.x = -direction * config.move_accel_init;
-                // Give a little boost for the frame that it takes for input to be received
-                lin_vel.y = config.fall_accel;
+            wall_slide_time.0 = f32::MAX;
+            // Move away from the wall a bit so that friction stops
+            lin_vel.x = -direction * config.move_accel_init;
+            // Give a little boost for the frame that it takes for input to be received
+            lin_vel.y = config.fall_accel;
 
-                commands.entity(entity).insert(PlayerPushback::new(
-                    jump_direction,
-                    Vec2::new(config.wall_pushback, 0.),
-                    config.wall_pushback_ticks,
-                ));
+            commands.entity(entity).insert(PlayerPushback::new(
+                jump_direction,
+                Vec2::new(config.wall_pushback, 0.),
+                config.wall_pushback_ticks,
+            ));
 
-                jump_count.0 = 2;
-                transitions.push(Falling::new_transition(Jumping))
-            }
+            jump_count.0 = 2;
+            transitions.push(Falling::new_transition(Jumping))
         }
     }
 }
@@ -1008,6 +989,7 @@ fn add_attack(
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
             Option<&CanAttack>,
+            Has<Grounded>,
         ),
         (
             Without<Attacking>,
@@ -1016,7 +998,7 @@ fn add_attack(
         ),
     >,
 ) {
-    for (mut transitions, action_state, maybe_immediate) in query.iter_mut() {
+    for (mut transitions, action_state, maybe_immediate, is_grounded) in query.iter_mut() {
         if action_state.just_pressed(&PlayerAction::Attack) {
             transitions.push(CanAttack::new_transition(
                 Attacking::default(),
@@ -1029,12 +1011,10 @@ fn add_attack(
             }
         }
         //TODO: Shouldnt be able to add both at the same time
-        if action_state.just_pressed(&PlayerAction::Whirl) {
+        //could move to own trigger with whirl energy
+        if is_grounded && action_state.just_pressed(&PlayerAction::Whirl) {
             transitions.push(CanAttack::new_transition(
                 Whirling::default(),
-            ));
-            transitions.push(CanAttack::new_transition(
-                Attacking::default(),
             ));
         }
     }
@@ -1061,6 +1041,7 @@ fn player_attack(
         query.iter_mut()
     {
         if attacking.ticks == 0 {
+            println!("attack added");
             commands
                 .spawn((
                     TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
@@ -1146,8 +1127,6 @@ pub fn player_whirl(
             &mut TransitionQueue,
             &mut Whirling,
             &Gent,
-            Has<Grounded>,
-            Has<Attacking>,
         ),
         (With<Player>, Without<Dashing>),
     >,
@@ -1163,23 +1142,19 @@ pub fn player_whirl(
     mut commands: Commands,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, action_state, mut transitions, mut whirling, gent, is_grounded, is_attacking) in
-        gent_query.iter_mut()
-    {
+    for (entity, action_state, mut transitions, mut whirling, gent) in gent_query.iter_mut() {
         whirling.ticks += 1;
-        if action_state.pressed(&PlayerAction::Whirl) {
+        if action_state.pressed(&PlayerAction::Whirl) || whirling.ticks < Whirling::MIN_TICKS {
             if let Some(attack_entity) = whirling.attack_entity {
                 // if let Ok(attack) = attack_query.get(attack_entity) {
                 //     println!("collider changed");
                 // }
                 //if the attack entities collider was changed, set the attack to none
                 if attack_query.get(attack_entity).is_err() {
-                    println!("set to none??");
                     whirling.attack_entity = None;
                 }
-                //if there is no attack, spawn a new one
+            //if there is no attack, spawn a new one
             } else {
-                println!("spawned attack");
                 whirling.attack_entity = Some(
                     commands
                         .spawn((
@@ -1199,7 +1174,8 @@ pub fn player_whirl(
                 );
             }
         } else {
-            if whirling.ticks > Whirling::MIN_TICKS {
+            //leave whirling state if button is not pressed and we are past min ticks
+            if whirling.ticks >= Whirling::MIN_TICKS {
                 transitions.push(Whirling::new_transition(
                     CanAttack::default(),
                 ));

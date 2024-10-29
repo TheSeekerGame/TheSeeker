@@ -241,11 +241,12 @@ fn debug_player(world: &World, query: Query<Entity, With<Player>>) {
 }
 
 fn setup_player(
-    mut q: Query<(&mut Transform, Entity), Added<PlayerBlueprint>>,
+    mut q: Query<(&mut Transform, Entity, &Parent), Added<PlayerBlueprint>>,
+    parent_query: Query<Entity, With<Children>>,
     mut commands: Commands,
     config: Res<PlayerConfig>,
 ) {
-    for (mut xf_gent, e_gent) in q.iter_mut() {
+    for (mut xf_gent, e_gent, parent) in q.iter_mut() {
         //TODO: proper way of ensuring z is correct
         xf_gent.translation.z = 15.0 * 0.000001;
         println!("{:?}", xf_gent);
@@ -283,9 +284,13 @@ fn setup_player(
                 coyote_time: Default::default(),
             },
             Facing::Right,
+            // Health {
+            //     current: config.max_health,
+            //     max: config.max_health,
+            // },
             Health {
-                current: config.max_health,
-                max: config.max_health,
+                current: config.max_health * 100,
+                max: config.max_health * 100,
             },
             //have to use builder here *i think* because of different types between keycode and
             //axis
@@ -332,6 +337,10 @@ fn setup_player(
             // Passives::new_with(Passive::CritResolve(true)),
             // Passives::new_with(Passive::Absorption),
         ));
+        //unparent from the level
+        if let Ok(parent) = parent_query.get(parent.get()) {
+            commands.entity(parent).remove_children(&[e_gent]);
+        }
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
             gent2gfx: TransformGfxFromGent {
@@ -410,11 +419,11 @@ pub struct Grounded;
 impl GentState for Grounded {}
 //cant be Idle or Running if not Grounded
 impl Transitionable<Jumping> for Grounded {
-    type Removals = (Grounded, Idle, Running);
+    type Removals = (Grounded, Idle, Running, Whirling);
 }
 //cant be Idle or Running if not Grounded
 impl Transitionable<Falling> for Grounded {
-    type Removals = (Grounded, Idle, Running);
+    type Removals = (Grounded, Idle, Running, Whirling);
 }
 
 #[derive(Component, Debug, Default)]
@@ -766,7 +775,7 @@ pub enum StatType {
 /// For now, Status Modifier is implemented so that only one Status Modifier is active at a time.
 /// However, a single Status Modifier can modify multiple Stats.
 /// scalar and delta will use the same coefficient for all Stats if there is only one.
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Debug)]
 pub struct StatusModifier {
     status_types: Vec<StatType>,
 
@@ -780,6 +789,7 @@ pub struct StatusModifier {
     time_remaining: f32,
 }
 
+//TODO: move to attack
 impl StatusModifier {
     pub fn basic_ice_spider() -> Self {
         Self {

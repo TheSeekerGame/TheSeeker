@@ -43,7 +43,11 @@ fn player_idle_animation(
     query: Query<
         &Gent,
         Or<(
-            (Added<Idle>, Without<Attacking>),
+            (
+                Added<Idle>,
+                Without<Attacking>,
+                Without<Whirling>,
+            ),
             (With<Idle>, Added<CanAttack>),
         )>,
     >,
@@ -113,7 +117,11 @@ fn player_running_animation(
     query: Query<
         &Gent,
         Or<(
-            (Added<Running>, Without<Attacking>),
+            (
+                Added<Running>,
+                Without<Attacking>,
+                Without<Whirling>,
+            ),
             (With<Running>, Added<CanAttack>),
         )>,
     >,
@@ -121,6 +129,7 @@ fn player_running_animation(
 ) {
     for gent in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            println!("played run anim");
             player.play_key("anim.player.Run")
         }
     }
@@ -134,48 +143,34 @@ fn player_attacking_animation(
             Has<Jumping>,
             Has<Running>,
             Option<&HitFreezeTime>,
-            Option<&WhirlAbility>,
         ),
         (With<Attacking>, Without<Whirling>),
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
 ) {
-    for (gent, is_falling, is_jumping, is_running, hitfrozen, whirl) in query.iter() {
+    for (gent, is_falling, is_jumping, is_running, hitfrozen) in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            if let Some(whirl) = whirl {
-                if whirl.active {
-                    //player.play_key("anim.player.SwordWhirling");
-                    if player.current_key().unwrap_or("") != "anim.player.SwordWhirling" {
-                        player.play_key("anim.player.SwordWhirling");
-                    }
-                    continue;
-                }
-            }
-
             let hitfrozen = hitfrozen
                 .map(|f| f.0 < config.hitfreeze_ticks)
                 .unwrap_or(false);
             if is_falling || is_jumping {
+                //TODO: These need a way to resume the new animation from the current frame index
+                //or specified offset
                 if player.current_key().unwrap_or("") != "anim.player.SwordBasicAir" {
                     player.play_key("anim.player.SwordBasicAir");
                 }
-                //player.play_key("anim.player.SwordBasicAir")
             } else if is_running && !hitfrozen {
-                //player.play_key("anim.player.SwordBasicRun")
                 if player.current_key().unwrap_or("") != "anim.player.SwordBasicRun" {
                     player.play_key("anim.player.SwordBasicRun");
                 }
             } else {
-                //player.play_key("anim.player.SwordBasicIdle")
                 if player.current_key().unwrap_or("") != "anim.player.SwordBasicIdle" {
                     player.play_key("anim.player.SwordBasicIdle");
                 }
             }
         }
     }
-    //have to check if first or 2nd attack, play diff anim
-    //also check for up attack?
 }
 
 fn player_whirling_animation(
