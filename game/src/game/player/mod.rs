@@ -549,15 +549,14 @@ pub struct JumpCount(u8);
 
 /// Pushback applied to the player for movement effects. Velocity is applied once and then blocks horizontal player movement.
 #[derive(Component, Default, Clone, Copy, Debug)]
-pub struct PlayerPushback {
+pub struct Knockback {
     pub ticks: u32,
     pub max_ticks: u32,
     pub x_direction: f32,
-    //    pub y_direction: f32,
     pub strength: Vec2,
 }
 
-impl PlayerPushback {
+impl Knockback {
     pub fn new(x_direction: f32, strength: Vec2, max_ticks: u32) -> Self {
         Self {
             ticks: 0,

@@ -1,5 +1,5 @@
 use crate::camera::CameraRig;
-use crate::game::attack::Attack;
+use crate::game::attack::{Attack, Pushback};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
@@ -30,7 +30,7 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::{
     dash_icon_fx, player_dash_fx, player_new_stats_mod, CanStealth, DashIcon, JumpCount, Knockback,
-    PlayerPushback, PlayerStats, StatType, Stealthing,
+    PlayerStats, StatType, Stealthing,
 };
 use super::{AttackBundle, KillCount, Passives, Whirling};
 
@@ -68,7 +68,7 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_grounded.run_if(any_with_component::<Grounded>),
                     player_falling.run_if(any_with_component::<Falling>),
                     player_pushback
-                        .run_if(any_with_component::<PlayerPushback>)
+                        .run_if(any_with_component::<Knockback>)
                         .before(player_jump)
                         .after(player_sliding),
                     player_sliding
@@ -247,7 +247,7 @@ fn player_move(
             Option<&Stealthing>,
             Option<&Dashing>,
         ),
-        (Without<PlayerPushback>, With<Player>),
+        (Without<Knockback>, With<Player>),
     >,
 ) {
     for (mut velocity, action_state, mut facing, grounded, stealth, dashing) in q_gent.iter_mut() {
@@ -824,7 +824,7 @@ fn player_sliding(
             // Give a little boost for the frame that it takes for input to be received
             lin_vel.y = config.fall_accel;
 
-            commands.entity(entity).insert(PlayerPushback::new(
+            commands.entity(entity).insert(Knockback::new(
                 jump_direction,
                 Vec2::new(config.wall_pushback, 0.),
                 config.wall_pushback_ticks,
@@ -916,13 +916,17 @@ fn player_attack(
                         PLAYER_ATTACK,
                         ENEMY_HURT,
                     )),
-                    Attack::new(16, entity).set_stealth(stealthed).set_pushback(
-                        PlayerPushback::new(
+                    Attack::new(16, entity)
+                        .set_stealth(stealthed)
+                        .set_pushback(Knockback::new(
                             -facing.direction(),
                             Vec2::new(config.melee_pushback, 0.),
                             config.melee_pushback_ticks,
-                        ),
-                    ),
+                        )),
+                    Pushback {
+                        direction: facing.direction(),
+                        strength: Vec2::new(config.melee_pushback, 0.),
+                    },
                 ))
                 .set_parent(entity);
 
@@ -962,7 +966,7 @@ fn player_attack(
 fn player_pushback(
     mut query: Query<(
         Entity,
-        &mut PlayerPushback,
+        &mut Knockback,
         &mut LinearVelocity,
     )>,
     mut commands: Commands,
@@ -979,7 +983,7 @@ fn player_pushback(
             velocity.x = 0.;
             //velocity.y = 0.;
 
-            commands.entity(entity).remove::<PlayerPushback>();
+            commands.entity(entity).remove::<Knockback>();
         }
     }
 }

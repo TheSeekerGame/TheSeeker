@@ -11,7 +11,7 @@ use theseeker_engine::physics::{
 use super::enemy::{Defense, EnemyGfx, EnemyStateSet};
 use super::gentstate::{Dead, Facing};
 use super::player::{
-    Passive, Passives, PlayerGfx, PlayerPushback, PlayerStateSet, StatusModifier, Stealthing,
+    Knockback, Passive, Passives, PlayerGfx, PlayerStateSet, StatusModifier, Stealthing,
 };
 use crate::game::attack::arc_attack::{arc_projectile, Projectile};
 use crate::game::attack::particles::AttackParticlesPlugin;
@@ -109,7 +109,7 @@ pub struct Attack {
 
     pub stealthed: bool,
 
-    pub pushback: Option<PlayerPushback>,
+    pub pushback: Option<Knockback>,
     pub pushback_applied: bool,
     pub status_mod: Option<StatusModifier>,
 
@@ -150,7 +150,7 @@ impl Attack {
         self
     }
 
-    pub fn set_pushback(mut self, pushback: PlayerPushback) -> Self {
+    pub fn set_pushback(mut self, pushback: Knockback) -> Self {
         self.pushback = Some(pushback);
         self
     }
@@ -183,28 +183,28 @@ pub struct DamageInfo {
 #[derive(Component, Default)]
 pub struct Pushback {
     pub direction: f32,
-    pub strength: f32,
+    pub strength: Vec2,
 }
 
 ///Component added to an entity damaged by a pushback attack
-#[derive(Component, Default, Debug)]
-pub struct Knockback {
-    pub ticks: u32,
-    pub max_ticks: u32,
-    pub direction: f32,
-    pub strength: f32,
-}
+// #[derive(Component, Default, Debug)]
+// pub struct Knockback {
+//     pub ticks: u32,
+//     pub max_ticks: u32,
+//     pub direction: f32,
+//     pub strength: f32,
+// }
 
-impl Knockback {
-    pub fn new(direction: f32, strength: f32, max_ticks: u32) -> Self {
-        Knockback {
-            ticks: 0,
-            max_ticks,
-            direction,
-            strength,
-        }
-    }
-}
+// impl Knockback {
+//     pub fn new(direction: f32, strength: f32, max_ticks: u32) -> Self {
+//         Knockback {
+//             ticks: 0,
+//             max_ticks,
+//             direction,
+//             strength,
+//         }
+//     }
+// }
 
 //checks nearest entities, modifies attacks targets
 pub fn determine_attack_targets(
@@ -463,6 +463,7 @@ pub fn kill_on_damage(
     }
 }
 
+//TODO:
 fn on_hit_player_pushback(mut commands: Commands, mut query: Query<&mut Attack, Changed<Attack>>) {
     for mut attack in query.iter_mut() {
         if !attack.pushback_applied && attack.pushback.is_some() && !attack.damaged_set.is_empty() {
@@ -488,7 +489,7 @@ fn knockback(
     for (entity, mut knockback, mut velocity, is_defending) in query.iter_mut() {
         knockback.ticks += 1;
         if !is_defending {
-            velocity.x += knockback.direction * knockback.strength;
+            velocity.x = knockback.x_direction * knockback.strength.x;
         }
         if knockback.ticks > knockback.max_ticks {
             velocity.x = 0.;
