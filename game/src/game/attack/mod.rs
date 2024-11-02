@@ -9,6 +9,7 @@ use theseeker_engine::physics::{
 use super::enemy::EnemyGfx;
 use super::player::{CanDash, CanStealth, Player, PlayerConfig, WhirlAbility};
 use super::player::{PlayerGfx, PlayerPushback, StatusModifier};
+use crate::camera::CameraShake;
 use crate::game::enemy::{Defense, Enemy, EnemyStateSet};
 use crate::game::player::PlayerStateSet;
 use crate::game::{attack::particles::AttackParticlesPlugin, gentstate::Dead};
@@ -313,11 +314,17 @@ pub fn attack_damage(
                 commands.entity(damaged_entity).insert(Dead::default());
                 //apply more screenshake if an enemies health becomes depleted by this attack
                 if is_enemy {
-                    rig.trauma = 0.4;
+                    commands.insert_resource(CameraShake::new(2.0, 1.2, 5.0));
+
+                    //rig.trauma = 0.4;
                 }
-            } else if rig.trauma < 0.3 && is_enemy {
+            //} else if rig.trauma < 0.3 && is_enemy {
+            } else if is_enemy {
                 //apply screenshake on damage to enemy
-                rig.trauma = 0.3
+                //rig.trauma = 0.3;
+                
+                commands.insert_resource(CameraShake::new(1.0, 0.6, 5.0));
+
             }
             if let Some(pushback) = maybe_pushback {
                 commands.entity(damaged_entity).insert(Knockback::new(
