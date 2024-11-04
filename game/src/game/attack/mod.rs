@@ -4,15 +4,12 @@ pub mod particles;
 use std::mem;
 
 use theseeker_engine::gent::Gent;
-use theseeker_engine::physics::{
-    update_sprite_colliders, Collider, LinearVelocity, PhysicsWorld, GROUND,
-};
+use theseeker_engine::physics::{update_sprite_colliders, Collider, PhysicsWorld, GROUND};
 
 use super::enemy::{Defense, EnemyGfx, EnemyStateSet};
 use super::gentstate::{Dead, Facing};
-use super::player::{
-    Knockback, Passive, Passives, PlayerGfx, PlayerStateSet, StatusModifier, Stealthing,
-};
+use super::physics::{knockback, Knockback};
+use super::player::{Passive, Passives, PlayerGfx, PlayerStateSet, StatusModifier, Stealthing};
 use crate::game::attack::arc_attack::{arc_projectile, Projectile};
 use crate::game::attack::particles::AttackParticlesPlugin;
 use crate::prelude::*;
@@ -37,23 +34,27 @@ impl Plugin for AttackPlugin {
                     apply_attack_modifications,
                     //DamageInfo event emited here
                     apply_attack_damage,
+                    //OnAttackFirstHitSet
                     track_crits,
+                    on_hit_self_pushback,
                 )
                     .chain(),
                 (
                     lifesteal,
                     kill_on_damage,
                     damage_flash,
-                    knockback,
+                    // knockback
+                    //     .before(player_jump)
+                    //     .after(crate::game::player::player_sliding),
                     apply_damage_flash,
                 )
                     .chain()
                     .in_set(RespondToDamageInfoSet)
                     .after(apply_attack_damage),
+                //cleanup
                 attack_tick,
                 despawn_projectile,
                 attack_cleanup,
-                on_hit_player_pushback.after(kill_on_damage),
             )
                 .chain()
                 .after(update_sprite_colliders)
@@ -109,8 +110,8 @@ pub struct Attack {
 
     pub stealthed: bool,
 
-    pub pushback: Option<Knockback>,
-    pub pushback_applied: bool,
+    // pub self_pushback: Option<Knockback>,
+    // pub pushback_applied: bool,
     pub status_mod: Option<StatusModifier>,
 
     ///TODO:
@@ -131,9 +132,6 @@ impl Attack {
             damaged_set: Default::default(),
             target_set: Default::default(),
             stealthed: false,
-            //component and field?
-            pushback: None,
-            pushback_applied: false,
             status_mod: None,
             can_backstab: false,
             crit: None,
@@ -149,15 +147,6 @@ impl Attack {
         self.stealthed = stealth;
         self
     }
-
-    pub fn set_pushback(mut self, pushback: Knockback) -> Self {
-        self.pushback = Some(pushback);
-        self
-    }
-
-    // pub fn has_hit(self) -> bool {
-    //     !self.damaged_set.is_empty()
-    // }
 }
 
 /// Event sent when damage is applied
@@ -180,31 +169,12 @@ pub struct DamageInfo {
 }
 
 ///Component added to attack entity to indicate it causes knockback
-#[derive(Component, Default)]
-pub struct Pushback {
-    pub direction: f32,
-    pub strength: Vec2,
-}
+#[derive(Component, Default, Deref)]
+pub struct Pushback(pub Knockback);
 
-///Component added to an entity damaged by a pushback attack
-// #[derive(Component, Default, Debug)]
-// pub struct Knockback {
-//     pub ticks: u32,
-//     pub max_ticks: u32,
-//     pub direction: f32,
-//     pub strength: f32,
-// }
-
-// impl Knockback {
-//     pub fn new(direction: f32, strength: f32, max_ticks: u32) -> Self {
-//         Knockback {
-//             ticks: 0,
-//             max_ticks,
-//             direction,
-//             strength,
-//         }
-//     }
-// }
+///Component added to attack entity to indicate it causes self pushback on hit
+#[derive(Component, Default, Deref)]
+pub struct SelfPushback(pub Knockback);
 
 //checks nearest entities, modifies attacks targets
 pub fn determine_attack_targets(
@@ -422,11 +392,7 @@ pub fn apply_attack_damage(
 
                 //apply Knockback
                 if let Some(pushback) = maybe_pushback {
-                    commands.entity(t_entity).insert(Knockback::new(
-                        pushback.direction,
-                        pushback.strength,
-                        16,
-                    ));
+                    commands.entity(t_entity).insert(pushback.0);
                 }
             }
         }
@@ -463,37 +429,11 @@ pub fn kill_on_damage(
     }
 }
 
-//TODO:
-fn on_hit_player_pushback(mut commands: Commands, mut query: Query<&mut Attack, Changed<Attack>>) {
-    for mut attack in query.iter_mut() {
-        if !attack.pushback_applied && attack.pushback.is_some() && !attack.damaged_set.is_empty() {
-            commands
-                .entity(attack.attacker)
-                .insert(attack.pushback.unwrap());
-            attack.pushback_applied = true;
-        }
-    }
-}
-
-//maybe should not modify velocity directly but add knockback, but this makes it behave differently
-//in states which dont set velocity every frame
-fn knockback(
-    mut query: Query<(
-        Entity,
-        &mut Knockback,
-        &mut LinearVelocity,
-        Has<Defense>,
-    )>,
-    mut commands: Commands,
-) {
-    for (entity, mut knockback, mut velocity, is_defending) in query.iter_mut() {
-        knockback.ticks += 1;
-        if !is_defending {
-            velocity.x = knockback.x_direction * knockback.strength.x;
-        }
-        if knockback.ticks > knockback.max_ticks {
-            velocity.x = 0.;
-            commands.entity(entity).remove::<Knockback>();
+fn on_hit_self_pushback(mut commands: Commands, query: Query<(Entity, &Attack, &SelfPushback)>) {
+    for (entity, attack, self_pushback) in query.iter() {
+        if !attack.damaged_set.is_empty() {
+            commands.entity(attack.attacker).insert(self_pushback.0);
+            commands.entity(entity).remove::<SelfPushback>();
         }
     }
 }
@@ -505,7 +445,6 @@ fn apply_damage_flash(
             With<Sprite>,
             Or<(With<EnemyGfx>, With<PlayerGfx>)>,
             Without<Gent>,
-            //Without<DamageFlash>,
         ),
     >,
     gent_query: Query<&Gent>,

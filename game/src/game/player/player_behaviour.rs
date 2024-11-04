@@ -1,5 +1,5 @@
 use crate::camera::CameraRig;
-use crate::game::attack::{Attack, Pushback};
+use crate::game::attack::{Attack, Pushback, SelfPushback};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
@@ -67,10 +67,12 @@ impl Plugin for PlayerBehaviorPlugin {
                         .run_if(any_with_component::<DashIcon>),
                     player_grounded.run_if(any_with_component::<Grounded>),
                     player_falling.run_if(any_with_component::<Falling>),
-                    player_pushback
+                    crate::game::physics::knockback
+                        // player_pushback
                         .run_if(any_with_component::<Knockback>)
                         .before(player_jump)
                         .after(player_sliding),
+                    // .in_set(super::RespondToDamageInfoSet),
                     player_sliding
                         .before(player_jump)
                         .run_if(any_with_component::<Falling>),
@@ -363,7 +365,7 @@ fn player_run(
     }
 }
 
-fn player_jump(
+pub fn player_jump(
     mut query: Query<
         (
             &ActionState<PlayerAction>,
@@ -785,7 +787,7 @@ fn player_falling(
     }
 }
 
-fn player_sliding(
+pub fn player_sliding(
     mut commands: Commands,
     mut query: Query<
         (
@@ -825,8 +827,10 @@ fn player_sliding(
             lin_vel.y = config.fall_accel;
 
             commands.entity(entity).insert(Knockback::new(
-                jump_direction,
-                Vec2::new(config.wall_pushback, 0.),
+                Vec2::new(
+                    config.wall_pushback * jump_direction,
+                    0.,
+                ),
                 config.wall_pushback_ticks,
             ));
 
@@ -916,17 +920,21 @@ fn player_attack(
                         PLAYER_ATTACK,
                         ENEMY_HURT,
                     )),
-                    Attack::new(16, entity)
-                        .set_stealth(stealthed)
-                        .set_pushback(Knockback::new(
-                            -facing.direction(),
-                            Vec2::new(config.melee_pushback, 0.),
-                            config.melee_pushback_ticks,
-                        )),
-                    Pushback {
-                        direction: facing.direction(),
-                        strength: Vec2::new(config.melee_pushback, 0.),
-                    },
+                    Attack::new(16, entity).set_stealth(stealthed),
+                    SelfPushback(Knockback::new(
+                        Vec2::new(
+                            config.melee_pushback * -facing.direction(),
+                            0.,
+                        ),
+                        config.melee_pushback_ticks,
+                    )),
+                    Pushback(Knockback::new(
+                        Vec2::new(
+                            facing.direction() * config.melee_pushback,
+                            0.,
+                        ),
+                        16,
+                    )),
                 ))
                 .set_parent(entity);
 
@@ -963,30 +971,30 @@ fn player_attack(
     }
 }
 
-fn player_pushback(
-    mut query: Query<(
-        Entity,
-        &mut Knockback,
-        &mut LinearVelocity,
-    )>,
-    mut commands: Commands,
-) {
-    for (entity, mut knockback, mut velocity) in query.iter_mut() {
-        knockback.ticks += 1;
-
-        if knockback.is_added() {
-            velocity.x = knockback.x_direction * knockback.strength.x;
-            velocity.y = knockback.strength.y;
-        }
-
-        if knockback.ticks > knockback.max_ticks {
-            velocity.x = 0.;
-            //velocity.y = 0.;
-
-            commands.entity(entity).remove::<Knockback>();
-        }
-    }
-}
+// fn player_pushback(
+//     mut query: Query<(
+//         Entity,
+//         &mut Knockback,
+//         &mut LinearVelocity,
+//     )>,
+//     mut commands: Commands,
+// ) {
+//     for (entity, mut knockback, mut velocity) in query.iter_mut() {
+//         knockback.ticks += 1;
+//
+//         if knockback.is_added() {
+//             velocity.x = knockback.x_direction * knockback.strength.x;
+//             velocity.y = knockback.strength.y;
+//         }
+//
+//         if knockback.ticks > knockback.max_ticks {
+//             velocity.x = 0.;
+//             //velocity.y = 0.;
+//
+//             commands.entity(entity).remove::<Knockback>();
+//         }
+//     }
+// }
 
 pub fn player_whirl_charge(
     mut query: Query<&mut WhirlAbility, Without<Whirling>>,

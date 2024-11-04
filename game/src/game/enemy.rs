@@ -1,4 +1,3 @@
-use bevy_hanabi::{ParticleEffect, ParticleEffectBundle};
 #[cfg(feature = "dev")]
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use rand::distributions::Standard;
@@ -15,7 +14,8 @@ use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::{animation::SpriteAnimationBundle, physics::ENEMY_INSIDE};
 use theseeker_engine::{assets::animation::SpriteAnimation, physics::ENEMY_HURT};
 
-use super::player::{Knockback, Player, PlayerConfig, StatusModifier, Stealthing};
+use super::physics::Knockback;
+use super::player::{Player, PlayerConfig, StatusModifier, Stealthing};
 use crate::game::attack::arc_attack::Projectile;
 use crate::game::attack::particles::ArcParticleEffectHandle;
 use crate::game::attack::*;
@@ -695,10 +695,10 @@ fn pushback_attack(
                     TransformBundle::from_transform(Transform::default()),
                     AnimationCollider(gent.e_gfx),
                     Attack::new(8, entity),
-                    Pushback {
-                        direction: -facing.direction(),
-                        strength: Vec2::new(100., 0.),
-                    },
+                    Pushback(Knockback::new(
+                        Vec2::new(-facing.direction() * 100., 0.),
+                        16,
+                    )),
                 ))
                 .set_parent(entity);
         }

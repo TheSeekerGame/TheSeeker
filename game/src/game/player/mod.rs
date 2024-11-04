@@ -16,6 +16,7 @@ use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::input::InputManagerPlugin;
 use theseeker_engine::physics::{Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER};
 
+use super::physics::Knockback;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
 use crate::prelude::*;
@@ -547,25 +548,25 @@ pub struct CoyoteTime(f32);
 #[derive(Component, Default, Debug)]
 pub struct JumpCount(u8);
 
-/// Pushback applied to the player for movement effects. Velocity is applied once and then blocks horizontal player movement.
-#[derive(Component, Default, Clone, Copy, Debug)]
-pub struct Knockback {
-    pub ticks: u32,
-    pub max_ticks: u32,
-    pub x_direction: f32,
-    pub strength: Vec2,
-}
+// /// Pushback applied to the player for movement effects. Velocity is applied once and then blocks horizontal player movement.
+// #[derive(Component, Default, Clone, Copy, Debug)]
+// pub struct Knockback {
+//     pub ticks: u32,
+//     pub max_ticks: u32,
+//     pub x_direction: f32,
+//     pub strength: Vec2,
+// }
 
-impl Knockback {
-    pub fn new(x_direction: f32, strength: Vec2, max_ticks: u32) -> Self {
-        Self {
-            ticks: 0,
-            max_ticks,
-            x_direction,
-            strength,
-        }
-    }
-}
+// impl Knockback {
+//     pub fn new(x_direction: f32, strength: Vec2, max_ticks: u32) -> Self {
+//         Self {
+//             ticks: 0,
+//             max_ticks,
+//             x_direction,
+//             strength,
+//         }
+//     }
+// }
 
 /// Indicates that sliding is tracked for this entity
 #[derive(Component, Default, Debug)]
