@@ -1,5 +1,5 @@
 use crate::camera::CameraRig;
-use crate::game::attack::{Attack, Pushback, SelfPushback};
+use crate::game::attack::{Attack, Pushback, SelfPushback, Stealthed};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
@@ -902,7 +902,6 @@ fn player_attack(
         ),
         (With<Player>, Without<Whirling>),
     >,
-    mut sprites: Query<&mut Sprite>,
     mut commands: Commands,
     config: Res<PlayerConfig>,
 ) {
@@ -910,8 +909,7 @@ fn player_attack(
         query.iter_mut()
     {
         if attacking.ticks == 0 {
-            println!("attack added");
-            commands
+            let attack = commands
                 .spawn((
                     TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
                     AnimationCollider(gent.e_gfx),
@@ -920,7 +918,7 @@ fn player_attack(
                         PLAYER_ATTACK,
                         ENEMY_HURT,
                     )),
-                    Attack::new(16, entity).set_stealth(stealthed),
+                    Attack::new(16, entity),
                     SelfPushback(Knockback::new(
                         Vec2::new(
                             config.melee_pushback * -facing.direction(),
@@ -928,22 +926,19 @@ fn player_attack(
                         ),
                         config.melee_pushback_ticks,
                     )),
-                    Pushback(Knockback::new(
-                        Vec2::new(
-                            facing.direction() * config.melee_pushback,
-                            0.,
-                        ),
-                        16,
-                    )),
+                    // Pushback(Knockback::new(
+                    //     Vec2::new(
+                    //         facing.direction() * config.melee_pushback,
+                    //         0.,
+                    //     ),
+                    //     16,
+                    // )),
                 ))
-                .set_parent(entity);
+                .set_parent(entity)
+                .id();
 
             if stealthed {
-                let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
-                sprite.color = sprite.color.with_a(1.0);
-                transitions.push(Stealthing::new_transition(
-                    CanStealth::new(&config),
-                ));
+                commands.entity(attack).insert(Stealthed);
             };
         }
 
@@ -971,31 +966,6 @@ fn player_attack(
     }
 }
 
-// fn player_pushback(
-//     mut query: Query<(
-//         Entity,
-//         &mut Knockback,
-//         &mut LinearVelocity,
-//     )>,
-//     mut commands: Commands,
-// ) {
-//     for (entity, mut knockback, mut velocity) in query.iter_mut() {
-//         knockback.ticks += 1;
-//
-//         if knockback.is_added() {
-//             velocity.x = knockback.x_direction * knockback.strength.x;
-//             velocity.y = knockback.strength.y;
-//         }
-//
-//         if knockback.ticks > knockback.max_ticks {
-//             velocity.x = 0.;
-//             //velocity.y = 0.;
-//
-//             commands.entity(entity).remove::<Knockback>();
-//         }
-//     }
-// }
-
 pub fn player_whirl_charge(
     mut query: Query<&mut WhirlAbility, Without<Whirling>>,
     config: Res<PlayerConfig>,
@@ -1015,6 +985,7 @@ pub fn player_whirl(
             &mut TransitionQueue,
             &mut Whirling,
             &mut WhirlAbility,
+            Has<Stealthing>,
             &Gent,
         ),
         (With<Player>, Without<Dashing>),
@@ -1032,8 +1003,15 @@ pub fn player_whirl(
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
-    for (entity, action_state, mut transitions, mut whirling, mut whirl_ability, gent) in
-        gent_query.iter_mut()
+    for (
+        entity,
+        action_state,
+        mut transitions,
+        mut whirling,
+        mut whirl_ability,
+        is_stealthing,
+        gent,
+    ) in gent_query.iter_mut()
     {
         whirling.ticks += 1;
         //TODO:
@@ -1050,23 +1028,25 @@ pub fn player_whirl(
                 }
             //if there is no attack, spawn a new one
             } else {
-                whirling.attack_entity = Some(
-                    commands
-                        .spawn((
-                            AttackBundle {
-                                //lifetime of two frames...
-                                attack: Attack::new(24, entity),
-                                collider: Collider::empty(InteractionGroups::new(
-                                    PLAYER_ATTACK,
-                                    ENEMY_HURT,
-                                )),
-                            },
-                            TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
-                            AnimationCollider(gent.e_gfx),
-                        ))
-                        .set_parent(entity)
-                        .id(),
-                );
+                let new_attack = commands
+                    .spawn((
+                        AttackBundle {
+                            //lifetime of two frames...
+                            attack: Attack::new(24, entity),
+                            collider: Collider::empty(InteractionGroups::new(
+                                PLAYER_ATTACK,
+                                ENEMY_HURT,
+                            )),
+                        },
+                        TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+                        AnimationCollider(gent.e_gfx),
+                    ))
+                    .set_parent(entity)
+                    .id();
+                if is_stealthing {
+                    commands.entity(new_attack).insert(Stealthed);
+                }
+                whirling.attack_entity = Some(new_attack);
             }
         } else {
             //leave whirling state if button is not pressed and we are past min ticks

@@ -1241,7 +1241,6 @@ fn remove_inside(
             Some(entity),
         );
         if intersections.is_empty() {
-            println!("removed inside");
             collider.0.set_collision_groups(InteractionGroups {
                 memberships: ENEMY,
                 filter: Group::all(),

@@ -72,13 +72,19 @@ fn instance(
                     TextStyle {
                         font: asset_server.load("font/Tektur-Regular.ttf"),
                         font_size: 42.0,
-                        color: if damage_info.crit {
+                        color: if damage_info.crit && damage_info.stealthed {
+                            Color::PURPLE * 1.5
+                        } else if damage_info.crit {
                             Color::YELLOW * 1.1
+                        } else if damage_info.stealthed {
+                            Color::PINK * 1.1
                         } else {
                             Color::WHITE
                         },
                         //TODO:
                         //if backstab, red?
+                        //TODO:
+                        //can we mix the colors to determine final color?
                     },
                 )
                 .with_style(Style {

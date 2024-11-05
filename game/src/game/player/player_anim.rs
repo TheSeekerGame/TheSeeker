@@ -129,7 +129,6 @@ fn player_running_animation(
 ) {
     for gent in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            println!("played run anim");
             player.play_key("anim.player.Run")
         }
     }

@@ -285,13 +285,9 @@ fn setup_player(
                 coyote_time: Default::default(),
             },
             Facing::Right,
-            // Health {
-            //     current: config.max_health,
-            //     max: config.max_health,
-            // },
             Health {
-                current: config.max_health * 100,
-                max: config.max_health * 100,
+                current: config.max_health,
+                max: config.max_health,
             },
             //have to use builder here *i think* because of different types between keycode and
             //axis
@@ -352,7 +348,6 @@ fn setup_player(
             },
             animation: Default::default(),
         },));
-        // println!("player spawned")
     }
 }
 
@@ -477,7 +472,7 @@ pub struct Dashing {
 
 impl GentState for Dashing {}
 impl Transitionable<CanDash> for Dashing {
-    type Removals = (Dashing);
+    type Removals = (Dashing, Whirling);
 }
 
 #[derive(Component, Debug)]
@@ -979,6 +974,51 @@ pub fn dash_icon_fx(
             commands.entity(entity).despawn();
         } else {
             sprite.color.set_a((1.0 - r) * icon.init_a);
+        }
+    }
+}
+
+///Resets the players cooldowns/energy on hit of a stealthed critical hit
+pub fn on_hit_stealth_reset(
+    query: Query<&Attack, (Added<Hit>, With<Crit>, With<Stealthed>)>,
+    mut attacker_skills: Query<(
+        Option<&mut CanDash>,
+        Option<&mut WhirlAbility>,
+        Option<&mut CanStealth>,
+    )>,
+    config: Res<PlayerConfig>,
+) {
+    for attack in query.iter() {
+        if let Ok((mut maybe_can_dash, mut maybe_whirl_ability, mut maybe_can_stealth)) =
+            attacker_skills.get_mut(attack.attacker)
+        {
+            if let Some(ref mut can_dash) = maybe_can_dash {
+                can_dash.remaining_cooldown = 0.;
+            }
+            if let Some(ref mut whirl_ability) = maybe_whirl_ability {
+                whirl_ability.energy = config.max_whirl_energy;
+            }
+            if let Some(ref mut can_stealth) = maybe_can_stealth {
+                can_stealth.remaining_cooldown = 0.;
+            }
+        }
+    }
+}
+
+///Exits player Stealthing state when a stealthed attack first hits
+pub fn on_hit_exit_stealthing(
+    query: Query<&Attack, (Added<Hit>, With<Stealthed>)>,
+    mut attacker_query: Query<(&Gent, &mut TransitionQueue), With<Player>>,
+    mut sprites: Query<&mut Sprite, Without<Player>>,
+    config: Res<PlayerConfig>,
+) {
+    for attack in query.iter() {
+        if let Ok((gent, mut transitions)) = attacker_query.get_mut(attack.attacker) {
+            let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
+            sprite.color = sprite.color.with_a(1.0);
+            transitions.push(Stealthing::new_transition(
+                CanStealth::new(&config),
+            ));
         }
     }
 }
