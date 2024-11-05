@@ -293,6 +293,9 @@ fn setup_enemy(
             },
             StateDespawnMarker,
         ));
+        let mut animation: ScriptPlayer<SpriteAnimation> = ScriptPlayer::default();
+        animation.play_key("anim.spider.Sparks");
+        animation.set_slot("Start", true);
         commands.entity(e_effects_gfx).insert((
             EnemyEffectsGfxBundle {
                 marker: EnemyEffectGfx { e_gent },
@@ -304,7 +307,7 @@ fn setup_enemy(
                     transform: xf_gent.with_translation(Vec3::new(0., 0., 1.)),
                     ..Default::default()
                 },
-                animation: Default::default(),
+                animation: SpriteAnimationBundle { player: animation },
             },
             StateDespawnMarker,
         ));

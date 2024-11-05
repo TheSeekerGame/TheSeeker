@@ -82,3 +82,11 @@ frame_index = 13
 run_on_slot_enable = "Spark6"
 action = "SetFrameNext"
 frame_index = 16
+
+# Starting Frame (Empty)
+[[script]]
+run_on_slot_enable = "Start"
+action = "SetFrameNext"
+frame_index = 3
+
+
