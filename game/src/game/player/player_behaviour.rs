@@ -172,6 +172,7 @@ pub fn player_can_stealth(
     }
 }
 
+//TODO: change to using Added<attack::Hit>
 fn hitfreeze(
     mut player_q: Query<
         (

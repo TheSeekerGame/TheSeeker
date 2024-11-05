@@ -2,7 +2,7 @@ use crate::appstate::AppState;
 use crate::game::gentstate::Facing;
 use crate::game::player::{
     Attacking, CanAttack, Dashing, Falling, HitFreezeTime, Idle, Jumping, PlayerConfig, PlayerGfx,
-    PlayerStateSet, Running, WallSlideTime, WhirlAbility,
+    PlayerStateSet, Running, WallSlideTime, Whirling,
 };
 use crate::prelude::{
     in_state, Added, App, Has, IntoSystemConfigs, Local, Or, Plugin, Query, Res, With, Without,
@@ -12,8 +12,6 @@ use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::LinearVelocity;
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
-
-use super::Whirling;
 
 ///play animations here, run after transitions
 pub struct PlayerAnimationPlugin;

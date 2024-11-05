@@ -3,7 +3,6 @@ use crate::game::attack::{apply_attack_damage, Attack, DamageInfo};
 use crate::game::player::Player;
 use crate::prelude::Update;
 use bevy::prelude::*;
-use ran::ran_f64;
 use theseeker_engine::physics::Collider;
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 
@@ -13,7 +12,6 @@ impl Plugin for DmgNumbersPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             GameTickUpdate,
-            // instance.after(attack_damage),
             instance.after(apply_attack_damage),
         );
         app.add_systems(Update, update_number);
@@ -37,9 +35,6 @@ fn instance(
         return;
     };
 
-    //TODO: switch to damage events
-    // for attack in attacks.iter() {
-    // for attack_info in attack.damaged.iter() {
     for damage_info in damage_events.read() {
         if let Ok((transform, collider)) = entity_with_hp.get(damage_info.target) {
             let mut world_position = transform.translation();
@@ -73,11 +68,11 @@ fn instance(
                         font: asset_server.load("font/Tektur-Regular.ttf"),
                         font_size: 42.0,
                         color: if damage_info.crit && damage_info.stealthed {
-                            Color::PURPLE * 1.5
+                            Color::PURPLE
                         } else if damage_info.crit {
                             Color::YELLOW * 1.1
                         } else if damage_info.stealthed {
-                            Color::PINK * 1.1
+                            Color::PINK
                         } else {
                             Color::WHITE
                         },
