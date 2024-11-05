@@ -184,17 +184,19 @@ fn spawn_enemy(
                 };
                 slot.cooldown_ticks += 1;
                 if slot.cooldown_ticks >= EnemySpawner::COOLDOWN && should_spawn {
-                    let id = commands
-                        .spawn((
-                            EnemyBlueprintBundle {
-                                marker: EnemyBlueprint {
-                                    bonus_hp: 20 * killed.0 as u32,
+                    for i in 0..25 {
+                        let id = commands
+                            .spawn((
+                                EnemyBlueprintBundle {
+                                    marker: EnemyBlueprint {
+                                        bonus_hp: 20 * killed.0 as u32,
+                                    },
                                 },
-                            },
-                            TransformBundle::from_transform(*transform),
-                        ))
-                        .id();
-                    slot.enemy = Some(id);
+                                TransformBundle::from_transform(*transform),
+                            ))
+                            .id();
+                        slot.enemy = Some(id);
+                    }
                     slot.cooldown_ticks = 0;
                 }
             }
@@ -904,8 +906,7 @@ fn ranged_attack(
             // spawn in the new projectile:
             commands
                 .spawn((
-                    Attack::new(1000, entity)
-                        .set_stat_mod(StatusModifier::basic_ice_spider()),
+                    Attack::new(1000, entity).set_stat_mod(StatusModifier::basic_ice_spider()),
                     final_solution,
                     Collider::cuboid(
                         5.,
