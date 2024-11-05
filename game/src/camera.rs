@@ -35,10 +35,8 @@ impl Plugin for CameraPlugin {
         app.insert_resource(CameraRig {
             target: Default::default(),
             camera: Default::default(),
-            //trauma: 0.0,
         });
         app.add_systems(GameTickUpdate, camera_rig_follow_player);
-        //app.add_systems(GameTickUpdate, update_rig_trauma);
         app.add_systems(
             GameTickUpdate,
             (
@@ -69,12 +67,6 @@ pub struct CameraRig {
     target: Vec2,
     /// the "base" position of the camera before screen shake is applied
     camera: Vec2,
-//    /// Applies screen shake based on this amount.
-//    ///
-//    /// value decreases over time. To use, add some amount based on impact intensity.
-//    ///
-//    /// 10.0 is a lot; death? 1.0 minor impact
-//    pub(crate) trauma: f32,
 }
 
 /// Limits to the viewable gameplay area.
@@ -194,44 +186,6 @@ fn camera_rig_follow_player(
     rig.target.y = player_xform.translation.y;
 }
 
-/*
-/// Tiny system that just makes sure trauma is always going down linearly
-pub(crate) fn update_rig_trauma(
-    mut rig: ResMut<CameraRig>,
-    time: Res<Time>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut commands: Commands,
-    player_q: Query<Entity, (With<Gent>, With<Player>)>,
-) {
-    rig.trauma = (rig.trauma - 1.75 * time.delta_seconds()).max(0.0);
-    #[cfg(feature = "dev")]
-    // Tests different levels based on number key if in dev
-    {
-        let number_keys = [
-            KeyCode::Digit1,
-            KeyCode::Digit2,
-            KeyCode::Digit3,
-            KeyCode::Digit4,
-            KeyCode::Digit5,
-            KeyCode::Digit6,
-            KeyCode::Digit7,
-            KeyCode::Digit8,
-            KeyCode::Digit9,
-            KeyCode::Digit0,
-        ];
-        for (i, key) in number_keys.iter().enumerate() {
-            if keyboard_input.pressed(*key) {
-                rig.trauma = (i as f32 + 1.0) * 0.1;
-            }
-        }
-        if keyboard_input.pressed(KeyCode::Delete) || keyboard_input.pressed(KeyCode::Backspace) {
-            if let Some(e) = player_q.iter().next() {
-                commands.entity(e).try_insert(Dead::default());
-            }
-        }
-    }
-}
- */
 /// Camera updates the camera position to smoothly interpolate to the
 /// rig location. also applies camera shake, and limits camera within the level boundaries
 pub(crate) fn update_camera_rig(
@@ -258,13 +212,8 @@ pub(crate) fn update_camera_rig(
 
     rig.camera = new_xy;
 
-    //let shake = rig.trauma.powi(3);
-
+    
     // screen shake amounts
-    //let angle = 2.5 * (std::f32::consts::PI / 180.0) * shake * ran_f64_range(-1.0..=1.0) as f32;
-    //let offset_x = 20.0 * shake * ran_f64_range(-1.0..=1.0) as f32;
-    //let offset_y = 20.0 * shake * ran_f64_range(-1.0..=1.0) as f32;
-
     let offset = match shake_op {
         Some(shake) => shake.c_offset,
         None => Vec2::ZERO,

@@ -150,8 +150,6 @@ pub fn player_can_stealth(
             } else {
                 
                 command.insert_resource(CameraShake::new(2.0, 1.0, 5.0));
-
-                //rig.trauma += 0.23;
             }
         }
     }
@@ -487,10 +485,7 @@ pub fn player_can_dash(
                     *hitfreeze = HitFreezeTime(u32::MAX, None)
                 }
             } else {
-                //rig.trauma += 0.23;
-                                
                 commands.insert_resource(CameraShake::new(2.0, 1.0, 5.0));
-
             }
         }
     }

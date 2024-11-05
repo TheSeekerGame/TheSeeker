@@ -315,14 +315,9 @@ pub fn attack_damage(
                 //apply more screenshake if an enemies health becomes depleted by this attack
                 if is_enemy {
                     commands.insert_resource(CameraShake::new(2.0, 1.2, 5.0));
-
-                    //rig.trauma = 0.4;
                 }
-            //} else if rig.trauma < 0.3 && is_enemy {
             } else if is_enemy {
                 //apply screenshake on damage to enemy
-                //rig.trauma = 0.3;
-                
                 commands.insert_resource(CameraShake::new(1.0, 0.6, 5.0));
 
             }
