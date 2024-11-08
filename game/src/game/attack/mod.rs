@@ -338,7 +338,7 @@ pub fn apply_attack_damage(
                 }
 
                 //apply JustGotHitMarker TODO: switch hitspark to damage_info events
-                commands.entity(damaged_entity).insert(JustGotHitMarker);
+                commands.entity(t_entity).insert(JustGotHitMarker);
 
                 //apply damage to the targets health
                 health.current = health.current.saturating_sub(damage);
