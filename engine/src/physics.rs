@@ -74,15 +74,6 @@ pub struct SpriteShapeMap {
         SharedShape,
         SharedShape,
     )>,
-    // pub shapes: Option<
-    //     Vec<(
-    //         SharedShape,
-    //         SharedShape,
-    //         SharedShape,
-    //         SharedShape,
-    //     )>,
-    // >,
-    ///Image and frame?
     pub map: HashMap<AssetId<Image>, Vec<usize>>,
 }
 
