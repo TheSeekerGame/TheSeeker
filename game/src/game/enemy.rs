@@ -1,4 +1,3 @@
-use bevy_hanabi::{ParticleEffect, ParticleEffectBundle};
 #[cfg(feature = "dev")]
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use rand::distributions::Standard;
@@ -15,6 +14,7 @@ use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::{animation::SpriteAnimationBundle, physics::ENEMY_INSIDE};
 use theseeker_engine::{assets::animation::SpriteAnimation, physics::ENEMY_HURT};
 
+use super::physics::Knockback;
 use super::player::{Player, PlayerConfig, StatusModifier, Stealthing};
 use crate::game::attack::arc_attack::Projectile;
 use crate::game::attack::particles::ArcParticleEffectHandle;
@@ -695,10 +695,10 @@ fn pushback_attack(
                     TransformBundle::from_transform(Transform::default()),
                     AnimationCollider(gent.e_gfx),
                     Attack::new(8, entity),
-                    Pushback {
-                        direction: -facing.direction(),
-                        strength: 100.,
-                    },
+                    Pushback(Knockback::new(
+                        Vec2::new(-facing.direction() * 100., 0.),
+                        16,
+                    )),
                 ))
                 .set_parent(entity);
         }
@@ -904,8 +904,7 @@ fn ranged_attack(
             // spawn in the new projectile:
             commands
                 .spawn((
-                    Attack::new(1000, entity)
-                        .set_stat_mod(StatusModifier::basic_ice_spider()),
+                    Attack::new(1000, entity).set_stat_mod(StatusModifier::basic_ice_spider()),
                     final_solution,
                     Collider::cuboid(
                         5.,
@@ -1242,7 +1241,6 @@ fn remove_inside(
             Some(entity),
         );
         if intersections.is_empty() {
-            println!("removed inside");
             collider.0.set_collision_groups(InteractionGroups {
                 memberships: ENEMY,
                 filter: Group::all(),

@@ -1,39 +1,62 @@
 pub mod arc_attack;
 pub mod particles;
 
-use theseeker_engine::gent::Gent;
-use theseeker_engine::physics::{
-    update_sprite_colliders, Collider, LinearVelocity, PhysicsWorld, GROUND,
-};
+use std::mem;
 
-use super::enemy::EnemyGfx;
-use super::player::{CanDash, CanStealth, Player, PlayerConfig, WhirlAbility};
-use super::player::{PlayerGfx, PlayerPushback, StatusModifier};
-use crate::game::enemy::{Defense, Enemy, EnemyStateSet};
-use crate::game::player::PlayerStateSet;
-use crate::game::{attack::particles::AttackParticlesPlugin, gentstate::Dead};
-use crate::prelude::*;
-use crate::{
-    camera::CameraRig,
-    game::attack::arc_attack::{arc_projectile, Projectile},
+use theseeker_engine::gent::Gent;
+use theseeker_engine::physics::{update_sprite_colliders, Collider, PhysicsWorld, GROUND};
+
+use super::enemy::{Defense, EnemyGfx, EnemyStateSet};
+use super::gentstate::{Dead, Facing};
+use super::physics::Knockback;
+use super::player::{
+    on_hit_exit_stealthing, on_hit_stealth_reset, Passive, Passives, PlayerGfx, PlayerStateSet,
+    StatusModifier,
 };
+use crate::game::attack::arc_attack::{arc_projectile, Projectile};
+use crate::game::attack::particles::AttackParticlesPlugin;
+use crate::prelude::*;
 
 pub struct AttackPlugin;
 
 impl Plugin for AttackPlugin {
     fn build(&self, app: &mut App) {
+        app.register_type::<Crits>();
         app.add_plugins(AttackParticlesPlugin);
+        app.add_gametick_event::<DamageInfo>();
         app.init_resource::<KillCount>();
         app.add_systems(
             GameTickUpdate,
             (
+                // (determine_attack_targets, apply_attack_modifications, apply_attack_damage)
+                // (track_crits, on_hit_player_pushback).in_set(OnAttackFirstHitSet)
+                // (lifesteal, kill_on_damage, damage_flash).in_set(RespondToDamageInfoSet)
                 arc_projectile,
-                attack_damage,
+                (
+                    determine_attack_targets,
+                    apply_attack_modifications,
+                    //DamageInfo event emited here
+                    apply_attack_damage,
+                    //OnAttackFirstHitSet
+                    track_crits,
+                    on_hit_self_pushback,
+                    on_hit_lifesteal,
+                    on_hit_stealth_reset,
+                    on_hit_exit_stealthing,
+                )
+                    .chain(),
+                (
+                    kill_on_damage,
+                    damage_flash,
+                    apply_damage_flash,
+                )
+                    .chain()
+                    .in_set(RespondToDamageInfoSet)
+                    .after(apply_attack_damage),
+                //cleanup
                 attack_tick,
+                despawn_projectile,
                 attack_cleanup,
-                damage_flash,
-                knockback,
-                on_hit_player_pushback.after(attack_damage),
             )
                 .chain()
                 .after(update_sprite_colliders)
@@ -44,6 +67,15 @@ impl Plugin for AttackPlugin {
         );
     }
 }
+
+///Effects that care about the first time an attack hits should go here
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct OnAttackFirstHitSet;
+
+///Effects that are applied when an instance of damage is dealt should go here
+#[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
+pub struct RespondToDamageInfoSet;
+
 #[derive(Component)]
 pub struct Health {
     pub current: u32,
@@ -59,11 +91,11 @@ pub struct DamageFlash {
 
 #[derive(Bundle)]
 pub struct AttackBundle {
-    attack: Attack,
-    collider: Collider,
+    pub attack: Attack,
+    pub collider: Collider,
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Attack {
     pub current_lifetime: u32,
     pub max_lifetime: u32,
@@ -71,23 +103,13 @@ pub struct Attack {
     /// Maximum number of targets that can be hit by this attack at once.
     pub max_targets: u32,
     pub attacker: Entity,
-    /// Includes every single instance of damage that was applied.
-    /// (even against the same enemy)
-    pub damaged: Vec<DamageInfo>,
-    /// Tracks which entities collided with the attack, and still remain in contact.
-    /// Not stored in damage info, because the collided entities might be
-    /// different from the entities that damage is applied. (due to max_targets)
-    pub collided: HashSet<Entity>,
 
-    /// Unique entities that where in contact with collider and took damage.
-    /// and are still in contact with the attack collider.
+    /// Unique entities damaged by this attack.
     pub damaged_set: HashSet<Entity>,
-    /// used to track if multiple hits are in the same attack or not
-    pub new_group: bool,
-    pub stealthed: bool,
 
-    pub pushback: Option<PlayerPushback>,
-    pub pushback_applied: bool,
+    /// Unique entities that are in contact this tick and are valid targets.
+    pub target_set: HashSet<Entity>,
+
     pub status_mod: Option<StatusModifier>,
 }
 impl Attack {
@@ -99,13 +121,8 @@ impl Attack {
             damage: 20,
             max_targets: 3,
             attacker,
-            damaged: Vec::new(),
-            collided: Default::default(),
             damaged_set: Default::default(),
-            new_group: false,
-            stealthed: false,
-            pushback: None,
-            pushback_applied: false,
+            target_set: Default::default(),
             status_mod: None,
         }
     }
@@ -116,101 +133,77 @@ impl Attack {
     }
 }
 
+/// Event sent when damage is applied
+#[derive(Event, Clone, Copy, Hash, Eq, PartialEq)]
 pub struct DamageInfo {
+    /// Entity that attacked
+    pub attacker: Entity,
+    /// Entity that dealt damage
+    pub source: Entity,
     /// Entity that got damaged
-    pub entity: Entity,
-    /// The tick it was damaged
-    pub tick: u64,
+    pub target: Entity,
     /// Amount of damage that was actually applied
     pub amount: u32,
     pub crit: bool,
+    pub stealthed: bool,
 }
 
-///Component added to attack entity to indicate it causes knockback
-#[derive(Component, Default)]
-pub struct Pushback {
-    pub direction: f32,
-    pub strength: f32,
-}
+///Component added to attack entity to indicate it causes Knockback to the Gent it damages
+#[derive(Component, Default, Deref)]
+pub struct Pushback(pub Knockback);
 
-///Component added to an entity damaged by a pushback attack
-#[derive(Component, Default, Debug)]
-pub struct Knockback {
-    pub ticks: u32,
-    pub max_ticks: u32,
-    pub direction: f32,
-    pub strength: f32,
-}
+///Component added to attack entity to indicate it causes Knockback to the attacker
+#[derive(Component, Default, Deref)]
+pub struct SelfPushback(pub Knockback);
 
-impl Knockback {
-    pub fn new(direction: f32, strength: f32, max_ticks: u32) -> Self {
-        Knockback {
-            ticks: 0,
-            max_ticks,
-            direction,
-            strength,
-        }
-    }
-}
+///Component added to attack entity to indicate it was initiated by a Stealthing Gent
+#[derive(Component)]
+pub struct Stealthed;
 
-pub fn attack_damage(
-    spatial_query: Res<PhysicsWorld>,
-    mut query: Query<(
+///Component added to an Attack entity the first time it hits something
+#[derive(Component)]
+pub struct Hit;
+
+///Component added to an Attack entity that indicates it *Can* backstab
+#[derive(Component)]
+pub struct Backstab;
+
+///Component added to an Attack entity to indicate that it is a crit
+#[derive(Component, Debug)]
+pub struct Crit;
+
+//checks nearest entities, modifies attacks targets
+pub fn determine_attack_targets(
+    mut attack_query: Query<(
         Entity,
         &GlobalTransform,
         &mut Attack,
         &Collider,
-        Option<&Pushback>,
-        Option<&Projectile>,
     )>,
-    mut health_query: Query<&mut Health>,
-    mut damageable_query: Query<(
-        Entity,
-        &Collider,
-        &Gent,
-        &GlobalTransform,
-        Has<Defense>,
-        Has<Enemy>,
-    )>,
-    mut crits: Query<(&mut Crits), Without<Attack>>,
-    mut player_skills: Query<
-        (
-            Option<&mut CanDash>,
-            Option<&mut WhirlAbility>,
-            Option<&mut CanStealth>,
-        ),
-        With<Player>,
-    >,
-    mut gfx_query: Query<Entity, Or<(With<PlayerGfx>, With<EnemyGfx>)>>,
-    mut commands: Commands,
-    mut rig: ResMut<CameraRig>,
-    time: Res<GameTime>,
-    config: Res<PlayerConfig>,
+    damageable_query: Query<&GlobalTransform, (With<Collider>, With<Health>, With<Gent>)>,
+    spatial_query: Res<PhysicsWorld>,
 ) {
-    for (attacker_entity, pos, mut attack, attack_collider, maybe_pushback, maybe_projectile) in
-        query.iter_mut()
-    {
+    for (entity, transform, mut attack, collider) in attack_query.iter_mut() {
         let mut newly_collided: HashSet<Entity> = HashSet::default();
         let intersections = spatial_query.intersect(
-            pos.translation().xy(),
-            attack_collider.0.shape(),
-            attack_collider
+            transform.translation().xy(),
+            collider.0.shape(),
+            collider
                 .0
                 .collision_groups()
-                .with_filter(attack_collider.0.collision_groups().filter | GROUND),
-            Some(attacker_entity),
+                .with_filter(collider.0.collision_groups().filter | GROUND),
+            Some(entity),
         );
-        let intersections_empty = intersections.is_empty();
         let mut targets = intersections
             .into_iter()
             // Filters out everything that's not damageable or one of the nearest max_targets entities to attack
             .filter_map(|colliding_entity| {
-                if let Ok((_, _, _, dmgbl_pos, _, _)) = damageable_query.get(colliding_entity) {
-                    newly_collided.insert(attacker_entity);
-                    let dist = dmgbl_pos
+                if let Ok(damageable_transform) = damageable_query.get(colliding_entity) {
+                    newly_collided.insert(entity);
+                    let dist = damageable_transform
                         .translation()
                         .xy()
-                        .distance_squared(pos.translation().xy());
+                        .distance_squared(transform.translation().xy());
                     Some((colliding_entity, dist))
                 } else {
                     None
@@ -218,193 +211,232 @@ pub fn attack_damage(
             })
             .collect::<Vec<_>>();
         targets.sort_by(|(_, dist1), (_, dist2)| dist1.total_cmp(dist2));
-        let targets_empty = targets.is_empty();
-        // Get the closest ones
-        let top_n = targets
+
+        // Get the closest targets
+        let valid_targets = targets
             .into_iter()
-            .take(attack.max_targets as usize)
+            .take(attack.max_targets as usize - attack.damaged_set.len())
             .map(|(e, _)| e)
             .collect::<Vec<_>>();
 
-        for entity in top_n.iter() {
+        for entity in valid_targets.iter() {
+            //if we already damaged this entity
             if attack.damaged_set.contains(entity) {
                 continue;
             };
 
-            let Ok((damaged_entity, _, gent, _, is_defending, is_enemy)) =
-                damageable_query.get_mut(*entity)
-            else {
+            //if the entity is not damageable
+            if damageable_query.get(*entity).is_err() {
                 continue;
-            };
-
-            // Apply Stat Modifier (if exists)
-            if let Some(stat_modifier) = &attack.status_mod {
-                commands
-                    .entity(damaged_entity)
-                    .insert(stat_modifier.clone());
             }
 
-            attack.damaged_set.insert(damaged_entity);
-            let mut damage_dealt = if is_defending {
-                attack.damage / 10000
-            } else {
-                attack.damage
-            };
+            attack.target_set.insert(*entity);
+        }
+    }
+}
 
-            let mut was_critical = false;
-            let was_stealthed = attack.stealthed;
-            if let Ok((mut crit)) = crits.get_mut(attack.attacker) {
-                if crit.next_hit_is_critical {
-                    damage_dealt = (damage_dealt as f32 * crit.crit_damage_multiplier) as u32;
-                    was_critical = true;
-                    println!("critical damage!")
+//could switch to command/component based approach for attack modifications
+pub fn apply_attack_modifications(
+    mut attack_query: Query<(Entity, &mut Attack, Has<Crit>, Has<Hit>), Without<Gent>>,
+    mut attacker_query: Query<(Option<&mut Crits>, Option<&Passives>), With<Gent>>,
+    mut commands: Commands,
+) {
+    for (entity, mut attack, is_crit, has_hit) in attack_query.iter_mut() {
+        //if there are no targets we dont want to do anything
+        if attack.target_set.is_empty() {
+            continue;
+        }
+        //if there is an attacker, apply relevant buffs
+        if let Ok((maybe_crits, maybe_passives)) = attacker_query.get_mut(attack.attacker) {
+            //TODO: attack should keep its original damage and modify only the multipliers
+            // crit multiplier
+            //
+            if let Some(mut crit) = maybe_crits {
+                if crit.next_hit_is_critical && !is_crit {
+                    commands.entity(entity).insert(Crit);
+                    attack.damage = (attack.damage as f32 * crit.crit_damage_multiplier) as u32;
+                    crit.next_hit_is_critical = false;
                 }
-                if attack.new_group == true {
-                    crit.counter += 1;
-                    println!("crit_counter: {}", crit.counter);
+
+                //increment hit count the first time we hit something with an attack
+                if !has_hit {
+                    crit.hit_count += 1;
                 }
             }
-            // Stealth Effects
-            let stealth_lifesteal = if was_critical { 1. } else { 0.2 };
-            if was_stealthed {
-                if let Ok(mut attacker_health) = health_query.get_mut(attack.attacker) {
-                    attacker_health.current = u32::min(
-                        attacker_health
-                            .current
-                            .saturating_add((damage_dealt as f32 * stealth_lifesteal) as u32),
-                        config.max_health,
-                    );
+
+            //passives
+            if let Some(passives) = maybe_passives {
+                //backstab
+                //check this later on application of damage for each enemy
+                if passives.contains(&Passive::Backstab) {
+                    commands.entity(entity).insert(Backstab);
                 }
             }
-            if was_stealthed && was_critical {
-                if let Ok((mut maybe_can_dash, mut maybe_whirl_ability, mut maybe_can_stealth)) =
-                    player_skills.get_single_mut()
-                {
-                    if let Some(ref mut can_dash) = maybe_can_dash {
-                        can_dash.remaining_cooldown = 0.;
+
+            if !has_hit {
+                commands.entity(entity).insert(Hit);
+            }
+        }
+    }
+}
+
+//Now we only have the attack and target
+pub fn apply_attack_damage(
+    mut attack_query: Query<(
+        Entity,
+        &mut Attack,
+        &GlobalTransform,
+        Has<Stealthed>,
+        Has<Backstab>,
+        Has<Crit>,
+        Option<&Pushback>,
+    )>,
+    mut target_query: Query<
+        (
+            Entity,
+            &mut Health,
+            &GlobalTransform,
+            &Facing,
+            Has<Defense>,
+        ),
+        With<Gent>,
+    >,
+    mut damage_events: EventWriter<DamageInfo>,
+    mut commands: Commands,
+) {
+    for (a_entity, mut attack, transform, is_stealthed, can_backstab, is_crit, maybe_pushback) in
+        attack_query.iter_mut()
+    {
+        //we take this and dont put it back each tick
+        let target_set = mem::take(&mut attack.target_set);
+        //this gets put back
+        let damaged_set = mem::take(&mut attack.damaged_set);
+        for target in target_set.difference(&damaged_set) {
+            if let Ok((t_entity, mut health, t_transform, t_facing, is_defending)) =
+                target_query.get_mut(*target)
+            {
+                let mut damage = attack.damage;
+                //modify damage based on target specific qualities
+                //target defenses...
+                if can_backstab {
+                    let is_backstab = match *t_facing {
+                        Facing::Right => t_transform.translation().x > transform.translation().x,
+                        Facing::Left => t_transform.translation().x < transform.translation().x,
+                    };
+                    if is_backstab {
+                        damage *= 2;
                     }
-                    if let Some(ref mut whirl_ability) = maybe_whirl_ability {
-                        whirl_ability.energy = config.max_whirl_energy;
-                    }
-                    if let Some(ref mut can_stealth) = maybe_can_stealth {
-                        can_stealth.remaining_cooldown = 0.;
-                    }
+                }
+                if is_defending {
+                    damage /= 4;
+                }
+
+                //TODO:
+                // Apply Stat Modifier (if exists)
+                if let Some(stat_modifier) = &attack.status_mod {
+                    commands.entity(t_entity).insert(stat_modifier.clone());
+                }
+
+                //apply damage to the targets health
+                health.current = health.current.saturating_sub(damage);
+                let damage_info = DamageInfo {
+                    attacker: attack.attacker,
+                    source: a_entity,
+                    target: t_entity,
+                    amount: damage,
+                    crit: is_crit,
+                    stealthed: is_stealthed,
+                };
+                attack.damaged_set.insert(t_entity);
+                damage_events.send(damage_info);
+
+                //apply Knockback
+                if let Some(pushback) = maybe_pushback {
+                    commands.entity(t_entity).insert(pushback.0);
                 }
             }
-            let mut damaged_health = health_query
-                .get_mut(damaged_entity)
-                .expect("damaged have health");
+        }
+        attack.damaged_set.extend(damaged_set);
+    }
+}
 
-            damaged_health.current = damaged_health.current.saturating_sub(damage_dealt);
-            attack.damaged.push(DamageInfo {
-                entity: damaged_entity,
-                tick: time.tick(),
-                amount: damage_dealt,
-                crit: was_critical,
-            });
-            if let Ok(anim_entity) = gfx_query.get_mut(gent.e_gfx) {
-                //insert a DamageFlash to flash for 1 animation frame/8 ticks
-                commands.entity(anim_entity).insert(DamageFlash {
+pub fn despawn_projectile(
+    query: Query<(Entity, &Attack), (With<Projectile>, With<Hit>)>,
+    mut commands: Commands,
+) {
+    for (entity, attack) in query.iter() {
+        if attack.damaged_set.len() == attack.max_targets as usize {
+            // Note: purposefully does not despawn child entities, nor remove the
+            // reference, so that child particle systems have the option of lingering
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+pub fn kill_on_damage(
+    query: Query<(Entity, &Health), With<Gent>>,
+    mut damage_events: EventReader<DamageInfo>,
+    mut commands: Commands,
+) {
+    for damage_info in damage_events.read() {
+        if let Ok((entity, health)) = query.get(damage_info.target) {
+            if health.current == 0 {
+                commands.entity(entity).insert(Dead::default());
+            }
+        }
+    }
+}
+
+///Applies pushback to attacker on first hit of an attack with SelfPushback
+fn on_hit_self_pushback(
+    query: Query<(&Attack, &SelfPushback), Added<Hit>>,
+    mut commands: Commands,
+) {
+    for (attack, self_pushback) in query.iter() {
+        commands.entity(attack.attacker).insert(self_pushback.0);
+    }
+}
+
+///Heals attacker on first hit of a Stealthed attack
+fn on_hit_lifesteal(
+    query: Query<(&Attack, Has<Crit>), (Added<Hit>, With<Stealthed>)>,
+    mut health_query: Query<&mut Health, Without<Attack>>,
+) {
+    for (attack, is_crit) in query.iter() {
+        if let Ok(mut health) = health_query.get_mut(attack.attacker) {
+            //heal by 100 percent or 20 percent max health
+            let stealth_lifesteal = if is_crit { 1. } else { 0.2 };
+            health.current = u32::min(
+                health
+                    .current
+                    .saturating_add((stealth_lifesteal * health.current as f32) as u32),
+                health.max,
+            );
+        }
+    }
+}
+
+fn apply_damage_flash(
+    sprite_query: Query<
+        Entity,
+        (
+            With<Sprite>,
+            Or<(With<EnemyGfx>, With<PlayerGfx>)>,
+            Without<Gent>,
+        ),
+    >,
+    gent_query: Query<&Gent>,
+    mut damage_events: EventReader<DamageInfo>,
+    mut commands: Commands,
+) {
+    for damage_info in damage_events.read() {
+        if let Ok(gent) = gent_query.get(damage_info.target) {
+            if let Ok(entity) = sprite_query.get(gent.e_gfx) {
+                commands.entity(entity).insert(DamageFlash {
                     current_ticks: 0,
                     max_ticks: 8,
                 });
             }
-            if damaged_health.current == 0 {
-                commands.entity(damaged_entity).insert(Dead::default());
-                //apply more screenshake if an enemies health becomes depleted by this attack
-                if is_enemy {
-                    rig.trauma = 0.4;
-                }
-            } else if rig.trauma < 0.3 && is_enemy {
-                //apply screenshake on damage to enemy
-                rig.trauma = 0.3
-            }
-            if let Some(pushback) = maybe_pushback {
-                commands.entity(damaged_entity).insert(Knockback::new(
-                    pushback.direction,
-                    pushback.strength,
-                    16,
-                ));
-            }
-
-            if attack.new_group == true {
-                attack.new_group = false;
-            }
-        }
-
-        // Removes entities from collided and damaged_set that are not in newly_collided
-        let Attack {
-            collided,
-            damaged_set,
-            ..
-        } = attack.as_mut();
-        for e in collided.difference(&newly_collided) {
-            damaged_set.remove(&*e);
-        }
-        *collided = newly_collided;
-        // Handle the edge case where newly collided *and* collided might not have damaged
-        // set's contents
-        if targets_empty {
-            damaged_set.clear();
-            if attack.new_group == false {
-                attack.new_group = true;
-
-                if let Ok((mut crit)) = crits.get_mut(attack.attacker) {
-                    let next_hit_counter = crit.counter + 1;
-                    if next_hit_counter % 17 == 0 {
-                        crit.next_hit_is_critical = true;
-                    } else if next_hit_counter % 19 == 0 {
-                        crit.next_hit_is_critical = true;
-                    } else {
-                        crit.next_hit_is_critical = false;
-                    }
-                }
-            }
-        }
-
-        if maybe_projectile.is_some() && !intersections_empty && attack.current_lifetime > 1 {
-            // Note: purposefully does not despawn child entities, nor remove the
-            // reference, so that child particle systems have the option of lingering
-            commands.entity(attacker_entity).despawn();
-        }
-    }
-}
-
-fn on_hit_player_pushback(
-    mut commands: Commands,
-    mut query: Query<(Entity, &mut Attack), (Changed<Attack>)>,
-) {
-    for (entity, mut attack) in query.iter_mut() {
-        if !attack.pushback_applied && attack.pushback.is_some() {
-            if !attack.damaged.is_empty() {
-                commands
-                    .entity(attack.attacker)
-                    .insert(attack.pushback.unwrap());
-                attack.pushback_applied = true;
-            }
-        }
-    }
-}
-
-//maybe should not modify velocity directly but add knockback, but this makes it behave differently
-//in states which dont set velocity every frame
-fn knockback(
-    mut query: Query<(
-        Entity,
-        &mut Knockback,
-        &mut LinearVelocity,
-        Has<Defense>,
-    )>,
-    mut commands: Commands,
-) {
-    for (entity, mut knockback, mut velocity, is_defending) in query.iter_mut() {
-        knockback.ticks += 1;
-        if !is_defending {
-            velocity.x += knockback.direction * knockback.strength;
-        }
-        if knockback.ticks > knockback.max_ticks {
-            velocity.x = 0.;
-            commands.entity(entity).remove::<Knockback>();
         }
     }
 }
@@ -440,14 +472,24 @@ fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
 #[derive(Resource, Debug, Default, Deref, DerefMut)]
 pub struct KillCount(pub u32);
 
+//TODO:
+//add crit passive
+fn track_crits(mut query: Query<&mut Crits>) {
+    for mut crits in query.iter_mut() {
+        if crits.hit_count != 0 && (crits.hit_count % 17 == 0 || crits.hit_count % 19 == 0) {
+            crits.next_hit_is_critical = true;
+        }
+    }
+}
+
 /// Allows the entity to apply critical strikes.
 /// Crits in TheSeeker are special, and trigger once
 /// every 17th and 19th successful hits
-#[derive(Component, Default, Debug)]
+#[derive(Component, Default, Debug, Reflect)]
 pub struct Crits {
     next_hit_is_critical: bool,
-    /// Counts how many successful hits since the 19th hit
-    counter: u32,
+    /// Counts number of successful hits
+    hit_count: u32,
     /// Yes
     crit_damage_multiplier: f32,
 }
@@ -456,7 +498,7 @@ impl Crits {
     pub fn new(multiplier: f32) -> Self {
         Self {
             next_hit_is_critical: false,
-            counter: 0,
+            hit_count: 0,
             crit_damage_multiplier: multiplier,
         }
     }

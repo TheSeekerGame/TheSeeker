@@ -2,7 +2,7 @@ use crate::appstate::AppState;
 use crate::game::gentstate::Facing;
 use crate::game::player::{
     Attacking, CanAttack, Dashing, Falling, HitFreezeTime, Idle, Jumping, PlayerConfig, PlayerGfx,
-    PlayerStateSet, Running, WallSlideTime, WhirlAbility,
+    PlayerStateSet, Running, WallSlideTime, Whirling,
 };
 use crate::prelude::{
     in_state, Added, App, Has, IntoSystemConfigs, Local, Or, Plugin, Query, Res, With, Without,
@@ -26,6 +26,7 @@ impl Plugin for PlayerAnimationPlugin {
                 player_jumping_animation,
                 player_running_animation,
                 player_attacking_animation,
+                player_whirling_animation,
                 player_dashing_animation,
                 sprite_flip.after(player_dashing_animation),
             )
@@ -37,16 +38,20 @@ impl Plugin for PlayerAnimationPlugin {
 }
 
 fn player_idle_animation(
-    i_query: Query<
+    query: Query<
         &Gent,
         Or<(
-            (Added<Idle>, Without<Attacking>),
+            (
+                Added<Idle>,
+                Without<Attacking>,
+                Without<Whirling>,
+            ),
             (With<Idle>, Added<CanAttack>),
         )>,
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for gent in i_query.iter() {
+    for gent in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             player.play_key("anim.player.Idle")
         }
@@ -90,7 +95,7 @@ fn player_falling_animation(
 }
 
 fn player_jumping_animation(
-    f_query: Query<
+    query: Query<
         &Gent,
         Or<(
             (Added<Jumping>, Without<Attacking>),
@@ -99,7 +104,7 @@ fn player_jumping_animation(
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for gent in f_query.iter() {
+    for gent in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             player.play_key("anim.player.Jump")
         }
@@ -107,16 +112,20 @@ fn player_jumping_animation(
 }
 
 fn player_running_animation(
-    r_query: Query<
+    query: Query<
         &Gent,
         Or<(
-            (Added<Running>, Without<Attacking>),
+            (
+                Added<Running>,
+                Without<Attacking>,
+                Without<Whirling>,
+            ),
             (With<Running>, Added<CanAttack>),
         )>,
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for gent in r_query.iter() {
+    for gent in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             player.play_key("anim.player.Run")
         }
@@ -124,62 +133,59 @@ fn player_running_animation(
 }
 
 fn player_attacking_animation(
-    r_query: Query<
+    query: Query<
         (
             &Gent,
             Has<Falling>,
             Has<Jumping>,
             Has<Running>,
             Option<&HitFreezeTime>,
-            Option<&WhirlAbility>,
         ),
-        With<Attacking>,
+        (With<Attacking>, Without<Whirling>),
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
 ) {
-    for (gent, is_falling, is_jumping, is_running, hitfrozen, whirl) in r_query.iter() {
+    for (gent, is_falling, is_jumping, is_running, hitfrozen) in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            if let Some(whirl) = whirl {
-                if whirl.active {
-                    //player.play_key("anim.player.SwordWhirling");
-                    if player.current_key().unwrap_or("") != "anim.player.SwordWhirling" {
-                        player.play_key("anim.player.SwordWhirling");
-                    }
-                    continue;
-                }
-            }
-
             let hitfrozen = hitfrozen
                 .map(|f| f.0 < config.hitfreeze_ticks)
                 .unwrap_or(false);
             if is_falling || is_jumping {
+                //TODO: These need a way to resume the new animation from the current frame index
+                //or specified offset
                 if player.current_key().unwrap_or("") != "anim.player.SwordBasicAir" {
                     player.play_key("anim.player.SwordBasicAir");
                 }
-                //player.play_key("anim.player.SwordBasicAir")
             } else if is_running && !hitfrozen {
-                //player.play_key("anim.player.SwordBasicRun")
                 if player.current_key().unwrap_or("") != "anim.player.SwordBasicRun" {
                     player.play_key("anim.player.SwordBasicRun");
                 }
             } else {
-                //player.play_key("anim.player.SwordBasicIdle")
                 if player.current_key().unwrap_or("") != "anim.player.SwordBasicIdle" {
                     player.play_key("anim.player.SwordBasicIdle");
                 }
             }
         }
     }
-    //have to check if first or 2nd attack, play diff anim
-    //also check for up attack?
+}
+
+fn player_whirling_animation(
+    query: Query<&Gent, Added<Whirling>>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+) {
+    for gent in query.iter() {
+        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            player.play_key("anim.player.SwordWhirling")
+        }
+    }
 }
 
 fn player_dashing_animation(
-    f_query: Query<&Gent, Added<Dashing>>,
+    query: Query<&Gent, Added<Dashing>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for gent in f_query.iter() {
+    for gent in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             player.play_key("anim.player.Dash")
         }

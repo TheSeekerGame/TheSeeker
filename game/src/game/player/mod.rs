@@ -8,18 +8,15 @@ use leafwing_input_manager::{
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
 use rapier2d::geometry::{Group, InteractionGroups};
-use rapier2d::parry::query::TOIStatus;
+use strum::IntoEnumIterator;
+use strum_macros::EnumIter;
 use theseeker_engine::animation::SpriteAnimationBundle;
-use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::input::InputManagerPlugin;
-use theseeker_engine::physics::{
-    into_vec2, AnimationCollider, Collider, LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
-    GROUND, PLAYER, PLAYER_ATTACK,
-};
-use theseeker_engine::script::ScriptPlayer;
+use theseeker_engine::physics::{Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER};
 
+use super::physics::Knockback;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
 use crate::prelude::*;
@@ -123,6 +120,53 @@ pub enum PlayerAction {
     Stealth,
 }
 
+#[derive(Component, Debug, Deref, DerefMut)]
+pub struct Passives {
+    #[deref]
+    pub current: HashSet<Passive>,
+    pub locked: Vec<Passive>,
+}
+
+impl Default for Passives {
+    fn default() -> Self {
+        let passives: Vec<Passive> = Passive::iter().collect();
+        Passives {
+            current: HashSet::with_capacity(5),
+            locked: passives,
+        }
+    }
+}
+
+impl Passives {
+    //TODO: pass in slice of passives, filter the locked passives on it
+    fn new_with(passive: Passive) -> Self {
+        Passives::default()
+    }
+    fn gain(&mut self) {
+        //TODO: add checks for no passives remaining
+        //TODO add limit on gaining past max passive slots?
+        //does nothing if there are no more passives to gain
+        let mut rng = rand::thread_rng();
+        if !self.locked.is_empty() {
+            let i = rng.gen_range(0..self.locked.len());
+            let passive = self.locked.swap_remove(i);
+            self.current.insert(passive);
+        }
+    }
+}
+
+#[derive(Debug, Eq, PartialEq, Hash, EnumIter)]
+pub enum Passive {
+    /// Heal when killing an enemy
+    Absorption,
+    /// Crit every 3rd and 5th hit when low health
+    CritResolve,
+    Backstab,
+    CrowdCtrl,
+    Unmoving,
+    Speedy,
+}
+
 fn debug_player_states(
     query: Query<
         AnyOf<(
@@ -198,11 +242,12 @@ fn debug_player(world: &World, query: Query<Entity, With<Player>>) {
 }
 
 fn setup_player(
-    mut q: Query<(&mut Transform, Entity), Added<PlayerBlueprint>>,
+    mut q: Query<(&mut Transform, Entity, &Parent), Added<PlayerBlueprint>>,
+    parent_query: Query<Entity, With<Children>>,
     mut commands: Commands,
     config: Res<PlayerConfig>,
 ) {
-    for (mut xf_gent, e_gent) in q.iter_mut() {
+    for (mut xf_gent, e_gent, parent) in q.iter_mut() {
         //TODO: proper way of ensuring z is correct
         xf_gent.translation.z = 15.0 * 0.000001;
         println!("{:?}", xf_gent);
@@ -266,26 +311,29 @@ fn setup_player(
                     .with(PlayerAction::Whirl, KeyCode::KeyL)
                     .with(PlayerAction::Stealth, KeyCode::KeyI),
             },
-            Falling,
-            CanDash {
-                remaining_cooldown: 0.0,
-            },
-            CanStealth {
-                remaining_cooldown: 0.0,
-            },
+            //bundling things up becuase we reached max tuple
+            (
+                Falling,
+                CanDash {
+                    remaining_cooldown: 0.0,
+                },
+                CanStealth {
+                    remaining_cooldown: 0.0,
+                },
+            ),
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
             JumpCount(0),
-            WhirlAbility {
-                active: false,
-                active_ticks: 0,
-                energy: 0.0,
-                attack_entity: None,
-            },
+            WhirlAbility::default(),
             Crits::new(2.0),
             TransitionQueue::default(),
             StateDespawnMarker,
+            Passives::default(),
         ));
+        //unparent from the level
+        if let Ok(parent) = parent_query.get(parent.get()) {
+            commands.entity(parent).remove_children(&[e_gent]);
+        }
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
             gent2gfx: TransformGfxFromGent {
@@ -298,7 +346,6 @@ fn setup_player(
             },
             animation: Default::default(),
         },));
-        // println!("player spawned")
     }
 }
 
@@ -364,11 +411,11 @@ pub struct Grounded;
 impl GentState for Grounded {}
 //cant be Idle or Running if not Grounded
 impl Transitionable<Jumping> for Grounded {
-    type Removals = (Grounded, Idle, Running);
+    type Removals = (Grounded, Idle, Running, Whirling);
 }
 //cant be Idle or Running if not Grounded
 impl Transitionable<Falling> for Grounded {
-    type Removals = (Grounded, Idle, Running);
+    type Removals = (Grounded, Idle, Running, Whirling);
 }
 
 #[derive(Component, Debug, Default)]
@@ -396,6 +443,24 @@ impl GentState for CanAttack {}
 impl Transitionable<Attacking> for CanAttack {
     type Removals = (CanAttack);
 }
+impl Transitionable<Whirling> for CanAttack {
+    type Removals = (CanAttack);
+}
+
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
+pub struct Whirling {
+    pub attack_entity: Option<Entity>,
+    pub ticks: u32,
+}
+impl GentState for Whirling {}
+
+impl Transitionable<CanAttack> for Whirling {
+    type Removals = (Whirling, Attacking);
+}
+impl Whirling {
+    const MIN_TICKS: u32 = 48;
+}
 
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
@@ -405,7 +470,7 @@ pub struct Dashing {
 
 impl GentState for Dashing {}
 impl Transitionable<CanDash> for Dashing {
-    type Removals = (Dashing);
+    type Removals = (Dashing, Whirling);
 }
 
 #[derive(Component, Debug)]
@@ -476,27 +541,6 @@ pub struct CoyoteTime(f32);
 #[derive(Component, Default, Debug)]
 pub struct JumpCount(u8);
 
-/// Pushback applied to the player for movement effects. Velocity is applied once and then blocks horizontal player movement.
-#[derive(Component, Default, Clone, Copy, Debug)]
-pub struct PlayerPushback {
-    pub ticks: u32,
-    pub max_ticks: u32,
-    pub x_direction: f32,
-    //    pub y_direction: f32,
-    pub strength: Vec2,
-}
-
-impl PlayerPushback {
-    pub fn new(x_direction: f32, strength: Vec2, max_ticks: u32) -> Self {
-        Self {
-            ticks: 0,
-            max_ticks,
-            x_direction,
-            strength,
-        }
-    }
-}
-
 /// Indicates that sliding is tracked for this entity
 #[derive(Component, Default, Debug)]
 pub struct WallSlideTime(f32);
@@ -511,12 +555,10 @@ impl WallSlideTime {
     }
 }
 
+///Tracks the cooldown for the available energy for the players whirl
 #[derive(Component, Default, Debug)]
 pub struct WhirlAbility {
-    active: bool,
-    active_ticks: u32,
     pub energy: f32,
-    attack_entity: Option<Entity>,
 }
 
 #[derive(Resource, Debug, Default)]
@@ -605,6 +647,9 @@ pub struct PlayerConfig {
 
     /// Ticks for melee pushback velocity; determines how long movement is locked for
     melee_pushback_ticks: u32,
+
+    /// How many kills to trigger a passive gain
+    passive_gain_rate: u32,
 }
 
 fn load_player_config(
@@ -675,6 +720,7 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "wall_pushback_ticks", |val| config.wall_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
     update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "passive_gain_rate", |val| config.passive_gain_rate = val as u32);
     
     for error in errors{
        warn!("failed to load player cfg value: {}", error);
@@ -697,7 +743,7 @@ pub enum StatType {
 /// For now, Status Modifier is implemented so that only one Status Modifier is active at a time.
 /// However, a single Status Modifier can modify multiple Stats.
 /// scalar and delta will use the same coefficient for all Stats if there is only one.
-#[derive(Component, Clone)]
+#[derive(Component, Clone, Debug)]
 pub struct StatusModifier {
     status_types: Vec<StatType>,
 
@@ -711,6 +757,7 @@ pub struct StatusModifier {
     time_remaining: f32,
 }
 
+//TODO: move to attack
 impl StatusModifier {
     pub fn basic_ice_spider() -> Self {
         Self {
@@ -905,6 +952,51 @@ pub fn dash_icon_fx(
             commands.entity(entity).despawn();
         } else {
             sprite.color.set_a((1.0 - r) * icon.init_a);
+        }
+    }
+}
+
+///Resets the players cooldowns/energy on hit of a stealthed critical hit
+pub fn on_hit_stealth_reset(
+    query: Query<&Attack, (Added<Hit>, With<Crit>, With<Stealthed>)>,
+    mut attacker_skills: Query<(
+        Option<&mut CanDash>,
+        Option<&mut WhirlAbility>,
+        Option<&mut CanStealth>,
+    )>,
+    config: Res<PlayerConfig>,
+) {
+    for attack in query.iter() {
+        if let Ok((mut maybe_can_dash, mut maybe_whirl_ability, mut maybe_can_stealth)) =
+            attacker_skills.get_mut(attack.attacker)
+        {
+            if let Some(ref mut can_dash) = maybe_can_dash {
+                can_dash.remaining_cooldown = 0.;
+            }
+            if let Some(ref mut whirl_ability) = maybe_whirl_ability {
+                whirl_ability.energy = config.max_whirl_energy;
+            }
+            if let Some(ref mut can_stealth) = maybe_can_stealth {
+                can_stealth.remaining_cooldown = 0.;
+            }
+        }
+    }
+}
+
+///Exits player Stealthing state when a stealthed attack first hits
+pub fn on_hit_exit_stealthing(
+    query: Query<&Attack, (Added<Hit>, With<Stealthed>)>,
+    mut attacker_query: Query<(&Gent, &mut TransitionQueue), With<Player>>,
+    mut sprites: Query<&mut Sprite, Without<Player>>,
+    config: Res<PlayerConfig>,
+) {
+    for attack in query.iter() {
+        if let Ok((gent, mut transitions)) = attacker_query.get_mut(attack.attacker) {
+            let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
+            sprite.color = sprite.color.with_a(1.0);
+            transitions.push(Stealthing::new_transition(
+                CanStealth::new(&config),
+            ));
         }
     }
 }

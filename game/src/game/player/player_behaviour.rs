@@ -1,5 +1,5 @@
 use crate::camera::CameraRig;
-use crate::game::attack::{Attack, Pushback};
+use crate::game::attack::{Attack, SelfPushback, Stealthed};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
@@ -11,7 +11,7 @@ use crate::prelude::{
     any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
     IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle, With, Without,
 };
-use bevy::prelude::Has;
+use bevy::prelude::{resource_changed, Has};
 
 use bevy::sprite::Sprite;
 use bevy::transform::TransformSystem::TransformPropagate;
@@ -30,8 +30,9 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::{
     dash_icon_fx, player_dash_fx, player_new_stats_mod, CanStealth, DashIcon, JumpCount, Knockback,
-    PlayerPushback, PlayerStats, StatType, Stealthing,
+    PlayerStats, StatType, Stealthing,
 };
+use super::{AttackBundle, KillCount, Passives, Whirling};
 
 ///Player behavior systems.
 ///Do stuff here in states and add transitions to other states by pushing
@@ -43,11 +44,13 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
+                (gain_passives.run_if(resource_changed::<KillCount>)),
                 (
                     player_idle.run_if(any_with_component::<Idle>),
                     player_new_stats_mod,
                     add_attack,
                     player_stealth,
+                    player_whirl_charge.before(player_whirl),
                     player_whirl.before(player_attack),
                     player_attack.run_if(any_with_component::<Attacking>),
                     player_move,
@@ -64,8 +67,9 @@ impl Plugin for PlayerBehaviorPlugin {
                         .run_if(any_with_component::<DashIcon>),
                     player_grounded.run_if(any_with_component::<Grounded>),
                     player_falling.run_if(any_with_component::<Falling>),
-                    player_pushback
-                        .run_if(any_with_component::<PlayerPushback>)
+                    crate::game::physics::knockback
+                        // player_pushback
+                        .run_if(any_with_component::<Knockback>)
                         .before(player_jump)
                         .after(player_sliding),
                     player_sliding
@@ -87,6 +91,19 @@ impl Plugin for PlayerBehaviorPlugin {
             )
                 .chain(),
         );
+    }
+}
+
+fn gain_passives(
+    mut query: Query<(&mut Passives), With<Player>>,
+    kills: Res<KillCount>,
+    player_config: Res<PlayerConfig>,
+) {
+    for mut passives in query.iter_mut() {
+        if **kills % player_config.passive_gain_rate == 0 {
+            passives.gain();
+            println!("{:?}", passives);
+        }
     }
 }
 
@@ -137,6 +154,7 @@ pub fn player_can_stealth(
 ) {
     for (action_state, mut can_stealth, mut transition_queue, gent) in q_gent.iter_mut() {
         can_stealth.remaining_cooldown -= 1.0 / time.hz as f32;
+        //Return to base sprite color when exiting stealth
         if can_stealth.is_added() {
             let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
             sprite.color = sprite.color.with_a(1.0);
@@ -152,74 +170,8 @@ pub fn player_can_stealth(
         }
     }
 }
-pub fn player_whirl(
-    mut q_gent: Query<
-        (
-            &ActionState<PlayerAction>,
-            &mut WhirlAbility,
-            &mut TransitionQueue,
-            Option<&Grounded>,
-            Option<&Attacking>,
-        ),
-        (
-            With<Player>,
-            With<Gent>,
-            Without<Dashing>,
-        ),
-    >,
-    time: Res<GameTime>,
-    mut command: Commands,
-    config: Res<PlayerConfig>,
-) {
-    let min_ticks = 48.0;
-    for (action_state, mut whirl, mut transition_queue, grounded, attacking) in q_gent.iter_mut() {
-        let mut stop_whirling = false;
-        if action_state.pressed(&PlayerAction::Whirl) {
-            // only start if we have enough whirl energy for full rotation
-            if whirl.energy - (min_ticks * config.whirl_cost / time.hz as f32) > 0.0
-                && grounded.is_some()
-            {
-                if attacking.is_none() {
-                    transition_queue.push(CanAttack::new_transition(
-                        Attacking::default(),
-                    ));
-                }
-                whirl.active = true;
-            } else {
-                stop_whirling = true;
-            }
-        } else {
-            stop_whirling = true;
-        }
 
-        if stop_whirling {
-            if whirl.active {
-                if whirl.active_ticks as f32 > min_ticks {
-                    if whirl.active {
-                        transition_queue.push(Attacking::new_transition(
-                            CanAttack::default(),
-                        ));
-                    }
-                    if let Some(whirl_attack) = whirl.attack_entity {
-                        command.entity(whirl_attack).despawn();
-                        whirl.attack_entity = None;
-                    }
-                    whirl.active = false;
-                    whirl.active_ticks = 0;
-                };
-            }
-        }
-
-        if whirl.active {
-            whirl.active_ticks += 1;
-            whirl.energy -= config.whirl_cost / time.hz as f32;
-        } else {
-            whirl.energy = (whirl.energy + config.whirl_regen / time.hz as f32)
-                .clamp(0.0, config.max_whirl_energy);
-        }
-    }
-}
-
+//TODO: change to using Added<attack::Hit>
 fn hitfreeze(
     mut player_q: Query<
         (
@@ -234,7 +186,7 @@ fn hitfreeze(
 ) {
     // Track if we need to initialize a hitfreeze affect
     for ((attack_entity, attack)) in attack_q.iter() {
-        if !attack.damaged.is_empty() {
+        if !attack.damaged_set.is_empty() {
             // Make sure the entity doing the attack is actually the player
             if let Ok((entity, mut hitfreeze, _)) = player_q.get_mut(attack.attacker) {
                 // If its the same exact attack entity as the last time the affect was activated.
@@ -274,13 +226,10 @@ fn player_idle(
     >,
 ) {
     for (action_state, mut transitions) in query.iter_mut() {
-        // println!("is idle");
         // check for direction input
         let mut direction: f32 = 0.0;
-        // println!("idleing, {:?}", action_state.get_pressed());
         if action_state.pressed(&PlayerAction::Move) {
             direction = action_state.value(&PlayerAction::Move);
-            // println!("moving??")
         }
         if direction != 0.0 {
             transitions.push(Idle::new_transition(Running));
@@ -300,7 +249,7 @@ fn player_move(
             Option<&Stealthing>,
             Option<&Dashing>,
         ),
-        (Without<PlayerPushback>, With<Player>),
+        (Without<Knockback>, With<Player>),
     >,
 ) {
     for (mut velocity, action_state, mut facing, grounded, stealth, dashing) in q_gent.iter_mut() {
@@ -416,7 +365,7 @@ fn player_run(
     }
 }
 
-fn player_jump(
+pub fn player_jump(
     mut query: Query<
         (
             &ActionState<PlayerAction>,
@@ -429,10 +378,6 @@ fn player_jump(
     config: Res<PlayerConfig>,
 ) {
     for (action_state, mut velocity, mut jumping, mut transitions) in query.iter_mut() {
-        //can enter state and first frame jump not pressed if you tap
-        //i think this is related to the fixedtimestep input
-        // print!("{:?}", action_state.get_pressed());
-
         let deaccel_rate = config.jump_fall_accel;
 
         if jumping.is_added() {
@@ -539,7 +484,7 @@ pub fn player_collisions(
             &Collider,
             Option<&mut WallSlideTime>,
             Option<&mut Dashing>,
-            Option<&WhirlAbility>,
+            Option<&mut Whirling>,
         ),
         (With<Player>),
     >,
@@ -548,15 +493,14 @@ pub fn player_collisions(
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, mut pos, mut linear_velocity, collider, slide, dashing, whirl) in q_gent.iter_mut()
+    for (entity, mut pos, mut linear_velocity, collider, slide, dashing, whirling) in
+        q_gent.iter_mut()
     {
         let mut shape = collider.0.shared_shape().clone();
         let mut original_pos = pos.translation.xy();
         let mut possible_pos = pos.translation.xy();
         let z = pos.translation.z;
         let mut projected_velocity = linear_velocity.xy();
-        // println!("initial projected_velocity");
-        // dbg!(projected_velocity);
         let mut interaction = InteractionGroups {
             memberships: PLAYER,
             filter: Group::from_bits_truncate(0b10010),
@@ -592,9 +536,7 @@ pub fn player_collisions(
                         //from above
                         TOIStatus::Converged | TOIStatus::OutOfIterations => {
                             // if we are also dashing, or whirling, ignore the collision entirely
-                            if dashing.is_none()
-                                && (whirl.is_none() || whirl.is_some_and(|w| !w.active))
-                            {
+                            if dashing.is_none() && whirling.is_none() {
                                 let sliding_plane = into_vec2(first_hit.normal1);
                                 //configurable theshold for collision normal/sliding plane in case of physics instability
                                 let threshold = 0.000001;
@@ -711,7 +653,6 @@ fn player_grounded(
             Entity,
             &ShapeCaster,
             &ActionState<PlayerAction>,
-            &LinearVelocity,
             &mut Transform,
             &mut TransitionQueue,
             Option<&mut CoyoteTime>,
@@ -732,7 +673,6 @@ fn player_grounded(
         entity,
         ray_cast_info,
         action_state,
-        liner_vel,
         mut position,
         mut transitions,
         coyote_time,
@@ -847,29 +787,23 @@ fn player_falling(
     }
 }
 
-fn player_sliding(
+pub fn player_sliding(
     mut commands: Commands,
-    mut query: Query<(
-        Entity,
-        &Gent,
-        &ActionState<PlayerAction>,
-        &mut TransitionQueue,
-        &mut WallSlideTime,
-        &mut LinearVelocity,
-        &mut JumpCount,
-    )>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    mut query: Query<
+        (
+            Entity,
+            &ActionState<PlayerAction>,
+            &mut TransitionQueue,
+            &mut WallSlideTime,
+            &mut LinearVelocity,
+            &mut JumpCount,
+        ),
+        With<Gent>,
+    >,
     config: Res<PlayerConfig>,
 ) {
-    for (
-        entity,
-        gent,
-        action_state,
-        mut transitions,
-        mut wall_slide_time,
-        mut lin_vel,
-        mut jump_count,
-    ) in query.iter_mut()
+    for (entity, action_state, mut transitions, mut wall_slide_time, mut lin_vel, mut jump_count) in
+        query.iter_mut()
     {
         let mut direction: f32 = 0.0;
         if action_state.pressed(&PlayerAction::Move) {
@@ -878,30 +812,30 @@ fn player_sliding(
         if wall_slide_time.sliding(&config) {
             jump_count.0 = 1;
         }
-        if let Ok(player) = gfx_query.get_mut(gent.e_gfx) {
-            if wall_slide_time.sliding(&config) && action_state.just_pressed(&PlayerAction::Jump) {
-                let jump_direction = direction
-                    * if wall_slide_time.strict_sliding(&config) {
-                        -1.0
-                    } else {
-                        1.0
-                    };
+        if wall_slide_time.sliding(&config) && action_state.just_pressed(&PlayerAction::Jump) {
+            let jump_direction = direction
+                * if wall_slide_time.strict_sliding(&config) {
+                    -1.0
+                } else {
+                    1.0
+                };
 
-                wall_slide_time.0 = f32::MAX;
-                // Move away from the wall a bit so that friction stops
-                lin_vel.x = -direction * config.move_accel_init;
-                // Give a little boost for the frame that it takes for input to be received
-                lin_vel.y = config.fall_accel;
+            wall_slide_time.0 = f32::MAX;
+            // Move away from the wall a bit so that friction stops
+            lin_vel.x = -direction * config.move_accel_init;
+            // Give a little boost for the frame that it takes for input to be received
+            lin_vel.y = config.fall_accel;
 
-                commands.entity(entity).insert(PlayerPushback::new(
-                    jump_direction,
-                    Vec2::new(config.wall_pushback, 0.),
-                    config.wall_pushback_ticks,
-                ));
+            commands.entity(entity).insert(Knockback::new(
+                Vec2::new(
+                    config.wall_pushback * jump_direction,
+                    0.,
+                ),
+                config.wall_pushback_ticks,
+            ));
 
-                jump_count.0 = 2;
-                transitions.push(Falling::new_transition(Jumping))
-            }
+            jump_count.0 = 2;
+            transitions.push(Falling::new_transition(Jumping))
         }
     }
 }
@@ -912,6 +846,8 @@ fn add_attack(
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
             Option<&CanAttack>,
+            Option<&WhirlAbility>,
+            Has<Grounded>,
         ),
         (
             Without<Attacking>,
@@ -919,8 +855,12 @@ fn add_attack(
             With<Player>,
         ),
     >,
+    player_config: Res<PlayerConfig>,
+    time: Res<GameTime>,
 ) {
-    for (mut transitions, action_state, maybe_immediate) in query.iter_mut() {
+    for (mut transitions, action_state, maybe_immediate, maybe_whirl_ability, is_grounded) in
+        query.iter_mut()
+    {
         if action_state.just_pressed(&PlayerAction::Attack) {
             transitions.push(CanAttack::new_transition(
                 Attacking::default(),
@@ -929,6 +869,18 @@ fn add_attack(
             if can_attack.immediate {
                 transitions.push(CanAttack::new_transition(
                     Attacking::default(),
+                ));
+            }
+        }
+        if let Some(whirl) = maybe_whirl_ability {
+            if whirl.energy
+                - (Whirling::MIN_TICKS as f32 * player_config.whirl_cost / time.hz as f32)
+                > 0.0
+                && is_grounded
+                && action_state.just_pressed(&PlayerAction::Whirl)
+            {
+                transitions.push(CanAttack::new_transition(
+                    Whirling::default(),
                 ));
             }
         }
@@ -944,99 +896,43 @@ fn player_attack(
             &mut Attacking,
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
-            Option<&mut WhirlAbility>,
-            Option<&Stealthing>,
+            Has<Stealthing>,
         ),
-        (With<Player>),
+        (With<Player>, Without<Whirling>),
     >,
-    mut sprites: Query<&mut Sprite>,
     mut commands: Commands,
     config: Res<PlayerConfig>,
 ) {
-    for (
-        entity,
-        gent,
-        facing,
-        mut attacking,
-        mut transitions,
-        action_state,
-        mut whirl,
-        maybe_stealthing,
-    ) in query.iter_mut()
+    for (entity, gent, facing, mut attacking, mut transitions, action_state, stealthed) in
+        query.iter_mut()
     {
-        let whirl_active = if let Some(whirl) = &whirl {
-            whirl.active
-        } else {
-            false
-        };
-        if attacking.ticks == 0 || (whirl_active && whirl.as_ref().unwrap().attack_entity.is_none())
-        {
-            let id = commands
+        if attacking.ticks == 0 {
+            let attack = commands
                 .spawn((
                     TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
                     AnimationCollider(gent.e_gfx),
+                    //TODO: ? ColliderMeta
                     Collider::empty(InteractionGroups::new(
                         PLAYER_ATTACK,
                         ENEMY_HURT,
                     )),
-                    if whirl_active {
-                        Attack {
-                            current_lifetime: 0,
-                            max_lifetime: u32::MAX,
-                            damage: 20,
-                            max_targets: 6,
-                            attacker: entity,
-                            damaged: Vec::new(),
-                            collided: Default::default(),
-                            damaged_set: Default::default(),
-                            new_group: false,
-                            stealthed: maybe_stealthing.is_some(),
-                            pushback: None,
-                            pushback_applied: false,
-                            status_mod: None,
-                        }
-                    } else {
-                        let mut att = Attack::new(16, entity);
-                        att.pushback = Some(PlayerPushback::new(
-                            -facing.direction(),
-                            Vec2::new(config.melee_pushback, 0.),
-                            config.melee_pushback_ticks,
-                        ));
-
-                        if maybe_stealthing.is_some() {
-                            att.damage = att.damage * 2;
-                            att.stealthed = true;
-                        }
-
-                        att
-                    },
+                    Attack::new(16, entity),
+                    SelfPushback(Knockback::new(
+                        Vec2::new(
+                            config.melee_pushback * -facing.direction(),
+                            0.,
+                        ),
+                        config.melee_pushback_ticks,
+                    )),
                 ))
                 .set_parent(entity)
                 .id();
-            if !whirl_active {
-                commands.entity(id).insert(Pushback {
-                    direction: facing.direction(),
-                    strength: 5.,
-                });
-                //                commands.entity(entity).insert(PlayerPushback::new(
-                //                    -facing.direction(),
-                //                    Vec2::new(config.melee_pushback, 0.),
-                //                config.melee_pushback_ticks,
-                //                ));
-            }
-            if let Some(mut whirl) = whirl {
-                if whirl.active {
-                    whirl.attack_entity = Some(id)
-                }
-            }
-            if maybe_stealthing.is_some() {
-                let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
-                sprite.color = sprite.color.with_a(1.0);
-                transitions.push(Stealthing::new_transition(
-                    CanStealth::new(&config),
-                ));
-            }
+
+            if stealthed {
+                commands.entity(attack).insert(Stealthed);
+            };
         }
+
         attacking.ticks += 1;
         //if we are in the later half of attacking and another attack input was pressed,
         //indicate an immediate follow up on animation end
@@ -1045,11 +941,9 @@ fn player_attack(
         {
             attacking.followup = true;
         }
+
+        //leave attacking state
         if attacking.ticks == Attacking::MAX * 8 {
-            // Keep attacking if whirl is ongoing
-            if whirl_active {
-                continue;
-            }
             if attacking.followup {
                 transitions.push(Attacking::new_transition(CanAttack {
                     immediate: true,
@@ -1063,27 +957,95 @@ fn player_attack(
     }
 }
 
-fn player_pushback(
-    mut query: Query<(
-        Entity,
-        &mut PlayerPushback,
-        &mut LinearVelocity,
-    )>,
-    mut commands: Commands,
+pub fn player_whirl_charge(
+    mut query: Query<&mut WhirlAbility, Without<Whirling>>,
+    config: Res<PlayerConfig>,
+    time: Res<GameTime>,
 ) {
-    for (entity, mut knockback, mut velocity) in query.iter_mut() {
-        knockback.ticks += 1;
+    for mut whirl in query.iter_mut() {
+        whirl.energy = (whirl.energy + config.whirl_regen / time.hz as f32)
+            .clamp(0.0, config.max_whirl_energy);
+    }
+}
 
-        if knockback.is_added() {
-            velocity.x = knockback.x_direction * knockback.strength.x;
-            velocity.y = knockback.strength.y;
+pub fn player_whirl(
+    mut gent_query: Query<
+        (
+            Entity,
+            &ActionState<PlayerAction>,
+            &mut TransitionQueue,
+            &mut Whirling,
+            &mut WhirlAbility,
+            Has<Stealthing>,
+            &Gent,
+        ),
+        (With<Player>, Without<Dashing>),
+    >,
+    //attacks which have had their collider changed by the AnimationCollider system
+    //TODO: need to not change collider unless there is a collider?
+    attack_query: Query<
+        &Attack,
+        (
+            With<AnimationCollider>,
+            // Changed<Collider>,
+        ),
+    >,
+    mut commands: Commands,
+    config: Res<PlayerConfig>,
+    time: Res<GameTime>,
+) {
+    for (
+        entity,
+        action_state,
+        mut transitions,
+        mut whirling,
+        mut whirl_ability,
+        is_stealthing,
+        gent,
+    ) in gent_query.iter_mut()
+    {
+        whirling.ticks += 1;
+        whirl_ability.energy -= config.whirl_cost / time.hz as f32;
+        if action_state.pressed(&PlayerAction::Whirl) || whirling.ticks < Whirling::MIN_TICKS {
+            if let Some(attack_entity) = whirling.attack_entity {
+                //if the attack entities collider was changed, set the attack to none
+                if attack_query.get(attack_entity).is_err() {
+                    whirling.attack_entity = None;
+                }
+            //if there is no attack, spawn a new one
+            } else {
+                let new_attack = commands
+                    .spawn((
+                        AttackBundle {
+                            //lifetime of two frames...
+                            attack: Attack::new(24, entity),
+                            collider: Collider::empty(InteractionGroups::new(
+                                PLAYER_ATTACK,
+                                ENEMY_HURT,
+                            )),
+                        },
+                        TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+                        AnimationCollider(gent.e_gfx),
+                    ))
+                    .set_parent(entity)
+                    .id();
+                if is_stealthing {
+                    commands.entity(new_attack).insert(Stealthed);
+                }
+                whirling.attack_entity = Some(new_attack);
+            }
+        } else {
+            //leave whirling state if button is not pressed and we are past min ticks
+            if whirling.ticks >= Whirling::MIN_TICKS {
+                transitions.push(Whirling::new_transition(
+                    CanAttack::default(),
+                ));
+            }
         }
-
-        if knockback.ticks > knockback.max_ticks {
-            velocity.x = 0.;
-            //velocity.y = 0.;
-
-            commands.entity(entity).remove::<PlayerPushback>();
+        if whirl_ability.energy < 0. {
+            transitions.push(Whirling::new_transition(
+                CanAttack::default(),
+            ));
         }
     }
 }
