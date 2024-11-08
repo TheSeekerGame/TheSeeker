@@ -230,9 +230,6 @@ pub fn determine_attack_targets(
                 continue;
             }
 
-            //TODO: make sure this is correct entity
-            //TODO: change to target_set?
-            // attack.damaged_set.insert(*entity);
             attack.target_set.insert(*entity);
         }
     }
@@ -364,13 +361,11 @@ pub fn apply_attack_damage(
 }
 
 pub fn despawn_projectile(
-    query: Query<(Entity, &Attack), With<Projectile>>,
+    query: Query<(Entity, &Attack), (With<Projectile>, With<Hit>)>,
     mut commands: Commands,
 ) {
     for (entity, attack) in query.iter() {
-        if attack.current_lifetime > 1 && !attack.damaged_set.is_empty() {
-            //TODO: ensure projectiles have a max_targets of 1/or however many is correct
-            // if attack.current_lifetime > 1 && attack.damaged_set.len() == attack.max_targets as usize {
+        if attack.damaged_set.len() == attack.max_targets as usize {
             // Note: purposefully does not despawn child entities, nor remove the
             // reference, so that child particle systems have the option of lingering
             commands.entity(entity).despawn();
