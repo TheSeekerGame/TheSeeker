@@ -329,8 +329,6 @@ fn setup_player(
             TransitionQueue::default(),
             StateDespawnMarker,
             Passives::default(),
-            // Passives::new_with(Passive::CritResolve(true)),
-            // Passives::new_with(Passive::Absorption),
         ));
         //unparent from the level
         if let Ok(parent) = parent_query.get(parent.get()) {

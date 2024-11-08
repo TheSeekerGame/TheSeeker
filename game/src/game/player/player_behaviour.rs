@@ -1,5 +1,5 @@
 use crate::camera::CameraRig;
-use crate::game::attack::{Attack, Pushback, SelfPushback, Stealthed};
+use crate::game::attack::{Attack, SelfPushback, Stealthed};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
@@ -72,7 +72,6 @@ impl Plugin for PlayerBehaviorPlugin {
                         .run_if(any_with_component::<Knockback>)
                         .before(player_jump)
                         .after(player_sliding),
-                    // .in_set(super::RespondToDamageInfoSet),
                     player_sliding
                         .before(player_jump)
                         .run_if(any_with_component::<Falling>),
@@ -873,8 +872,6 @@ fn add_attack(
                 ));
             }
         }
-        //TODO: Shouldnt be able to add both at the same time
-        //could move to own trigger with whirl energy
         if let Some(whirl) = maybe_whirl_ability {
             if whirl.energy
                 - (Whirling::MIN_TICKS as f32 * player_config.whirl_cost / time.hz as f32)
@@ -927,13 +924,6 @@ fn player_attack(
                         ),
                         config.melee_pushback_ticks,
                     )),
-                    // Pushback(Knockback::new(
-                    //     Vec2::new(
-                    //         facing.direction() * config.melee_pushback,
-                    //         0.,
-                    //     ),
-                    //     16,
-                    // )),
                 ))
                 .set_parent(entity)
                 .id();
@@ -1015,14 +1005,9 @@ pub fn player_whirl(
     ) in gent_query.iter_mut()
     {
         whirling.ticks += 1;
-        //TODO:
-        //consume energy
         whirl_ability.energy -= config.whirl_cost / time.hz as f32;
         if action_state.pressed(&PlayerAction::Whirl) || whirling.ticks < Whirling::MIN_TICKS {
             if let Some(attack_entity) = whirling.attack_entity {
-                // if let Ok(attack) = attack_query.get(attack_entity) {
-                //     println!("collider changed");
-                // }
                 //if the attack entities collider was changed, set the attack to none
                 if attack_query.get(attack_entity).is_err() {
                     whirling.attack_entity = None;
