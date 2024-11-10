@@ -272,10 +272,9 @@ pub fn apply_attack_modifications(
                     commands.entity(entity).insert(Backstab);
                 }
             }
-
-            if !has_hit {
-                commands.entity(entity).insert(Hit);
-            }
+        }
+        if !has_hit {
+            commands.entity(entity).insert(Hit);
         }
     }
 }
