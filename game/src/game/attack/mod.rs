@@ -412,7 +412,7 @@ fn on_hit_lifesteal(
             health.current = u32::min(
                 health
                     .current
-                    .saturating_add((stealth_lifesteal * health.current as f32) as u32),
+                    .saturating_add((stealth_lifesteal * health.max as f32) as u32),
                 health.max,
             );
         }
