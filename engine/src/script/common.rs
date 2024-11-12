@@ -39,6 +39,9 @@ pub struct CommonScriptTracker {
     runcount: u32,
 }
 
+#[derive(Default)]
+pub struct CommonScriptCarryover;
+
 impl CommonScriptTracker {
     pub fn new_with_offset(start_tick: u64, start_time: Duration) -> Self {
         Self {
@@ -61,13 +64,16 @@ impl ScriptTracker for CommonScriptTracker {
     type Settings = CommonScriptSettings;
     type UpdateParam = (SRes<Time>, SRes<GameTime>);
     type ActionParams = CommonScriptParams;
+    type Carryover = CommonScriptCarryover;
+    type CarryoverParam = ();
 
-    fn init<'w>(
+    fn init(
         &mut self,
         entity: Entity,
         settings: &Self::Settings,
         metadata: &ScriptMetadata,
-        (time, gametime, leveltime, query_tb, query_quant): &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
+        _carryover: Self::Carryover,
+        (time, gametime, leveltime, query_tb, query_quant): &mut <Self::InitParam as SystemParam>::Item<'_, '_>,
     ) {
         let time_base = query_tb.get(entity).unwrap_or(&settings.time_base);
         let tick_quant = query_quant
@@ -99,6 +105,14 @@ impl ScriptTracker for CommonScriptTracker {
         }
         self.old_key = metadata.key_previous.clone();
         self.runcount = metadata.runcount;
+    }
+
+    fn produce_carryover(
+        &self,
+        _entity: Entity,
+        _: &mut <Self::CarryoverParam as SystemParam>::Item<'_, '_>,
+    ) -> Self::Carryover {
+        CommonScriptCarryover
     }
 
     fn transfer_progress(&mut self, other: &Self) {
@@ -186,11 +200,11 @@ impl ScriptTracker for CommonScriptTracker {
         self.time_actions.sort_by_key(|(duration, _)| *duration);
     }
 
-    fn update<'w>(
+    fn update(
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
-        (time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        (time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         queue: &mut Vec<QueuedAction>,
     ) -> ScriptUpdateResult {
         // any delayed actions
@@ -258,11 +272,11 @@ impl ScriptTracker for CommonScriptTracker {
         queue.append(&mut self.q_extra);
     }
 
-    fn do_start<'w>(
+    fn do_start(
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
-        (time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        (_time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         queue: &mut Vec<QueuedAction>,
     ) {
         queue.extend(self.start_actions.drain(..).map(|action| QueuedAction {
@@ -271,11 +285,11 @@ impl ScriptTracker for CommonScriptTracker {
         }));
     }
 
-    fn do_stop<'w>(
+    fn do_stop(
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
-        (time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        (_time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         queue: &mut Vec<QueuedAction>,
     ) {
         queue.extend(self.stop_actions.drain(..).map(|action| QueuedAction {
@@ -356,12 +370,12 @@ impl ScriptActionParams for CommonScriptParams {
     type Tracker = CommonScriptTracker;
     type ShouldRunParam = (SRes<Time>, SRes<GameTime>);
 
-    fn should_run<'w>(
+    fn should_run(
         &self,
         _entity: Entity,
         tracker: &mut Self::Tracker,
         action_id: ActionId,
-        (_time, game_time): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+        (_time, game_time): &mut <Self::ShouldRunParam as SystemParam>::Item<'_, '_>,
     ) -> Result<(), ScriptUpdateResult> {
         if let Some(i_delayed) = tracker.q_delayed.iter()
             .position(|(tick, aid)| *tick == game_time.tick() && *aid == action_id)
@@ -461,7 +475,7 @@ impl ScriptAction for CommonScriptAction {
     );
     type Tracker = CommonScriptTracker;
 
-    fn run<'w>(
+    fn run(
         &self,
         entity: Entity,
         timing: ScriptActionTiming,
@@ -474,7 +488,7 @@ impl ScriptAction for CommonScriptAction {
             ref elabels,
             ref mut commands,
             q_mixer,
-        ): &mut <Self::Param as SystemParam>::Item<'w, '_>,
+        ): &mut <Self::Param as SystemParam>::Item<'_, '_>,
     ) -> ScriptUpdateResult {
         match self {
             CommonScriptAction::RunCli { cli } => {
@@ -494,11 +508,7 @@ impl ScriptAction for CommonScriptAction {
                 }
                 ScriptUpdateResult::NormalRun
             },
-            CommonScriptAction::SpawnScene {
-                asset_key,
-                as_child,
-                parent_label,
-            } => ScriptUpdateResult::NormalRun,
+            CommonScriptAction::SpawnScene { .. } => ScriptUpdateResult::NormalRun,
             CommonScriptAction::SpawnScript { asset_key } => {
                 let mut player = ScriptPlayer::new();
                 player.play_key(asset_key.as_str());
@@ -556,6 +566,12 @@ impl ScriptAction for CommonScriptAction {
 }
 
 #[derive(Default)]
+pub struct ExtendedScriptCarryover<T> {
+    pub extended: T,
+    pub common: CommonScriptCarryover,
+}
+
+#[derive(Default)]
 pub struct ExtendedScriptTracker<T: ScriptTracker> {
     pub extended: T,
     pub common: CommonScriptTracker,
@@ -573,16 +589,33 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         <<CommonScriptRunIf as ScriptRunIf>::Tracker as ScriptTracker>::UpdateParam,
     );
     type ActionParams = ExtendedScriptParams<T::ActionParams>;
+    type Carryover = ExtendedScriptCarryover<T::Carryover>;
+    type CarryoverParam = (
+        T::CarryoverParam,
+        <<CommonScriptRunIf as ScriptRunIf>::Tracker as ScriptTracker>::CarryoverParam,
+    );
 
-    fn init<'w>(
+    fn init(
         &mut self,
         entity: Entity,
         settings: &Self::Settings,
         metadata: &ScriptMetadata,
-        param: &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
+        carryover: Self::Carryover,
+        param: &mut <Self::InitParam as SystemParam>::Item<'_, '_>,
     ) {
-        self.extended.init(entity, &settings.extended, metadata, &mut param.0);
-        self.common.init(entity, &settings.common, metadata, &mut param.1);
+        self.extended.init(entity, &settings.extended, metadata, carryover.extended, &mut param.0);
+        self.common.init(entity, &settings.common, metadata, carryover.common, &mut param.1);
+    }
+
+    fn produce_carryover(
+        &self,
+        entity: Entity,
+        param: &mut <Self::CarryoverParam as SystemParam>::Item<'_, '_>,
+    ) -> Self::Carryover {
+        ExtendedScriptCarryover {
+            extended: self.extended.produce_carryover(entity, &mut param.0),
+            common: self.common.produce_carryover(entity, &mut param.1),
+        }
     }
 
     fn transfer_progress(&mut self, other: &Self) {
@@ -606,11 +639,11 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         self.common.finalize();
     }
 
-    fn update<'w>(
+    fn update(
         &mut self,
         entity: Entity,
         settings: &Self::Settings,
-        param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        param: &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         queue: &mut Vec<QueuedAction>,
     ) -> ScriptUpdateResult {
         let r_extended = self.extended.update(
@@ -645,22 +678,22 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         self.common.queue_extra_actions(&settings.common, queue);
     }
 
-    fn do_start<'w>(
+    fn do_start(
         &mut self,
         entity: Entity,
         settings: &Self::Settings,
-        param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        param: &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         queue: &mut Vec<QueuedAction>,
     ) {
         self.extended.do_start(entity, &settings.extended, &mut param.0, queue);
         self.common.do_start(entity, &settings.common, &mut param.1, queue);
     }
 
-    fn do_stop<'w>(
+    fn do_stop(
         &mut self,
         entity: Entity,
         settings: &Self::Settings,
-        param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        param: &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         queue: &mut Vec<QueuedAction>,
     ) {
         self.extended.do_stop(entity, &settings.extended, &mut param.0, queue);
@@ -709,12 +742,12 @@ impl<T: ScriptActionParams> ScriptActionParams for ExtendedScriptParams<T> {
         T::ShouldRunParam,
         <CommonScriptParams as ScriptActionParams>::ShouldRunParam,
     );
-    fn should_run<'w>(
+    fn should_run(
         &self,
         entity: Entity,
         tracker: &mut Self::Tracker,
         action_id: ActionId,
-        (param_ext, param_common): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+        (param_ext, param_common): &mut <Self::ShouldRunParam as SystemParam>::Item<'_, '_>,
     ) -> Result<(), ScriptUpdateResult> {
         if let Err(r) = self.extended.should_run(entity, &mut tracker.extended, action_id, param_ext) {
             Err(r)
@@ -735,13 +768,13 @@ where
     );
     type Tracker = ExtendedScriptTracker<T::Tracker>;
 
-    fn run<'w>(
+    fn run(
         &self,
         entity: Entity,
         timing: ScriptActionTiming,
         actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
-        (param_ext, param_common): &mut <Self::Param as SystemParam>::Item<'w, '_>,
+        (param_ext, param_common): &mut <Self::Param as SystemParam>::Item<'_, '_>,
     ) -> ScriptUpdateResult {
         match self {
             ExtendedScriptAction::Extended(action) => {
@@ -778,11 +811,11 @@ impl ScriptAsset for Script {
         self.settings.clone().unwrap_or_default()
     }
 
-    fn build<'w>(
+    fn build(
         &self,
         mut builder: ScriptRuntimeBuilder<Self>,
         _entity: Entity,
-        _param: &mut <Self::BuildParam as SystemParam>::Item<'w, '_>,
+        _param: &mut <Self::BuildParam as SystemParam>::Item<'_, '_>,
     ) -> ScriptRuntimeBuilder<Self> {
         builder.replace_config(&self.config);
         for action in self.script.iter() {

@@ -23,6 +23,7 @@ pub struct SpriteAnimationBundle {
 
 #[derive(Default)]
 pub struct SpriteAnimationTracker {
+    carryover: SpriteAnimationCarryover,
     frame_actions: HashMap<FrameId, Vec<ActionId>>,
     framequant_actions: Vec<(Quant, ActionId)>,
     reversed: bool,
@@ -33,6 +34,11 @@ pub struct SpriteAnimationTracker {
     ticks_remain: u32,
     bookmarks: HashMap<String, FrameId>,
     q_extra: Vec<QueuedAction>,
+}
+
+#[derive(Default)]
+pub struct SpriteAnimationCarryover {
+    frame: Option<FrameId>,
 }
 
 impl SpriteAnimationTracker {
@@ -88,12 +94,12 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
         )>,
     );
 
-    fn should_run<'w>(
+    fn should_run(
         &self,
         entity: Entity,
         tracker: &mut Self::Tracker,
         _action_id: ActionId,
-        (q_self,): &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+        (q_self,): &mut <Self::ShouldRunParam as SystemParam>::Item<'_, '_>,
     ) -> Result<(), ScriptUpdateResult> {
         let current_index = FrameId::from_sprite_index(q_self.get(entity).unwrap().0.index);
         if let Some(lt) = &self.if_frame_lt {
@@ -168,13 +174,13 @@ impl ScriptAction for SpriteAnimationScriptAction {
     );
     type Tracker = SpriteAnimationTracker;
 
-    fn run<'w>(
+    fn run(
         &self,
         entity: Entity,
         timing: ScriptActionTiming,
         actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
-        (q,): &mut <Self::Param as SystemParam>::Item<'w, '_>,
+        (q,): &mut <Self::Param as SystemParam>::Item<'_, '_>,
     ) -> ScriptUpdateResult {
         let (mut atlas, mut sprite, mut xf) = q
             .get_mut(entity)
@@ -295,14 +301,20 @@ impl ScriptTracker for SpriteAnimationTracker {
         SQuery<&'static mut TextureAtlas>,
     );
     type ActionParams = SpriteAnimationScriptParams;
+    type Carryover = SpriteAnimationCarryover;
+    type CarryoverParam = (
+        SQuery<&'static TextureAtlas>,
+    );
 
-    fn init<'w>(
+    fn init(
         &mut self,
         entity: Entity,
         settings: &Self::Settings,
         _metadata: &ScriptMetadata,
-        (q,): &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
+        carryover: Self::Carryover,
+        (q,): &mut <Self::InitParam as SystemParam>::Item<'_, '_>,
     ) {
+        self.carryover = carryover;
         self.ticks_per_frame = settings.ticks_per_frame;
         self.ticks_remain = 0;
         self.next_frame = Some(settings.frame_start);
@@ -314,6 +326,16 @@ impl ScriptTracker for SpriteAnimationTracker {
             .get_mut(entity)
             .expect("Animation entity must have TextureAtlasSprite component");
         atlas.index = settings.frame_start.as_sprite_index();
+    }
+
+    fn produce_carryover(
+        &self,
+        entity: Entity,
+        (q,): &mut <Self::CarryoverParam as SystemParam>::Item<'_, '_>,
+    ) -> Self::Carryover {
+        SpriteAnimationCarryover {
+            frame: q.get(entity).ok().map(|s| FrameId::from_sprite_index(s.index)),
+        }
     }
 
     fn transfer_progress(&mut self, other: &Self) {
@@ -363,11 +385,11 @@ impl ScriptTracker for SpriteAnimationTracker {
         }
     }
 
-    fn update<'w>(
+    fn update(
         &mut self,
         entity: Entity,
         _settings: &Self::Settings,
-        (gt, q,): &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        (gt, q,): &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         queue: &mut Vec<QueuedAction>,
     ) -> ScriptUpdateResult {
         let mut atlas = q
@@ -430,11 +452,11 @@ impl ScriptAsset for SpriteAnimation {
         self.settings.clone()
     }
 
-    fn build<'w>(
+    fn build(
         &self,
         mut builder: ScriptRuntimeBuilder<Self>,
         entity: Entity,
-        (q_atlas, preloaded): &mut <Self::BuildParam as SystemParam>::Item<'w, '_>,
+        (q_atlas, preloaded): &mut <Self::BuildParam as SystemParam>::Item<'_, '_>,
     ) -> ScriptRuntimeBuilder<Self> {
         let (mut image, mut atlas, mut _sprite) = q_atlas
             .get_mut(entity)
