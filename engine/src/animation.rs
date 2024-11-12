@@ -101,6 +101,60 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
         _action_id: ActionId,
         (q_self,): &mut <Self::ShouldRunParam as SystemParam>::Item<'_, '_>,
     ) -> Result<(), ScriptUpdateResult> {
+        if let Some(oldanim_index) = tracker.carryover.frame {
+            if let Some(lt) = &self.if_oldanim_frame_lt {
+                if !(oldanim_index < *lt) {
+                    return Err(ScriptUpdateResult::NormalRun);
+                }
+            }
+            if let Some(le) = &self.if_oldanim_frame_le {
+                if !(oldanim_index <= *le) {
+                    return Err(ScriptUpdateResult::NormalRun);
+                }
+            }
+            if let Some(gt) = &self.if_oldanim_frame_gt {
+                if !(oldanim_index > *gt) {
+                    return Err(ScriptUpdateResult::NormalRun);
+                }
+            }
+            if let Some(ge) = &self.if_oldanim_frame_ge {
+                if !(oldanim_index >= *ge) {
+                    return Err(ScriptUpdateResult::NormalRun);
+                }
+            }
+            if let Some(f) = &self.if_oldanim_frame_was {
+                match f {
+                    OneOrMany::Single(f) => {
+                        if oldanim_index != *f {
+                            return Err(ScriptUpdateResult::NormalRun);
+                        }
+                    }
+                    OneOrMany::Many(f) => {
+                        for f in f.iter() {
+                            if oldanim_index != *f {
+                                return Err(ScriptUpdateResult::NormalRun);
+                            }
+                        }
+                    }
+                }
+            }
+            if let Some(f) = &self.if_oldanim_frame_was_not {
+                match f {
+                    OneOrMany::Single(f) => {
+                        if oldanim_index == *f {
+                            return Err(ScriptUpdateResult::NormalRun);
+                        }
+                    }
+                    OneOrMany::Many(f) => {
+                        for f in f.iter() {
+                            if oldanim_index == *f {
+                                return Err(ScriptUpdateResult::NormalRun);
+                            }
+                        }
+                    }
+                }
+            }
+        }
         let current_index = FrameId::from_sprite_index(q_self.get(entity).unwrap().0.index);
         if let Some(lt) = &self.if_frame_lt {
             if !(current_index < tracker.resolve_frame(self.frame_bookmark.as_ref(), lt)) {

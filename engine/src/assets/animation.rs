@@ -53,6 +53,12 @@ pub struct SpriteAnimationScriptParams {
     pub if_frame_ge: Option<FrameIndexOrBookmark>,
     pub if_frame_is: Option<OneOrMany<FrameIndexOrBookmark>>,
     pub if_frame_is_not: Option<OneOrMany<FrameIndexOrBookmark>>,
+    pub if_oldanim_frame_lt: Option<FrameId>,
+    pub if_oldanim_frame_le: Option<FrameId>,
+    pub if_oldanim_frame_gt: Option<FrameId>,
+    pub if_oldanim_frame_ge: Option<FrameId>,
+    pub if_oldanim_frame_was: Option<OneOrMany<FrameId>>,
+    pub if_oldanim_frame_was_not: Option<OneOrMany<FrameId>>,
     pub if_playing_reversed: Option<bool>,
 }
 
