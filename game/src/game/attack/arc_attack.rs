@@ -1,5 +1,5 @@
 use theseeker_engine::ballistics_math::solve_ballistic_arc;
-use theseeker_engine::physics::{Collider, LinearVelocity, PhysicsWorld};
+use theseeker_engine::physics::{Collider, LinearVelocity};
 
 use crate::game::attack::Attack;
 use crate::game::player::PlayerConfig;

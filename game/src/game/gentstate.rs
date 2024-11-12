@@ -1,5 +1,4 @@
 use bevy::ecs::component::SparseStorage;
-use theseeker_engine::gent::Gent;
 
 use crate::prelude::*;
 

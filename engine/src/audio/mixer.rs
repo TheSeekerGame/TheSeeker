@@ -1,4 +1,4 @@
-use std::sync::{atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering as MemOrdering}, Mutex};
+use std::sync::{atomic::{AtomicBool, AtomicI64, Ordering as MemOrdering}, Mutex};
 
 use rodio::{Sample, Source};
 use cpal::FromSample;

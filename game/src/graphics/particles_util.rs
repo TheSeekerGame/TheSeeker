@@ -1,4 +1,4 @@
-use crate::prelude::{ChildBuilder, Handle};
+use crate::prelude::Handle;
 use bevy_hanabi::EffectAsset;
 
 pub trait BuildParticles {

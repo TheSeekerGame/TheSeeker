@@ -11,7 +11,6 @@ mod prelude {
 
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
-use bevy_sprite3d::Sprite3dPlugin;
 use iyes_perf_ui::PerfUiPlugin;
 use theseeker_engine::physics::PhysicsPlugin;
 

@@ -1,11 +1,9 @@
 //! Everything to do with the in-game camera(s)
 
-use crate::game::gentstate::Dead;
 use crate::game::player::Player;
 use crate::graphics::darkness::DarknessSettings;
 use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
 use crate::level::MainBackround;
-use crate::parallax::Parallax;
 use crate::prelude::*;
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::prepass::DepthPrepass;

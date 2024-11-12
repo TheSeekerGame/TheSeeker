@@ -95,7 +95,7 @@ impl Plugin for PlayerBehaviorPlugin {
 }
 
 fn gain_passives(
-    mut query: Query<(&mut Passives), With<Player>>,
+    mut query: Query<&mut Passives, With<Player>>,
     kills: Res<KillCount>,
     player_config: Res<PlayerConfig>,
 ) {
@@ -179,13 +179,13 @@ fn hitfreeze(
             &mut HitFreezeTime,
             &mut LinearVelocity,
         ),
-        (With<Player>),
+        With<Player>,
     >,
     attack_q: Query<(Entity, &Attack)>,
     config: Res<PlayerConfig>,
 ) {
     // Track if we need to initialize a hitfreeze affect
-    for ((attack_entity, attack)) in attack_q.iter() {
+    for (attack_entity, attack) in attack_q.iter() {
         if !attack.damaged_set.is_empty() {
             // Make sure the entity doing the attack is actually the player
             if let Ok((entity, mut hitfreeze, _)) = player_q.get_mut(attack.attacker) {
@@ -203,7 +203,7 @@ fn hitfreeze(
         }
     }
 
-    for ((entity, mut hitfreeze, mut linear_vel)) in player_q.iter_mut() {
+    for (entity, mut hitfreeze, mut linear_vel) in player_q.iter_mut() {
         if hitfreeze.0 < u32::MAX {
             hitfreeze.0 += 1;
         }
@@ -302,7 +302,7 @@ fn player_move(
 }
 
 fn set_movement_slots(
-    mut q_gent: Query<(&LinearVelocity, &Gent), (With<Player>)>,
+    mut q_gent: Query<(&LinearVelocity, &Gent), With<Player>>,
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for (velocity, gent) in q_gent.iter_mut() {
@@ -486,7 +486,7 @@ pub fn player_collisions(
             Option<&mut Dashing>,
             Option<&mut Whirling>,
         ),
-        (With<Player>),
+        With<Player>,
     >,
     mut q_enemy: Query<(Entity, &mut Collider), (With<Enemy>, Without<Player>)>,
     mut commands: Commands,
@@ -604,7 +604,7 @@ pub fn player_collisions(
                             projected_velocity += friction_vec + bounce_force;
 
                             possible_pos =
-                                (pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01)));
+                                pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
                         },
                         TOIStatus::Penetrating => {
                             let depenetration = -linear_velocity.0;
