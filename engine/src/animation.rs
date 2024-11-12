@@ -132,6 +132,22 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
                 }
             }
         }
+        if let Some(f) = &self.if_frame_is_not {
+            match f {
+                OneOrMany::Single(f) => {
+                    if current_index == tracker.resolve_frame(self.frame_bookmark.as_ref(), f) {
+                        return Err(ScriptUpdateResult::NormalRun);
+                    }
+                }
+                OneOrMany::Many(f) => {
+                    for f in f.iter() {
+                        if current_index == tracker.resolve_frame(self.frame_bookmark.as_ref(), f) {
+                            return Err(ScriptUpdateResult::NormalRun);
+                        }
+                    }
+                }
+            }
+        }
         if let Some(reversed) = self.if_playing_reversed {
             if reversed != tracker.reversed {
                 return Err(ScriptUpdateResult::NormalRun);

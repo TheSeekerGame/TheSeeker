@@ -52,6 +52,7 @@ pub struct SpriteAnimationScriptParams {
     pub if_frame_gt: Option<FrameIndexOrBookmark>,
     pub if_frame_ge: Option<FrameIndexOrBookmark>,
     pub if_frame_is: Option<OneOrMany<FrameIndexOrBookmark>>,
+    pub if_frame_is_not: Option<OneOrMany<FrameIndexOrBookmark>>,
     pub if_playing_reversed: Option<bool>,
 }
 
@@ -175,6 +176,7 @@ impl FrameId {
         debug_assert!(self.0 != 0);
         (self.0 - 1) as usize
     }
+
     pub fn from_sprite_index(i: usize) -> Self {
         FrameId(i as u32 + 1)
     }
@@ -188,6 +190,7 @@ impl Default for FrameId {
 
 impl std::ops::Add<FrameId> for FrameId {
     type Output = FrameId;
+
     fn add(self, rhs: FrameId) -> Self::Output {
         FrameId(self.0 + rhs.0 - 1)
     }
@@ -195,6 +198,7 @@ impl std::ops::Add<FrameId> for FrameId {
 
 impl std::ops::Add<u32> for FrameId {
     type Output = FrameId;
+
     fn add(self, rhs: u32) -> Self::Output {
         FrameId(self.0 + rhs)
     }
@@ -202,6 +206,7 @@ impl std::ops::Add<u32> for FrameId {
 
 impl std::ops::Sub<FrameId> for FrameId {
     type Output = FrameId;
+
     fn sub(self, rhs: FrameId) -> Self::Output {
         FrameId(self.0 - (rhs.0 - 1))
     }
@@ -209,6 +214,7 @@ impl std::ops::Sub<FrameId> for FrameId {
 
 impl std::ops::Sub<u32> for FrameId {
     type Output = FrameId;
+
     fn sub(self, rhs: u32) -> Self::Output {
         FrameId(self.0 - rhs)
     }

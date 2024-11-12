@@ -405,6 +405,15 @@ impl ScriptActionParams for CommonScriptParams {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
+        if let Some(eq) = &self.if_runcount_is_not {
+            let b = match eq {
+                OneOrMany::Single(x) => *x == tracker.runcount,
+                OneOrMany::Many(x) => x.iter().any(|x| *x == tracker.runcount),
+            };
+            if b {
+                return Err(ScriptUpdateResult::NormalRun);
+            }
+        }
         match (&self.if_previous_script_key, &tracker.old_key) {
             (None, _) => {}
             (Some(req), Some(old)) if req == old => {},
