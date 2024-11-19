@@ -1,5 +1,7 @@
 //! Everything to do with the in-game camera(s)
 
+use std::f32::consts::PI;
+
 use crate::game::player::Player;
 use crate::graphics::darkness::DarknessSettings;
 use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
@@ -10,7 +12,6 @@ use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use iyes_perf_ui::PerfUiCompleteBundle;
 use ran::ran_f64_range;
-use theseeker_engine::gent::Gent;
 
 pub struct CameraPlugin;
 
@@ -31,13 +32,14 @@ impl Plugin for CameraPlugin {
         app.insert_resource(CameraRig {
             target: Default::default(),
             camera: Default::default(),
-            trauma: 0.0,
         });
         app.add_systems(GameTickUpdate, camera_rig_follow_player);
-        app.add_systems(GameTickUpdate, update_rig_trauma);
         app.add_systems(
             GameTickUpdate,
-            update_camera_rig.after(camera_rig_follow_player),
+            (
+                update_camera_rig.after(camera_rig_follow_player),
+                update_screen_shake.run_if(resource_exists::<CameraShake>),
+            )
         );
     }
 }
@@ -62,12 +64,6 @@ pub struct CameraRig {
     target: Vec2,
     /// the "base" position of the camera before screen shake is applied
     camera: Vec2,
-    /// Applies screen shake based on this amount.
-    ///
-    /// value decreases over time. To use, add some amount based on impact intensity.
-    ///
-    /// 10.0 is a lot; death? 1.0 minor impact
-    pub(crate) trauma: f32,
 }
 
 /// Limits to the viewable gameplay area.
@@ -187,43 +183,6 @@ fn camera_rig_follow_player(
     rig.target.y = player_xform.translation.y;
 }
 
-/// Tiny system that just makes sure trauma is always going down linearly
-pub(crate) fn update_rig_trauma(
-    mut rig: ResMut<CameraRig>,
-    time: Res<Time>,
-    keyboard_input: Res<ButtonInput<KeyCode>>,
-    mut commands: Commands,
-    player_q: Query<Entity, (With<Gent>, With<Player>)>,
-) {
-    rig.trauma = (rig.trauma - 1.75 * time.delta_seconds()).max(0.0);
-    #[cfg(feature = "dev")]
-    // Tests different levels based on number key if in dev
-    {
-        let number_keys = [
-            KeyCode::Digit1,
-            KeyCode::Digit2,
-            KeyCode::Digit3,
-            KeyCode::Digit4,
-            KeyCode::Digit5,
-            KeyCode::Digit6,
-            KeyCode::Digit7,
-            KeyCode::Digit8,
-            KeyCode::Digit9,
-            KeyCode::Digit0,
-        ];
-        for (i, key) in number_keys.iter().enumerate() {
-            if keyboard_input.pressed(*key) {
-                rig.trauma = (i as f32 + 1.0) * 0.1;
-            }
-        }
-        if keyboard_input.pressed(KeyCode::Delete) || keyboard_input.pressed(KeyCode::Backspace) {
-            if let Some(e) = player_q.iter().next() {
-                commands.entity(e).try_insert(Dead::default());
-            }
-        }
-    }
-}
-
 /// Camera updates the camera position to smoothly interpolate to the
 /// rig location. also applies camera shake, and limits camera within the level boundaries
 pub(crate) fn update_camera_rig(
@@ -233,6 +192,7 @@ pub(crate) fn update_camera_rig(
         (&LayerMetadata, &Transform),
         (With<MainBackround>, Without<MainCamera>),
     >,
+    shake_op: Option<Res<CameraShake>>,
     time: Res<Time>,
 ) {
     let Ok((mut cam_xform, projection)) = q_cam.get_single_mut() else {
@@ -249,12 +209,15 @@ pub(crate) fn update_camera_rig(
 
     rig.camera = new_xy;
 
-    let shake = rig.trauma.powi(3);
-
+    
     // screen shake amounts
-    let angle = 2.5 * (std::f32::consts::PI / 180.0) * shake * ran_f64_range(-1.0..=1.0) as f32;
-    let offset_x = 20.0 * shake * ran_f64_range(-1.0..=1.0) as f32;
-    let offset_y = 20.0 * shake * ran_f64_range(-1.0..=1.0) as f32;
+    let offset = match shake_op {
+        Some(shake) => shake.c_offset,
+        None => Vec2::ZERO,
+    };
+
+    let offset_x = offset.x;
+    let offset_y = offset.y;
 
     // cam_xform.rotation.z = 0.0 + angle;
     cam_xform.translation.x = rig.camera.x;
@@ -295,6 +258,78 @@ pub(crate) fn update_camera_rig(
         cam_xform.translation = xy.extend(cam_xform.translation.z);
     }
 }
+
+#[derive(Resource, Clone)]
+pub struct CameraShake {
+    strength: f32,
+    c_offset: Vec2,
+    freq: f32,
+    dir: Vec2,
+    timer: Timer,
+    sub_timer: Timer,
+}
+
+impl CameraShake {
+    pub fn new(strength: f32, t: f32, freq: f32) -> Self {
+        let rand_a = ran_f64_range(0.0..=360.0);
+        let dir = Vec2::from_angle(rand_a as f32 * PI * 2.0);
+
+        Self { 
+            strength, 
+            freq,
+            timer: Timer::from_seconds(t, TimerMode::Once), 
+            sub_timer: Timer::from_seconds(t / freq, TimerMode::Repeating), 
+            c_offset: Vec2::ZERO,
+            dir,
+        }
+    }
+}
+
+
+pub fn update_screen_shake(
+    mut commands: Commands,
+//    mut cam_query: Query<(Entity, &mut CameraShake, &mut Transform), (With<PlayerCamera>)>,
+    time: Res<Time<Virtual>>,
+    mut shake: ResMut<CameraShake>,
+) {
+
+    let freq = shake.freq;
+    let ratio = shake.timer.fraction();
+    let decay = 1.0 - ratio.powi(2);
+
+    let t = freq * ratio * PI * 2.0;
+    let s = t.sin();
+
+    const TAN_FREQ_SCALE: f32 = 2.;
+    const TAN_AMP_SCALE: f32 = 0.5;
+
+    let tan_s = (TAN_FREQ_SCALE * t).sin();
+
+    if shake.sub_timer.finished() {
+        let rand_a = ran_f64_range(0.0..=360.0);
+        shake.dir = Vec2::from_angle(rand_a as f32 * PI * 2.0);
+    }
+
+    let val = s * decay;
+    let tan_val = tan_s * decay * TAN_AMP_SCALE;
+
+    let tan_dir = Vec3::Z.cross(shake.dir.extend(0.)).truncate();
+    
+    let delta = shake.dir * val * shake.strength;
+    let tan_delta = tan_dir * tan_val * shake.strength;
+//    let angle = val * shake.strength * 0.0001;
+
+    //println!("{}", delta);
+
+    shake.c_offset = delta + tan_delta;
+
+    shake.timer.tick(time.delta());
+    shake.sub_timer.tick(time.delta());
+
+    if shake.timer.finished() {
+        commands.remove_resource::<CameraShake>();
+    }
+}   
 
 fn cli_camera_at(In(args): In<Vec<String>>, mut q_cam: Query<&mut Transform, With<MainCamera>>) {
     if args.len() != 2 {

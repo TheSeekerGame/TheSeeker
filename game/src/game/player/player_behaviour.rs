@@ -1,4 +1,4 @@
-use crate::camera::CameraRig;
+use crate::camera::{CameraRig, CameraShake};
 use crate::game::attack::{Attack, SelfPushback, Stealthed};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
@@ -150,7 +150,7 @@ pub fn player_can_stealth(
     >,
     mut sprites: Query<&mut Sprite, With<PlayerGfx>>,
     time: Res<GameTime>,
-    mut rig: ResMut<CameraRig>,
+    mut commands: Commands
 ) {
     for (action_state, mut can_stealth, mut transition_queue, gent) in q_gent.iter_mut() {
         can_stealth.remaining_cooldown -= 1.0 / time.hz as f32;
@@ -165,7 +165,7 @@ pub fn player_can_stealth(
                     Stealthing::default(),
                 ));
             } else {
-                rig.trauma += 0.23;
+                commands.insert_resource(CameraShake::new(2.0, 1.0, 5.0));
             }
         }
     }
@@ -408,6 +408,7 @@ pub fn player_can_dash(
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
     mut rig: ResMut<CameraRig>,
+    mut commands: Commands,
 ) {
     for (action_state, facing, mut can_dash, mut velocity, mut transition_queue, hitfreeze) in
         q_gent.iter_mut()
@@ -424,7 +425,7 @@ pub fn player_can_dash(
                     *hitfreeze = HitFreezeTime(u32::MAX, None)
                 }
             } else {
-                rig.trauma += 0.23;
+                commands.insert_resource(CameraShake::new(2.0, 1.0, 5.0));
             }
         }
     }

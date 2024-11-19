@@ -10,9 +10,9 @@ use super::enemy::{Defense, EnemyGfx, EnemyStateSet, JustGotHitMarker};
 use super::gentstate::{Dead, Facing};
 use super::physics::Knockback;
 use super::player::{
-    on_hit_exit_stealthing, on_hit_stealth_reset, Passive, Passives, PlayerGfx, PlayerStateSet,
-    StatusModifier,
+    on_hit_exit_stealthing, on_hit_stealth_reset, Passive, Passives, Player, PlayerGfx, PlayerStateSet, StatusModifier
 };
+use crate::camera::CameraShake;
 use crate::game::attack::arc_attack::{arc_projectile, Projectile};
 use crate::game::attack::particles::AttackParticlesPlugin;
 use crate::prelude::*;
@@ -39,6 +39,7 @@ impl Plugin for AttackPlugin {
                     apply_attack_damage,
                     //OnAttackFirstHitSet
                     track_crits,
+                    on_hit_cam_shake,
                     on_hit_self_pushback,
                     on_hit_lifesteal,
                     on_hit_stealth_reset,
@@ -385,6 +386,19 @@ pub fn kill_on_damage(
             if health.current == 0 {
                 commands.entity(entity).insert(Dead::default());
             }
+        }
+    }
+}
+
+///Applies camera shaker on first hit if attacker is player
+fn on_hit_cam_shake(
+    query: Query<&Attack, Added<Hit>>,
+    p_query: Query<Entity, With<Player>>,
+    mut commands: Commands,
+) {
+    for attack in query.iter() {
+        if let Ok(_entity) = p_query.get(attack.attacker) {
+            commands.insert_resource(CameraShake::new(2.0, 1.0, 5.0));
         }
     }
 }
