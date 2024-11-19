@@ -2,7 +2,6 @@
 
 use std::f32::consts::PI;
 
-use crate::game::gentstate::Dead;
 use crate::game::player::Player;
 use crate::graphics::darkness::DarknessSettings;
 use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
@@ -13,7 +12,6 @@ use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use iyes_perf_ui::PerfUiCompleteBundle;
 use ran::ran_f64_range;
-use theseeker_engine::gent::Gent;
 
 pub struct CameraPlugin;
 

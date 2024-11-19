@@ -11,7 +11,7 @@ use crate::prelude::{
     any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
     IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle, With, Without,
 };
-use bevy::prelude::{resource_changed, {resource_changed, Has}};
+use bevy::prelude::{resource_changed, Has};
 
 use bevy::sprite::Sprite;
 use bevy::transform::TransformSystem::TransformPropagate;
@@ -94,6 +94,19 @@ impl Plugin for PlayerBehaviorPlugin {
     }
 }
 
+fn gain_passives(
+    mut query: Query<&mut Passives, With<Player>>,
+    kills: Res<KillCount>,
+    player_config: Res<PlayerConfig>,
+) {
+    for mut passives in query.iter_mut() {
+        if **kills % player_config.passive_gain_rate == 0 {
+            passives.gain();
+            println!("{:?}", passives);
+        }
+    }
+}
+
 pub fn player_stealth(
     mut query: Query<
         (
@@ -137,8 +150,7 @@ pub fn player_can_stealth(
     >,
     mut sprites: Query<&mut Sprite, With<PlayerGfx>>,
     time: Res<GameTime>,
-    mut rig: ResMut<CameraRig>,
-    mut command: Commands
+    mut commands: Commands
 ) {
     for (action_state, mut can_stealth, mut transition_queue, gent) in q_gent.iter_mut() {
         can_stealth.remaining_cooldown -= 1.0 / time.hz as f32;
@@ -153,7 +165,7 @@ pub fn player_can_stealth(
                     Stealthing::default(),
                 ));
             } else {
-                //TODO: change to using Added<attack::Hit>
+                commands.insert_resource(CameraShake::new(2.0, 1.0, 5.0));
             }
         }
     }
@@ -174,7 +186,7 @@ fn hitfreeze(
 ) {
     // Track if we need to initialize a hitfreeze affect
     for (attack_entity, attack) in attack_q.iter() {
-        if !attack.damaged.is_empty() {
+        if !attack.damaged_set.is_empty() {
             // Make sure the entity doing the attack is actually the player
             if let Ok((entity, mut hitfreeze, _)) = player_q.get_mut(attack.attacker) {
                 // If its the same exact attack entity as the last time the affect was activated.

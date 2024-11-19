@@ -465,24 +465,6 @@ impl Transitionable<CanAttack> for Whirling {
 impl Whirling {
     const MIN_TICKS: u32 = 48;
 }
-impl Transitionable<Whirling> for CanAttack {
-    type Removals = (CanAttack);
-}
-
-#[derive(Component, Debug, Default)]
-#[component(storage = "SparseSet")]
-pub struct Whirling {
-    pub attack_entity: Option<Entity>,
-    pub ticks: u32,
-}
-impl GentState for Whirling {}
-
-impl Transitionable<CanAttack> for Whirling {
-    type Removals = (Whirling, Attacking);
-}
-impl Whirling {
-    const MIN_TICKS: u32 = 48;
-}
 
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
