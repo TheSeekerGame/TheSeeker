@@ -15,7 +15,6 @@
 
 use crate::parallax::{Parallax, ParallaxOffset};
 use crate::prelude::*;
-use seek_ecs_tilemap::map::TilemapChunks;
 use seek_ecs_tilemap::tiles::TilePos;
 
 pub struct LevelManagerPlugin;

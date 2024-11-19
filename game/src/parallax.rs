@@ -82,7 +82,7 @@ fn apply_parallax(
         ),
         Without<MainCamera>,
     >,
-    q_cam: Query<&Transform, (With<MainCamera>)>,
+    q_cam: Query<&Transform, With<MainCamera>>,
 ) {
     let Some(cam_trnsfrm) = q_cam.iter().next() else {
         return;

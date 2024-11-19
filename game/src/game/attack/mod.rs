@@ -6,13 +6,15 @@ use std::mem;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{update_sprite_colliders, Collider, PhysicsWorld, GROUND};
 
-use super::enemy::EnemyGfx;
-use super::player::{CanDash, CanStealth, Player, PlayerConfig, WhirlAbility};
-use super::player::{PlayerGfx, PlayerPushback, StatusModifier};
-use crate::game::enemy::{Defense, Enemy, EnemyStateSet};
-use crate::game::player::PlayerStateSet;
-use crate::game::{attack::particles::AttackParticlesPlugin, gentstate::Dead};
-use crate::camera::CameraShake;
+use super::enemy::{Defense, EnemyGfx, EnemyStateSet, JustGotHitMarker};
+use super::gentstate::{Dead, Facing};
+use super::physics::Knockback;
+use super::player::{
+    on_hit_exit_stealthing, on_hit_stealth_reset, Passive, Passives, PlayerGfx, PlayerStateSet,
+    StatusModifier,
+};
+use crate::game::attack::arc_attack::{arc_projectile, Projectile};
+use crate::game::attack::particles::AttackParticlesPlugin;
 use crate::prelude::*;
 
 pub struct AttackPlugin;

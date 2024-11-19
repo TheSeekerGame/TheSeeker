@@ -434,7 +434,7 @@ impl Attacking {
 impl GentState for Attacking {}
 
 impl Transitionable<CanAttack> for Attacking {
-    type Removals = (Attacking);
+    type Removals = Attacking;
 }
 
 #[derive(Component, Debug, Default)]
@@ -445,7 +445,25 @@ pub struct CanAttack {
 impl GentState for CanAttack {}
 
 impl Transitionable<Attacking> for CanAttack {
-    type Removals = (CanAttack);
+    type Removals = CanAttack;
+}
+impl Transitionable<Whirling> for CanAttack {
+    type Removals = CanAttack;
+}
+
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
+pub struct Whirling {
+    pub attack_entity: Option<Entity>,
+    pub ticks: u32,
+}
+impl GentState for Whirling {}
+
+impl Transitionable<CanAttack> for Whirling {
+    type Removals = (Whirling, Attacking);
+}
+impl Whirling {
+    const MIN_TICKS: u32 = 48;
 }
 impl Transitionable<Whirling> for CanAttack {
     type Removals = (CanAttack);
@@ -510,7 +528,7 @@ pub struct Stealthing {
 
 impl GentState for Stealthing {}
 impl Transitionable<CanStealth> for Stealthing {
-    type Removals = (Stealthing);
+    type Removals = Stealthing;
 }
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]

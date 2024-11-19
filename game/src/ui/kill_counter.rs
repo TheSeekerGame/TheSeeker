@@ -1,9 +1,7 @@
 use crate::appstate::AppState;
 use crate::camera::MainCamera;
 use crate::game::attack::KillCount;
-use crate::graphics::hp_bar::HpBarUiMaterial;
 use crate::prelude::*;
-use crate::ui::ability_widget::UiAbilityWidgetExt;
 use sickle_ui::ui_builder::{UiBuilderExt, UiRoot};
 use sickle_ui::ui_commands::SetTextExt;
 use sickle_ui::ui_style::*;

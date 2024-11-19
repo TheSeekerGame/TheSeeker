@@ -5,14 +5,10 @@ mod fog;
 pub mod hp_bar;
 pub(crate) mod particles_util;
 
-use crate::graphics::darkness::DarknessPlugin;
 use crate::graphics::dmg_numbers::DmgNumbersPlugin;
 use crate::graphics::dof::DepthOfFieldPlugin;
-use crate::graphics::fog::FogPlugin;
 use crate::graphics::hp_bar::HpBarsPlugin;
 use crate::prelude::*;
-use bevy::render::render_resource::AsBindGroup;
-use bevy::sprite::Material2d;
 use bevy_hanabi::HanabiPlugin;
 
 pub struct GraphicsFxPlugin;

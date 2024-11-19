@@ -31,7 +31,7 @@ fn instance(
     entity_with_hp: Query<(Entity, Ref<Health>, Has<Player>), With<GlobalTransform>>,
     mut ui_materials: ResMut<Assets<HpBarUiMaterial>>,
 ) {
-    for ((entity, health, player)) in entity_with_hp.iter() {
+    for (entity, health, player) in entity_with_hp.iter() {
         if health.is_added() {
             if !player {
                 commands

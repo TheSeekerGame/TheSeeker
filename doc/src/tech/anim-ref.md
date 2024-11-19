@@ -474,7 +474,7 @@ In dev builds, the game might print warnings to the log/console.
 
 <details>
   <summary>
-  <code>if_frame_lt</code>/<code>if_frame_le</code>/<code>if_frame_gt</code>/<code>if_frame_ge</code>
+  <code>if_frame_lt</code>/<code>if_frame_le</code>/<code>if_frame_gt</code>/<code>if_frame_ge</code>/<code>if_frame_is</code>/<code>if_frame_is_not</code>
   </summary>
 
 Example:
@@ -494,16 +494,30 @@ action = "..."
 run_every_n_ticks = "5+1"
 if_frame_lt = "my_bookmark"
 action = "..."
+
+# Do something as soon as the "attack" slot is enabled,
+# but only if we are currently displaying frame 6
+[[script]]
+run_on_slot_enable = "attack"
+if_frame_is = 6
+action = "..."
+
+# Do something every 3 ticks, but only if we are not currently
+# displaying one of the special magic frames
+[[script]]
+run_every_n_ticks = "3"
+if_frame_is_not = [ 3, 7, 9 ]
+action = "..."
 ```
 
 Only run the action if the current frame index is:
 
- - less than (lt)
- - less than or equal to (le)
- - greater than (gt)
- - greater than or equal to (ge)
-
-the specified value.
+ - less than a given value (`lt`)
+ - less than or equal to a given value (`le`)
+ - greater than a given value (`gt`)
+ - greater than or equal to a given value (`ge`)
+ - equal to any of the specified values (`is`)
+ - not equal to any of the specified values (`is_not`)
 
 It can be specified as either a number or a frame bookmark. If specified
 as a number, it will be relative to `frame_bookmark`, if set.
@@ -512,32 +526,52 @@ as a number, it will be relative to `frame_bookmark`, if set.
 
 <details>
   <summary>
-  <code>if_frame_is</code>
+  <code>if_oldanim_frame_lt</code>/<code>if_oldanim_frame_le</code>/<code>if_oldanim_frame_gt</code>/<code>if_oldanim_frame_ge</code>/<code>if_oldanim_frame_was</code>/<code>if_oldanim_frame_was_not</code>
   </summary>
 
 Example:
 
 ```toml
-# Do something as soon as the "attack" slot is enabled,
-# but only if we are currently displaying frame 6
+# Do something when the animation starts,
+# but only if the previouly-playing animation
+# was "anim.Player.Attack"
+# and it had not yet reached frame 7
 [[script]]
-run_on_slot_enable = "attack"
-if_frame_is = 6
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.Player.Attack"
+if_oldanim_frame_lt = 7
 action = "..."
 
-# Do something every 3 ticks, but only if we are currently
-# displaying one of the special magic frames
+# Do something on tick 3,
+# but only if the previously-playing animation
+# was "anim.Player.Run"
+# and it was on frame 15
+# (when the current animation was started)
 [[script]]
-run_every_n_ticks = "3"
-if_frame_is = [ 3, 7, 9 ]
+run_at_tick = 3
+if_previous_script_key = "anim.Player.Run"
+if_oldanim_frame_was = 15
 action = "..."
 ```
 
-Only run the action if the current frame index is equal to any of
-the specified values.
+These parameters let you perform actions depending on where the
+previously-playing animation (if any) left off. This allows you to implement
+special handling for specific transitions between animations.
 
-The values can be specified as either a number or a frame bookmark. If
-specified as a number, it will be relative to `frame_bookmark`, if set.
+These parameters should be used together with `if_previous_script_key`.
+
+Only run the action if the frame index of the previously-playing animation
+(at the time of switching to the current animation) was:
+
+ - less than a given value (`lt`)
+ - less than or equal to a given value (`le`)
+ - greater than a given value (`gt`)
+ - greater than or equal to a given value (`ge`)
+ - equal to any of the specified values (`was`)
+ - not equal to any of the specified values (`was_not`)
+
+The provided values must be literal numbers. Since they refer to a different
+animation asset, bookmarks are not taken into account.
 
 </details>
 

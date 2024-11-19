@@ -5,15 +5,15 @@ use crate::game::player::{Player, PlayerStateSet};
 use crate::gamestate::GameState;
 use crate::prelude::{
     default, AlignItems, App, AppState, AssetServer, BackgroundColor, Commands, Component, Entity,
-    FlexDirection, Has, IntoSystemConfigs, JustifyContent, NextState, NodeBundle, Plugin,
-    PositionType, Query, Res, ResMut, StateDespawnMarker, Style, TargetCamera, Text, TextBundle,
-    TextStyle, Time, UiRect, Update, Val, With, ZIndex,
+    FlexDirection, Has, IntoSystemConfigs, JustifyContent, NodeBundle, Plugin,
+    PositionType, Query, Res, ResMut, StateDespawnMarker, Style, TargetCamera, TextBundle,
+    TextStyle, Time, Update, Val, With, ZIndex,
 };
 use crate::ui::button;
 use iyes_ui::prelude::OnClick;
 use sickle_ui::ui_builder::{UiBuilderExt, UiRoot};
 use sickle_ui::ui_style::{
-    SetNodeAlignItemsExt, SetNodeBottomExt, SetNodeJustifyContentsExt, SetNodePositionTypeExt,
+    SetNodeAlignItemsExt, SetNodeJustifyContentsExt, SetNodePositionTypeExt,
     SetNodeTopExt, SetNodeWidthExt,
 };
 use sickle_ui::widgets::prelude::*;
@@ -62,7 +62,7 @@ pub fn update_fade_in(
 }
 
 pub fn on_game_over(
-    query: Query<(Entity, &Gent, Has<Dead>), (With<Player>)>,
+    query: Query<(Entity, &Gent, Has<Dead>), With<Player>>,
     q_cam: Query<Entity, With<MainCamera>>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,

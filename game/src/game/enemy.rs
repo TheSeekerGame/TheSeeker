@@ -155,7 +155,7 @@ fn spawn_enemy(
             Without<EnemySpawner>,
         ),
     >,
-    player_query: Query<(&Transform), (Without<Enemy>, With<Player>)>,
+    player_query: Query<&Transform, (Without<Enemy>, With<Player>)>,
     mut commands: Commands,
 ) {
     let p_transform = player_query.get_single();
@@ -361,7 +361,7 @@ impl Plugin for EnemyBehaviorPlugin {
 struct Patrolling;
 impl GentState for Patrolling {}
 impl Transitionable<Aggroed> for Patrolling {
-    type Removals = (Patrolling);
+    type Removals = Patrolling;
 }
 
 #[derive(Component, Default, Debug)]
@@ -395,7 +395,7 @@ struct Aggroed;
 impl GentState for Aggroed {}
 impl Transitionable<Patrolling> for Aggroed {
     // type Removals = (Aggroed, RangedAttack);
-    type Removals = (Aggroed);
+    type Removals = Aggroed;
 }
 
 #[derive(Component, Debug, Default)]
@@ -674,7 +674,7 @@ fn patrolling(
     }
 }
 
-fn waiting(mut query: Query<(&mut Waiting), With<Enemy>>) {
+fn waiting(mut query: Query<&mut Waiting, With<Enemy>>) {
     for mut waiting in query.iter_mut() {
         waiting.ticks += 1;
     }
@@ -814,7 +814,7 @@ fn ranged_attack(
         ),
         With<Enemy>,
     >,
-    player_query: Query<(&Transform), With<Player>>,
+    player_query: Query<&Transform, With<Player>>,
     mut commands: Commands,
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
@@ -1056,7 +1056,7 @@ fn retreating(
         ),
         (With<Enemy>, Without<Walking>),
     >,
-    player_query: Query<(Entity), With<Player>>,
+    player_query: Query<Entity, With<Player>>,
 ) {
     for (range, facing, mut nav, mut velocity, mut retreating, mut transitions) in query.iter_mut()
     {
@@ -1409,7 +1409,7 @@ fn enemy_sparks_on_hit_animation(
 }
 
 fn enemy_walking_animation(
-    i_query: Query<&Gent, ((Added<Walking>), (With<Enemy>))>,
+    i_query: Query<&Gent, (Added<Walking>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
     for gent in i_query.iter() {
@@ -1420,7 +1420,7 @@ fn enemy_walking_animation(
 }
 
 fn enemy_chasing_animation(
-    i_query: Query<&Gent, ((Added<Chasing>), (With<Enemy>))>,
+    i_query: Query<&Gent, (Added<Chasing>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
     for gent in i_query.iter() {

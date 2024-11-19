@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use rapier2d::geometry::InteractionGroups;
 use rapier2d::prelude::Group;
-use theseeker_engine::physics::{Collider, ENEMY, GROUND, PLAYER};
+use theseeker_engine::physics::{Collider, GROUND};
 
 pub struct WallPlugin;
 

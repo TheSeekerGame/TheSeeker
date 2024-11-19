@@ -1,7 +1,5 @@
-use crate::assets::animation::SpriteAnimation;
-use crate::prelude::{GameTickUpdate, HashMap, HashSet};
-use crate::script::{ScriptPlayer, ScriptSet};
-use crate::PreloadedAssets;
+use crate::prelude::{GameTickUpdate, HashMap};
+use crate::script::ScriptSet;
 use bevy::prelude::*;
 use bevy::transform::TransformSystem::TransformPropagate;
 use rapier2d::na::{Unit, UnitComplex};

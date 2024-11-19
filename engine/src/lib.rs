@@ -1,5 +1,11 @@
+#![allow(unused_mut)]
+
 pub mod prelude {
-    pub use anyhow::{anyhow, bail, ensure, Context, Error as AnyError, Result as AnyResult};
+    pub use std::sync::Arc;
+
+    pub use anyhow::{
+        anyhow, bail, ensure, Context, Error as AnyError, Result as AnyResult,
+    };
     pub use bevy::prelude::*;
     pub use bevy::utils::{Duration, HashMap, HashSet, Instant};
     pub use bevy_asset_loader::prelude::*;
@@ -14,14 +20,12 @@ pub mod prelude {
     pub use serde_with::{serde_as, DeserializeFromStr, SerializeDisplay};
     pub use thiserror::Error;
 
-    pub use std::sync::Arc;
-
     pub use crate::assets::{AssetKey, AssetsSet, PreloadedAssets};
     pub use crate::condition::*;
     pub use crate::data::Quant;
     pub use crate::time::{
-        at_tick_multiples, GameTickEventClearSet, GameTickSet, GameTickUpdate, GameTime,
-        GameTimeAppExt,
+        at_tick_multiples, GameTickEventClearSet, GameTickSet, GameTickUpdate,
+        GameTime, GameTimeAppExt,
     };
 }
 

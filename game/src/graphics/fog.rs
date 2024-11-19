@@ -3,7 +3,6 @@ use crate::prelude::*;
 use bevy::prelude::shape::Quad;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 use bevy::sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle};
-use bevy_ecs_ldtk::GridCoords;
 
 pub struct FogPlugin;
 

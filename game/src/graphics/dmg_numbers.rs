@@ -1,5 +1,5 @@
 use crate::camera::MainCamera;
-use crate::game::attack::{apply_attack_damage, Attack, DamageInfo};
+use crate::game::attack::{apply_attack_damage, DamageInfo};
 use crate::game::player::Player;
 use crate::prelude::Update;
 use bevy::prelude::*;

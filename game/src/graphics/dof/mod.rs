@@ -20,7 +20,6 @@ use std::f32::INFINITY;
 
 use crate::prelude::*;
 use bevy::asset::{load_internal_asset, Handle};
-use bevy::core_pipeline::core_2d::graph::{Core2d, Node2d};
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
 use bevy::core_pipeline::core_3d::{AlphaMask3d, Camera3dDepthLoadOp, CORE_3D_DEPTH_FORMAT, Opaque3d, Transmissive3d, Transparent3d};
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
@@ -35,7 +34,7 @@ use bevy::ecs::{
 };
 use bevy::render::render_graph::RenderLabel;
 use bevy::render::{
-    camera::{PhysicalCameraParameters, Projection},
+    camera::PhysicalCameraParameters,
     extract_component::{ComponentUniforms, DynamicUniformIndex, UniformComponentPlugin},
     render_graph::{
         NodeRunError, RenderGraphApp as _, RenderGraphContext, ViewNode, ViewNodeRunner,
@@ -61,8 +60,7 @@ use bevy::render::{
 };
 use bevy::render::camera::{CameraMainTextureUsages, ExtractedCamera};
 use bevy::render::render_phase::RenderPhase;
-use bevy::render::render_resource::{Extent3d, ImageCopyTexture, Origin3d, TextureAspect};
-use bevy::render::render_resource::binding_types::texture_2d_multisampled;
+use bevy::render::render_resource::Extent3d;
 use bevy::utils::{info_once, prelude::default, warn_once};
 use smallvec::SmallVec;
 

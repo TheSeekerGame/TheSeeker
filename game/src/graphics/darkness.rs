@@ -12,18 +12,16 @@ use bevy::render::render_graph::{
     NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
 };
 use bevy::render::render_resource::{
-    BindGroupEntries, BindGroupLayout, BindGroupLayoutDescriptor, BindGroupLayoutEntry,
+    BindGroupEntries, BindGroupLayout, BindGroupLayoutEntry,
     BindingType, CachedRenderPipelineId, ColorTargetState, ColorWrites, FragmentState,
     MultisampleState, Operations, PipelineCache, PrimitiveState, RenderPassColorAttachment,
     RenderPassDescriptor, RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor,
     ShaderStages, ShaderType, TextureFormat, TextureSampleType, TextureViewDimension,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice};
-use bevy::render::texture::BevyDefault;
 use bevy::render::view::ViewTarget;
 use bevy::render::RenderApp;
 use glam::FloatExt;
-use std::f32::consts::PI;
 
 /// To use this plugin add it to your app, and make sure the [`DarknessSettings`] component is added
 /// to the camera:

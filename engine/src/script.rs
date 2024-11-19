@@ -91,11 +91,11 @@ pub trait ScriptAsset: Asset + Sized + Send + Sync + 'static {
     type Tracker: ScriptTracker<RunIf = Self::RunIf, Settings = Self::Settings, ActionParams = Self::ActionParams>;
     type BuildParam: SystemParam + 'static;
 
-    fn build<'w>(
+    fn build(
         &self,
         builder: ScriptRuntimeBuilder<Self>,
         entity: Entity,
-        param: &mut <Self::BuildParam as SystemParam>::Item<'w, '_>,
+        param: &mut <Self::BuildParam as SystemParam>::Item<'_, '_>,
     ) -> ScriptRuntimeBuilder<Self>;
 
     fn into_settings(&self) -> Self::Settings;
@@ -106,14 +106,17 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
     type Settings: Sized + Send + Sync + 'static;
     type InitParam: SystemParam + 'static;
     type UpdateParam: SystemParam + 'static;
+    type CarryoverParam: SystemParam + 'static;
     type ActionParams: ScriptActionParams<Tracker = Self>;
+    type Carryover: Default + Sized + Send + Sync + 'static;
 
-    fn init<'w>(
+    fn init(
         &mut self,
         entity: Entity,
         settings: &Self::Settings,
         metadata: &ScriptMetadata,
-        param: &mut <Self::InitParam as SystemParam>::Item<'w, '_>,
+        carryover: Self::Carryover,
+        param: &mut <Self::InitParam as SystemParam>::Item<'_, '_>,
     );
     fn transfer_progress(&mut self, other: &Self);
     fn track_action(
@@ -123,11 +126,11 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         action_id: ActionId,
     );
     fn finalize(&mut self);
-    fn update<'w>(
+    fn update(
         &mut self,
         entity: Entity,
         settings: &Self::Settings,
-        param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        param: &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         queue: &mut Vec<QueuedAction>,
     ) -> ScriptUpdateResult;
     fn queue_extra_actions(
@@ -152,20 +155,25 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         &mut self,
         _timing: ScriptActionTiming,
     ) {}
-    fn do_start<'w>(
+    fn do_start(
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
-        _param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        _param: &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         _queue: &mut Vec<QueuedAction>,
     ) {}
-    fn do_stop<'w>(
+    fn do_stop(
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
-        _param: &mut <Self::UpdateParam as SystemParam>::Item<'w, '_>,
+        _param: &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         _queue: &mut Vec<QueuedAction>,
     ) {}
+    fn produce_carryover(
+        &self,
+        entity: Entity,
+        param: &mut <Self::CarryoverParam as SystemParam>::Item<'_, '_>,
+    ) -> Self::Carryover;
 }
 
 pub trait ScriptRunIf: Clone + Send + Sync + 'static {
@@ -176,13 +184,13 @@ pub trait ScriptAction: Clone + Send + Sync + 'static {
     type Tracker: ScriptTracker;
     type ActionParams: ScriptActionParams<Tracker = Self::Tracker>;
     type Param: SystemParam + 'static;
-    fn run<'w>(
+    fn run(
         &self,
         entity: Entity,
         timing: ScriptActionTiming,
         actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
-        param: &mut <Self::Param as SystemParam>::Item<'w, '_>,
+        param: &mut <Self::Param as SystemParam>::Item<'_, '_>,
     ) -> ScriptUpdateResult;
 }
 
@@ -190,12 +198,12 @@ pub trait ScriptActionParams: Clone + Send + Sync + 'static {
     type Tracker: ScriptTracker;
     type ShouldRunParam: SystemParam + 'static;
 
-    fn should_run<'w>(
+    fn should_run(
         &self,
         _entity: Entity,
         _tracker: &mut Self::Tracker,
         _action_id: ActionId,
-        _param: &mut <Self::ShouldRunParam as SystemParam>::Item<'w, '_>,
+        _param: &mut <Self::ShouldRunParam as SystemParam>::Item<'_, '_>,
     ) -> Result<(), ScriptUpdateResult> {
         Ok(())
     }
@@ -250,14 +258,15 @@ struct ScriptRuntime<T: ScriptAsset> {
 }
 
 impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
-    pub fn new<'w>(
+    pub fn new(
         entity: Entity,
         settings: <T::Tracker as ScriptTracker>::Settings,
         metadata: &ScriptMetadata,
-        param: &mut <<T::Tracker as ScriptTracker>::InitParam as SystemParam>::Item<'w, '_>,
+        carryover: <T::Tracker as ScriptTracker>::Carryover,
+        param: &mut <<T::Tracker as ScriptTracker>::InitParam as SystemParam>::Item<'_, '_>,
     ) -> Self {
         let mut tracker = T::Tracker::default();
-        tracker.init(entity, &settings, metadata, param);
+        tracker.init(entity, &settings, metadata, carryover, param);
         ScriptRuntimeBuilder {
             runtime: ScriptRuntime {
                 key: metadata.key.clone(),
@@ -504,6 +513,7 @@ fn script_init_system<T: ScriptAsset>(
     mut params: ParamSet<(
         StaticSystemParam<<T::Tracker as ScriptTracker>::InitParam>,
         StaticSystemParam<T::BuildParam>,
+        StaticSystemParam<<T::Tracker as ScriptTracker>::CarryoverParam>,
     )>,
 ) {
     for (e, mut player) in &mut q_script {
@@ -539,10 +549,20 @@ fn script_init_system<T: ScriptAsset>(
             0
         };
         if let Some(script) = ass_script.get(&handle) {
+            let old_state = std::mem::replace(&mut player.state, ScriptPlayerState::Stopped);
+            let old_runtime = match old_state {
+                ScriptPlayerState::PrePlayHandle { old_runtime, .. } => old_runtime,
+                ScriptPlayerState::PrePlayKey { old_runtime, .. } => old_runtime,
+                _ => None,
+            };
+            let carryover = {
+                let mut carryover_param = params.p2().into_inner();
+                old_runtime.as_ref().map(|rt| rt.tracker.produce_carryover(e, &mut carryover_param)).unwrap_or_default()
+            };
             let settings = script.into_settings();
             let builder = {
                 let mut tracker_init_param = params.p0().into_inner();
-                ScriptRuntimeBuilder::new(e, settings, &metadata, &mut tracker_init_param)
+                ScriptRuntimeBuilder::new(e, settings, &metadata, carryover, &mut tracker_init_param)
             };
             let builder = {
                 let mut build_param = params.p1().into_inner();
@@ -550,18 +570,10 @@ fn script_init_system<T: ScriptAsset>(
             };
             let mut runtime = builder.build();
             // transfer slots
-            {
-                let old_state = std::mem::replace(&mut player.state, ScriptPlayerState::Stopped);
-                let old_runtime = match old_state {
-                    ScriptPlayerState::PrePlayHandle { old_runtime, .. } => old_runtime,
-                    ScriptPlayerState::PrePlayKey { old_runtime, .. } => old_runtime,
-                    _ => None,
-                };
-                let timing = ScriptActionTiming::Tick(gt.tick());
-                let slots = old_runtime.map(|mut rt| rt.tracker.take_slots(timing)).unwrap_or_default();
-                for slot in slots.iter() {
-                    runtime.tracker.set_slot(timing, slot, true);
-                }
+            let timing = ScriptActionTiming::Tick(gt.tick());
+            let slots = old_runtime.map(|mut rt| rt.tracker.take_slots(timing)).unwrap_or_default();
+            for slot in slots.iter() {
+                runtime.tracker.set_slot(timing, slot, true);
             }
             player.state = ScriptPlayerState::Starting {
                 runtime,

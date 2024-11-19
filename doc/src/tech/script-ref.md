@@ -475,7 +475,7 @@ any of them is `true`.
 
 <details>
   <summary>
-  <code>if_runcount_lt</code>/<code>if_runcount_le</code>/<code>if_runcount_gt</code>/<code>if_runcount_ge</code>
+  <code>if_runcount_lt</code>/<code>if_runcount_le</code>/<code>if_runcount_gt</code>/<code>if_runcount_ge</code>/<code>if_runcount_is</code>/<code>if_runcount_is_not</code>
   </summary>
 
 Example:
@@ -494,27 +494,7 @@ action = "..."
 run_every_n_ticks = "5+1"
 if_runcount_gt = 2
 action = "..."
-```
 
-Only run the action if the current runcount is:
-
- - less than (lt)
- - less than or equal to (le)
- - greater than (gt)
- - greater than or equal to (ge)
-
-the specified value.
-
-</details>
-
-<details>
-  <summary>
-  <code>if_runcount_is</code>
-  </summary>
-
-Example:
-
-```toml
 # Do something as soon as the "attack" slot is enabled,
 # but only if the script is run for the first time
 [[script]]
@@ -523,15 +503,21 @@ if_runcount_is = 0
 action = "..."
 
 # Do something when the script starts, but
-# only on the third, seventh, and ninth time it runs.
+# not on the third, seventh, and ninth time it runs.
 [[script]]
 run_on_playback_control = "Start"
 if_runcount_is = [ 3, 7, 9 ]
 action = "..."
 ```
 
-Only run the action if the current runcount is equal to any of the specified
-values.
+Only run the action if the current runcount is:
+
+ - less than a given value (`lt`)
+ - less than or equal to a given value (`le`)
+ - greater than a given value (`gt`)
+ - greater than or equal to a given value (`ge`)
+ - equal to any of the specified values (`is`)
+ - not equal to any of the specified values (`is_not`)
 
 </details>
 

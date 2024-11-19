@@ -4,7 +4,7 @@ use bevy::ecs::system::{EntityCommand, EntityCommands};
 use sickle_ui::ui_builder::UiBuilder;
 use sickle_ui::ui_style::*;
 use sickle_ui::widgets::column::UiColumnExt;
-use sickle_ui::widgets::prelude::{UiContainerExt, UiRowExt};
+use sickle_ui::widgets::prelude::UiContainerExt;
 use std::f32::consts::PI;
 
 #[derive(Component)]

@@ -1,3 +1,5 @@
+#![allow(unused_mut)]
+
 /// Custom prelude, for stuff we'd like to access all over the codebase
 /// Use in every file. :)
 mod prelude {
@@ -7,12 +9,12 @@ mod prelude {
     pub use crate::gamestate::GameState;
 }
 
-use crate::prelude::*;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use iyes_perf_ui::PerfUiPlugin;
-use bevy_sprite3d::Sprite3dPlugin;
 use theseeker_engine::physics::PhysicsPlugin;
+
+use crate::prelude::*;
 
 mod appstate;
 mod assets;
@@ -84,7 +86,7 @@ fn main() {
 
     // and custom "engine"
     app.add_plugins(theseeker_engine::EnginePlugins);
-    //app.add_plugin(Sprite3dPlugin);
+    // app.add_plugin(Sprite3dPlugin);
 
     // external plugins
     app.add_plugins((

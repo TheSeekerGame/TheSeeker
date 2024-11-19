@@ -1,9 +1,8 @@
 use bevy::reflect::TypePath;
 
+use super::config::DynamicConfigValue;
 use crate::data::*;
 use crate::prelude::*;
-
-use super::config::DynamicConfigValue;
 
 /// Scripted Sequence Asset type
 ///
@@ -82,6 +81,7 @@ pub struct CommonScriptParams {
     #[serde(default)]
     pub forbid_slots_any: Vec<String>,
     pub if_runcount_is: Option<OneOrMany<u32>>,
+    pub if_runcount_is_not: Option<OneOrMany<u32>>,
     pub if_runcount_lt: Option<u32>,
     pub if_runcount_le: Option<u32>,
     pub if_runcount_gt: Option<u32>,
@@ -146,17 +146,11 @@ pub enum CommonScriptAction {
     /// Spawn a new entity to run a script
     SpawnScript { asset_key: String },
     /// Enable a Slot
-    SlotEnable {
-        slot: String,
-    },
+    SlotEnable { slot: String },
     /// Disable a Slot
-    SlotDisable {
-        slot: String,
-    },
+    SlotDisable { slot: String },
     /// Toggle a Slot
-    SlotToggle {
-        slot: String,
-    },
+    SlotToggle { slot: String },
     /// Play a sound (precise timing based on action's trigger condition)
     PlayAudio {
         asset_key: String,
@@ -239,7 +233,8 @@ pub enum ExtendedScriptWorkaroundInner<ExtRunIf, ExtAction> {
     CC(Flattened<CommonScriptRunIf, CommonScriptAction>),
 }
 
-impl<ExtParams, ExtRunIf, ExtAction> From<ExtendedScriptWorkaround<ExtParams, ExtRunIf, ExtAction>>
+impl<ExtParams, ExtRunIf, ExtAction>
+    From<ExtendedScriptWorkaround<ExtParams, ExtRunIf, ExtAction>>
     for ExtendedScript<ExtParams, ExtRunIf, ExtAction>
 {
     fn from(

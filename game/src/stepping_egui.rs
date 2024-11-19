@@ -8,7 +8,7 @@ use bevy::{
     ecs::schedule::{InternedScheduleLabel, NodeId, ScheduleLabel, Stepping},
     prelude::*,
 };
-use bevy_egui::{egui, EguiContexts, EguiPlugin};
+use bevy_egui::{egui, EguiContexts};
 
 #[derive(Default)]
 pub struct SteppingEguiPlugin {

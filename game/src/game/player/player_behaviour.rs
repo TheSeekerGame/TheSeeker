@@ -11,7 +11,7 @@ use crate::prelude::{
     any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
     IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle, With, Without,
 };
-use bevy::prelude::{resource_changed, Has};
+use bevy::prelude::{resource_changed, {resource_changed, Has}};
 
 use bevy::sprite::Sprite;
 use bevy::transform::TransformSystem::TransformPropagate;
@@ -94,19 +94,6 @@ impl Plugin for PlayerBehaviorPlugin {
     }
 }
 
-fn gain_passives(
-    mut query: Query<(&mut Passives), With<Player>>,
-    kills: Res<KillCount>,
-    player_config: Res<PlayerConfig>,
-) {
-    for mut passives in query.iter_mut() {
-        if **kills % player_config.passive_gain_rate == 0 {
-            passives.gain();
-            println!("{:?}", passives);
-        }
-    }
-}
-
 pub fn player_stealth(
     mut query: Query<
         (
@@ -166,8 +153,7 @@ pub fn player_can_stealth(
                     Stealthing::default(),
                 ));
             } else {
-                
-                command.insert_resource(CameraShake::new(2.0, 1.0, 5.0));
+                //TODO: change to using Added<attack::Hit>
             }
         }
     }
@@ -181,14 +167,14 @@ fn hitfreeze(
             &mut HitFreezeTime,
             &mut LinearVelocity,
         ),
-        (With<Player>),
+        With<Player>,
     >,
     attack_q: Query<(Entity, &Attack)>,
     config: Res<PlayerConfig>,
 ) {
     // Track if we need to initialize a hitfreeze affect
-    for ((attack_entity, attack)) in attack_q.iter() {
-        if !attack.damaged_set.is_empty() {
+    for (attack_entity, attack) in attack_q.iter() {
+        if !attack.damaged.is_empty() {
             // Make sure the entity doing the attack is actually the player
             if let Ok((entity, mut hitfreeze, _)) = player_q.get_mut(attack.attacker) {
                 // If its the same exact attack entity as the last time the affect was activated.
@@ -205,7 +191,7 @@ fn hitfreeze(
         }
     }
 
-    for ((entity, mut hitfreeze, mut linear_vel)) in player_q.iter_mut() {
+    for (entity, mut hitfreeze, mut linear_vel) in player_q.iter_mut() {
         if hitfreeze.0 < u32::MAX {
             hitfreeze.0 += 1;
         }
@@ -304,7 +290,7 @@ fn player_move(
 }
 
 fn set_movement_slots(
-    mut q_gent: Query<(&LinearVelocity, &Gent), (With<Player>)>,
+    mut q_gent: Query<(&LinearVelocity, &Gent), With<Player>>,
     mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     for (velocity, gent) in q_gent.iter_mut() {
@@ -489,7 +475,7 @@ pub fn player_collisions(
             Option<&mut Dashing>,
             Option<&mut Whirling>,
         ),
-        (With<Player>),
+        With<Player>,
     >,
     mut q_enemy: Query<(Entity, &mut Collider), (With<Enemy>, Without<Player>)>,
     mut commands: Commands,
@@ -607,7 +593,7 @@ pub fn player_collisions(
                             projected_velocity += friction_vec + bounce_force;
 
                             possible_pos =
-                                (pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01)));
+                                pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
                         },
                         TOIStatus::Penetrating => {
                             let depenetration = -linear_velocity.0;

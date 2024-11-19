@@ -1,18 +1,16 @@
 use crate::game::attack::arc_attack::Projectile;
 use crate::prelude::{
-    App, Assets, ChildBuilder, ColorMaterial, Commands, Component, GlobalTransform, Handle, Mesh,
-    Parent, Plugin, PushChildren, Rectangle, Res, ResMut, Resource, Startup, Update,
+    App, Assets, Commands, Component, GlobalTransform, Handle,
+    Parent, Plugin, Res, ResMut, Resource, Startup, Update,
 };
 use bevy::ecs::system::EntityCommands;
-use bevy::prelude::{default, BuildChildren, Color, Entity, Name, Query, Transform, Without};
-use bevy::sprite::MaterialMesh2dBundle;
-use bevy::utils::smallvec::SmallVec;
+use bevy::prelude::{default, BuildChildren, Entity, Name, Query, Without};
 use bevy_hanabi::{
     Attribute, ColorOverLifetimeModifier, EffectAsset, EffectProperties, ExprWriter,
     Gradient, ParticleEffect, ParticleEffectBundle, SetAttributeModifier,
-    SetPositionCircleModifier, AlphaMode, ShapeDimension, SizeOverLifetimeModifier, Spawner
+    SetPositionCircleModifier, ShapeDimension, SizeOverLifetimeModifier, Spawner
 };
-use glam::{Vec2, Vec2Swizzles, Vec3, Vec4};
+use glam::{Vec2, Vec3, Vec4};
 
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 
@@ -39,7 +37,7 @@ pub struct SystemLifetime(f32);
 fn attack_particles_setup(mut commands: Commands, mut effects: ResMut<Assets<EffectAsset>>) {
     // Create a color gradient for the particles
     let mut gradient = Gradient::new();
-    let r = (1.0 / 8.0);
+    let r = 1.0 / 8.0;
     // set w to 5 on the first one for fun
     gradient.add_key(
         r * 0.0,
@@ -196,7 +194,7 @@ fn despawn_lingering(
     mut query: Query<(Entity, &mut SystemLifetime), Without<Parent>>,
     mut commands: Commands,
 ) {
-    for ((entity, mut lifetime)) in &mut query {
+    for (entity, mut lifetime) in &mut query {
         lifetime.0 -= 1.0 / time.hz as f32;
         if lifetime.0 < 0.0 {
             commands.entity(entity).despawn();
