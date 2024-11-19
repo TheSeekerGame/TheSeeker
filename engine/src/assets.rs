@@ -349,6 +349,8 @@ fn populate_collider_map(
             collider_ids.push(i_new);
         }
         *image_origin = image.into();
+        //collider ids is either 0 or an index into shapes?
+        //could it be option instead..
         collider_map.map.insert(h_image.id(), collider_ids);
     }
 }

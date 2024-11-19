@@ -1,4 +1,3 @@
-use bevy_hanabi::{ParticleEffect, ParticleEffectBundle};
 #[cfg(feature = "dev")]
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use rand::distributions::Standard;
@@ -15,6 +14,7 @@ use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::{animation::SpriteAnimationBundle, physics::ENEMY_INSIDE};
 use theseeker_engine::{assets::animation::SpriteAnimation, physics::ENEMY_HURT};
 
+use super::physics::Knockback;
 use super::player::{Player, PlayerConfig, StatusModifier, Stealthing};
 use crate::game::attack::arc_attack::Projectile;
 use crate::game::attack::particles::ArcParticleEffectHandle;
@@ -124,8 +124,20 @@ pub struct EnemyGfxBundle {
     animation: SpriteAnimationBundle,
 }
 
+#[derive(Bundle)]
+pub struct EnemyEffectsGfxBundle {
+    marker: EnemyEffectGfx,
+    gent2gfx: TransformGfxFromGent,
+    sprite: SpriteSheetBundle,
+    animation: SpriteAnimationBundle,
+}
+
 #[derive(Component)]
 pub struct EnemyGfx {
+    e_gent: Entity,
+}
+#[derive(Component)]
+pub struct EnemyEffectGfx {
     e_gent: Entity,
 }
 
@@ -217,11 +229,15 @@ fn setup_enemy(
         //TODO: ensure propper z order
         xf_gent.translation.z = 14.0 * 0.000001;
         let e_gfx = commands.spawn(()).id();
+        let e_effects_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
             Name::new("Enemy"),
             EnemyGentBundle {
                 enemy: Enemy,
-                marker: Gent { e_gfx },
+                marker: Gent {
+                    e_gfx,
+                    e_effects_gfx,
+                },
                 phys: GentPhysicsBundle {
                     //need to find a way to offset this one px toward back of enemys facing
                     //direction
@@ -274,6 +290,24 @@ fn setup_enemy(
                     ..Default::default()
                 },
                 animation: Default::default(),
+            },
+            StateDespawnMarker,
+        ));
+        let mut animation: ScriptPlayer<SpriteAnimation> = ScriptPlayer::default();
+        animation.play_key("anim.spider.Sparks");
+        animation.set_slot("Start", true);
+        commands.entity(e_effects_gfx).insert((
+            EnemyEffectsGfxBundle {
+                marker: EnemyEffectGfx { e_gent },
+                gent2gfx: TransformGfxFromGent {
+                    pixel_aligned: false,
+                    gent: e_gent,
+                },
+                sprite: SpriteSheetBundle {
+                    transform: xf_gent.with_translation(Vec3::new(0., 0., 1.)),
+                    ..Default::default()
+                },
+                animation: SpriteAnimationBundle { player: animation },
             },
             StateDespawnMarker,
         ));
@@ -431,6 +465,9 @@ impl Waiting {
 }
 impl GentState for Waiting {}
 impl GenericState for Waiting {}
+
+#[derive(Component)]
+pub struct JustGotHitMarker;
 
 #[derive(Component, Reflect)]
 enum Navigation {
@@ -695,10 +732,10 @@ fn pushback_attack(
                     TransformBundle::from_transform(Transform::default()),
                     AnimationCollider(gent.e_gfx),
                     Attack::new(8, entity),
-                    Pushback {
-                        direction: -facing.direction(),
-                        strength: 100.,
-                    },
+                    Pushback(Knockback::new(
+                        Vec2::new(-facing.direction() * 100., 0.),
+                        16,
+                    )),
                 ))
                 .set_parent(entity);
         }
@@ -904,8 +941,7 @@ fn ranged_attack(
             // spawn in the new projectile:
             commands
                 .spawn((
-                    Attack::new(1000, entity)
-                        .set_stat_mod(StatusModifier::basic_ice_spider()),
+                    Attack::new(1000, entity).set_stat_mod(StatusModifier::basic_ice_spider()),
                     final_solution,
                     Collider::cuboid(
                         5.,
@@ -1242,7 +1278,6 @@ fn remove_inside(
             Some(entity),
         );
         if intersections.is_empty() {
-            println!("removed inside");
             collider.0.set_collision_groups(InteractionGroups {
                 memberships: ENEMY,
                 filter: Group::all(),
@@ -1320,6 +1355,7 @@ impl Plugin for EnemyAnimationPlugin {
                 enemy_pushback_attack_animation,
                 enemy_death_animation,
                 enemy_decay_animation,
+                enemy_sparks_on_hit_animation,
                 sprite_flip,
             )
                 .in_set(EnemyStateSet::Animation)
@@ -1336,6 +1372,38 @@ fn enemy_idle_animation(
     for gent in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
             enemy.play_key("anim.spider.Idle");
+        }
+    }
+}
+fn enemy_sparks_on_hit_animation(
+    i_query: Query<(Entity, &Gent), (Added<JustGotHitMarker>, With<Enemy>)>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyEffectGfx>>,
+    mut commands: Commands,
+    player_facing_dir: Query<&Facing, With<Player>>,
+) {
+    for (e, gent) in i_query.iter() {
+        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_effects_gfx) {
+            let mut rng = thread_rng();
+            let picked_spark = rng.gen_range(1..=6);
+            enemy.play_key("anim.spider.Sparks");
+            enemy.clear_slots();
+            enemy.set_slot(
+                format!("Spark{picked_spark}").as_str(),
+                true,
+            );
+            if let Ok(direction) = player_facing_dir.get_single() {
+                match direction {
+                    Facing::Right => {
+                        enemy.set_slot("DirectionRight", true);
+                        enemy.set_slot("DirectionLeft", false);
+                    },
+                    Facing::Left => {
+                        enemy.set_slot("DirectionRight", false);
+                        enemy.set_slot("DirectionLeft", true);
+                    },
+                };
+            }
+            commands.entity(e).remove::<JustGotHitMarker>();
         }
     }
 }

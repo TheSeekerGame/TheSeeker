@@ -9,14 +9,15 @@ use crate::prelude::*;
 use self::enemy::{EnemyBlueprintBundle, EnemySpawnerBundle};
 use self::player::PlayerBlueprintBundle;
 
-pub mod enemy;
-pub mod gentstate;
-pub mod player;
 pub mod attack;
-mod wall;
-mod merchant;
-mod yak;
+pub mod enemy;
 mod game_over;
+pub mod gentstate;
+mod merchant;
+pub mod physics;
+pub mod player;
+mod wall;
+mod yak;
 
 pub struct GameplayPlugin;
 
