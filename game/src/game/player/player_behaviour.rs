@@ -8,11 +8,11 @@ use crate::game::player::{
     PlayerGfx, PlayerStateSet, Running, WallSlideTime, WhirlAbility,
 };
 use crate::prelude::{
-    any_with_component, App, BuildChildren, Commands, DetectChanges,
-    Direction2d, Entity, IntoSystemConfigs, Plugin, Query, Res, ResMut,
-    Transform, TransformBundle, With, Without,
+    any_with_component, resource_changed, App, BuildChildren, Commands,
+    DetectChanges, Direction2d, Entity, GameTickUpdate, GameTime, Has,
+    IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle,
+    With, Without,
 };
-use bevy::prelude::{resource_changed, Has};
 
 use bevy::sprite::Sprite;
 use bevy::transform::TransformSystem::TransformPropagate;
@@ -27,7 +27,6 @@ use theseeker_engine::physics::{
     LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY_HURT, ENEMY_INSIDE,
     GROUND, PLAYER, PLAYER_ATTACK,
 };
-use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
 
 use super::{
