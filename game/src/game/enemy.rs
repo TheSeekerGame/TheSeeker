@@ -7,12 +7,17 @@ use rapier2d::prelude::{Group, InteractionGroups};
 use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
-    into_vec2, update_sprite_colliders, AnimationCollider, Collider, LinearVelocity, PhysicsWorld,
-    ShapeCaster, ENEMY, ENEMY_ATTACK, GROUND, PLAYER, SENSOR,
+    into_vec2, update_sprite_colliders, AnimationCollider, Collider,
+    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, GROUND,
+    PLAYER, SENSOR,
 };
 use theseeker_engine::script::ScriptPlayer;
-use theseeker_engine::{animation::SpriteAnimationBundle, physics::ENEMY_INSIDE};
-use theseeker_engine::{assets::animation::SpriteAnimation, physics::ENEMY_HURT};
+use theseeker_engine::{
+    animation::SpriteAnimationBundle, physics::ENEMY_INSIDE,
+};
+use theseeker_engine::{
+    assets::animation::SpriteAnimation, physics::ENEMY_HURT,
+};
 
 use super::physics::Knockback;
 use super::player::{Player, PlayerConfig, StatusModifier, Stealthing};
@@ -195,7 +200,8 @@ fn spawn_enemy(
                     true
                 };
                 slot.cooldown_ticks += 1;
-                if slot.cooldown_ticks >= EnemySpawner::COOLDOWN && should_spawn {
+                if slot.cooldown_ticks >= EnemySpawner::COOLDOWN && should_spawn
+                {
                     let id = commands
                         .spawn((
                             EnemyBlueprintBundle {
@@ -293,7 +299,8 @@ fn setup_enemy(
             },
             StateDespawnMarker,
         ));
-        let mut animation: ScriptPlayer<SpriteAnimation> = ScriptPlayer::default();
+        let mut animation: ScriptPlayer<SpriteAnimation> =
+            ScriptPlayer::default();
         animation.play_key("anim.spider.Sparks");
         animation.set_slot("Start", true);
         commands.entity(e_effects_gfx).insert((
@@ -333,9 +340,12 @@ impl Plugin for EnemyBehaviorPlugin {
                             aggro.run_if(any_with_component::<Aggroed>),
                             waiting.run_if(any_with_component::<Waiting>),
                             defense.run_if(any_with_component::<Defense>),
-                            ranged_attack.run_if(any_with_component::<RangedAttack>),
-                            melee_attack.run_if(any_with_component::<MeleeAttack>),
-                            pushback_attack.run_if(any_with_component::<PushbackAttack>),
+                            ranged_attack
+                                .run_if(any_with_component::<RangedAttack>),
+                            melee_attack
+                                .run_if(any_with_component::<MeleeAttack>),
+                            pushback_attack
+                                .run_if(any_with_component::<PushbackAttack>),
                         ),
                         (
                             walking.run_if(any_with_component::<Walking>),
@@ -556,8 +566,12 @@ fn check_player_range(
         (Without<Enemy>, With<Player>),
     >,
 ) {
-    for (mut range, mut target, mut facing, trans, is_aggroed, is_meleeing) in query.iter_mut() {
-        if let Ok((player_e, player_trans, player_stealth)) = player_query.get_single() {
+    for (mut range, mut target, mut facing, trans, is_aggroed, is_meleeing) in
+        query.iter_mut()
+    {
+        if let Ok((player_e, player_trans, player_stealth)) =
+            player_query.get_single()
+        {
             if player_stealth.is_some() {
                 *range = Range::Deaggro;
                 target.0 = None;
@@ -619,7 +633,8 @@ fn assign_group(
             InteractionGroups::new(SENSOR, ENEMY_HURT),
             Some(entity),
         ) {
-            let closest = project_from.distance([projection.point.x, projection.point.y].into());
+            let closest = project_from
+                .distance([projection.point.x, projection.point.y].into());
             if closest < Range::GROUPED && !is_grouped {
                 commands.entity(entity).insert(Grouped);
             } else if closest >= Range::GROUPED && is_grouped {
@@ -645,7 +660,9 @@ fn patrolling(
         (With<Patrolling>, With<Enemy>),
     >,
 ) {
-    for (range, mut transitions, mut additions, maybe_waiting) in query.iter_mut() {
+    for (range, mut transitions, mut additions, maybe_waiting) in
+        query.iter_mut()
+    {
         match range {
             Range::Aggro | Range::Melee => {
                 transitions.push(Patrolling::new_transition(Aggroed));
@@ -720,7 +737,8 @@ fn pushback_attack(
     >,
     mut commands: Commands,
 ) {
-    for (entity, facing, gent, mut attack, mut transitions) in query.iter_mut() {
+    for (entity, facing, gent, mut attack, mut transitions) in query.iter_mut()
+    {
         attack.ticks += 1;
         if attack.ticks == PushbackAttack::STARTUP * 8 {
             commands
@@ -779,9 +797,9 @@ fn aggro(
             } else if is_grouped {
                 if matches!(range, Range::Melee) {
                     match role {
-                        Role::Melee => transitions.push(Waiting::new_transition(
-                            MeleeAttack::default(),
-                        )),
+                        Role::Melee => transitions.push(
+                            Waiting::new_transition(MeleeAttack::default()),
+                        ),
                         Role::Ranged => {
                             transitions.push(Waiting::new_transition(
                                 Defense::default(),
@@ -812,7 +830,7 @@ fn ranged_attack(
             &mut AddQueue,
             Has<Grouped>,
         ),
-        With<Enemy>,
+        (With<Enemy>, Without<Knockback>),
     >,
     player_query: Query<&Transform, With<Player>>,
     mut commands: Commands,
@@ -849,7 +867,9 @@ fn ranged_attack(
         if attack.ticks == RangedAttack::STARTUP * 8 {
             // cast a ray midway between enemy and player to find height of ceiling
             // we want to avoid
-            let mid_pt = (enemy_transform.translation().xy() + transform.translation.xy()) * 0.5;
+            let mid_pt = (enemy_transform.translation().xy()
+                + transform.translation.xy())
+                * 0.5;
             // how far is the ceiling above the mid point of the projectile trajectory?
             let mut ceiling = f32::MAX;
             if let Some((hit_e, hit)) = spatial_query.ray_cast(
@@ -862,7 +882,8 @@ fn ranged_attack(
             ) {
                 // only count it if the ray didn't start underground
                 if hit.toi != 0.0 {
-                    ceiling = mid_pt.y + hit.toi - enemy_transform.translation().y;
+                    ceiling =
+                        mid_pt.y + hit.toi - enemy_transform.translation().y;
                 } else {
                     // if it did start underground, fire another one to find how far underground, and then fire again from there + 0.1
                     if let Some((hit_e, hit)) = spatial_query.ray_cast(
@@ -891,12 +912,15 @@ fn ranged_attack(
             // account for projectile width
             ceiling -= 5.0;
 
-            let relative_height = enemy_transform.translation().y - transform.translation.y;
-            let delta_x = transform.translation.x - enemy_transform.translation().x;
+            let relative_height =
+                enemy_transform.translation().y - transform.translation.y;
+            let delta_x =
+                transform.translation.x - enemy_transform.translation().x;
             let gravity = config.fall_accel * time.hz as f32;
             let rng_factor = 1.0;
             let mut speed =
-                ballistic_speed(Range::RANGED, gravity, relative_height) * rng_factor as f32;
+                ballistic_speed(Range::RANGED, gravity, relative_height)
+                    * rng_factor as f32;
             let max_attempts = 10;
             // Define default arc as 50ish degree shot with in the direction of the player
             let mut final_solution = Projectile {
@@ -915,7 +939,8 @@ fn ranged_attack(
                     let max_proj_h = projectile.vel.y.powi(2) / (2.0 * gravity);
                     if max_proj_h >= ceiling {
                         let max_vel_y = (ceiling * (2.0 * gravity)).sqrt();
-                        let max_vel_x = max_vel_y / projectile.vel.y * projectile.vel.x;
+                        let max_vel_x =
+                            max_vel_y / projectile.vel.y * projectile.vel.x;
                         let max_vel = Vec2::new(max_vel_x, max_vel_y).length();
                         if let Some(projectile_2) = Projectile::with_vel(
                             transform.translation.xy(),
@@ -941,7 +966,8 @@ fn ranged_attack(
             // spawn in the new projectile:
             commands
                 .spawn((
-                    Attack::new(1000, entity).set_stat_mod(StatusModifier::basic_ice_spider()),
+                    Attack::new(1000, entity)
+                        .set_stat_mod(StatusModifier::basic_ice_spider()),
                     final_solution,
                     Collider::cuboid(
                         5.,
@@ -1011,11 +1037,21 @@ fn walking(
             &mut AddQueue,
             //TODO: remove addqueue
         ),
-        (With<Enemy>, Without<Retreating>),
+        (
+            With<Enemy>,
+            Without<Retreating>,
+            Without<Knockback>,
+        ),
     >,
 ) {
-    for (mut nav, mut facing, mut velocity, mut walking, mut transitions, mut add_q) in
-        query.iter_mut()
+    for (
+        mut nav,
+        mut facing,
+        mut velocity,
+        mut walking,
+        mut transitions,
+        mut add_q,
+    ) in query.iter_mut()
     {
         //set initial velocity
         velocity.x = -20. * facing.direction();
@@ -1054,14 +1090,27 @@ fn retreating(
             &mut Retreating,
             &mut TransitionQueue,
         ),
-        (With<Enemy>, Without<Walking>),
+        (
+            With<Enemy>,
+            Without<Walking>,
+            Without<Knockback>,
+        ),
     >,
     player_query: Query<Entity, With<Player>>,
 ) {
-    for (range, facing, mut nav, mut velocity, mut retreating, mut transitions) in query.iter_mut()
+    for (
+        range,
+        facing,
+        mut nav,
+        mut velocity,
+        mut retreating,
+        mut transitions,
+    ) in query.iter_mut()
     {
         velocity.x = 12. * facing.direction();
-        if matches!(*nav, Navigation::Blocked) || retreating.ticks > retreating.max_ticks {
+        if matches!(*nav, Navigation::Blocked)
+            || retreating.ticks > retreating.max_ticks
+        {
             velocity.x = 0.;
             *nav = Navigation::Grounded;
             match range {
@@ -1070,12 +1119,12 @@ fn retreating(
                         Defense::default(),
                     ));
                 },
-                Range::Ranged | Range::Aggro => transitions.push(Retreating::new_transition(
-                    RangedAttack {
+                Range::Ranged | Range::Aggro => transitions.push(
+                    Retreating::new_transition(RangedAttack {
                         target: player_query.get_single().expect("no player"),
                         ticks: 0,
-                    },
-                )),
+                    }),
+                ),
                 _ => transitions.push(Retreating::new_transition(
                     // RangedAttack {
                     //     target: player_query.get_single().expect("no player"),
@@ -1089,7 +1138,9 @@ fn retreating(
             transitions.push(Retreating::new_transition(
                 Defense::default(),
             ));
-        } else if matches!(range, Range::Ranged) || matches!(range, Range::Aggro) {
+        } else if matches!(range, Range::Ranged)
+            || matches!(range, Range::Aggro)
+        {
             velocity.x = 0.;
             transitions.push(Retreating::new_transition(
                 RangedAttack {
@@ -1114,10 +1165,16 @@ fn chasing(
             &mut LinearVelocity,
             &mut TransitionQueue,
         ),
-        (With<Enemy>, With<Chasing>),
+        (
+            With<Enemy>,
+            With<Chasing>,
+            Without<Knockback>,
+        ),
     >,
 ) {
-    for (target, facing, role, range, mut nav, mut velocity, mut transitions) in query.iter_mut() {
+    for (target, facing, role, range, mut nav, mut velocity, mut transitions) in
+        query.iter_mut()
+    {
         //TODO: else transition back to waiting?
         let mut continue_chasing = false;
         if let Some(p_entity) = target.0 {
@@ -1125,10 +1182,12 @@ fn chasing(
             match role {
                 Role::Ranged => match *range {
                     Range::Ranged | Range::Aggro => {
-                        transitions.push(Chasing::new_transition(RangedAttack {
-                            target: p_entity,
-                            ticks: 0,
-                        }));
+                        transitions.push(Chasing::new_transition(
+                            RangedAttack {
+                                target: p_entity,
+                                ticks: 0,
+                            },
+                        ));
                     },
                     Range::Melee => transitions.push(Chasing::new_transition(
                         MeleeAttack::default(),
@@ -1196,7 +1255,9 @@ fn move_collide(
     time: Res<GameTime>,
     spatial_query: Res<PhysicsWorld>,
 ) {
-    for (mut linear_velocity, mut transform, mut nav, collider, is_knocked) in query.iter_mut() {
+    for (mut linear_velocity, mut transform, mut nav, collider, is_knocked) in
+        query.iter_mut()
+    {
         let shape = collider.0.shared_shape().clone();
         let dir = linear_velocity.x.signum();
         let x_len = linear_velocity.x.abs();
@@ -1224,7 +1285,8 @@ fn move_collide(
                 if first_hit.status != TOIStatus::Penetrating {
                     let sliding_plane = into_vec2(first_hit.normal1);
                     projected_velocity = linear_velocity.xy()
-                        - sliding_plane * linear_velocity.xy().dot(sliding_plane);
+                        - sliding_plane
+                            * linear_velocity.xy().dot(sliding_plane);
                     linear_velocity.0 = projected_velocity;
                     if !is_knocked {
                         *nav = Navigation::Blocked;
@@ -1257,13 +1319,17 @@ fn move_collide(
             projected_velocity.x = first_hit.toi * dir;
         }
 
-        transform.translation =
-            (transform.translation.xy() + projected_velocity * (1.0 / time.hz as f32)).extend(z);
+        transform.translation = (transform.translation.xy()
+            + projected_velocity * (1.0 / time.hz as f32))
+            .extend(z);
     }
 }
 
 fn remove_inside(
-    mut query: Query<(Entity, &GlobalTransform, &mut Collider), (With<Inside>, With<Enemy>)>,
+    mut query: Query<
+        (Entity, &GlobalTransform, &mut Collider),
+        (With<Inside>, With<Enemy>),
+    >,
     mut commands: Commands,
     spatial_query: Res<PhysicsWorld>,
 ) {
@@ -1377,7 +1443,10 @@ fn enemy_idle_animation(
 }
 fn enemy_sparks_on_hit_animation(
     i_query: Query<(Entity, &Gent), (Added<JustGotHitMarker>, With<Enemy>)>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyEffectGfx>>,
+    mut gfx_query: Query<
+        &mut ScriptPlayer<SpriteAnimation>,
+        With<EnemyEffectGfx>,
+    >,
     mut commands: Commands,
     player_facing_dir: Query<&Facing, With<Player>>,
 ) {
