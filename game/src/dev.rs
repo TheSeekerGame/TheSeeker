@@ -28,7 +28,9 @@ impl Plugin for DevPlugin {
             //SteppingEguiPlugin::default().add_schedule(GameTickUpdate),
         ));
         #[cfg(feature = "dev")]
-        app.add_plugins(WorldInspectorPlugin::new());
+        app.add_plugins(
+            bevy_inspector_egui::quick::WorldInspectorPlugin::new(),
+        );
     }
 }
 

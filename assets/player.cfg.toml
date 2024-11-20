@@ -69,13 +69,19 @@ max_health = 150.0
 # Pushback velocity on wall jumps
 wall_pushback = 50.0
 
-# Ticks for wall pushback velocity; determines how long movement is locked for 
+# Ticks for wall pushback velocity; determines how long movement is locked for
 wall_pushback_ticks = 5.0
 
 # Pushback velocity on basic melee hits
+melee_self_pushback = 60.0
+
+# Ticks for melee pushback velocity; determines how long movement is locked for
+melee_self_pushback_ticks = 10.0
+
+# Knockback velocity applied to enemy on basic melee hit
 melee_pushback = 60.0
 
-# Ticks for melee pushback velocity; determines how long movement is locked for 
+# Ticks for melee knockback velocity; determines how long movement is locked for
 melee_pushback_ticks = 10.0
 
 # Number of kills to trigger passive gain

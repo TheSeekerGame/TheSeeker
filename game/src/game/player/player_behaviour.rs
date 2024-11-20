@@ -3,15 +3,16 @@ use crate::game::attack::{Attack, SelfPushback, Stealthed};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
-    Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded, HitFreezeTime, Idle,
-    Jumping, Player, PlayerAction, PlayerConfig, PlayerGfx, PlayerStateSet, Running, WallSlideTime,
-    WhirlAbility,
+    Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded,
+    HitFreezeTime, Idle, Jumping, Player, PlayerAction, PlayerConfig,
+    PlayerGfx, PlayerStateSet, Running, WallSlideTime, WhirlAbility,
 };
 use crate::prelude::{
-    any_with_component, App, BuildChildren, Commands, DetectChanges, Direction2d, Entity,
-    IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle, With, Without,
+    any_with_component, resource_changed, App, BuildChildren, Commands,
+    DetectChanges, Direction2d, Entity, GameTickUpdate, GameTime, Has,
+    IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle,
+    With, Without,
 };
-use bevy::prelude::{resource_changed, Has};
 
 use bevy::sprite::Sprite;
 use bevy::transform::TransformSystem::TransformPropagate;
@@ -22,15 +23,15 @@ use rapier2d::parry::query::TOIStatus;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
-    into_vec2, update_sprite_colliders, AnimationCollider, Collider, LinearVelocity, PhysicsWorld,
-    ShapeCaster, ENEMY_HURT, ENEMY_INSIDE, GROUND, PLAYER, PLAYER_ATTACK,
+    into_vec2, update_sprite_colliders, AnimationCollider, Collider,
+    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY_HURT, ENEMY_INSIDE,
+    GROUND, PLAYER, PLAYER_ATTACK,
 };
-use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
 
 use super::{
-    dash_icon_fx, player_dash_fx, player_new_stats_mod, CanStealth, DashIcon, JumpCount, Knockback,
-    PlayerStats, StatType, Stealthing,
+    dash_icon_fx, player_dash_fx, player_new_stats_mod, CanStealth, DashIcon,
+    JumpCount, Knockback, PlayerStats, Pushback, StatType, Stealthing,
 };
 use super::{AttackBundle, KillCount, Passives, Whirling};
 
@@ -150,9 +151,11 @@ pub fn player_can_stealth(
     >,
     mut sprites: Query<&mut Sprite, With<PlayerGfx>>,
     time: Res<GameTime>,
-    mut commands: Commands
+    mut commands: Commands,
 ) {
-    for (action_state, mut can_stealth, mut transition_queue, gent) in q_gent.iter_mut() {
+    for (action_state, mut can_stealth, mut transition_queue, gent) in
+        q_gent.iter_mut()
+    {
         can_stealth.remaining_cooldown -= 1.0 / time.hz as f32;
         //Return to base sprite color when exiting stealth
         if can_stealth.is_added() {
@@ -188,7 +191,9 @@ fn hitfreeze(
     for (attack_entity, attack) in attack_q.iter() {
         if !attack.damaged_set.is_empty() {
             // Make sure the entity doing the attack is actually the player
-            if let Ok((entity, mut hitfreeze, _)) = player_q.get_mut(attack.attacker) {
+            if let Ok((entity, mut hitfreeze, _)) =
+                player_q.get_mut(attack.attacker)
+            {
                 // If its the same exact attack entity as the last time the affect was activated.
                 // (for example, if the attack wasn't despawned yet) we don't want to
                 // trigger a timer reset again.
@@ -252,7 +257,9 @@ fn player_move(
         (Without<Knockback>, With<Player>),
     >,
 ) {
-    for (mut velocity, action_state, mut facing, grounded, stealth, dashing) in q_gent.iter_mut() {
+    for (mut velocity, action_state, mut facing, grounded, stealth, dashing) in
+        q_gent.iter_mut()
+    {
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
@@ -271,7 +278,8 @@ fn player_move(
         } else if action_state.pressed(&PlayerAction::Move)
             && action_state.value(&PlayerAction::Move) != 0.0
         {
-            (velocity.x + initial_accel * direction * ground_friction) * stealth_boost
+            (velocity.x + initial_accel * direction * ground_friction)
+                * stealth_boost
         } else {
             // de-acceleration profile
             if grounded.is_some() {
@@ -279,10 +287,14 @@ fn player_move(
             } else {
                 // airtime de-acceleration profile
                 if action_state.just_released(&PlayerAction::Move) {
-                    velocity.x + initial_accel * 0.5 * action_state.value(&PlayerAction::Move)
+                    velocity.x
+                        + initial_accel
+                            * 0.5
+                            * action_state.value(&PlayerAction::Move)
                 } else {
                     let max_vel = velocity.x.abs();
-                    (velocity.x + accel * -velocity.x.signum()).clamp(-max_vel, max_vel)
+                    (velocity.x + accel * -velocity.x.signum())
+                        .clamp(-max_vel, max_vel)
                 }
             }
         };
@@ -303,7 +315,10 @@ fn player_move(
 
 fn set_movement_slots(
     mut q_gent: Query<(&LinearVelocity, &Gent), With<Player>>,
-    mut q_gfx_player: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    mut q_gfx_player: Query<
+        &mut ScriptPlayer<SpriteAnimation>,
+        With<PlayerGfx>,
+    >,
 ) {
     for (velocity, gent) in q_gent.iter_mut() {
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
@@ -377,13 +392,17 @@ pub fn player_jump(
     >,
     config: Res<PlayerConfig>,
 ) {
-    for (action_state, mut velocity, mut jumping, mut transitions) in query.iter_mut() {
+    for (action_state, mut velocity, mut jumping, mut transitions) in
+        query.iter_mut()
+    {
         let deaccel_rate = config.jump_fall_accel;
 
         if jumping.is_added() {
             velocity.y += config.jump_vel_init;
         } else {
-            if (velocity.y - deaccel_rate < 0.0) || action_state.released(&PlayerAction::Jump) {
+            if (velocity.y - deaccel_rate < 0.0)
+                || action_state.released(&PlayerAction::Jump)
+            {
                 transitions.push(Jumping::new_transition(Falling));
             }
             velocity.y -= deaccel_rate;
@@ -410,8 +429,14 @@ pub fn player_can_dash(
     mut rig: ResMut<CameraRig>,
     mut commands: Commands,
 ) {
-    for (action_state, facing, mut can_dash, mut velocity, mut transition_queue, hitfreeze) in
-        q_gent.iter_mut()
+    for (
+        action_state,
+        facing,
+        mut can_dash,
+        mut velocity,
+        mut transition_queue,
+        hitfreeze,
+    ) in q_gent.iter_mut()
     {
         can_dash.remaining_cooldown -= 1.0 / time.hz as f32;
         if action_state.just_pressed(&PlayerAction::Dash) {
@@ -446,8 +471,14 @@ pub fn player_dash(
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
-    for (facing, mut velocity, mut dashing, mut transitions, is_grounded, hitfreeze) in
-        query.iter_mut()
+    for (
+        facing,
+        mut velocity,
+        mut dashing,
+        mut transitions,
+        is_grounded,
+        hitfreeze,
+    ) in query.iter_mut()
     {
         if dashing.is_added() {
             velocity.x = config.dash_velocity * facing.direction();
@@ -494,8 +525,15 @@ pub fn player_collisions(
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, mut pos, mut linear_velocity, collider, slide, dashing, whirling) in
-        q_gent.iter_mut()
+    for (
+        entity,
+        mut pos,
+        mut linear_velocity,
+        collider,
+        slide,
+        dashing,
+        whirling,
+    ) in q_gent.iter_mut()
     {
         let mut shape = collider.0.shared_shape().clone();
         let mut original_pos = pos.translation.xy();
@@ -538,23 +576,33 @@ pub fn player_collisions(
                         TOIStatus::Converged | TOIStatus::OutOfIterations => {
                             // if we are also dashing, or whirling, ignore the collision entirely
                             if dashing.is_none() && whirling.is_none() {
-                                let sliding_plane = into_vec2(first_hit.normal1);
+                                let sliding_plane =
+                                    into_vec2(first_hit.normal1);
                                 //configurable theshold for collision normal/sliding plane in case of physics instability
                                 let threshold = 0.000001;
-                                if !(1. - threshold..=1. + threshold).contains(&sliding_plane.y) {
+                                if !(1. - threshold..=1. + threshold)
+                                    .contains(&sliding_plane.y)
+                                {
                                     projected_velocity.x = linear_velocity.x
-                                        - sliding_plane.x * linear_velocity.xy().dot(sliding_plane);
+                                        - sliding_plane.x
+                                            * linear_velocity
+                                                .xy()
+                                                .dot(sliding_plane);
                                 }
                             }
                         },
                         //if we are already inside, modify the enemies collision group and add
                         //Inside so next frame we dont collide with them
                         TOIStatus::Penetrating => {
-                            collider.0.set_collision_groups(InteractionGroups {
-                                memberships: ENEMY_INSIDE,
-                                filter: Group::all(),
-                            });
-                            commands.entity(enemy).insert(crate::game::enemy::Inside);
+                            collider.0.set_collision_groups(
+                                InteractionGroups {
+                                    memberships: ENEMY_INSIDE,
+                                    filter: Group::all(),
+                                },
+                            );
+                            commands
+                                .entity(enemy)
+                                .insert(crate::game::enemy::Inside);
                         },
                         //maybe failed never happens?
                         TOIStatus::Failed => println!("failed"),
@@ -567,33 +615,44 @@ pub fn player_collisions(
                             // the bounce helps prevent the player from getting stuck.
                             let sliding_plane = into_vec2(first_hit.normal1);
 
-                            let bounce_coefficient = if dashing.is_some() { 0.0 } else { 0.05 };
+                            let bounce_coefficient =
+                                if dashing.is_some() { 0.0 } else { 0.05 };
                             let bounce_force = -sliding_plane
                                 * linear_velocity.dot(sliding_plane)
                                 * bounce_coefficient;
 
                             projected_velocity = linear_velocity.xy()
-                                - sliding_plane * linear_velocity.xy().dot(sliding_plane);
+                                - sliding_plane
+                                    * linear_velocity.xy().dot(sliding_plane);
 
                             // Applies downward friction only when player tries to push
                             // against the wall while falling. Ignores x component.
                             let friction_coefficient = config.sliding_friction;
-                            let friction_force = if projected_velocity.y < -0.0 {
+                            let friction_force = if projected_velocity.y < -0.0
+                            {
                                 // make sure at least 1/2 of player is against the wall
                                 // (because it looks wierd to have the character hanging by their head)
-                                if let Some((e, first_hit)) = spatial_query.ray_cast(
-                                    pos.translation.xy(),
-                                    Vec2::new(dir, 0.0),
-                                    shape.as_cuboid().unwrap().half_extents.x + 0.1,
-                                    true,
-                                    InteractionGroups {
-                                        memberships: PLAYER,
-                                        filter: GROUND,
-                                    },
-                                    Some(entity),
-                                ) {
+                                if let Some((e, first_hit)) = spatial_query
+                                    .ray_cast(
+                                        pos.translation.xy(),
+                                        Vec2::new(dir, 0.0),
+                                        shape
+                                            .as_cuboid()
+                                            .unwrap()
+                                            .half_extents
+                                            .x
+                                            + 0.1,
+                                        true,
+                                        InteractionGroups {
+                                            memberships: PLAYER,
+                                            filter: GROUND,
+                                        },
+                                        Some(entity),
+                                    )
+                                {
                                     wall_slide = true;
-                                    -(projected_velocity.y * friction_coefficient)
+                                    -(projected_velocity.y
+                                        * friction_coefficient)
                                 } else {
                                     0.0
                                 }
@@ -604,8 +663,8 @@ pub fn player_collisions(
 
                             projected_velocity += friction_vec + bounce_force;
 
-                            possible_pos =
-                                pos.translation.xy() + (shape_dir.xy() * (first_hit.toi - 0.01));
+                            possible_pos = pos.translation.xy()
+                                + (shape_dir.xy() * (first_hit.toi - 0.01));
                         },
                         TOIStatus::Penetrating => {
                             let depenetration = -linear_velocity.0;
@@ -629,8 +688,9 @@ pub fn player_collisions(
             }
         }
 
-        pos.translation =
-            (pos.translation.xy() + linear_velocity.xy() * (1.0 / time.hz as f32)).extend(z);
+        pos.translation = (pos.translation.xy()
+            + linear_velocity.xy() * (1.0 / time.hz as f32))
+            .extend(z);
 
         if let Some(mut slide) = slide {
             if wall_slide {
@@ -690,7 +750,8 @@ fn player_grounded(
             });
         // Ensures player character lands at the expected x height every time.
         if !is_falling && time_of_impact != 0.0 {
-            position.translation.y = position.translation.y - time_of_impact + GROUNDED_THRESHOLD;
+            position.translation.y =
+                position.translation.y - time_of_impact + GROUNDED_THRESHOLD;
         }
         let mut in_c_time = false;
         if let Some(mut c_time) = coyote_time {
@@ -753,13 +814,18 @@ fn player_falling(
     {
         let fall_accel = config.fall_accel;
         let mut falling = true;
-        if let Some((hit_entity, toi)) = hits.cast(&spatial_query, &transform, Some(entity)) {
+        if let Some((hit_entity, toi)) =
+            hits.cast(&spatial_query, &transform, Some(entity))
+        {
             //if we are ~touching the ground
-            if (toi.toi + velocity.y * (1.0 / time.hz) as f32) < GROUNDED_THRESHOLD {
+            if (toi.toi + velocity.y * (1.0 / time.hz) as f32)
+                < GROUNDED_THRESHOLD
+            {
                 transitions.push(Falling::new_transition(Grounded));
                 //stop falling
                 velocity.y = 0.0;
-                transform.translation.y = transform.translation.y - toi.toi + GROUNDED_THRESHOLD;
+                transform.translation.y =
+                    transform.translation.y - toi.toi + GROUNDED_THRESHOLD;
                 if action_state.pressed(&PlayerAction::Move) {
                     transitions.push(Falling::new_transition(Running));
                 } else {
@@ -769,7 +835,9 @@ fn player_falling(
             }
         }
         if falling {
-            if action_state.just_pressed(&PlayerAction::Jump) && jump_count.0 > 0 {
+            if action_state.just_pressed(&PlayerAction::Jump)
+                && jump_count.0 > 0
+            {
                 velocity.y = 0.0;
                 jump_count.0 -= 1;
 
@@ -803,8 +871,14 @@ pub fn player_sliding(
     >,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, action_state, mut transitions, mut wall_slide_time, mut lin_vel, mut jump_count) in
-        query.iter_mut()
+    for (
+        entity,
+        action_state,
+        mut transitions,
+        mut wall_slide_time,
+        mut lin_vel,
+        mut jump_count,
+    ) in query.iter_mut()
     {
         let mut direction: f32 = 0.0;
         if action_state.pressed(&PlayerAction::Move) {
@@ -813,7 +887,9 @@ pub fn player_sliding(
         if wall_slide_time.sliding(&config) {
             jump_count.0 = 1;
         }
-        if wall_slide_time.sliding(&config) && action_state.just_pressed(&PlayerAction::Jump) {
+        if wall_slide_time.sliding(&config)
+            && action_state.just_pressed(&PlayerAction::Jump)
+        {
             let jump_direction = direction
                 * if wall_slide_time.strict_sliding(&config) {
                     -1.0
@@ -859,8 +935,13 @@ fn add_attack(
     player_config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
-    for (mut transitions, action_state, maybe_immediate, maybe_whirl_ability, is_grounded) in
-        query.iter_mut()
+    for (
+        mut transitions,
+        action_state,
+        maybe_immediate,
+        maybe_whirl_ability,
+        is_grounded,
+    ) in query.iter_mut()
     {
         if action_state.just_pressed(&PlayerAction::Attack) {
             transitions.push(CanAttack::new_transition(
@@ -875,7 +956,8 @@ fn add_attack(
         }
         if let Some(whirl) = maybe_whirl_ability {
             if whirl.energy
-                - (Whirling::MIN_TICKS as f32 * player_config.whirl_cost / time.hz as f32)
+                - (Whirling::MIN_TICKS as f32 * player_config.whirl_cost
+                    / time.hz as f32)
                 > 0.0
                 && is_grounded
                 && action_state.just_pressed(&PlayerAction::Whirl)
@@ -904,13 +986,22 @@ fn player_attack(
     mut commands: Commands,
     config: Res<PlayerConfig>,
 ) {
-    for (entity, gent, facing, mut attacking, mut transitions, action_state, stealthed) in
-        query.iter_mut()
+    for (
+        entity,
+        gent,
+        facing,
+        mut attacking,
+        mut transitions,
+        action_state,
+        stealthed,
+    ) in query.iter_mut()
     {
         if attacking.ticks == 0 {
             let attack = commands
                 .spawn((
-                    TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+                    TransformBundle::from_transform(Transform::from_xyz(
+                        0.0, 0.0, 0.0,
+                    )),
                     AnimationCollider(gent.e_gfx),
                     //TODO: ? ColliderMeta
                     Collider::empty(InteractionGroups::new(
@@ -920,7 +1011,14 @@ fn player_attack(
                     Attack::new(16, entity),
                     SelfPushback(Knockback::new(
                         Vec2::new(
-                            config.melee_pushback * -facing.direction(),
+                            config.melee_self_pushback * -facing.direction(),
+                            0.,
+                        ),
+                        config.melee_self_pushback_ticks,
+                    )),
+                    Pushback(Knockback::new(
+                        Vec2::new(
+                            facing.direction() * config.melee_pushback,
                             0.,
                         ),
                         config.melee_pushback_ticks,
@@ -1007,7 +1105,9 @@ pub fn player_whirl(
     {
         whirling.ticks += 1;
         whirl_ability.energy -= config.whirl_cost / time.hz as f32;
-        if action_state.pressed(&PlayerAction::Whirl) || whirling.ticks < Whirling::MIN_TICKS {
+        if action_state.pressed(&PlayerAction::Whirl)
+            || whirling.ticks < Whirling::MIN_TICKS
+        {
             if let Some(attack_entity) = whirling.attack_entity {
                 //if the attack entities collider was changed, set the attack to none
                 if attack_query.get(attack_entity).is_err() {
@@ -1025,7 +1125,9 @@ pub fn player_whirl(
                                 ENEMY_HURT,
                             )),
                         },
-                        TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+                        TransformBundle::from_transform(Transform::from_xyz(
+                            0.0, 0.0, 0.0,
+                        )),
                         AnimationCollider(gent.e_gfx),
                     ))
                     .set_parent(entity)

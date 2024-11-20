@@ -3,7 +3,8 @@ mod player_behaviour;
 use bevy::utils::hashbrown::HashMap;
 use leafwing_input_manager::axislike::VirtualAxis;
 use leafwing_input_manager::{
-    action_state::ActionState, input_map::InputMap, Actionlike, InputManagerBundle,
+    action_state::ActionState, input_map::InputMap, Actionlike,
+    InputManagerBundle,
 };
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
@@ -14,7 +15,9 @@ use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::input::InputManagerPlugin;
-use theseeker_engine::physics::{Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER};
+use theseeker_engine::physics::{
+    Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER,
+};
 
 use super::physics::Knockback;
 use crate::game::attack::*;
@@ -39,9 +42,10 @@ impl Plugin for PlayerPlugin {
         app.add_systems(Startup, load_dash_asset);
         app.add_systems(
             GameTickUpdate,
-            ((setup_player, despawn_dead_player).run_if(in_state(GameState::Playing)))
-                .before(PlayerStateSet::Transition)
-                .run_if(in_state(AppState::InGame)),
+            ((setup_player, despawn_dead_player)
+                .run_if(in_state(GameState::Playing)))
+            .before(PlayerStateSet::Transition)
+            .run_if(in_state(AppState::InGame)),
         );
         app.add_systems(
             OnEnter(GameState::Paused),
@@ -183,7 +187,8 @@ fn debug_player_states(
 ) {
     for states in query.iter() {
         // println!("{:?}", states);
-        let (running, idle, falling, jumping, grounded, dashing, can_dash) = states;
+        let (running, idle, falling, jumping, grounded, dashing, can_dash) =
+            states;
         let mut states_string: String = String::new();
         if let Some(running) = running {
             if running.is_added() {
@@ -272,10 +277,14 @@ fn setup_player(
                         },
                     ),
                     shapecast: ShapeCaster {
-                        shape: Collider::cuboid(4.0, 10.0, InteractionGroups::none())
-                            .0
-                            .shared_shape()
-                            .clone(),
+                        shape: Collider::cuboid(
+                            4.0,
+                            10.0,
+                            InteractionGroups::none(),
+                        )
+                        .0
+                        .shared_shape()
+                        .clone(),
                         origin: Vec2::new(0.0, 0.0),
                         max_toi: f32::MAX,
                         direction: Direction2d::NEG_Y,
@@ -307,7 +316,10 @@ fn setup_player(
                     )
                     .with(
                         PlayerAction::Move,
-                        VirtualAxis::from_keys(KeyCode::ArrowLeft, KeyCode::ArrowRight),
+                        VirtualAxis::from_keys(
+                            KeyCode::ArrowLeft,
+                            KeyCode::ArrowRight,
+                        ),
                     )
                     .with(PlayerAction::Attack, KeyCode::Enter)
                     .with(PlayerAction::Attack, KeyCode::KeyJ)
@@ -646,10 +658,16 @@ pub struct PlayerConfig {
     /// Ticks for wall pushback velocity; determines how long movement is locked for
     wall_pushback_ticks: u32,
 
-    /// Pushback velocity on basic melee hits
+    /// Self pushback velocity on basic melee hits
+    melee_self_pushback: f32,
+
+    /// Ticks for melee self pushback velocity; determines how long movement is locked for
+    melee_self_pushback_ticks: u32,
+
+    /// Knockback velocity applied to enemy on basic melee hit
     melee_pushback: f32,
 
-    /// Ticks for melee pushback velocity; determines how long movement is locked for
+    /// Ticks for melee knockback velocity; determines how long movement is locked for
     melee_pushback_ticks: u32,
 
     /// How many kills to trigger a passive gain
@@ -665,7 +683,9 @@ fn load_player_config(
     mut initialized_config: Local<bool>,
 ) {
     // convert from asset key string to bevy handle
-    let Some(cfg_handle) = preloaded.get_single_asset::<DynamicConfig>("cfg.player") else {
+    let Some(cfg_handle) =
+        preloaded.get_single_asset::<DynamicConfig>("cfg.player")
+    else {
         return;
     };
     // The reason we do this here instead of in an AssetEvent::Added match arm, is because
@@ -722,10 +742,12 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "max_health", |val| config.max_health = val as u32);
     update_field(&mut errors, &cfg.0, "wall_pushback", |val| config.wall_pushback = val);
     update_field(&mut errors, &cfg.0, "wall_pushback_ticks", |val| config.wall_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "melee_self_pushback", |val| config.melee_self_pushback = val);
+    update_field(&mut errors, &cfg.0, "melee_self_pushback_ticks", |val| config.melee_self_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
     update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "passive_gain_rate", |val| config.passive_gain_rate = val as u32);
-    
+
     for error in errors{
        warn!("failed to load player cfg value: {}", error);
    }
@@ -828,7 +850,8 @@ impl PlayerStats {
         };
 
         for (i, stat) in modifier.status_types.iter().enumerate() {
-            let val = self.base_stats[stat] * base_scalar.unwrap_or_else(|| modifier.scalar[i])
+            let val = self.base_stats[stat]
+                * base_scalar.unwrap_or_else(|| modifier.scalar[i])
                 + base_delta.unwrap_or_else(|| modifier.delta[i]);
 
             self.effective_stats.insert(*stat, val);
@@ -971,8 +994,11 @@ pub fn on_hit_stealth_reset(
     config: Res<PlayerConfig>,
 ) {
     for attack in query.iter() {
-        if let Ok((mut maybe_can_dash, mut maybe_whirl_ability, mut maybe_can_stealth)) =
-            attacker_skills.get_mut(attack.attacker)
+        if let Ok((
+            mut maybe_can_dash,
+            mut maybe_whirl_ability,
+            mut maybe_can_stealth,
+        )) = attacker_skills.get_mut(attack.attacker)
         {
             if let Some(ref mut can_dash) = maybe_can_dash {
                 can_dash.remaining_cooldown = 0.;
@@ -995,7 +1021,9 @@ pub fn on_hit_exit_stealthing(
     config: Res<PlayerConfig>,
 ) {
     for attack in query.iter() {
-        if let Ok((gent, mut transitions)) = attacker_query.get_mut(attack.attacker) {
+        if let Ok((gent, mut transitions)) =
+            attacker_query.get_mut(attack.attacker)
+        {
             let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
             sprite.color = sprite.color.with_a(1.0);
             transitions.push(Stealthing::new_transition(
