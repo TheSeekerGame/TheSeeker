@@ -4,20 +4,16 @@ use rand::distributions::Standard;
 use rapier2d::geometry::SharedShape;
 use rapier2d::parry::query::TOIStatus;
 use rapier2d::prelude::{Group, InteractionGroups};
+use theseeker_engine::animation::SpriteAnimationBundle;
+use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
     into_vec2, update_sprite_colliders, AnimationCollider, Collider,
-    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, GROUND,
-    PLAYER, SENSOR,
+    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, ENEMY_HURT,
+    ENEMY_INSIDE, GROUND, PLAYER, SENSOR,
 };
 use theseeker_engine::script::ScriptPlayer;
-use theseeker_engine::{
-    animation::SpriteAnimationBundle, physics::ENEMY_INSIDE,
-};
-use theseeker_engine::{
-    assets::animation::SpriteAnimation, physics::ENEMY_HURT,
-};
 
 use super::physics::Knockback;
 use super::player::{Player, PlayerConfig, StatusModifier, Stealthing};
