@@ -928,6 +928,7 @@ fn add_attack(
         ),
         (
             Without<Attacking>,
+            Without<Whirling>,
             Without<Dashing>,
             With<Player>,
         ),
@@ -960,7 +961,7 @@ fn add_attack(
                     / time.hz as f32)
                 > 0.0
                 && is_grounded
-                && action_state.just_pressed(&PlayerAction::Whirl)
+                && action_state.pressed(&PlayerAction::Whirl)
             {
                 transitions.push(CanAttack::new_transition(
                     Whirling::default(),
