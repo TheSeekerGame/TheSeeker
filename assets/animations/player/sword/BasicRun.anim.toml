@@ -1,28 +1,112 @@
 [settings]
 time_base = "Relative"
 tick_quant = "8"
-ticks_per_frame = 8
+# ticks_per_frame = 8
+ticks_per_frame = 16
 frame_min = 1
 frame_max = 20
 frame_start = 1
 
-# VARIANT 1 INIT
+## VARIANT 1 INIT
+#[[script]]
+#run_on_playback_control = "Start"
+#action = "SetFrameNow"
+#frame_index = 1
+#
+## VARIANT 2 INIT
+#[[script]]
+#run_on_playback_control = "Start"
+#if_runcount_quant = "2"
+#action = "SetFrameNow"
+#frame_index = 5
+
+#end the animation by setting to zero so we dont mistakenly roll over into next variant
+[[script]]
+run_at_frame = [5, 10, 15]
+action = "SetFrameNext"
+frame_index = 0
+
+# [[script]]
+# run_at_frame = [2, 6, 10]
+# action = "PlayAudio"
+# asset_key = "audio.game.HammerImpact"
+
 [[script]]
 run_on_playback_control = "Start"
-action = "SetFrameNow"
-frame_index = 1
-
-# VARIANT 2 INIT
-[[script]]
-run_on_playback_control = "Start"
-if_runcount_quant = "2"
-action = "SetFrameNow"
-frame_index = 5
-
-[[script]]
-run_at_frame = [2, 6, 10]
+if_previous_script_key = "anim.player.Run"
 action = "PlayAudio"
 asset_key = "audio.game.HammerImpact"
+
+# if_previous_script_key = "anim.player.SwordBasicIdle"
+# action = "SetFrameNow"
+# frame_index = 5
+# if_oldanim_frame_is_not = 20
+
+
+# if coming from another attack, pick up where we left off
+
+# [[script]]
+# run_on_playback_control = "Start"
+# if_previous_script_key = "anim.player.SwordBasicIdle"
+# if_oldanim_frame_was = 1
+# action = "SetFrameNext"
+# frame_index = 2
+
+# [[script]]
+# run_on_playback_control = "Start"
+# if_previous_script_key = "anim.player.SwordBasicIdle"
+# if_oldanim_frame_was = 2
+# action = "SetFrameNext"
+# frame_index = 3
+
+# [[script]]
+# run_on_playback_control = "Start"
+# if_previous_script_key = "anim.player.SwordBasicIdle"
+# if_oldanim_frame_was = 3
+# action = "SetFrameNext"
+# frame_index = 4
+
+# [[script]]
+# run_on_playback_control = "Start"
+# if_previous_script_key = "anim.player.SwordBasicIdle"
+# if_oldanim_frame_was = 4
+# action = "SetFrameNext"
+# frame_index = 5
+
+# [[script]]
+# run_on_playback_control = "Start"
+# if_previous_script_key = "anim.player.SwordBasicIdle"
+# if_oldanim_frame_was = 5
+# action = "SetFrameNext"
+# frame_index = 6
+
+# [[script]]
+# run_on_playback_control = "Start"
+# if_previous_script_key = "anim.player.SwordBasicIdle"
+# if_oldanim_frame_was = 6
+# action = "SetFrameNext"
+# frame_index = 7
+
+# [[script]]
+# run_on_playback_control = "Start"
+# if_previous_script_key = "anim.player.SwordBasicIdle"
+# if_oldanim_frame_was = 7
+# action = "SetFrameNext"
+# frame_index = 8
+
+# [[script]]
+# run_on_playback_control = "Start"
+# if_previous_script_key = "anim.player.SwordBasicIdle"
+# if_oldanim_frame_was = 8
+# action = "SetFrameNext"
+# frame_index = 9
+
+# [[script]]
+# run_on_playback_control = "Start"
+# if_previous_script_key = "anim.player.SwordBasicIdle"
+# if_oldanim_frame_was = 9
+# action = "SetFrameNext"
+# frame_index = 10
 
 # Support left/right flipping
 [[script]]
@@ -33,27 +117,3 @@ flip_x = true
 run_on_slot_enable = "DirectionRight"
 action = "SetSpriteFlip"
 flip_x = false
-
-# Blink Red on Damage
-[[script]]
-run_every_n_ticks = "8+2"
-require_slots_any = ["Damage"]
-action = "SetSpriteColor"
-color = "#ff0000"
-[[script]]
-run_every_n_ticks = "8+6"
-require_slots_any = ["Damage"]
-action = "SetSpriteColor"
-color = "#ffffff"
-
-# Ensure correct color after damage stops
-[[script]]
-run_on_slot_disable = "Damage"
-action = "SetSpriteColor"
-color = "#ffffff"
-
-# On Damage, immediately change color to ensure no delay
-[[script]]
-run_on_slot_enable = "Damage"
-action = "SetSpriteColor"
-color = "#ff0000"
