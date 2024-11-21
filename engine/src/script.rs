@@ -75,6 +75,7 @@ impl ScriptAppExt for App {
     }
 }
 
+#[derive(Debug, Default)]
 pub struct ScriptMetadata {
     pub key: Option<String>,
     pub key_previous: Option<String>,
@@ -517,21 +518,11 @@ fn script_init_system<T: ScriptAsset>(
     )>,
 ) {
     for (e, mut player) in &mut q_script {
-        let mut metadata = ScriptMetadata {
-            runcount: 0,
-            key: None,
-            key_previous: match &player.state {
-                | ScriptPlayerState::ChangingHandle { old_runtime, .. }
-                | ScriptPlayerState::ChangingKey { old_runtime, ..  } => old_runtime.key.clone(),
-                _ => None,
-            },
-        };
         let handle = match &player.state {
             ScriptPlayerState::PrePlayHandle { handle, .. } => {
                 handle.clone()
             }
             ScriptPlayerState::PrePlayKey { key, .. } => {
-                metadata.key = Some(key.clone());
                 if let Some(handle) = preloaded.get_single_asset(&key) {
                     handle
                 } else {
@@ -540,24 +531,29 @@ fn script_init_system<T: ScriptAsset>(
             },
             _ => continue,
         };
-        metadata.runcount = if let Some(count) = runcounts.counts.get_mut(&handle.id()) {
-            let r = *count;
-            *count += 1;
-            r
-        } else {
-            runcounts.counts.insert(handle.id(), 1);
-            0
-        };
         if let Some(script) = ass_script.get(&handle) {
             let old_state = std::mem::replace(&mut player.state, ScriptPlayerState::Stopped);
+            let mut metadata = ScriptMetadata::default();
             let old_runtime = match old_state {
                 ScriptPlayerState::PrePlayHandle { old_runtime, .. } => old_runtime,
-                ScriptPlayerState::PrePlayKey { old_runtime, .. } => old_runtime,
+                ScriptPlayerState::PrePlayKey { old_runtime, key, .. } => {
+                    metadata.key = Some(key);
+                    old_runtime
+                }
                 _ => None,
             };
             let carryover = {
                 let mut carryover_param = params.p2().into_inner();
                 old_runtime.as_ref().map(|rt| rt.tracker.produce_carryover(e, &mut carryover_param)).unwrap_or_default()
+            };
+            metadata.key_previous = old_runtime.as_ref().and_then(|rt| rt.key.clone());
+            metadata.runcount = if let Some(count) = runcounts.counts.get_mut(&handle.id()) {
+                let r = *count;
+                *count += 1;
+                r
+            } else {
+                runcounts.counts.insert(handle.id(), 1);
+                0
             };
             let settings = script.into_settings();
             let builder = {
