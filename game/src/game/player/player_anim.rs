@@ -1,12 +1,14 @@
 use crate::appstate::AppState;
 use crate::game::gentstate::Facing;
 use crate::game::player::{
-    Attacking, CanAttack, Dashing, Falling, HitFreezeTime, Idle, Jumping, PlayerConfig, PlayerGfx,
-    PlayerStateSet, Running, WallSlideTime, Whirling,
+    Attacking, CanAttack, Dashing, Falling, HitFreezeTime, Idle, Jumping,
+    PlayerConfig, PlayerGfx, PlayerStateSet, Running, WallSlideTime, Whirling,
 };
 use crate::prelude::{
-    in_state, Added, App, Has, IntoSystemConfigs, Local, Or, Plugin, Query, Res, With, Without,
+    in_state, Added, App, Has, IntoSystemConfigs, Local, Or, Plugin, Query,
+    Res, With, Without,
 };
+use bevy::prelude::{DetectChanges, Ref};
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::LinearVelocity;
@@ -77,16 +79,23 @@ fn player_falling_animation(
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             if let Some(sliding) = sliding {
                 if sliding.sliding(&config) {
-                    if player.current_key().unwrap_or("") != "anim.player.WallSlide" {
+                    if player.current_key().unwrap_or("")
+                        != "anim.player.WallSlide"
+                    {
                         player.play_key("anim.player.WallSlide");
                     }
                 } else {
-                    if velocity.y < 0. && player.current_key().unwrap_or("") != "anim.player.Fall" {
+                    if velocity.y < 0.
+                        && player.current_key().unwrap_or("")
+                            != "anim.player.Fall"
+                    {
                         player.play_key("anim.player.Fall");
                     }
                 }
             } else {
-                if velocity.y < 0. && player.current_key().unwrap_or("") != "anim.player.Fall" {
+                if velocity.y < 0.
+                    && player.current_key().unwrap_or("") != "anim.player.Fall"
+                {
                     player.play_key("anim.player.Fall");
                 }
             }
@@ -140,30 +149,50 @@ fn player_attacking_animation(
             Has<Jumping>,
             Has<Running>,
             Option<&HitFreezeTime>,
+            Ref<Attacking>,
         ),
-        (With<Attacking>, Without<Whirling>),
+        (Without<Whirling>),
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
 ) {
-    for (gent, is_falling, is_jumping, is_running, hitfrozen) in query.iter() {
+    for (gent, is_falling, is_jumping, is_running, hitfrozen, attacking) in
+        query.iter()
+    {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             let hitfrozen = hitfrozen
                 .map(|f| f.0 < config.hitfreeze_ticks)
                 .unwrap_or(false);
+            // let current = player.current_key().unwrap_or("").clone();
+            player.set_slot("AttackTransition", false);
             if is_falling || is_jumping {
                 //TODO: These need a way to resume the new animation from the current frame index
                 //or specified offset
-                if player.current_key().unwrap_or("") != "anim.player.SwordBasicAir" {
+                if player.current_key().unwrap_or("")
+                    != "anim.player.SwordBasicAir"
+                {
                     player.play_key("anim.player.SwordBasicAir");
+                    if !attacking.is_added() {
+                        player.set_slot("AttackTransition", true);
+                    }
                 }
             } else if is_running && !hitfrozen {
-                if player.current_key().unwrap_or("") != "anim.player.SwordBasicRun" {
+                if player.current_key().unwrap_or("")
+                    != "anim.player.SwordBasicRun"
+                {
                     player.play_key("anim.player.SwordBasicRun");
+                    if !attacking.is_added() {
+                        player.set_slot("AttackTransition", true);
+                    }
                 }
             } else {
-                if player.current_key().unwrap_or("") != "anim.player.SwordBasicIdle" {
+                if player.current_key().unwrap_or("")
+                    != "anim.player.SwordBasicIdle"
+                {
                     player.play_key("anim.player.SwordBasicIdle");
+                    if !attacking.is_added() {
+                        player.set_slot("AttackTransition", true);
+                    }
                 }
             }
         }
@@ -211,7 +240,9 @@ fn sprite_flip(
                 // (ie: not wall_jump_coyote_time)
                 .map(|s| s.0 <= 1.0 / time.hz as f32)
                 .unwrap_or(false);
-            if pressed_on_wall && player.current_key() == Some("anim.player.SwordBasicAir") {
+            if pressed_on_wall
+                && player.current_key() == Some("anim.player.SwordBasicAir")
+            {
                 facing = match facing {
                     Facing::Right => Facing::Left,
                     Facing::Left => Facing::Right,
