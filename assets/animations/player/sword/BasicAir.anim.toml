@@ -12,7 +12,7 @@ forbid_slots_all = ["AttackTransition"]
 action = "PlayAudio"
 asset_key = "audio.game.HammerImpact"
 
-#end the animation by setting to zero so we dont mistakenly roll over into next variant
+# play the last frame again if the animation hasnt ended so we dont roll over into next variant
 [[script]]
 run_at_frame = [5]
 action = "SetFrameNext"
@@ -28,7 +28,8 @@ run_at_frame = [15]
 action = "SetFrameNext"
 frame_index = 15
 
-#if coming from another attack, pick up where we left off
+# if coming from another attack, pick up where we left off
+# From run
 [[script]]
 run_on_playback_control = "Start"
 if_previous_script_key = "anim.player.SwordBasicRun"
@@ -85,7 +86,7 @@ if_oldanim_frame_was = 8
 action = "SetFrameNow"
 frame_index = 9
 
-#from idle
+# From idle
 [[script]]
 run_on_playback_control = "Start"
 if_previous_script_key = "anim.player.SwordBasicIdle"
