@@ -39,6 +39,9 @@ bevy_ui = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
 bevy_window = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
 bevy_winit = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
 
+[patch."https://github.com/IyesGames/iyes_cli"]
+iyes_cli = { git = "https://github.com/TheSeekerGame/iyes_cli", branch = "seeker" }
+
 [lib]
 name = "theseeker_engine"
 path = "engine/src/lib.rs"
@@ -132,6 +135,7 @@ version = "0.10"
 
 [dependencies.iyes_bevy_extras]
 git = "https://github.com/IyesGames/iyes_bevy_extras"
+rev = "3b016ca6e2c3dc4b0cae1b037f0ae25c48ca0878"
 features = ["2d"]
 
 [dependencies.iyes_cli]
@@ -143,6 +147,7 @@ features = ["assets"]
 
 [dependencies.iyes_ui]
 git = "https://github.com/IyesGames/iyes_ui"
+rev = "2a0314386f807715de619246c54bbfe7dbc09bea"
 features = ["iyes_cli"]
 
 [dependencies.sickle_ui]
