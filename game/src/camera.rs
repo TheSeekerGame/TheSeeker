@@ -214,7 +214,7 @@ pub(crate) fn update_camera(
     camera_transform.translation.x = rig.camera.x;
     camera_transform.translation.y = rig.camera.y;
 
-    if let Some((bg_layer, bg_transform)) = backround_query.iter().next() {
+    if let Ok((bg_layer, bg_transform)) = backround_query.get_single() {
         let camera_rect = ortho_projection.area;
         let background_rect = background_rect(bg_layer, bg_transform);
 
