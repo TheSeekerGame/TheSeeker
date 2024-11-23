@@ -226,10 +226,7 @@ pub(crate) fn update_camera(
 
         // Apply screen shake after camera is clamped so that camera still shakes at the edges
         if let Some(camera_shake) = camera_shake {
-            apply_camera_shake(
-                camera_shake.c_offset,
-                &mut camera_transform,
-            );
+            camera_shake.apply(&mut camera_transform);
         }
 
         // Apply another clamp so we don't show the edge of the level
@@ -269,14 +266,6 @@ fn clamp_camera_to_edge(
     camera_transform.translation = xy.extend(camera_transform.translation.z);
 }
 
-fn apply_camera_shake(
-    camera_shake_offset: Vec2,
-    camera_transform: &mut Transform,
-) {
-    camera_transform.translation.x += camera_shake_offset.x;
-    camera_transform.translation.y += camera_shake_offset.y;
-}
-
 #[derive(Resource, Clone)]
 pub struct CameraShake {
     strength: f32,
@@ -300,6 +289,11 @@ impl CameraShake {
             c_offset: Vec2::ZERO,
             dir,
         }
+    }
+
+    pub fn apply(&self, camera_transform: &mut Transform) {
+        camera_transform.translation.x += self.c_offset.x;
+        camera_transform.translation.y += self.c_offset.y;
     }
 }
 
