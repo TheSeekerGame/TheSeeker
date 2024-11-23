@@ -14,8 +14,6 @@ use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
 use crate::level::MainBackround;
 use crate::prelude::*;
 
-const CAMERA_RIG_MOVE_SPEED: f32 = 1.9;
-
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
@@ -35,6 +33,7 @@ impl Plugin for CameraPlugin {
         app.insert_resource(CameraRig {
             target: Default::default(),
             camera: Default::default(),
+            move_speed: 1.9,
             lead_direction: LeadDirection::Forward,
             lead_amount: 20.0,
             lead_buffer: 10.0,
@@ -70,6 +69,8 @@ pub struct CameraRig {
     target: Vec2,
     /// the "base" position of the camera before screen shake is applied.
     camera: Vec2,
+    /// The factor used in lerping to move the rig.
+    move_speed: f32,
     /// Keeps track if the camera is leading ahead, or behind the player.
     lead_direction: LeadDirection,
     /// Defines how far ahead the camera will lead the player by.
@@ -197,7 +198,7 @@ fn camera_rig_follow_player(
 
     rig.camera = rig.camera.lerp(
         rig.target,
-        time.delta_seconds() * CAMERA_RIG_MOVE_SPEED,
+        time.delta_seconds() * rig.move_speed,
     );
 }
 
