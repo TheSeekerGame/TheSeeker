@@ -398,7 +398,7 @@ fn on_hit_cam_shake(
 ) {
     for attack in query.iter() {
         if let Ok(_entity) = p_query.get(attack.attacker) {
-            commands.insert_resource(CameraShake::new(0.7, 0.1, 2.0));
+            commands.insert_resource(CameraShake::new(0.9, 0.1, 2.0));
         }
     }
 }
