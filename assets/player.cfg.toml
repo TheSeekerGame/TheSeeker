@@ -2,7 +2,7 @@
 
 # The maximum horizontal velocity the player can move at.
 # (in pixels/second)
-max_move_vel = 65.0
+max_move_vel = 70.0
 
 # The maximum downward velocity the player can fall at.
 # (in pixels/second)
