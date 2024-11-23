@@ -14,6 +14,8 @@ use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
 use crate::level::MainBackround;
 use crate::prelude::*;
 
+const CAMERA_RIG_MOVE_SPEED: f32 = 1.9;
+
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
@@ -34,11 +36,11 @@ impl Plugin for CameraPlugin {
             target: Default::default(),
             camera: Default::default(),
         });
-        app.add_systems(GameTickUpdate, camera_rig_follow_player);
         app.add_systems(
             GameTickUpdate,
             (
-                update_camera_rig.after(camera_rig_follow_player),
+                camera_rig_follow_player,
+                update_camera.after(camera_rig_follow_player),
                 update_screen_shake.run_if(resource_exists::<CameraShake>),
             ),
         );
@@ -150,53 +152,58 @@ fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wit
 /// Updates the Camera rig (ie, the camera target) based on where the player is going.
 fn camera_rig_follow_player(
     mut rig: ResMut<CameraRig>,
-    q_player: Query<&Transform, (With<Player>, Without<MainCamera>)>,
+    player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
     // Keeps track if the camera is leading ahead, or behind the player
-    mut lead_bckwrd: Local<bool>,
+    mut lead_backward: Local<bool>,
+    time: Res<Time>,
 ) {
-    let Ok(player_xform) = q_player.get_single() else {
+    let Ok(player_transform) = player_query.get_single() else {
         return;
     };
     // define how far away the player can get going in the unanticipated direction
     // before the camera switches to track that direction
     let max_err = 10.0;
     // Define how far ahead the camera will lead the player by
-    let lead_amnt = 20.0;
+    let lead_amount = 20.0;
 
     // Default state is to predict the player goes forward, ie "right"
-    let delta_x = player_xform.translation.x - rig.target.x;
+    let delta_x = player_transform.translation.x - rig.target.x;
 
-    if !*lead_bckwrd {
-        if delta_x > -lead_amnt {
-            rig.target.x = player_xform.translation.x + lead_amnt
-        } else if delta_x < -lead_amnt - max_err {
-            *lead_bckwrd = !*lead_bckwrd
+    if !*lead_backward {
+        if delta_x > -lead_amount {
+            rig.target.x = player_transform.translation.x + lead_amount
+        } else if delta_x < -lead_amount - max_err {
+            *lead_backward = !*lead_backward
         }
     } else {
-        if delta_x < lead_amnt {
-            rig.target.x = player_xform.translation.x - lead_amnt
-        } else if delta_x > lead_amnt + max_err {
-            *lead_bckwrd = !*lead_bckwrd
+        if delta_x < lead_amount {
+            rig.target.x = player_transform.translation.x - lead_amount
+        } else if delta_x > lead_amount + max_err {
+            *lead_backward = !*lead_backward
         }
     }
-    // rig.position.x = player_xform.translation.x;
 
-    rig.target.y = player_xform.translation.y;
+    rig.target.y = player_transform.translation.y;
+
+    rig.camera = rig.camera.lerp(
+        rig.target,
+        time.delta_seconds() * CAMERA_RIG_MOVE_SPEED,
+    );
 }
 
 /// Camera updates the camera position to smoothly interpolate to the
 /// rig location. also applies camera shake, and limits camera within the level boundaries
-pub(crate) fn update_camera_rig(
-    mut q_cam: Query<(&mut Transform, &Projection), With<MainCamera>>,
-    mut rig: ResMut<CameraRig>,
+pub(crate) fn update_camera(
+    mut camera_query: Query<(&mut Transform, &Projection), With<MainCamera>>,
+    rig: Res<CameraRig>,
     backround_query: Query<
         (&LayerMetadata, &Transform),
         (With<MainBackround>, Without<MainCamera>),
     >,
-    shake_op: Option<Res<CameraShake>>,
-    time: Res<Time>,
+    camera_shake: Option<Res<CameraShake>>,
 ) {
-    let Ok((mut cam_xform, projection)) = q_cam.get_single_mut() else {
+    let Ok((mut camera_transform, projection)) = camera_query.get_single_mut()
+    else {
         return;
     };
 
@@ -204,59 +211,70 @@ pub(crate) fn update_camera_rig(
         return;
     };
 
-    let speed = 1.9;
-
-    let new_xy = rig.camera.lerp(rig.target, time.delta_seconds() * speed);
-
-    rig.camera = new_xy;
-
-    // screen shake amounts
-    let offset = match shake_op {
-        Some(shake) => shake.c_offset,
-        None => Vec2::ZERO,
-    };
-
-    let offset_x = offset.x;
-    let offset_y = offset.y;
-
-    // cam_xform.rotation.z = 0.0 + angle;
-    cam_xform.translation.x = rig.camera.x;
-    cam_xform.translation.y = rig.camera.y;
+    camera_transform.translation.x = rig.camera.x;
+    camera_transform.translation.y = rig.camera.y;
 
     if let Some((bg_layer, bg_transform)) = backround_query.iter().next() {
-        let bg_width = (bg_layer.c_wid * bg_layer.grid_size) as f32;
-        let bg_height = (bg_layer.c_hei * bg_layer.grid_size) as f32;
+        let camera_rect = ortho_projection.area;
+        let background_rect = background_rect(bg_layer, bg_transform);
 
-        let cam_rect = ortho_projection.area;
-
-        // The backround width and height actually have 3 pixels extra padding on the far
-        // right/upper sides. This accounts for that.
-        let bg_max = Vec2::new(bg_width - 3.0, bg_height - 3.0);
-
-        // bottom left corner of the background is zero/minimum corner, because
-        // that's how LDtk imports it.
-        let limit_rect = Rect::from_corners(
-            bg_max + bg_transform.translation.xy(),
-            bg_transform.translation.xy(),
+        clamp_camera_to_edge(
+            &mut camera_transform,
+            background_rect,
+            camera_rect,
         );
-
-        let xy = cam_xform.translation.xy().clamp(
-            limit_rect.min + cam_rect.half_size(),
-            limit_rect.max - cam_rect.half_size(),
-        );
-        cam_xform.translation = xy.extend(cam_xform.translation.z);
 
         // Apply screen shake after camera is clamped so that camera still shakes at the edges
-        cam_xform.translation.x = cam_xform.translation.x + offset_x;
-        cam_xform.translation.y = cam_xform.translation.y + offset_y;
+        if let Some(camera_shake) = camera_shake {
+            apply_camera_shake(
+                camera_shake.c_offset,
+                &mut camera_transform,
+            );
+        }
 
         // Apply another clamp so we don't show the edge of the level
-        let xy = cam_xform.translation.xy().clamp(
-            limit_rect.min + cam_rect.half_size(),
-            limit_rect.max - cam_rect.half_size(),
+        clamp_camera_to_edge(
+            &mut camera_transform,
+            background_rect,
+            camera_rect,
         );
-        cam_xform.translation = xy.extend(cam_xform.translation.z);
     }
+}
+
+fn background_rect(bg_layer: &LayerMetadata, bg_transform: &Transform) -> Rect {
+    let bg_width = (bg_layer.c_wid * bg_layer.grid_size) as f32;
+    let bg_height = (bg_layer.c_hei * bg_layer.grid_size) as f32;
+
+    // The backround width and height actually have 3 pixels extra padding on the far
+    // right/upper sides. This accounts for that.
+    let bg_max = Vec2::new(bg_width - 3.0, bg_height - 3.0);
+
+    // bottom left corner of the background is zero/minimum corner, because
+    // that's how LDtk imports it.
+    Rect::from_corners(
+        bg_max + bg_transform.translation.xy(),
+        bg_transform.translation.xy(),
+    )
+}
+
+fn clamp_camera_to_edge(
+    camera_transform: &mut Transform,
+    background_rect: Rect,
+    camera_rect: Rect,
+) {
+    let xy = camera_transform.translation.xy().clamp(
+        background_rect.min + camera_rect.half_size(),
+        background_rect.max - camera_rect.half_size(),
+    );
+    camera_transform.translation = xy.extend(camera_transform.translation.z);
+}
+
+fn apply_camera_shake(
+    camera_shake_offset: Vec2,
+    camera_transform: &mut Transform,
+) {
+    camera_transform.translation.x += camera_shake_offset.x;
+    camera_transform.translation.y += camera_shake_offset.y;
 }
 
 #[derive(Resource, Clone)]
@@ -316,8 +334,6 @@ pub fn update_screen_shake(
     let delta = shake.dir * val * shake.strength;
     let tan_delta = tan_dir * tan_val * shake.strength;
     //    let angle = val * shake.strength * 0.0001;
-
-    // println!("{}", delta);
 
     shake.c_offset = delta + tan_delta;
 
