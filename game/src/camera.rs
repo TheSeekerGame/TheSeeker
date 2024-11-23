@@ -14,6 +14,8 @@ use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
 use crate::level::MainBackround;
 use crate::prelude::*;
 
+const PROJECTION_SCALE: f32 = 1.0 / 5.0;
+
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
@@ -32,7 +34,7 @@ impl Plugin for CameraPlugin {
 
         app.insert_resource(CameraRig {
             target: Default::default(),
-            camera: Default::default(),
+            camera_position: Default::default(),
             move_speed: 1.9,
             lead_direction: LeadDirection::Forward,
             lead_amount: 20.0,
@@ -68,7 +70,7 @@ pub struct CameraRig {
     /// The camera is moved towards this position smoothly.
     target: Vec2,
     /// the "base" position of the camera before screen shake is applied.
-    camera: Vec2,
+    camera_position: Vec2,
     /// The factor used in lerping to move the rig.
     move_speed: f32,
     /// Keeps track if the camera is leading ahead, or behind the player.
@@ -108,7 +110,7 @@ pub(crate) fn setup_main_camera(
         tonemapping: Tonemapping::None,
         ..default()
     };
-    camera.projection.scale = 1.0 / 5.0;
+    camera.projection.scale = PROJECTION_SCALE;
 
     let mut camera3d = Camera3dBundle {
         camera: Camera {
@@ -196,10 +198,17 @@ fn camera_rig_follow_player(
 
     rig.target.y = player_transform.translation.y;
 
-    rig.camera = rig.camera.lerp(
-        rig.target,
-        time.delta_seconds() * rig.move_speed,
-    );
+    if (rig.camera_position - rig.target).length() < PROJECTION_SCALE {
+        // Stop lerping if already at the target
+        rig.camera_position = rig.target;
+    } else {
+        rig.camera_position = rig.camera_position.lerp(
+            rig.target,
+            time.delta_seconds() * rig.move_speed,
+        );
+    }
+
+    quantize_pos_to_scale(&mut rig.camera_position);
 }
 
 /// Camera updates the camera position to smoothly interpolate to the
@@ -222,8 +231,8 @@ pub(crate) fn update_camera(
         return;
     };
 
-    camera_transform.translation.x = rig.camera.x;
-    camera_transform.translation.y = rig.camera.y;
+    camera_transform.translation.x = rig.camera_position.x;
+    camera_transform.translation.y = rig.camera_position.y;
 
     if let Ok((bg_layer, bg_transform)) = backround_query.get_single() {
         let camera_rect = ortho_projection.area;
@@ -398,5 +407,35 @@ fn cli_camera_limits_args(
         } else {
             error!("\"camera_limits <x0> <y0> <x1> <y1>\": args must be numeric values");
         }
+    }
+}
+
+fn quantize_pos_to_scale(pos: &mut Vec2) {
+    *pos = (*pos / PROJECTION_SCALE).floor() * PROJECTION_SCALE;
+}
+
+#[cfg(test)]
+mod quantize_pos_to_scale {
+    use super::*;
+
+    #[test]
+    fn whole_number() {
+        let mut pos = Vec2::new(1.0, 3.0);
+        quantize_pos_to_scale(&mut pos);
+        assert_eq!(pos, Vec2::new(1.0, 3.0));
+    }
+
+    #[test]
+    fn clean_fraction() {
+        let mut pos = Vec2::new(10.2, 4.4);
+        quantize_pos_to_scale(&mut pos);
+        assert_eq!(pos, Vec2::new(10.2, 4.4));
+    }
+
+    #[test]
+    fn dirty_fraction() {
+        let mut pos = Vec2::new(0.333333, 9.9999);
+        quantize_pos_to_scale(&mut pos);
+        assert_eq!(pos, Vec2::new(0.2, 9.8));
     }
 }
