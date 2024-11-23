@@ -169,17 +169,17 @@ fn camera_rig_follow_player(
     // Default state is to predict the player goes forward, ie "right"
     let delta_x = player_transform.translation.x - rig.target.x;
 
-    if !*lead_backward {
-        if delta_x > -lead_amount {
-            rig.target.x = player_transform.translation.x + lead_amount
-        } else if delta_x < -lead_amount - max_err {
-            *lead_backward = !*lead_backward
-        }
-    } else {
+    if *lead_backward {
         if delta_x < lead_amount {
             rig.target.x = player_transform.translation.x - lead_amount
         } else if delta_x > lead_amount + max_err {
-            *lead_backward = !*lead_backward
+            *lead_backward = false
+        }
+    } else {
+        if delta_x > -lead_amount {
+            rig.target.x = player_transform.translation.x + lead_amount
+        } else if delta_x < -lead_amount - max_err {
+            *lead_backward = true
         }
     }
 
