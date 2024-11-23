@@ -35,6 +35,9 @@ impl Plugin for CameraPlugin {
         app.insert_resource(CameraRig {
             target: Default::default(),
             camera: Default::default(),
+            lead_direction: LeadDirection::Forward,
+            lead_amount: 20.0,
+            lead_buffer: 10.0,
         });
         app.add_systems(
             GameTickUpdate,
@@ -63,10 +66,22 @@ pub struct MainCamera;
 #[derive(Resource)]
 /// Tracks the target location of the camera, as well as internal state for interpolation.
 pub struct CameraRig {
-    /// The camera is moved towards this position smoothly
+    /// The camera is moved towards this position smoothly.
     target: Vec2,
-    /// the "base" position of the camera before screen shake is applied
+    /// the "base" position of the camera before screen shake is applied.
     camera: Vec2,
+    /// Keeps track if the camera is leading ahead, or behind the player.
+    lead_direction: LeadDirection,
+    /// Defines how far ahead the camera will lead the player by.
+    lead_amount: f32,
+    /// Defines how far away the player can get going in the unanticipated direction
+    /// before the camera switches to track that direction.
+    lead_buffer: f32,
+}
+
+enum LeadDirection {
+    Backward,
+    Forward,
 }
 
 /// Limits to the viewable gameplay area.
@@ -153,34 +168,29 @@ fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wit
 fn camera_rig_follow_player(
     mut rig: ResMut<CameraRig>,
     player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
-    // Keeps track if the camera is leading ahead, or behind the player
-    mut lead_backward: Local<bool>,
     time: Res<Time>,
 ) {
     let Ok(player_transform) = player_query.get_single() else {
         return;
     };
-    // define how far away the player can get going in the unanticipated direction
-    // before the camera switches to track that direction
-    let max_err = 10.0;
-    // Define how far ahead the camera will lead the player by
-    let lead_amount = 20.0;
-
     // Default state is to predict the player goes forward, ie "right"
     let delta_x = player_transform.translation.x - rig.target.x;
 
-    if *lead_backward {
-        if delta_x < lead_amount {
-            rig.target.x = player_transform.translation.x - lead_amount
-        } else if delta_x > lead_amount + max_err {
-            *lead_backward = false
-        }
-    } else {
-        if delta_x > -lead_amount {
-            rig.target.x = player_transform.translation.x + lead_amount
-        } else if delta_x < -lead_amount - max_err {
-            *lead_backward = true
-        }
+    match rig.lead_direction {
+        LeadDirection::Backward => {
+            if delta_x < rig.lead_amount {
+                rig.target.x = player_transform.translation.x - rig.lead_amount
+            } else if delta_x > rig.lead_amount + rig.lead_buffer {
+                rig.lead_direction = LeadDirection::Forward
+            }
+        },
+        LeadDirection::Forward => {
+            if delta_x > -rig.lead_amount {
+                rig.target.x = player_transform.translation.x + rig.lead_amount
+            } else if delta_x < -rig.lead_amount - rig.lead_buffer {
+                rig.lead_direction = LeadDirection::Backward
+            }
+        },
     }
 
     rig.target.y = player_transform.translation.y;
