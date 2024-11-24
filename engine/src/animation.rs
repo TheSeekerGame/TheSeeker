@@ -265,9 +265,17 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 }
                 ScriptUpdateResult::NormalRun
             },
-            SpriteAnimationScriptAction::SetTicksPerFrame { ticks_per_frame } => {
+            SpriteAnimationScriptAction::SetTicksPerFrame {
+                ticks_per_frame,
+                reset_progress,
+            } => {
                 tracker.ticks_per_frame = *ticks_per_frame;
-                tracker.ticks_remain = tracker.ticks_remain.min(*ticks_per_frame);
+                if let Some(true) = reset_progress {
+                    tracker.ticks_remain = *ticks_per_frame;
+                } else {
+                    tracker.ticks_remain =
+                        tracker.ticks_remain.min(*ticks_per_frame);
+                }
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetSpriteColor { color } => {

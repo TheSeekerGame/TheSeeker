@@ -80,6 +80,8 @@ pub enum SpriteAnimationScriptAction {
     SetTicksPerFrame {
         /// The new frame rate
         ticks_per_frame: u32,
+        /// Whether the current progress should be hard reset to the new tick rate
+        reset_progress: Option<bool>,
     },
     /// Immediately change to the given frame, without waiting for `ticks_per_frame`
     SetFrameNow {
