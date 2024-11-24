@@ -1371,12 +1371,18 @@ pub fn dead(
 }
 
 /// Despawns the gent after enemy enters Decay state
-/// the gfx entity if despawned with a script action after the decay animation finishes playing
+/// the gfx entity is despawned with a script action after the decay animation finishes playing
+///
+/// Also moves the Decay marker to the gfx entity so we can adjust the rate
 fn decay_despawn(
-    query: Query<Entity, (With<Enemy>, With<Gent>, With<Decay>)>,
+    query: Query<(Entity, &Gent), (With<Enemy>, With<Decay>)>,
+    gfx_query: Query<Entity, With<EnemyGfx>>,
     mut commands: Commands,
 ) {
-    for entity in query.iter() {
+    for (entity, gent) in query.iter() {
+        if let Ok(gfx_entity) = gfx_query.get(gent.e_gfx) {
+            commands.entity(gfx_entity).insert(Decay);
+        }
         commands.entity(entity).despawn_recursive();
     }
 }
@@ -1569,6 +1575,21 @@ fn enemy_decay_animation(
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
             enemy.play_key("anim.spider.Decay");
         }
+    }
+}
+
+/// Passes sprite screen visibility to the script slot that controls the decay rate
+fn enemy_decay_visibility(
+    mut gfx_query: Query<
+        (
+            &mut ScriptPlayer<SpriteAnimation>,
+            &ViewVisibility,
+        ),
+        (With<EnemyGfx>, With<Decay>),
+    >,
+) {
+    for (mut enemy, visible) in gfx_query.iter_mut() {
+        enemy.set_slot("DecayRate", !visible.get());
     }
 }
 
