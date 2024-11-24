@@ -55,13 +55,21 @@ impl SpriteAnimationTracker {
             default()
         }
     }
-    fn resolve_frame(&self, bm: Option<&String>, frame: &FrameIndexOrBookmark) -> FrameId {
+
+    fn resolve_frame(
+        &self,
+        bm: Option<&String>,
+        frame: &FrameIndexOrBookmark,
+    ) -> FrameId {
         let bm_offset = self.resolve_bookmark(bm);
         match frame {
             FrameIndexOrBookmark::Index(i) => *i + bm_offset,
-            FrameIndexOrBookmark::Bookmark(bm) => self.resolve_bookmark(Some(bm)),
+            FrameIndexOrBookmark::Bookmark(bm) => {
+                self.resolve_bookmark(Some(bm))
+            },
         }
     }
+
     fn set_next_frame(&mut self, index: FrameId) {
         if index < self.frame_min || index > self.frame_max {
             self.next_frame = None;
@@ -69,15 +77,20 @@ impl SpriteAnimationTracker {
             self.next_frame = Some(index);
         }
     }
+
     fn set_auto_next_frame(&mut self, current: FrameId) {
         self.next_frame = if self.reversed {
             if current > self.frame_min {
                 Some(current - 1)
-            } else { None }
+            } else {
+                None
+            }
         } else {
             if current < self.frame_max {
                 Some(current + 1)
-            } else { None }
+            } else {
+                None
+            }
         };
     }
 }
@@ -87,12 +100,8 @@ impl ScriptRunIf for SpriteAnimationScriptRunIf {
 }
 
 impl ScriptActionParams for SpriteAnimationScriptParams {
+    type ShouldRunParam = (SQuery<(&'static TextureAtlas,)>,);
     type Tracker = SpriteAnimationTracker;
-    type ShouldRunParam = (
-        SQuery<(
-            &'static TextureAtlas,
-        )>,
-    );
 
     fn should_run(
         &self,
@@ -128,14 +137,14 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
                         if oldanim_index != *f {
                             return Err(ScriptUpdateResult::NormalRun);
                         }
-                    }
+                    },
                     OneOrMany::Many(f) => {
                         for f in f.iter() {
                             if oldanim_index != *f {
                                 return Err(ScriptUpdateResult::NormalRun);
                             }
                         }
-                    }
+                    },
                 }
             }
             if let Some(f) = &self.if_oldanim_frame_was_not {
@@ -144,68 +153,89 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
                         if oldanim_index == *f {
                             return Err(ScriptUpdateResult::NormalRun);
                         }
-                    }
+                    },
                     OneOrMany::Many(f) => {
                         for f in f.iter() {
                             if oldanim_index == *f {
                                 return Err(ScriptUpdateResult::NormalRun);
                             }
                         }
-                    }
+                    },
                 }
             }
         }
-        let current_index = FrameId::from_sprite_index(q_self.get(entity).unwrap().0.index);
+        let current_index =
+            FrameId::from_sprite_index(q_self.get(entity).unwrap().0.index);
         if let Some(lt) = &self.if_frame_lt {
-            if !(current_index < tracker.resolve_frame(self.frame_bookmark.as_ref(), lt)) {
+            if !(current_index
+                < tracker.resolve_frame(self.frame_bookmark.as_ref(), lt))
+            {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
         if let Some(le) = &self.if_frame_le {
-            if !(current_index <= tracker.resolve_frame(self.frame_bookmark.as_ref(), le)) {
+            if !(current_index
+                <= tracker.resolve_frame(self.frame_bookmark.as_ref(), le))
+            {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
         if let Some(gt) = &self.if_frame_gt {
-            if !(current_index > tracker.resolve_frame(self.frame_bookmark.as_ref(), gt)) {
+            if !(current_index
+                > tracker.resolve_frame(self.frame_bookmark.as_ref(), gt))
+            {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
         if let Some(ge) = &self.if_frame_ge {
-            if !(current_index >= tracker.resolve_frame(self.frame_bookmark.as_ref(), ge)) {
+            if !(current_index
+                >= tracker.resolve_frame(self.frame_bookmark.as_ref(), ge))
+            {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
         if let Some(f) = &self.if_frame_is {
             match f {
                 OneOrMany::Single(f) => {
-                    if current_index != tracker.resolve_frame(self.frame_bookmark.as_ref(), f) {
+                    if current_index
+                        != tracker
+                            .resolve_frame(self.frame_bookmark.as_ref(), f)
+                    {
                         return Err(ScriptUpdateResult::NormalRun);
                     }
-                }
+                },
                 OneOrMany::Many(f) => {
                     for f in f.iter() {
-                        if current_index != tracker.resolve_frame(self.frame_bookmark.as_ref(), f) {
+                        if current_index
+                            != tracker
+                                .resolve_frame(self.frame_bookmark.as_ref(), f)
+                        {
                             return Err(ScriptUpdateResult::NormalRun);
                         }
                     }
-                }
+                },
             }
         }
         if let Some(f) = &self.if_frame_is_not {
             match f {
                 OneOrMany::Single(f) => {
-                    if current_index == tracker.resolve_frame(self.frame_bookmark.as_ref(), f) {
+                    if current_index
+                        == tracker
+                            .resolve_frame(self.frame_bookmark.as_ref(), f)
+                    {
                         return Err(ScriptUpdateResult::NormalRun);
                     }
-                }
+                },
                 OneOrMany::Many(f) => {
                     for f in f.iter() {
-                        if current_index == tracker.resolve_frame(self.frame_bookmark.as_ref(), f) {
+                        if current_index
+                            == tracker
+                                .resolve_frame(self.frame_bookmark.as_ref(), f)
+                        {
                             return Err(ScriptUpdateResult::NormalRun);
                         }
                     }
-                }
+                },
             }
         }
         if let Some(reversed) = self.if_playing_reversed {
@@ -241,27 +271,38 @@ impl ScriptAction for SpriteAnimationScriptAction {
             .expect("Entity is missing sprite animation components!");
 
         match self {
-            SpriteAnimationScriptAction::SetFrameNext { to_frame_bookmark, frame_index } => {
+            SpriteAnimationScriptAction::SetFrameNext {
+                to_frame_bookmark,
+                frame_index,
+            } => {
                 let bm_offset = tracker.resolve_bookmark(
-                    to_frame_bookmark.as_ref()
-                        .or(actionparams.frame_bookmark.as_ref())
+                    to_frame_bookmark
+                        .as_ref()
+                        .or(actionparams.frame_bookmark.as_ref()),
                 );
-                tracker.set_next_frame(frame_index.unwrap_or_default() + bm_offset);
+                tracker.set_next_frame(
+                    frame_index.unwrap_or_default() + bm_offset,
+                );
                 ScriptUpdateResult::NormalRun
             },
-            SpriteAnimationScriptAction::SetFrameNow { to_frame_bookmark, frame_index } => {
+            SpriteAnimationScriptAction::SetFrameNow {
+                to_frame_bookmark,
+                frame_index,
+            } => {
                 let bm_offset = tracker.resolve_bookmark(
-                    to_frame_bookmark.as_ref()
-                        .or(actionparams.frame_bookmark.as_ref())
+                    to_frame_bookmark
+                        .as_ref()
+                        .or(actionparams.frame_bookmark.as_ref()),
                 );
                 let index = frame_index.unwrap_or_default() + bm_offset;
                 atlas.index = index.as_sprite_index();
                 tracker.set_auto_next_frame(index);
                 if let Some(actions) = tracker.frame_actions.get(&index) {
-                    tracker.q_extra.extend(actions.iter().map(|&action| QueuedAction {
-                        timing,
-                        action,
-                    }));
+                    tracker.q_extra.extend(
+                        actions
+                            .iter()
+                            .map(|&action| QueuedAction { timing, action }),
+                    );
                 }
                 ScriptUpdateResult::NormalRun
             },
@@ -299,13 +340,17 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 match (tracker.reversed, reversed) {
                     (false, true) => {
                         tracker.reversed = true;
-                        tracker.set_auto_next_frame(FrameId::from_sprite_index(atlas.index));
-                    }
+                        tracker.set_auto_next_frame(
+                            FrameId::from_sprite_index(atlas.index),
+                        );
+                    },
                     (true, false) => {
                         tracker.reversed = false;
-                        tracker.set_auto_next_frame(FrameId::from_sprite_index(atlas.index));
-                    }
-                    _ => {}
+                        tracker.set_auto_next_frame(
+                            FrameId::from_sprite_index(atlas.index),
+                        );
+                    },
+                    _ => {},
                 }
                 ScriptUpdateResult::NormalRun
             },
@@ -342,12 +387,19 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 xf.rotate_z(f32::from(*turns) * 2.0 * std::f32::consts::PI);
                 ScriptUpdateResult::NormalRun
             },
-            SpriteAnimationScriptAction::TransformSetRotationDegrees { degrees } => {
-                xf.rotation = Quat::from_rotation_z(f32::from(*degrees).to_radians());
+            SpriteAnimationScriptAction::TransformSetRotationDegrees {
+                degrees,
+            } => {
+                xf.rotation =
+                    Quat::from_rotation_z(f32::from(*degrees).to_radians());
                 ScriptUpdateResult::NormalRun
             },
-            SpriteAnimationScriptAction::TransformSetRotationTurns { turns } => {
-                xf.rotation = Quat::from_rotation_z(f32::from(*turns) * 2.0 * std::f32::consts::PI);
+            SpriteAnimationScriptAction::TransformSetRotationTurns {
+                turns,
+            } => {
+                xf.rotation = Quat::from_rotation_z(
+                    f32::from(*turns) * 2.0 * std::f32::consts::PI,
+                );
                 ScriptUpdateResult::NormalRun
             },
         }
@@ -355,17 +407,15 @@ impl ScriptAction for SpriteAnimationScriptAction {
 }
 
 impl ScriptTracker for SpriteAnimationTracker {
+    type ActionParams = SpriteAnimationScriptParams;
+    type Carryover = SpriteAnimationCarryover;
+    type CarryoverParam = (SQuery<&'static TextureAtlas>,);
     type InitParam = (SQuery<&'static mut TextureAtlas>,);
     type RunIf = SpriteAnimationScriptRunIf;
     type Settings = SpriteAnimationSettings;
     type UpdateParam = (
         SRes<GameTime>,
         SQuery<&'static mut TextureAtlas>,
-    );
-    type ActionParams = SpriteAnimationScriptParams;
-    type Carryover = SpriteAnimationCarryover;
-    type CarryoverParam = (
-        SQuery<&'static TextureAtlas>,
     );
 
     fn init(
@@ -396,7 +446,10 @@ impl ScriptTracker for SpriteAnimationTracker {
         (q,): &mut <Self::CarryoverParam as SystemParam>::Item<'_, '_>,
     ) -> Self::Carryover {
         SpriteAnimationCarryover {
-            frame: q.get(entity).ok().map(|s| FrameId::from_sprite_index(s.index)),
+            frame: q
+                .get(entity)
+                .ok()
+                .map(|s| FrameId::from_sprite_index(s.index)),
         }
     }
 
@@ -428,12 +481,12 @@ impl ScriptTracker for SpriteAnimationTracker {
                 match frame {
                     OneOrMany::Single(frame) => {
                         add_action(self.resolve_frame(bm, frame));
-                    }
+                    },
                     OneOrMany::Many(frames) => {
                         for frame in frames.iter() {
                             add_action(self.resolve_frame(bm, frame));
                         }
-                    }
+                    },
                 };
                 self.frame_actions = actions;
             },
@@ -443,7 +496,7 @@ impl ScriptTracker for SpriteAnimationTracker {
                 let mut quant = *quant;
                 quant.offset += bm_offset.as_sprite_index() as i64;
                 self.framequant_actions.push((quant, action_id));
-            }
+            },
         }
     }
 
@@ -451,7 +504,7 @@ impl ScriptTracker for SpriteAnimationTracker {
         &mut self,
         entity: Entity,
         _settings: &Self::Settings,
-        (gt, q,): &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
+        (gt, q): &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         queue: &mut Vec<QueuedAction>,
     ) -> ScriptUpdateResult {
         let mut atlas = q
@@ -463,9 +516,11 @@ impl ScriptTracker for SpriteAnimationTracker {
                 return ScriptUpdateResult::Finished;
             };
             if let Some(actions) = self.frame_actions.get(&next_frame) {
-                queue.extend(actions.iter().map(|&action| QueuedAction {
-                    timing: ScriptActionTiming::Tick(gt.tick()),
-                    action,
+                queue.extend(actions.iter().map(|&action| {
+                    QueuedAction {
+                        timing: ScriptActionTiming::Tick(gt.tick()),
+                        action,
+                    }
                 }));
             }
             for (quant, action_id) in &self.framequant_actions {
@@ -518,19 +573,28 @@ impl ScriptAsset for SpriteAnimation {
         &self,
         mut builder: ScriptRuntimeBuilder<Self>,
         entity: Entity,
-        (q_atlas, preloaded): &mut <Self::BuildParam as SystemParam>::Item<'_, '_>,
+        (q_atlas, preloaded): &mut <Self::BuildParam as SystemParam>::Item<
+            '_,
+            '_,
+        >,
     ) -> ScriptRuntimeBuilder<Self> {
         let (mut image, mut atlas, mut _sprite) = q_atlas
             .get_mut(entity)
             .expect("Animation entity must have Texture Atlas components");
 
-        let (h_image, h_layout) = self.resolve_image_atlas(&preloaded, builder.asset_key())
-            .expect("Cannot resolve Animation asset's Image and Layout assets.");
+        let (h_image, h_layout) = self
+            .resolve_image_atlas(&preloaded, builder.asset_key())
+            .expect(
+                "Cannot resolve Animation asset's Image and Layout assets.",
+            );
 
         *image = h_image;
         atlas.layout = h_layout;
 
-        atlas.index = self.settings.extended.frame_start
+        atlas.index = self
+            .settings
+            .extended
+            .frame_start
             .min(self.settings.extended.frame_max)
             .max(self.settings.extended.frame_min)
             .as_sprite_index();
