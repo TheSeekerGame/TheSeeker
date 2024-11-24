@@ -230,6 +230,7 @@ fn setup_enemy(
         }
         //TODO: ensure propper z order
         xf_gent.translation.z = 14.0 * 0.000001;
+        xf_gent.translation.y += 2.0; // Sprite offset so it looks like it is standing on the ground
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
