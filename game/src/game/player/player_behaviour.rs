@@ -244,9 +244,9 @@ fn player_idle(
 
 fn player_move(
     config: Res<PlayerConfig>,
-    stats: Res<PlayerStats>,
     mut q_gent: Query<
         (
+            &PlayerStats,
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
             &mut Facing,
@@ -257,8 +257,15 @@ fn player_move(
         (Without<Knockback>, With<Player>),
     >,
 ) {
-    for (mut velocity, action_state, mut facing, grounded, stealth, dashing) in
-        q_gent.iter_mut()
+    for (
+        stats,
+        mut velocity,
+        action_state,
+        mut facing,
+        grounded,
+        stealth,
+        dashing,
+    ) in q_gent.iter_mut()
     {
         let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start

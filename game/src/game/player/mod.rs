@@ -337,6 +337,7 @@ fn setup_player(
                     remaining_cooldown: 0.0,
                 },
             ),
+            PlayerStats::init_from_config(&config),
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
             JumpCount(0),
@@ -753,10 +754,13 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
    }
 }
 
-fn load_player_stats(mut commands: Commands, player_config: Res<PlayerConfig>) {
-    commands.insert_resource(PlayerStats::init_from_config(
-        &player_config,
-    ));
+fn load_player_stats(
+    player_config: Res<PlayerConfig>,
+    mut stat_q: Query<&mut PlayerStats>,
+) {
+    stat_q.iter_mut().for_each(|mut stats| {
+        *stats = PlayerStats::init_from_config(&player_config);
+    });
 }
 
 /// Extend with additional parameter Stats
@@ -801,7 +805,7 @@ impl StatusModifier {
     }
 }
 
-#[derive(Resource)]
+#[derive(Component)]
 pub struct PlayerStats {
     pub base_stats: HashMap<StatType, f32>,
     pub effective_stats: HashMap<StatType, f32>,
@@ -862,14 +866,19 @@ impl PlayerStats {
 }
 
 fn player_new_stats_mod(
-    mut query: Query<(Entity, &mut StatusModifier)>,
+    mut query: Query<(
+        Entity,
+        &mut StatusModifier,
+        &mut PlayerStats,
+    )>,
     mut gfx_query: Query<(&PlayerGfx, &mut Sprite)>,
-    mut player_stats: ResMut<PlayerStats>,
     time: Res<Time<Virtual>>,
     mut commands: Commands,
 ) {
     for (p_gfx, mut sprite) in gfx_query.iter_mut() {
-        let Ok((entity, mut modifier)) = query.get_mut(p_gfx.e_gent) else {
+        let Ok((entity, mut modifier, mut player_stats)) =
+            query.get_mut(p_gfx.e_gent)
+        else {
             return;
         };
 
