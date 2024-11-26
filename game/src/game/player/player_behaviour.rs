@@ -18,7 +18,7 @@ use super::{
     CanStealth, DashIcon, JumpCount, KillCount, Knockback, Passives,
     PlayerStats, Pushback, StatType, Stealthing, Whirling,
 };
-use crate::camera::{CameraRig, CameraShake};
+use crate::camera::CameraShake;
 use crate::game::attack::{Attack, SelfPushback, Stealthed};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
@@ -30,8 +30,8 @@ use crate::game::player::{
 use crate::prelude::{
     any_with_component, resource_changed, App, BuildChildren, Commands,
     DetectChanges, Direction2d, Entity, GameTickUpdate, GameTime, Has,
-    IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle,
-    With, Without,
+    IntoSystemConfigs, Plugin, Query, Res, Transform, TransformBundle, With,
+    Without,
 };
 
 /// Player behavior systems.
@@ -174,7 +174,7 @@ pub fn player_can_stealth(
 }
 
 // TODO: change to using Added<attack::Hit>
-fn hitfreeze(
+fn _hitfreeze(
     mut player_q: Query<
         (
             Entity,
@@ -190,8 +190,7 @@ fn hitfreeze(
     for (attack_entity, attack) in attack_q.iter() {
         if !attack.damaged_set.is_empty() {
             // Make sure the entity doing the attack is actually the player
-            if let Ok((entity, mut hitfreeze, _)) =
-                player_q.get_mut(attack.attacker)
+            if let Ok((_, mut hitfreeze, _)) = player_q.get_mut(attack.attacker)
             {
                 // If its the same exact attack entity as the last time the affect was activated.
                 // (for example, if the attack wasn't despawned yet) we don't want to
@@ -207,10 +206,8 @@ fn hitfreeze(
         }
     }
 
-    for (entity, mut hitfreeze, mut linear_vel) in player_q.iter_mut() {
-        if hitfreeze.0 < u32::MAX {
-            hitfreeze.0 += 1;
-        }
+    for (_, mut hitfreeze, mut linear_vel) in player_q.iter_mut() {
+        hitfreeze.0 = hitfreeze.0.saturating_add(1);
         // Where the actual affect is applied.
         // if its desired to check if its being applied in another system, can do a query and this
         // same check,
@@ -242,7 +239,6 @@ fn player_idle(
 }
 
 fn player_move(
-    config: Res<PlayerConfig>,
     mut q_gent: Query<
         (
             &PlayerStats,
@@ -266,7 +262,6 @@ fn player_move(
         dashing,
     ) in q_gent.iter_mut()
     {
-        let mut direction: f32 = 0.0;
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
         // Acceleration is per game tick.
         let initial_accel = stats.get(StatType::MoveAccelInit);
@@ -276,7 +271,7 @@ fn player_move(
         // Todo: Have this value be determined by tile type at some point?
         let ground_friction = 0.7;
         let stealth_boost = if stealth.is_some() { 1.15 } else { 1.0 };
-        direction = action_state.value(&PlayerAction::Move);
+        let mut direction = action_state.value(&PlayerAction::Move);
         let new_vel = if action_state.just_pressed(&PlayerAction::Move)
             && action_state.value(&PlayerAction::Move) != 0.0
         {
@@ -432,7 +427,6 @@ pub fn player_can_dash(
     >,
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
-    mut rig: ResMut<CameraRig>,
     mut commands: Commands,
 ) {
     for (
@@ -638,7 +632,7 @@ pub fn player_collisions(
                             {
                                 // make sure at least 1/2 of player is against the wall
                                 // (because it looks wierd to have the character hanging by their head)
-                                if let Some((e, first_hit)) = spatial_query
+                                if spatial_query
                                     .ray_cast(
                                         pos.translation.xy(),
                                         Vec2::new(dir, 0.0),
@@ -655,6 +649,7 @@ pub fn player_collisions(
                                         },
                                         Some(entity),
                                     )
+                                    .is_some()
                                 {
                                     wall_slide = true;
                                     -(projected_velocity.y
@@ -778,11 +773,9 @@ fn player_grounded(
         if action_state.just_pressed(&PlayerAction::Jump) {
             jump_count.0 = 1;
             transitions.push(Grounded::new_transition(Jumping))
-        } else if is_falling {
-            if !in_c_time {
-                jump_count.0 = 1;
-                transitions.push(Grounded::new_transition(Falling))
-            }
+        } else if is_falling && !in_c_time {
+            jump_count.0 = 1;
+            transitions.push(Grounded::new_transition(Falling))
         }
     }
 }
@@ -820,7 +813,7 @@ fn player_falling(
     {
         let fall_accel = config.fall_accel;
         let mut falling = true;
-        if let Some((hit_entity, toi)) =
+        if let Some((_, toi)) =
             hits.cast(&spatial_query, &transform, Some(entity))
         {
             // if we are ~touching the ground
@@ -851,7 +844,7 @@ fn player_falling(
                 transitions.push(Falling::new_transition(Jumping))
             }
             if velocity.y > 0.0 {
-                velocity.y = velocity.y / 1.2;
+                velocity.y /= 1.2;
             }
             velocity.y -= fall_accel;
             velocity.y = velocity.y.clamp(

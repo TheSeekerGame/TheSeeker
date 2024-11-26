@@ -142,9 +142,9 @@ impl Default for Passives {
 
 impl Passives {
     // TODO: pass in slice of passives, filter the locked passives on it
-    fn new_with(passive: Passive) -> Self {
-        Passives::default()
-    }
+    // fn new_with(passive: Passive) -> Self {
+    //     Passives::default()
+    // }
 
     fn gain(&mut self) {
         // TODO: add checks for no passives remaining
@@ -171,7 +171,7 @@ pub enum Passive {
     Speedy,
 }
 
-fn debug_player_states(
+fn _debug_player_states(
     query: Query<
         AnyOf<(
             Ref<Running>,
@@ -549,6 +549,7 @@ impl Transitionable<Stealthing> for CanStealth {
 /// If a player attack lands, locks their velocity for the configured number of ticks'
 // Tracks the attack entity which last caused the hirfreeze affect. and ticks since triggered
 // (this way the same attack doesn't trigger it multiple times)
+#[allow(dead_code)]
 #[derive(Component, Default, Debug)]
 pub struct HitFreezeTime(u32, Option<Entity>);
 
@@ -681,7 +682,6 @@ fn load_player_config(
     cfgs: Res<Assets<DynamicConfig>>,
     preloaded: Res<PreloadedAssets>,
     mut player_config: ResMut<PlayerConfig>,
-    mut commands: Commands,
     mut initialized_config: Local<bool>,
 ) {
     // convert from asset key string to bevy handle
@@ -702,19 +702,16 @@ fn load_player_config(
         *initialized_config = true;
     }
     for ev in ev_asset.read() {
-        match ev {
-            AssetEvent::Modified { id } => {
-                if let Some(cfg) = cfgs.get(*id) {
-                    if cfg_handle.id() == *id {
-                        println!("before:");
-                        dbg!(&player_config);
-                        update_player_config(&mut player_config, cfg);
-                        println!("after:");
-                        dbg!(&player_config);
-                    }
+        if let AssetEvent::Modified { id } = ev {
+            if let Some(cfg) = cfgs.get(*id) {
+                if cfg_handle.id() == *id {
+                    println!("before:");
+                    dbg!(&player_config);
+                    update_player_config(&mut player_config, cfg);
+                    println!("after:");
+                    dbg!(&player_config);
                 }
-            },
-            _ => {},
+            }
         }
     }
 }
@@ -765,6 +762,7 @@ fn load_player_stats(
 }
 
 /// Extend with additional parameter Stats
+#[allow(clippy::enum_variant_names)]
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub enum StatType {
     MoveVelMax,
@@ -887,7 +885,7 @@ fn player_new_stats_mod(
             player_stats.update_stats(&modifier);
         }
 
-        sprite.color = modifier.effect_col.clone();
+        sprite.color = modifier.effect_col;
 
         modifier.time_remaining -= time.delta_seconds();
 
@@ -930,7 +928,7 @@ pub fn player_dash_fx(
     mut commands: Commands,
     asset: Res<DashIconAssetHandle>,
 ) {
-    for (global_tr, facing, dashing, stealthing_maybe) in query.iter() {
+    for (global_tr, facing, _dashing, stealthing_maybe) in query.iter() {
         let pos = global_tr.translation();
 
         // Code for potentially interpolating position
