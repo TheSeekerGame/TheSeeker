@@ -801,6 +801,11 @@ Example:
 [[script]]
 action = "SetTicksPerFrame"
 ticks_per_frame = 4
+
+[[script]]
+action = "SetTicksPerFrame"
+ticks_per_frame = 100
+reset_progress = true # Optionally reset the current frame timer
 ```
 
 Changes the rate of animation playback.
