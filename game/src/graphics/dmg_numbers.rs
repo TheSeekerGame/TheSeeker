@@ -88,6 +88,7 @@ fn instance(
                     top: Val::Px(screen_position.y),
                     ..default()
                 }),
+                StateDespawnMarker,
             ));
         }
     }
