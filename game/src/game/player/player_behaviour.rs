@@ -1,19 +1,3 @@
-use crate::camera::{CameraRig, CameraShake};
-use crate::game::attack::{Attack, SelfPushback, Stealthed};
-use crate::game::enemy::Enemy;
-use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
-use crate::game::player::{
-    Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded,
-    HitFreezeTime, Idle, Jumping, Player, PlayerAction, PlayerConfig,
-    PlayerGfx, PlayerStateSet, Running, WallSlideTime, WhirlAbility,
-};
-use crate::prelude::{
-    any_with_component, resource_changed, App, BuildChildren, Commands,
-    DetectChanges, Direction2d, Entity, GameTickUpdate, GameTime, Has,
-    IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle,
-    With, Without,
-};
-
 use bevy::sprite::Sprite;
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
@@ -30,14 +14,29 @@ use theseeker_engine::physics::{
 use theseeker_engine::script::ScriptPlayer;
 
 use super::{
-    dash_icon_fx, player_dash_fx, player_new_stats_mod, CanStealth, DashIcon,
-    JumpCount, Knockback, PlayerStats, Pushback, StatType, Stealthing,
+    dash_icon_fx, player_dash_fx, player_new_stats_mod, AttackBundle,
+    CanStealth, DashIcon, JumpCount, KillCount, Knockback, Passives,
+    PlayerStats, Pushback, StatType, Stealthing, Whirling,
 };
-use super::{AttackBundle, KillCount, Passives, Whirling};
+use crate::camera::{CameraRig, CameraShake};
+use crate::game::attack::{Attack, SelfPushback, Stealthed};
+use crate::game::enemy::Enemy;
+use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
+use crate::game::player::{
+    Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded,
+    HitFreezeTime, Idle, Jumping, Player, PlayerAction, PlayerConfig,
+    PlayerGfx, PlayerStateSet, Running, WallSlideTime, WhirlAbility,
+};
+use crate::prelude::{
+    any_with_component, resource_changed, App, BuildChildren, Commands,
+    DetectChanges, Direction2d, Entity, GameTickUpdate, GameTime, Has,
+    IntoSystemConfigs, Plugin, Query, Res, ResMut, Transform, TransformBundle,
+    With, Without,
+};
 
-///Player behavior systems.
-///Do stuff here in states and add transitions to other states by pushing
-///to a TransitionQueue.
+/// Player behavior systems.
+/// Do stuff here in states and add transitions to other states by pushing
+/// to a TransitionQueue.
 pub(crate) struct PlayerBehaviorPlugin;
 
 impl Plugin for PlayerBehaviorPlugin {
@@ -79,8 +78,8 @@ impl Plugin for PlayerBehaviorPlugin {
                 )
                     .in_set(PlayerStateSet::Behavior)
                     .before(update_sprite_colliders),
-                //consider a set for all movement/systems modify velocity, then collisions/move
-                //moves based on velocity
+                // consider a set for all movement/systems modify velocity, then collisions/move
+                // moves based on velocity
                 (
                     // hitfreeze,
                     set_movement_slots,
@@ -157,7 +156,7 @@ pub fn player_can_stealth(
         q_gent.iter_mut()
     {
         can_stealth.remaining_cooldown -= 1.0 / time.hz as f32;
-        //Return to base sprite color when exiting stealth
+        // Return to base sprite color when exiting stealth
         if can_stealth.is_added() {
             let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
             sprite.color = sprite.color.with_a(1.0);
@@ -174,7 +173,7 @@ pub fn player_can_stealth(
     }
 }
 
-//TODO: change to using Added<attack::Hit>
+// TODO: change to using Added<attack::Hit>
 fn hitfreeze(
     mut player_q: Query<
         (
@@ -379,8 +378,8 @@ fn player_run(
         if action_state.pressed(&PlayerAction::Move) {
             direction = action_state.value(&PlayerAction::Move);
         }
-        //should it account for decel and only transition to idle when player stops completely?
-        //shouldnt be able to transition to idle if we also jump
+        // should it account for decel and only transition to idle when player stops completely?
+        // shouldnt be able to transition to idle if we also jump
         if direction == 0.0 && action_state.released(&PlayerAction::Jump) {
             transitions.push(Running::new_transition(Idle));
         }
@@ -559,7 +558,7 @@ pub fn player_collisions(
         // so the velocity is only stopped in the x direction, but not the y, so without the extra
         // check with the new velocity and position, the y might clip the player through the roof
         // of the corner.
-        //if we are not moving, we can not shapecast in direction of movement
+        // if we are not moving, we can not shapecast in direction of movement
         while let Ok(shape_dir) = Direction2d::new(projected_velocity) {
             if let Some((e, first_hit)) = spatial_query.shape_cast(
                 possible_pos,
@@ -569,23 +568,23 @@ pub fn player_collisions(
                 interaction,
                 Some(entity),
             ) {
-                //If we are colliding with an enemy
+                // If we are colliding with an enemy
                 if let Ok((enemy, mut collider)) = q_enemy.get_mut(e) {
-                    //change collision groups to only include ground so on the next loop we can
-                    //ignore enemies/check our ground collision
+                    // change collision groups to only include ground so on the next loop we can
+                    // ignore enemies/check our ground collision
                     interaction = InteractionGroups {
                         memberships: PLAYER,
                         filter: GROUND,
                     };
                     match first_hit.status {
-                        //if we are not yet inside the enemy, collide, but not if we are falling
-                        //from above
+                        // if we are not yet inside the enemy, collide, but not if we are falling
+                        // from above
                         TOIStatus::Converged | TOIStatus::OutOfIterations => {
                             // if we are also dashing, or whirling, ignore the collision entirely
                             if dashing.is_none() && whirling.is_none() {
                                 let sliding_plane =
                                     into_vec2(first_hit.normal1);
-                                //configurable theshold for collision normal/sliding plane in case of physics instability
+                                // configurable theshold for collision normal/sliding plane in case of physics instability
                                 let threshold = 0.000001;
                                 if !(1. - threshold..=1. + threshold)
                                     .contains(&sliding_plane.y)
@@ -598,8 +597,8 @@ pub fn player_collisions(
                                 }
                             }
                         },
-                        //if we are already inside, modify the enemies collision group and add
-                        //Inside so next frame we dont collide with them
+                        // if we are already inside, modify the enemies collision group and add
+                        // Inside so next frame we dont collide with them
                         TOIStatus::Penetrating => {
                             collider.0.set_collision_groups(
                                 InteractionGroups {
@@ -611,10 +610,10 @@ pub fn player_collisions(
                                 .entity(enemy)
                                 .insert(crate::game::enemy::Inside);
                         },
-                        //maybe failed never happens?
+                        // maybe failed never happens?
                         TOIStatus::Failed => println!("failed"),
                     }
-                //otherwise we are colliding with the ground
+                // otherwise we are colliding with the ground
                 } else {
                     match first_hit.status {
                         TOIStatus::Converged | TOIStatus::OutOfIterations => {
@@ -773,9 +772,9 @@ fn player_grounded(
             }
         };
 
-        //just pressed seems to get missed sometimes... but we need it because pressed makes you
-        //jump continuously if held
-        //known issue https://github.com/bevyengine/bevy/issues/6183
+        // just pressed seems to get missed sometimes... but we need it because pressed makes you
+        // jump continuously if held
+        // known issue https://github.com/bevyengine/bevy/issues/6183
         if action_state.just_pressed(&PlayerAction::Jump) {
             jump_count.0 = 1;
             transitions.push(Grounded::new_transition(Jumping))
@@ -824,12 +823,12 @@ fn player_falling(
         if let Some((hit_entity, toi)) =
             hits.cast(&spatial_query, &transform, Some(entity))
         {
-            //if we are ~touching the ground
+            // if we are ~touching the ground
             if (toi.toi + velocity.y * (1.0 / time.hz) as f32)
                 < GROUNDED_THRESHOLD
             {
                 transitions.push(Falling::new_transition(Grounded));
-                //stop falling
+                // stop falling
                 velocity.y = 0.0;
                 transform.translation.y =
                     transform.translation.y - toi.toi + GROUNDED_THRESHOLD;
@@ -848,7 +847,7 @@ fn player_falling(
                 velocity.y = 0.0;
                 jump_count.0 -= 1;
 
-                //println!("air jump: {}", jump_count.0);
+                // println!("air jump: {}", jump_count.0);
                 transitions.push(Falling::new_transition(Jumping))
             }
             if velocity.y > 0.0 {
@@ -1011,7 +1010,7 @@ fn player_attack(
                         0.0, 0.0, 0.0,
                     )),
                     AnimationCollider(gent.e_gfx),
-                    //TODO: ? ColliderMeta
+                    // TODO: ? ColliderMeta
                     Collider::empty(InteractionGroups::new(
                         PLAYER_ATTACK,
                         ENEMY_HURT,
@@ -1041,15 +1040,15 @@ fn player_attack(
         }
 
         attacking.ticks += 1;
-        //if we are in the later half of attacking and another attack input was pressed,
-        //indicate an immediate follow up on animation end
+        // if we are in the later half of attacking and another attack input was pressed,
+        // indicate an immediate follow up on animation end
         if attacking.ticks >= Attacking::MAX * 8 - 8
             && action_state.just_pressed(&PlayerAction::Attack)
         {
             attacking.followup = true;
         }
 
-        //leave attacking state
+        // leave attacking state
         if attacking.ticks == Attacking::MAX * 8 {
             if attacking.followup {
                 transitions.push(Attacking::new_transition(CanAttack {
@@ -1088,8 +1087,8 @@ pub fn player_whirl(
         ),
         (With<Player>, Without<Dashing>),
     >,
-    //attacks which have had their collider changed by the AnimationCollider system
-    //TODO: need to not change collider unless there is a collider?
+    // attacks which have had their collider changed by the AnimationCollider system
+    // TODO: need to not change collider unless there is a collider?
     attack_query: Query<
         &Attack,
         (
@@ -1117,16 +1116,16 @@ pub fn player_whirl(
             || whirling.ticks < Whirling::MIN_TICKS
         {
             if let Some(attack_entity) = whirling.attack_entity {
-                //if the attack entities collider was changed, set the attack to none
+                // if the attack entities collider was changed, set the attack to none
                 if attack_query.get(attack_entity).is_err() {
                     whirling.attack_entity = None;
                 }
-            //if there is no attack, spawn a new one
+            // if there is no attack, spawn a new one
             } else {
                 let new_attack = commands
                     .spawn((
                         AttackBundle {
-                            //lifetime of two frames...
+                            // lifetime of two frames...
                             attack: Attack::new(24, entity),
                             collider: Collider::empty(InteractionGroups::new(
                                 PLAYER_ATTACK,
@@ -1146,7 +1145,7 @@ pub fn player_whirl(
                 whirling.attack_entity = Some(new_attack);
             }
         } else {
-            //leave whirling state if button is not pressed and we are past min ticks
+            // leave whirling state if button is not pressed and we are past min ticks
             if whirling.ticks >= Whirling::MIN_TICKS {
                 transitions.push(Whirling::new_transition(
                     CanAttack::default(),
