@@ -207,8 +207,6 @@ fn camera_rig_follow_player(
             time.delta_seconds() * rig.move_speed,
         );
     }
-
-    quantize_pos_to_scale(&mut rig.camera_position);
 }
 
 /// Camera updates the camera position to smoothly interpolate to the
@@ -407,35 +405,5 @@ fn cli_camera_limits_args(
         } else {
             error!("\"camera_limits <x0> <y0> <x1> <y1>\": args must be numeric values");
         }
-    }
-}
-
-fn quantize_pos_to_scale(pos: &mut Vec2) {
-    *pos = (*pos / PROJECTION_SCALE).floor() * PROJECTION_SCALE;
-}
-
-#[cfg(test)]
-mod quantize_pos_to_scale {
-    use super::*;
-
-    #[test]
-    fn whole_number() {
-        let mut pos = Vec2::new(1.0, 3.0);
-        quantize_pos_to_scale(&mut pos);
-        assert_eq!(pos, Vec2::new(1.0, 3.0));
-    }
-
-    #[test]
-    fn clean_fraction() {
-        let mut pos = Vec2::new(10.2, 4.4);
-        quantize_pos_to_scale(&mut pos);
-        assert_eq!(pos, Vec2::new(10.2, 4.4));
-    }
-
-    #[test]
-    fn dirty_fraction() {
-        let mut pos = Vec2::new(0.333333, 9.9999);
-        quantize_pos_to_scale(&mut pos);
-        assert_eq!(pos, Vec2::new(0.2, 9.8));
     }
 }
