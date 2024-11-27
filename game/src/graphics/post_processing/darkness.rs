@@ -1,27 +1,31 @@
-use crate::camera::MainCamera;
-use crate::game::player::Player;
-use crate::parallax::Parallax;
-use bevy::core_pipeline::core_2d;
+use bevy::core_pipeline::core_3d;
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 use bevy::ecs::query::QueryItem;
 use bevy::prelude::*;
 use bevy::render::extract_component::{
-    ComponentUniforms, ExtractComponent, ExtractComponentPlugin, UniformComponentPlugin,
+    ComponentUniforms, ExtractComponent, ExtractComponentPlugin,
+    UniformComponentPlugin,
 };
 use bevy::render::render_graph::{
-    NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode, ViewNodeRunner,
+    NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode,
+    ViewNodeRunner,
 };
 use bevy::render::render_resource::{
-    BindGroupEntries, BindGroupLayout, BindGroupLayoutEntry,
-    BindingType, CachedRenderPipelineId, ColorTargetState, ColorWrites, FragmentState,
-    MultisampleState, Operations, PipelineCache, PrimitiveState, RenderPassColorAttachment,
-    RenderPassDescriptor, RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor,
-    ShaderStages, ShaderType, TextureFormat, TextureSampleType, TextureViewDimension,
+    BindGroupEntries, BindGroupLayout, BindGroupLayoutEntry, BindingType,
+    CachedRenderPipelineId, ColorTargetState, ColorWrites, FragmentState,
+    MultisampleState, Operations, PipelineCache, PrimitiveState,
+    RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
+    Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, ShaderType,
+    TextureFormat, TextureSampleType, TextureViewDimension,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice};
 use bevy::render::view::ViewTarget;
 use bevy::render::RenderApp;
 use glam::FloatExt;
+
+use crate::camera::MainCamera;
+use crate::game::player::Player;
+use crate::parallax::Parallax;
 
 /// To use this plugin add it to your app, and make sure the [`DarknessSettings`] component is added
 /// to the camera:
@@ -52,8 +56,8 @@ pub struct DarknessPlugin;
 
 impl Plugin for DarknessPlugin {
     fn build(&self, app: &mut App) {
-        //app.add_systems(Update, darkness_dynamics);
-        //app.add_systems(Update, darkness_parallax);
+        // app.add_systems(Update, darkness_dynamics);
+        // app.add_systems(Update, darkness_parallax);
         app.add_plugins((
             // The settings will be a component that lives in the main world but will
             // be extracted to the render world every frame.
@@ -94,24 +98,24 @@ impl Plugin for DarknessPlugin {
             // matching the [`ViewQuery`]
             .add_render_graph_node::<ViewNodeRunner<DarknessPostProcessNode>>(
                 // Specify the name of the graph, in this case we want the graph for 3d
-                core_2d::graph::Core2d,
+                core_3d::graph::Core3d,
                 // It also needs the name of the node
                 DarknessPostProcessLabel,
                 // DarknessPostProcessNode::NAME,
             )
             .add_render_graph_edges(
-                core_2d::graph::Core2d,
+                core_3d::graph::Core3d,
                 // core_2d::graph::NAME,
                 // Specify the node ordering.
                 // This will automatically create all required node edges to enforce the given ordering.
                 // Currently runs after ToneMapping, which seems to give best appearance... might need to revisit
                 // to handle bloom/ other glowing objects.
                 (
-                    core_2d::graph::Node2d::Tonemapping,
+                    core_3d::graph::Node3d::Tonemapping,
                     // core_2d::graph::node::TONEMAPPING,
                     DarknessPostProcessLabel,
                     // DarknessPostProcessNode::NAME,
-                    core_2d::graph::Node2d::EndMainPassPostProcessing,
+                    core_3d::graph::Node3d::EndMainPassPostProcessing,
                     // core_2d::graph::node::END_MAIN_PASS_POST_PROCESSING,
                 ),
             );
@@ -143,12 +147,12 @@ pub struct DarknessSettings {
     /// RGB
     pub bg_light_color: Vec3,
     // WebGL2 structs must be 16 byte aligned.
-    #[cfg(feature = "webgl2")]
+    #[cfg(target_arch = "wasm32")]
     _webgl2_padding: Vec2,
 }
 
 /// Changes the intensity over time to show that the effect is controlled from the main world
-fn darkness_dynamics(
+fn _darkness_dynamics(
     mut settings: Query<&mut DarknessSettings>,
     time: Res<Time>,
     camera: Query<&Transform, (With<MainCamera>, Without<Player>)>,
@@ -158,12 +162,13 @@ fn darkness_dynamics(
     // make sure the lantern is centered on the player even if the camera isn't
     if let Ok(cam_transform) = camera.get_single() {
         if let Ok(player_transform) = player.get_single() {
-            offest = player_transform.translation.xy() - cam_transform.translation.xy()
+            offest = player_transform.translation.xy()
+                - cam_transform.translation.xy()
         };
     };
 
     for mut setting in &mut settings {
-        let seconds_per_day_cycle = 300000.0;
+        let _seconds_per_day_cycle = 300000.0;
 
         let mut intensity = 1.0;
         // remaps sines normal output to the 0-1 range
@@ -172,9 +177,11 @@ fn darkness_dynamics(
         // uses the lerp trick to easily add smooth transition; maybe use different
         // curve/tweening in the future.
         if intensity < 0.3 {
-            setting.lantern = setting.lantern.lerp(1.0, time.delta_seconds() * 0.9);
+            setting.lantern =
+                setting.lantern.lerp(1.0, time.delta_seconds() * 0.9);
         } else if intensity > 0.3 {
-            setting.lantern = setting.lantern.lerp(0.0, time.delta_seconds() * 0.9);
+            setting.lantern =
+                setting.lantern.lerp(0.0, time.delta_seconds() * 0.9);
         }
 
         // Set the intensity.
@@ -190,7 +197,7 @@ fn darkness_dynamics(
 /// Currently only applies to [`bevy_ecs_tilemap::tiles::TileColor`]'s
 /// Might need modifications if we draw other things in the backround and
 /// want it to work with darkness properly.
-fn darkness_parallax(
+fn _darkness_parallax(
     settings: Query<&DarknessSettings>,
     parallaxed_bgs: Query<(Entity, &Parallax)>,
     children: Query<&Children>,
@@ -246,7 +253,8 @@ impl ViewNode for DarknessPostProcessNode {
     ) -> Result<(), NodeRunError> {
         // Get the pipeline resource that contains the global data we need
         // to create the render pipeline
-        let post_process_pipeline = world.resource::<DarknessPostProcessPipeline>();
+        let post_process_pipeline =
+            world.resource::<DarknessPostProcessPipeline>();
 
         // The pipeline cache is a cache of all previously created pipelines.
         // It is required to avoid creating a new pipeline each frame,
@@ -254,14 +262,17 @@ impl ViewNode for DarknessPostProcessNode {
         let pipeline_cache = world.resource::<PipelineCache>();
 
         // Get the pipeline from the cache
-        let Some(pipeline) = pipeline_cache.get_render_pipeline(post_process_pipeline.pipeline_id)
+        let Some(pipeline) = pipeline_cache
+            .get_render_pipeline(post_process_pipeline.pipeline_id)
         else {
             return Ok(());
         };
 
         // Get the settings uniform binding
-        let settings_uniforms = world.resource::<ComponentUniforms<DarknessSettings>>();
-        let Some(settings_binding) = settings_uniforms.uniforms().binding() else {
+        let settings_uniforms =
+            world.resource::<ComponentUniforms<DarknessSettings>>();
+        let Some(settings_binding) = settings_uniforms.uniforms().binding()
+        else {
             return Ok(());
         };
 
@@ -296,19 +307,20 @@ impl ViewNode for DarknessPostProcessNode {
         );
 
         // Begin the render pass
-        let mut render_pass = render_context.begin_tracked_render_pass(RenderPassDescriptor {
-            label: Some("darkness_post_process_pass"),
-            color_attachments: &[Some(RenderPassColorAttachment {
-                // We need to specify the post process destination view here
-                // to make sure we write to the appropriate texture.
-                view: post_process.destination,
-                resolve_target: None,
-                ops: Operations::default(),
-            })],
-            depth_stencil_attachment: None,
-            timestamp_writes: None,
-            occlusion_query_set: None,
-        });
+        let mut render_pass =
+            render_context.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("darkness_post_process_pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    // We need to specify the post process destination view here
+                    // to make sure we write to the appropriate texture.
+                    view: post_process.destination,
+                    resolve_target: None,
+                    ops: Operations::default(),
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
 
         // This is mostly just wgpu boilerplate for drawing a fullscreen triangle,
         // using the pipeline/bind_group created above
@@ -369,12 +381,13 @@ impl FromWorld for DarknessPostProcessPipeline {
         );
 
         // We can create the sampler here since it won't change at runtime and doesn't depend on the view
-        let sampler = render_device.create_sampler(&SamplerDescriptor::default());
+        let sampler =
+            render_device.create_sampler(&SamplerDescriptor::default());
 
         // Get the shader handle
         let shader = world
             .resource::<AssetServer>()
-            .load("shaders/darkness_post_processing.wgsl");
+            .load("shaders/post_processing/darkness.wgsl");
 
         let pipeline_id = world
             .resource_mut::<PipelineCache>()

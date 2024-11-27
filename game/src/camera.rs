@@ -2,16 +2,17 @@
 
 use std::f32::consts::PI;
 
-use crate::game::player::Player;
-use crate::graphics::darkness::DarknessSettings;
-use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
-use crate::level::MainBackround;
-use crate::prelude::*;
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use iyes_perf_ui::PerfUiCompleteBundle;
 use ran::ran_f64_range;
+
+use crate::game::player::Player;
+use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
+use crate::graphics::post_processing::DarknessSettings;
+use crate::level::MainBackround;
+use crate::prelude::*;
 
 pub struct CameraPlugin;
 
@@ -39,7 +40,7 @@ impl Plugin for CameraPlugin {
             (
                 update_camera_rig.after(camera_rig_follow_player),
                 update_screen_shake.run_if(resource_exists::<CameraShake>),
-            )
+            ),
         );
     }
 }
@@ -178,7 +179,7 @@ fn camera_rig_follow_player(
             *lead_bckwrd = !*lead_bckwrd
         }
     }
-    //rig.position.x = player_xform.translation.x;
+    // rig.position.x = player_xform.translation.x;
 
     rig.target.y = player_xform.translation.y;
 }
@@ -209,7 +210,6 @@ pub(crate) fn update_camera_rig(
 
     rig.camera = new_xy;
 
-    
     // screen shake amounts
     let offset = match shake_op {
         Some(shake) => shake.c_offset,
@@ -274,25 +274,23 @@ impl CameraShake {
         let rand_a = ran_f64_range(0.0..=360.0);
         let dir = Vec2::from_angle(rand_a as f32 * PI * 2.0);
 
-        Self { 
-            strength, 
+        Self {
+            strength,
             freq,
-            timer: Timer::from_seconds(t, TimerMode::Once), 
-            sub_timer: Timer::from_seconds(t / freq, TimerMode::Repeating), 
+            timer: Timer::from_seconds(t, TimerMode::Once),
+            sub_timer: Timer::from_seconds(t / freq, TimerMode::Repeating),
             c_offset: Vec2::ZERO,
             dir,
         }
     }
 }
 
-
 pub fn update_screen_shake(
     mut commands: Commands,
-//    mut cam_query: Query<(Entity, &mut CameraShake, &mut Transform), (With<PlayerCamera>)>,
+    //    mut cam_query: Query<(Entity, &mut CameraShake, &mut Transform), (With<PlayerCamera>)>,
     time: Res<Time<Virtual>>,
     mut shake: ResMut<CameraShake>,
 ) {
-
     let freq = shake.freq;
     let ratio = shake.timer.fraction();
     let decay = 1.0 - ratio.powi(2);
@@ -314,12 +312,12 @@ pub fn update_screen_shake(
     let tan_val = tan_s * decay * TAN_AMP_SCALE;
 
     let tan_dir = Vec3::Z.cross(shake.dir.extend(0.)).truncate();
-    
+
     let delta = shake.dir * val * shake.strength;
     let tan_delta = tan_dir * tan_val * shake.strength;
-//    let angle = val * shake.strength * 0.0001;
+    //    let angle = val * shake.strength * 0.0001;
 
-    //println!("{}", delta);
+    // println!("{}", delta);
 
     shake.c_offset = delta + tan_delta;
 
@@ -329,9 +327,12 @@ pub fn update_screen_shake(
     if shake.timer.finished() {
         commands.remove_resource::<CameraShake>();
     }
-}   
+}
 
-fn cli_camera_at(In(args): In<Vec<String>>, mut q_cam: Query<&mut Transform, With<MainCamera>>) {
+fn cli_camera_at(
+    In(args): In<Vec<String>>,
+    mut q_cam: Query<&mut Transform, With<MainCamera>>,
+) {
     if args.len() != 2 {
         error!("\"camera_at <x> <y>\"");
         return;
