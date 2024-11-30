@@ -170,10 +170,10 @@
         columns: 6,
     ),
     "anim.spider.Idle": File (
-        path: "animations/spider/Idle.anim.toml",
+        path: "animations/spider/big/tier1/Idle.anim.toml",
     ),
     "anim.spider.Idle.image": File (
-        path: "animations/spider/Idle.png",
+        path: "animations/spider/big/tier1/Idle.png",
     ),
     "anim.spider.Idle.atlas": TextureAtlasLayout (
         tile_size_x: 90.,
@@ -182,10 +182,10 @@
         columns: 17,
     ),
     "anim.spider.Walk": File (
-        path: "animations/spider/Walk.anim.toml",
+        path: "animations/spider/big/tier1/Walk.anim.toml",
     ),
     "anim.spider.Walk.image": File (
-        path: "animations/spider/Walk.png",
+        path: "animations/spider/big/tier1/Walk.png",
     ),
     "anim.spider.Walk.atlas": TextureAtlasLayout (
         tile_size_x: 90.,
@@ -194,10 +194,10 @@
         columns: 10,
     ),
     "anim.spider.RangedAttack": File (
-        path: "animations/spider/RangedAttack.anim.toml",
+        path: "animations/spider/big/tier1/RangedAttack.anim.toml",
     ),
     "anim.spider.RangedAttack.image": File (
-        path: "animations/spider/RangedAttack.png",
+        path: "animations/spider/big/tier1/RangedAttack.png",
     ),
     "anim.spider.RangedAttack.atlas": TextureAtlasLayout (
         tile_size_x: 90.,
@@ -206,10 +206,10 @@
         columns: 15,
     ),
     "anim.spider.OffensiveAttack": File (
-        path: "animations/spider/OffensiveAttack.anim.toml",
+        path: "animations/spider/big/tier1/OffensiveAttack.anim.toml",
     ),
     "anim.spider.OffensiveAttack.image": File (
-        path: "animations/spider/OffensiveAttack.png",
+        path: "animations/spider/big/tier1/OffensiveAttack.png",
     ),
     "anim.spider.OffensiveAttack.atlas": TextureAtlasLayout (
         tile_size_x: 90.,
@@ -218,10 +218,10 @@
         columns: 11,
     ),
     "anim.spider.Chase": File (
-            path: "animations/spider/Chase.anim.toml",
+            path: "animations/spider/big/tier1/Chase.anim.toml",
     ),
         "anim.spider.Chase.image": File (
-            path: "animations/spider/Chase.png",
+            path: "animations/spider/big/tier1/Chase.png",
     ),
         "anim.spider.Chase.atlas": TextureAtlasLayout (
             tile_size_x: 90.,
@@ -230,10 +230,10 @@
             columns: 6,
     ),
     "anim.spider.DefensiveAttack": File (
-        path: "animations/spider/DefensiveAttack.anim.toml",
+        path: "animations/spider/big/tier1/DefensiveAttack.anim.toml",
     ),
     "anim.spider.DefensiveAttack.image": File (
-        path: "animations/spider/DefensiveAttack.png",
+        path: "animations/spider/big/tier1/DefensiveAttack.png",
     ),
     "anim.spider.DefensiveAttack.atlas": TextureAtlasLayout (
         tile_size_x: 90.,
@@ -242,10 +242,10 @@
         columns: 11,
     ),
     "anim.spider.Defense": File (
-        path: "animations/spider/Defense.anim.toml",
+        path: "animations/spider/big/tier1/Defense.anim.toml",
     ),
     "anim.spider.Defense.image": File (
-        path: "animations/spider/Defence.png",
+        path: "animations/spider/big/tier1/Defence.png",
     ),
     "anim.spider.Defense.atlas": TextureAtlasLayout (
         tile_size_x: 90.,
@@ -254,10 +254,10 @@
         columns: 5,
     ),
      "anim.spider.Sparks": File (
-        path: "animations/spider/Sparks.anim.toml",
+        path: "animations/spider/big/tier1/Sparks.anim.toml",
     ),
      "anim.spider.Sparks.image": File (
-        path: "animations/spider/Sparks.png",
+        path: "animations/spider/big/tier1/Sparks.png",
     ),
     "anim.spider.Sparks.atlas": TextureAtlasLayout (
         tile_size_x: 36.,
@@ -266,10 +266,10 @@
         columns: 18,
     ),
     "anim.spider.Retreat": File (
-        path: "animations/spider/Retreat.anim.toml",
+        path: "animations/spider/big/tier1/Retreat.anim.toml",
     ),
     "anim.spider.Retreat.image": File (
-        path: "animations/spider/Retreat.png",
+        path: "animations/spider/big/tier1/Retreat.png",
     ),
     "anim.spider.Retreat.atlas": TextureAtlasLayout (
         tile_size_x: 90.,
@@ -278,10 +278,10 @@
         columns: 10,
     ),
     "anim.spider.Death": File (
-        path: "animations/spider/Death.anim.toml",
+        path: "animations/spider/big/tier1/Death.anim.toml",
     ),
     "anim.spider.Death.image": File (
-        path: "animations/spider/Death.png",
+        path: "animations/spider/big/tier1/Death.png",
     ),
     "anim.spider.Death.atlas": TextureAtlasLayout (
         tile_size_x: 90.,
@@ -290,10 +290,10 @@
         columns: 7,
     ),
     "anim.spider.Decay": File (
-        path: "animations/spider/Decay.anim.toml",
+        path: "animations/spider/big/tier1/Decay.anim.toml",
     ),
     "anim.spider.Decay.image": File (
-        path: "animations/spider/Decay.png",
+        path: "animations/spider/big/tier1/Decay.png",
     ),
     "anim.spider.Decay.atlas": TextureAtlasLayout (
         tile_size_x: 90.,
