@@ -159,3 +159,7 @@ branch = "fixed_update_0.13"
 
 [dependencies.rapier2d]
 version = "0.18"
+
+# Unavoidable with how Bevy is designed
+[lints.clippy]
+type_complexity = "allow"

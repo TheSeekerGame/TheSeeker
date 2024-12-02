@@ -1,10 +1,12 @@
+use bevy::prelude::*;
+use theseeker_engine::physics::Collider;
+use theseeker_engine::prelude::{GameTickUpdate, GameTime};
+
 use crate::camera::MainCamera;
 use crate::game::attack::{apply_attack_damage, DamageInfo};
 use crate::game::player::Player;
 use crate::prelude::Update;
-use bevy::prelude::*;
-use theseeker_engine::physics::Collider;
-use theseeker_engine::prelude::{GameTickUpdate, GameTime};
+use crate::StateDespawnMarker;
 
 pub struct DmgNumbersPlugin;
 
@@ -26,7 +28,10 @@ struct DmgNumber(Vec3, f64);
 fn instance(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    entity_with_hp: Query<(&GlobalTransform, Option<&Collider>), Without<Player>>,
+    entity_with_hp: Query<
+        (&GlobalTransform, Option<&Collider>),
+        Without<Player>,
+    >,
     mut damage_events: EventReader<DamageInfo>,
     game_time: Res<GameTime>,
     q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
@@ -36,14 +41,17 @@ fn instance(
     };
 
     for damage_info in damage_events.read() {
-        if let Ok((transform, collider)) = entity_with_hp.get(damage_info.target) {
+        if let Ok((transform, collider)) =
+            entity_with_hp.get(damage_info.target)
+        {
             let mut world_position = transform.translation();
 
             // Makes the number start above the collider, if it exists
             world_position += match collider {
                 Some(collider) => {
                     let above_hb_offset = 11.0;
-                    let collider_height = collider.0.compute_aabb().half_extents().y;
+                    let collider_height =
+                        collider.0.compute_aabb().half_extents().y;
                     Vec3::new(
                         1.0,
                         collider_height + above_hb_offset,
@@ -60,7 +68,8 @@ fn instance(
             commands.spawn((
                 DmgNumber(
                     world_position,
-                    game_time.tick() as f64 / game_time.hz + game_time.last_update().as_secs_f64(),
+                    game_time.tick() as f64 / game_time.hz
+                        + game_time.last_update().as_secs_f64(),
                 ),
                 TextBundle::from_section(
                     format!("{}", damage_info.amount),
@@ -76,10 +85,10 @@ fn instance(
                         } else {
                             Color::WHITE
                         },
-                        //TODO:
-                        //if backstab, red?
-                        //TODO:
-                        //can we mix the colors to determine final color?
+                        // TODO:
+                        // if backstab, red?
+                        // TODO:
+                        // can we mix the colors to determine final color?
                     },
                 )
                 .with_style(Style {
@@ -88,6 +97,7 @@ fn instance(
                     top: Val::Px(screen_position.y),
                     ..default()
                 }),
+                StateDespawnMarker,
             ));
         }
     }
@@ -109,7 +119,8 @@ fn update_number(
     };
     let max_time = 6.0;
 
-    for (entity, mut dmg_number, mut style, mut text) in dmg_numer_q.iter_mut() {
+    for (entity, mut dmg_number, mut style, mut text) in dmg_numer_q.iter_mut()
+    {
         let text_style = &mut text.sections[0].style;
         // This way the floating text position is dependent on the gametick time,
         // so if the game is paused, the floating numbers will pause as well.
@@ -118,7 +129,8 @@ fn update_number(
             - dmg_number.1;
 
         // apply a little wobble affect, and start each with a random different phase
-        let global_pos = dmg_number.0 + Vec3::new(0.0, 3.0 * elapsed_time as f32, 0.0);
+        let global_pos =
+            dmg_number.0 + Vec3::new(0.0, 3.0 * elapsed_time as f32, 0.0);
         let screen_position = camera
             .world_to_viewport(camera_transform, global_pos)
             .unwrap();

@@ -1,11 +1,10 @@
 mod player_anim;
 mod player_behaviour;
 use bevy::utils::hashbrown::HashMap;
+use leafwing_input_manager::action_state::ActionState;
 use leafwing_input_manager::axislike::VirtualAxis;
-use leafwing_input_manager::{
-    action_state::ActionState, input_map::InputMap, Actionlike,
-    InputManagerBundle,
-};
+use leafwing_input_manager::input_map::InputMap;
+use leafwing_input_manager::{Actionlike, InputManagerBundle};
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
 use rapier2d::geometry::{Group, InteractionGroups};
@@ -81,7 +80,7 @@ pub enum PlayerStateSet {
     Animation,
 }
 
-//TODO: change to player spawnpoint
+// TODO: change to player spawnpoint
 #[derive(Bundle, LdtkEntity, Default)]
 pub struct PlayerBlueprintBundle {
     marker: PlayerBlueprint,
@@ -142,14 +141,15 @@ impl Default for Passives {
 }
 
 impl Passives {
-    //TODO: pass in slice of passives, filter the locked passives on it
-    fn new_with(passive: Passive) -> Self {
-        Passives::default()
-    }
+    // TODO: pass in slice of passives, filter the locked passives on it
+    // fn new_with(passive: Passive) -> Self {
+    //     Passives::default()
+    // }
+
     fn gain(&mut self) {
-        //TODO: add checks for no passives remaining
-        //TODO add limit on gaining past max passive slots?
-        //does nothing if there are no more passives to gain
+        // TODO: add checks for no passives remaining
+        // TODO add limit on gaining past max passive slots?
+        // does nothing if there are no more passives to gain
         let mut rng = rand::thread_rng();
         if !self.locked.is_empty() {
             let i = rng.gen_range(0..self.locked.len());
@@ -171,7 +171,7 @@ pub enum Passive {
     Speedy,
 }
 
-fn debug_player_states(
+fn _debug_player_states(
     query: Query<
         AnyOf<(
             Ref<Running>,
@@ -253,7 +253,7 @@ fn setup_player(
     config: Res<PlayerConfig>,
 ) {
     for (mut xf_gent, e_gent, parent) in q.iter_mut() {
-        //TODO: proper way of ensuring z is correct
+        // TODO: proper way of ensuring z is correct
         xf_gent.translation.z = 15.0 * 0.000001;
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
@@ -272,7 +272,7 @@ fn setup_player(
                         10.0,
                         InteractionGroups {
                             memberships: PLAYER,
-                            //should be more specific
+                            // should be more specific
                             filter: Group::all(),
                         },
                     ),
@@ -302,8 +302,8 @@ fn setup_player(
                 current: config.max_health,
                 max: config.max_health,
             },
-            //have to use builder here *i think* because of different types between keycode and
-            //axis
+            // have to use builder here *i think* because of different types between keycode and
+            // axis
             InputManagerBundle::<PlayerAction> {
                 action_state: ActionState::default(),
                 input_map: InputMap::default()
@@ -327,7 +327,7 @@ fn setup_player(
                     .with(PlayerAction::Whirl, KeyCode::KeyL)
                     .with(PlayerAction::Stealth, KeyCode::KeyI),
             },
-            //bundling things up becuase we reached max tuple
+            // bundling things up becuase we reached max tuple
             (
                 Falling,
                 CanDash {
@@ -337,6 +337,7 @@ fn setup_player(
                     remaining_cooldown: 0.0,
                 },
             ),
+            PlayerStats::init_from_config(&config),
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
             JumpCount(0),
@@ -346,7 +347,7 @@ fn setup_player(
             StateDespawnMarker,
             Passives::default(),
         ));
-        //unparent from the level
+        // unparent from the level
         if let Ok(parent) = parent_query.get(parent.get()) {
             commands.entity(parent).remove_children(&[e_gent]);
         }
@@ -425,11 +426,11 @@ impl GenericState for Jumping {}
 #[component(storage = "SparseSet")]
 pub struct Grounded;
 impl GentState for Grounded {}
-//cant be Idle or Running if not Grounded
+// cant be Idle or Running if not Grounded
 impl Transitionable<Jumping> for Grounded {
     type Removals = (Grounded, Idle, Running, Whirling);
 }
-//cant be Idle or Running if not Grounded
+// cant be Idle or Running if not Grounded
 impl Transitionable<Falling> for Grounded {
     type Removals = (Grounded, Idle, Running, Whirling);
 }
@@ -546,8 +547,9 @@ impl Transitionable<Stealthing> for CanStealth {
 // and provide storage for that behaviours state
 
 /// If a player attack lands, locks their velocity for the configured number of ticks'
-//Tracks the attack entity which last caused the hirfreeze affect. and ticks since triggered
+// Tracks the attack entity which last caused the hirfreeze affect. and ticks since triggered
 // (this way the same attack doesn't trigger it multiple times)
+#[allow(dead_code)]
 #[derive(Component, Default, Debug)]
 pub struct HitFreezeTime(u32, Option<Entity>);
 
@@ -566,12 +568,13 @@ impl WallSlideTime {
     fn sliding(&self, cfg: &PlayerConfig) -> bool {
         self.0 <= cfg.max_coyote_time * 2.0
     }
+
     fn strict_sliding(&self, cfg: &PlayerConfig) -> bool {
         self.0 <= cfg.max_coyote_time * 1.0
     }
 }
 
-///Tracks the cooldown for the available energy for the players whirl
+/// Tracks the cooldown for the available energy for the players whirl
 #[derive(Component, Default, Debug)]
 pub struct WhirlAbility {
     pub energy: f32,
@@ -679,7 +682,6 @@ fn load_player_config(
     cfgs: Res<Assets<DynamicConfig>>,
     preloaded: Res<PreloadedAssets>,
     mut player_config: ResMut<PlayerConfig>,
-    mut commands: Commands,
     mut initialized_config: Local<bool>,
 ) {
     // convert from asset key string to bevy handle
@@ -700,19 +702,16 @@ fn load_player_config(
         *initialized_config = true;
     }
     for ev in ev_asset.read() {
-        match ev {
-            AssetEvent::Modified { id } => {
-                if let Some(cfg) = cfgs.get(*id) {
-                    if cfg_handle.id() == *id {
-                        println!("before:");
-                        dbg!(&player_config);
-                        update_player_config(&mut player_config, cfg);
-                        println!("after:");
-                        dbg!(&player_config);
-                    }
+        if let AssetEvent::Modified { id } = ev {
+            if let Some(cfg) = cfgs.get(*id) {
+                if cfg_handle.id() == *id {
+                    println!("before:");
+                    dbg!(&player_config);
+                    update_player_config(&mut player_config, cfg);
+                    println!("after:");
+                    dbg!(&player_config);
                 }
-            },
-            _ => {},
+            }
         }
     }
 }
@@ -753,13 +752,17 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
    }
 }
 
-fn load_player_stats(mut commands: Commands, player_config: Res<PlayerConfig>) {
-    commands.insert_resource(PlayerStats::init_from_config(
-        &player_config,
-    ));
+fn load_player_stats(
+    player_config: Res<PlayerConfig>,
+    mut stat_q: Query<&mut PlayerStats>,
+) {
+    stat_q.iter_mut().for_each(|mut stats| {
+        *stats = PlayerStats::init_from_config(&player_config);
+    });
 }
 
 /// Extend with additional parameter Stats
+#[allow(clippy::enum_variant_names)]
 #[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
 pub enum StatType {
     MoveVelMax,
@@ -783,7 +786,7 @@ pub struct StatusModifier {
     time_remaining: f32,
 }
 
-//TODO: move to attack
+// TODO: move to attack
 impl StatusModifier {
     pub fn basic_ice_spider() -> Self {
         Self {
@@ -795,13 +798,13 @@ impl StatusModifier {
             scalar: vec![0.5],
             delta: vec![],
             //            effect_col: Color::hex("C2C9C9").unwrap(),
-            effect_col: Color::hex("0099CC").unwrap(), // For More Visible Effect
+            effect_col: Color::hex("0099CC").unwrap(), /* For More Visible Effect */
             time_remaining: 2.0,
         }
     }
 }
 
-#[derive(Resource)]
+#[derive(Component)]
 pub struct PlayerStats {
     pub base_stats: HashMap<StatType, f32>,
     pub effective_stats: HashMap<StatType, f32>,
@@ -862,14 +865,19 @@ impl PlayerStats {
 }
 
 fn player_new_stats_mod(
-    mut query: Query<(Entity, &mut StatusModifier)>,
+    mut query: Query<(
+        Entity,
+        &mut StatusModifier,
+        &mut PlayerStats,
+    )>,
     mut gfx_query: Query<(&PlayerGfx, &mut Sprite)>,
-    mut player_stats: ResMut<PlayerStats>,
     time: Res<Time<Virtual>>,
     mut commands: Commands,
 ) {
     for (p_gfx, mut sprite) in gfx_query.iter_mut() {
-        let Ok((entity, mut modifier)) = query.get_mut(p_gfx.e_gent) else {
+        let Ok((entity, mut modifier, mut player_stats)) =
+            query.get_mut(p_gfx.e_gent)
+        else {
             return;
         };
 
@@ -877,7 +885,7 @@ fn player_new_stats_mod(
             player_stats.update_stats(&modifier);
         }
 
-        sprite.color = modifier.effect_col.clone();
+        sprite.color = modifier.effect_col;
 
         modifier.time_remaining -= time.delta_seconds();
 
@@ -920,22 +928,22 @@ pub fn player_dash_fx(
     mut commands: Commands,
     asset: Res<DashIconAssetHandle>,
 ) {
-    for (global_tr, facing, dashing, stealthing_maybe) in query.iter() {
+    for (global_tr, facing, _dashing, stealthing_maybe) in query.iter() {
         let pos = global_tr.translation();
 
         // Code for potentially interpolating position
         // Not deemed necessary due to sufficient sprite overlap
-        //let dir = Vec3::new(
+        // let dir = Vec3::new(
         //    config.dash_velocity * facing.direction(),
         //    0.0,
         //    0.0,
         //);
-        //let lpos = pos + dir * 0.5;
-        //if dashing.is_added() {
+        // let lpos = pos + dir * 0.5;
+        // if dashing.is_added() {
         //
         //} else
         {
-            //let dir = Vec2::new(
+            // let dir = Vec2::new(
             //    config.dash_velocity * facing.direction(),
             //    0.0,
             //);
@@ -983,7 +991,7 @@ pub fn dash_icon_fx(
     }
 }
 
-///Resets the players cooldowns/energy on hit of a stealthed critical hit
+/// Resets the players cooldowns/energy on hit of a stealthed critical hit
 pub fn on_hit_stealth_reset(
     query: Query<&Attack, (Added<Hit>, With<Crit>, With<Stealthed>)>,
     mut attacker_skills: Query<(
@@ -1013,7 +1021,7 @@ pub fn on_hit_stealth_reset(
     }
 }
 
-///Exits player Stealthing state when a stealthed attack first hits
+/// Exits player Stealthing state when a stealthed attack first hits
 pub fn on_hit_exit_stealthing(
     query: Query<&Attack, (Added<Hit>, With<Stealthed>)>,
     mut attacker_query: Query<(&Gent, &mut TransitionQueue), With<Player>>,
