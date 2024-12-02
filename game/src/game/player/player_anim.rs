@@ -1,3 +1,10 @@
+use bevy::prelude::{DetectChanges, Ref};
+use theseeker_engine::assets::animation::SpriteAnimation;
+use theseeker_engine::gent::Gent;
+use theseeker_engine::physics::LinearVelocity;
+use theseeker_engine::prelude::{GameTickUpdate, GameTime};
+use theseeker_engine::script::ScriptPlayer;
+
 use crate::appstate::AppState;
 use crate::game::gentstate::Facing;
 use crate::game::player::{
@@ -8,14 +15,8 @@ use crate::prelude::{
     in_state, Added, App, Has, IntoSystemConfigs, Local, Or, Plugin, Query,
     Res, With, Without,
 };
-use bevy::prelude::{DetectChanges, Ref};
-use theseeker_engine::assets::animation::SpriteAnimation;
-use theseeker_engine::gent::Gent;
-use theseeker_engine::physics::LinearVelocity;
-use theseeker_engine::prelude::{GameTickUpdate, GameTime};
-use theseeker_engine::script::ScriptPlayer;
 
-///play animations here, run after transitions
+/// play animations here, run after transitions
 pub struct PlayerAnimationPlugin;
 
 impl Plugin for PlayerAnimationPlugin {
@@ -166,8 +167,8 @@ fn player_attacking_animation(
             // let current = player.current_key().unwrap_or("").clone();
             player.set_slot("AttackTransition", false);
             if is_falling || is_jumping {
-                //TODO: These need a way to resume the new animation from the current frame index
-                //or specified offset
+                // TODO: These need a way to resume the new animation from the current frame index
+                // or specified offset
                 if player.current_key().unwrap_or("")
                     != "anim.player.SwordBasicAir"
                 {
@@ -250,7 +251,7 @@ fn sprite_flip(
             }
             match facing {
                 Facing::Right => {
-                    //TODO: toggle facing script action
+                    // TODO: toggle facing script action
                     player.set_slot("DirectionRight", true);
                     player.set_slot("DirectionLeft", false);
                     *current_direction = true;

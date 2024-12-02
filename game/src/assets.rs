@@ -14,14 +14,26 @@ impl Plugin for AssetsPlugin {
         // bevy_asset_loader
         app.add_loading_state(
             LoadingState::new(AppState::AssetsLoading)
-                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("animations.assets.ron")
-                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("sprites.assets.ron")
-                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("audio.assets.ron")
-                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("levels.assets.ron")
-                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("gameplay.assets.ron")
-                .with_dynamic_assets_file::<StandardDynamicAssetCollection>("ui.assets.ron")
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>(
+                    "animations.assets.ron",
+                )
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>(
+                    "sprites.assets.ron",
+                )
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>(
+                    "audio.assets.ron",
+                )
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>(
+                    "levels.assets.ron",
+                )
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>(
+                    "gameplay.assets.ron",
+                )
+                .with_dynamic_assets_file::<StandardDynamicAssetCollection>(
+                    "ui.assets.ron",
+                )
                 .load_collection::<UiAssets>()
-                .load_collection::<MainMenuAssets>()
+                .load_collection::<MainMenuAssets>(),
         );
     }
 }

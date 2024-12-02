@@ -3,12 +3,12 @@ use std::marker::PhantomData;
 use bevy::asset::{Asset, UntypedAssetId};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
-
 use bevy_common_assets::toml::TomlAssetPlugin;
 use rapier2d::geometry::SharedShape;
 use rapier2d::prelude::Point;
 
-use crate::{physics::SpriteShapeMap, prelude::*};
+use crate::physics::SpriteShapeMap;
+use crate::prelude::*;
 
 pub mod animation;
 pub mod config;
@@ -23,7 +23,9 @@ impl<S: States> Plugin for AssetsPlugin<S> {
         // add custom asset types
         app.add_plugins((
             TomlAssetPlugin::<self::script::Script>::new(&["script.toml"]),
-            TomlAssetPlugin::<self::animation::SpriteAnimation>::new(&["anim.toml"]),
+            TomlAssetPlugin::<self::animation::SpriteAnimation>::new(&[
+                "anim.toml",
+            ]),
             TomlAssetPlugin::<self::config::DynamicConfig>::new(&["cfg.toml"]),
         ));
         // dynamic key resolvers for whatever we need
@@ -140,7 +142,10 @@ impl PreloadedAssets {
         None
     }
 
-    pub fn get_single_assetid<T: Asset>(&self, key: &str) -> Option<AssetId<T>> {
+    pub fn get_single_assetid<T: Asset>(
+        &self,
+        key: &str,
+    ) -> Option<AssetId<T>> {
         if let Some(d) = self.get_asset(key) {
             if let DynamicAssetType::Single(handle) = d {
                 return Some(handle.id().typed::<T>());
@@ -158,7 +163,10 @@ impl PreloadedAssets {
         None
     }
 
-    pub fn get_key_for_asset(&self, assid: impl Into<UntypedAssetId>) -> Option<&str> {
+    pub fn get_key_for_asset(
+        &self,
+        assid: impl Into<UntypedAssetId>,
+    ) -> Option<&str> {
         let assid = assid.into();
         self.map_reverse.get(&assid).map(|x| x.as_str())
     }
@@ -223,11 +231,15 @@ fn finalize_preloaded_dynamic_assets(world: &mut World) {
                 Ok(dat) => {
                     match &dat {
                         DynamicAssetType::Single(handle) => {
-                            preloaded_ass.map_reverse.insert(handle.id(), key.clone());
+                            preloaded_ass
+                                .map_reverse
+                                .insert(handle.id(), key.clone());
                         },
                         DynamicAssetType::Collection(handles) => {
                             for handle in handles {
-                                preloaded_ass.map_reverse.insert(handle.id(), key.clone());
+                                preloaded_ass
+                                    .map_reverse
+                                    .insert(handle.id(), key.clone());
                             }
                         },
                     }
@@ -295,7 +307,8 @@ fn populate_collider_map(
         };
 
         let mut collider_ids = vec![];
-        let mut image = image_origin.convert(TextureFormat::Rgba8UnormSrgb).unwrap();
+        let mut image =
+            image_origin.convert(TextureFormat::Rgba8UnormSrgb).unwrap();
         let width = image.width() as usize;
         let mut data = &mut image.data;
         for (i, anim_frame_rect) in layout.textures.iter().enumerate() {
@@ -312,7 +325,11 @@ fn populate_collider_map(
 
                     // Any pixels with the bright Magenta color will be used for
                     // building the collider
-                    if pixel[0] == 255 && pixel[1] == 0 && pixel[2] == 255 && pixel[3] == 255 {
+                    if pixel[0] == 255
+                        && pixel[1] == 0
+                        && pixel[2] == 255
+                        && pixel[3] == 255
+                    {
                         collider_points.push(Point::new(
                             (0.5 + x as f32 - min.x) - size.x * 0.5,
                             // the siz.y - flips it on y since texture coords are inverted y
@@ -327,17 +344,20 @@ fn populate_collider_map(
                 collider_ids.push(0);
                 continue;
             }
-            let shape =
-                SharedShape::convex_hull(&*collider_points).expect("Cannot build convex hull");
+            let shape = SharedShape::convex_hull(&*collider_points)
+                .expect("Cannot build convex hull");
             collider_points.iter_mut().for_each(|p| p.x = -p.x);
-            let shape_flipped_x = SharedShape::convex_hull(&*collider_points).unwrap();
+            let shape_flipped_x =
+                SharedShape::convex_hull(&*collider_points).unwrap();
             collider_points.iter_mut().for_each(|p| {
                 p.x = -p.x;
                 p.y = -p.y;
             });
-            let shape_flipped_y = SharedShape::convex_hull(&*collider_points).unwrap();
+            let shape_flipped_y =
+                SharedShape::convex_hull(&*collider_points).unwrap();
             collider_points.iter_mut().for_each(|p| p.y = -p.y);
-            let shape_flipped_xy = SharedShape::convex_hull(&*collider_points).unwrap();
+            let shape_flipped_xy =
+                SharedShape::convex_hull(&*collider_points).unwrap();
 
             let i_new = collider_map.shapes.len();
             collider_map.shapes.push((
@@ -349,8 +369,8 @@ fn populate_collider_map(
             collider_ids.push(i_new);
         }
         *image_origin = image.into();
-        //collider ids is either 0 or an index into shapes?
-        //could it be option instead..
+        // collider ids is either 0 or an index into shapes?
+        // could it be option instead..
         collider_map.map.insert(h_image.id(), collider_ids);
     }
 }

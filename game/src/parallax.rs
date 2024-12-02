@@ -1,6 +1,7 @@
+use bevy::transform::TransformSystem::TransformPropagate;
+
 use crate::camera::MainCamera;
 use crate::prelude::*;
-use bevy::transform::TransformSystem::TransformPropagate;
 
 /// A simple plugin for applying parallax to entities.
 /// Use by adding this plugin, and attaching the Parallax
@@ -92,12 +93,14 @@ fn apply_parallax(
         // Same as in the wgsl fog parallax, calculates the vector from the center to the camera,
         // and then scales it based on the depth. (only difference is applying the optional offset)
         let offset = offset.map(|x| x.0);
-        let mut delta = cam_trnsfrm.translation.xy() - (origin.0 + offset.unwrap_or_default());
+        let mut delta = cam_trnsfrm.translation.xy()
+            - (origin.0 + offset.unwrap_or_default());
         delta = delta / (parallax.depth);
 
         // Getting the final position is different then in wgsl fog code, since we set it in world space
         // instead of camera space, as well as account for the offset here as well.
-        let mut pos_final = cam_trnsfrm.translation.xy() - delta - offset.unwrap_or_default();
+        let mut pos_final =
+            cam_trnsfrm.translation.xy() - delta - offset.unwrap_or_default();
 
         // There is another way of doing parallax, without requiring PrallaxOrigin, that just measures
         // the camera position change, divides it by the depth, and then translates the transform.

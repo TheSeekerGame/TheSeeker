@@ -139,8 +139,11 @@ pub struct TimeSpec {
 
 impl From<TimeSpec> for Duration {
     fn from(value: TimeSpec) -> Self {
-        Duration::from_secs(value.secs as u64 + value.mins as u64 * 60 + value.hours as u64 * 3600)
-            + Duration::from_secs_f64(value.fract.abs())
+        Duration::from_secs(
+            value.secs as u64
+                + value.mins as u64 * 60
+                + value.hours as u64 * 3600,
+        ) + Duration::from_secs_f64(value.fract.abs())
     }
 }
 

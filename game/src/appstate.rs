@@ -42,7 +42,10 @@ pub enum AppState {
 pub struct StateDespawnMarker;
 
 /// CliCommand for switching state
-fn cli_appstate(In(args): In<Vec<String>>, mut next: ResMut<NextState<AppState>>) {
+fn cli_appstate(
+    In(args): In<Vec<String>>,
+    mut next: ResMut<NextState<AppState>>,
+) {
     if args.len() != 1 {
         error!("\"appstate <Value>\"");
         return;

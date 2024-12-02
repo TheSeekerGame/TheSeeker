@@ -3,11 +3,11 @@
 
 use std::collections::HashMap;
 
-use bevy::{
-    app::MainScheduleOrder,
-    ecs::schedule::{InternedScheduleLabel, NodeId, ScheduleLabel, Stepping},
-    prelude::*,
+use bevy::app::MainScheduleOrder;
+use bevy::ecs::schedule::{
+    InternedScheduleLabel, NodeId, ScheduleLabel, Stepping,
 };
+use bevy::prelude::*;
 use bevy_egui::{egui, EguiContexts};
 
 #[derive(Default)]
@@ -17,7 +17,10 @@ pub struct SteppingEguiPlugin {
 
 impl SteppingEguiPlugin {
     /// add a schedule to be stepped when stepping is enabled
-    pub fn add_schedule(mut self, label: impl ScheduleLabel) -> SteppingEguiPlugin {
+    pub fn add_schedule(
+        mut self,
+        label: impl ScheduleLabel,
+    ) -> SteppingEguiPlugin {
         self.schedule_labels.push(label.intern());
         self
     }
@@ -219,7 +222,10 @@ fn draw_window(
     });
 }
 
-fn handle_input(keyboard_input: Res<ButtonInput<KeyCode>>, mut stepping: ResMut<Stepping>) {
+fn handle_input(
+    keyboard_input: Res<ButtonInput<KeyCode>>,
+    mut stepping: ResMut<Stepping>,
+) {
     // grave key to toggle stepping mode for the FixedUpdate schedule
     if keyboard_input.just_pressed(KeyCode::Backquote) {
         if stepping.is_enabled() {

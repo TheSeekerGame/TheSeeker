@@ -1,6 +1,7 @@
+use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
+
 use crate::gamestate::{pause, unpause};
 use crate::prelude::*;
-use bevy::diagnostic::{FrameTimeDiagnosticsPlugin, LogDiagnosticsPlugin};
 
 pub struct DevPlugin;
 
@@ -25,7 +26,7 @@ impl Plugin for DevPlugin {
             FrameTimeDiagnosticsPlugin,
             LogDiagnosticsPlugin::default(),
             // FilterQueryInspectorPlugin::<(With<Enemy>)>::default(),
-            //SteppingEguiPlugin::default().add_schedule(GameTickUpdate),
+            // SteppingEguiPlugin::default().add_schedule(GameTickUpdate),
         ));
         #[cfg(feature = "dev")]
         app.add_plugins(
