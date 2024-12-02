@@ -22,7 +22,7 @@ fn solve_quadric(c0: f64, c1: f64, c2: f64, s0: &mut f64, s1: &mut f64) -> i32 {
     let mut q;
     let mut d;
 
-    /* normal form: x^2 + px + q = 0 */
+    // normal form: x^2 + px + q = 0
     p = c1 / (2.0 * c0);
     q = c2 / c0;
     d = p * p - q;
@@ -60,34 +60,34 @@ fn solve_cubic(
     let mut cb_p;
     let mut d;
 
-    /* normal form: x^3 + Ax^2 + Bx + C = 0 */
+    // normal form: x^3 + Ax^2 + Bx + C = 0
     a = c1 / c0;
     b = c2 / c0;
     c = c3 / c0;
 
-    /* substitute x = y - A/3 to eliminate quadric term: x^3 +px + q = 0 */
+    // substitute x = y - A/3 to eliminate quadric term: x^3 +px + q = 0
     sq_a = a * a;
     p = 1.0 / 3.0 * (-1.0 / 3.0 * sq_a + b);
     q = 1.0 / 2.0 * (2.0 / 27.0 * a * sq_a - 1.0 / 3.0 * a * b + c);
 
-    /* use Cardano's formula */
+    // use Cardano's formula
     cb_p = p * p * p;
     d = q * q + cb_p;
 
     if is_zero(d) {
         if is_zero(q) {
-            /* one triple solution */
+            // one triple solution
             *s0 = 0.0;
             num = 1;
         } else {
-            /* one single and one double solution */
+            // one single and one double solution
             let u = get_cubic_root(-q);
             *s0 = 2.0 * u;
             *s1 = -u;
             num = 2;
         }
     } else if d < 0.0 {
-        /* Casus irreducibilis: three real solutions */
+        // Casus irreducibilis: three real solutions
         let phi = 1.0 / 3.0 * (-q / (-cb_p).sqrt()).acos();
         let t = 2.0 * (-p).sqrt();
         *s0 = t * phi.cos();
@@ -95,7 +95,7 @@ fn solve_cubic(
         *s2 = -t * (phi - std::f64::consts::PI / 3.0).cos();
         num = 3;
     } else {
-        /* one real solution */
+        // one real solution
         let sqrt_d = d.sqrt();
         let u = get_cubic_root(sqrt_d - q);
         let v = -get_cubic_root(sqrt_d + q);
@@ -103,7 +103,7 @@ fn solve_cubic(
         num = 1;
     }
 
-    /* resubstitute */
+    // resubstitute
     sub = 1.0 / 3.0 * a;
     if num > 0 {
         *s0 -= sub;
@@ -135,20 +135,20 @@ fn solve_quartic(
     let (mut sq_a, mut p, mut q, mut r);
     let mut num;
 
-    /* normal form: x^4 + Ax^3 + Bx^2 + Cx + D = 0 */
+    // normal form: x^4 + Ax^3 + Bx^2 + Cx + D = 0
     a = c1 / c0;
     b = c2 / c0;
     c = c3 / c0;
     d = c4 / c0;
 
-    /* substitute x = y - A/4 to eliminate cubic term: x^4 + px^2 + qx + r = 0 */
+    // substitute x = y - A/4 to eliminate cubic term: x^4 + px^2 + qx + r = 0
     sq_a = a * a;
     p = -0.375 * sq_a + b;
     q = 0.125 * sq_a * a - 0.5 * a * b + c;
     r = -0.01171875 * sq_a * sq_a + 0.0625 * sq_a * b - 0.25 * a * c + d;
 
     if is_zero(r) {
-        /* no absolute term: y(y^3 + py + q) = 0 */
+        // no absolute term: y(y^3 + py + q) = 0
         coeffs[3] = q;
         coeffs[2] = p;
         coeffs[1] = 0.0;
@@ -157,7 +157,7 @@ fn solve_quartic(
             coeffs[0], coeffs[1], coeffs[2], coeffs[3], s0, s1, s2,
         );
     } else {
-        /* solve the resolvent cubic ... */
+        // solve the resolvent cubic ...
         coeffs[3] = 0.5 * r * p - 0.125 * q * q;
         coeffs[2] = -r;
         coeffs[1] = -0.5 * p;
@@ -166,10 +166,10 @@ fn solve_quartic(
             coeffs[0], coeffs[1], coeffs[2], coeffs[3], s0, s1, s2,
         );
 
-        /* ... and take the one real solution ... */
+        // ... and take the one real solution ...
         z = *s0;
 
-        /* ... to build two quadric equations */
+        // ... to build two quadric equations
         u = z * z - r;
         v = 2.0 * z - p;
 
@@ -207,7 +207,7 @@ fn solve_quartic(
         }
     }
 
-    /* resubstitute */
+    // resubstitute
     sub = 0.25 * a;
     if num > 0 {
         *s0 -= sub;
@@ -250,7 +250,9 @@ pub fn ballistic_range(speed: f32, gravity: f32, initial_height: f32) -> f32 {
     let sin = angle.sin();
 
     let range = (speed * cos / gravity)
-        * (speed * sin + (speed * speed * sin * sin + 2.0 * gravity * initial_height).sqrt());
+        * (speed * sin
+            + (speed * speed * sin * sin + 2.0 * gravity * initial_height)
+                .sqrt());
 
     range
 }

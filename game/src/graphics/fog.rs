@@ -1,8 +1,9 @@
-use crate::camera::MainCamera;
-use crate::prelude::*;
 use bevy::prelude::shape::Quad;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 use bevy::sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle};
+
+use crate::camera::MainCamera;
+use crate::prelude::*;
 
 pub struct FogPlugin;
 
@@ -77,7 +78,10 @@ pub fn setup_fog(
     }
 }
 
-pub fn cleanup_fog(mut commands: Commands, mut fog_layers: Query<Entity, With<FogLayer>>) {
+pub fn cleanup_fog(
+    mut commands: Commands,
+    mut fog_layers: Query<Entity, With<FogLayer>>,
+) {
     for layer in &fog_layers {
         commands.entity(layer).despawn()
     }
@@ -112,7 +116,8 @@ pub fn update_fog(
             mat_data = Some((transfrm, emitter));
         }
     }
-    for (mut fog_trnsfrm, handle, mut visibility) in fog_bundle_query.iter_mut() {
+    for (mut fog_trnsfrm, handle, mut visibility) in fog_bundle_query.iter_mut()
+    {
         let Some(material) = materials.get_mut(handle) else {
             error!(
                 "{}:{}: fog material missing from assets!",

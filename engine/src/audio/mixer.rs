@@ -1,7 +1,8 @@
-use std::sync::{atomic::{AtomicBool, AtomicI64, Ordering as MemOrdering}, Mutex};
+use std::sync::atomic::{AtomicBool, AtomicI64, Ordering as MemOrdering};
+use std::sync::Mutex;
 
-use rodio::{Sample, Source};
 use cpal::FromSample;
+use rodio::{Sample, Source};
 
 use crate::prelude::*;
 
@@ -66,20 +67,30 @@ impl PrecisionMixerController {
             tick_rate,
         })
     }
+
     pub fn has_playing(&self) -> bool {
         self.has_playing.load(MemOrdering::Relaxed)
     }
+
     pub fn reset_sample_counter(&self, new: i64) {
         self.sample_count.store(new, MemOrdering::Relaxed);
     }
+
     pub fn sample_count(&self) -> i64 {
         self.sample_count.load(MemOrdering::Relaxed)
     }
+
     pub fn sample_rate(&self) -> u32 {
         self.sample_rate
     }
-    fn play_at_sample_number<T, S>(&self, start_at_sample_number: Option<i64>, source: T, volume: f32, pan: f32)
-    where
+
+    fn play_at_sample_number<T, S>(
+        &self,
+        start_at_sample_number: Option<i64>,
+        source: T,
+        volume: f32,
+        pan: f32,
+    ) where
         T: Source<Item = S> + Send + Sync + 'static,
         S: Sample + Send + 'static,
         MySample: FromSample<S>,
@@ -89,13 +100,16 @@ impl PrecisionMixerController {
         }
         let mut source = Box::new(source.convert_samples::<MySample>());
         if let Some(first_sample) = (&mut *source).next() {
-            self.pending.lock().unwrap().push(PrecisionMixerQueuedTrack {
-                start_at_sample_number,
-                first_sample,
-                volume,
-                pan,
-                source: Some(source),
-            });
+            self.pending
+                .lock()
+                .unwrap()
+                .push(PrecisionMixerQueuedTrack {
+                    start_at_sample_number,
+                    first_sample,
+                    volume,
+                    pan,
+                    source: Some(source),
+                });
         }
         self.has_pending.store(true, MemOrdering::SeqCst);
     }
@@ -109,31 +123,52 @@ impl PrecisionMixerController {
         self.play_at_sample_number(None, source, volume, pan);
     }
 
-    pub fn play_at_time<T, S>(&self, dur: Duration, source: T, volume: f32, pan: f32)
-    where
+    pub fn play_at_time<T, S>(
+        &self,
+        dur: Duration,
+        source: T,
+        volume: f32,
+        pan: f32,
+    ) where
         T: Source<Item = S> + Send + Sync + 'static,
         S: Sample + Send + 'static,
         MySample: FromSample<S>,
     {
         let seconds = dur.as_secs();
         let nanos = dur.subsec_nanos();
-        let start_at_sample_number =
-            (seconds as u64 * self.sample_rate as u64) +
-            (self.sample_rate as u64 * nanos as u64 / 1_000_000_000);
-        self.play_at_sample_number(Some(start_at_sample_number as i64), source, volume, pan);
+        let start_at_sample_number = (seconds as u64 * self.sample_rate as u64)
+            + (self.sample_rate as u64 * nanos as u64 / 1_000_000_000);
+        self.play_at_sample_number(
+            Some(start_at_sample_number as i64),
+            source,
+            volume,
+            pan,
+        );
     }
 
-    pub fn play_at_tick<T, S>(&self, tick: u32, offset_nanos: i32, source: T, volume: f32, pan: f32)
-    where
+    pub fn play_at_tick<T, S>(
+        &self,
+        tick: u32,
+        offset_nanos: i32,
+        source: T,
+        volume: f32,
+        pan: f32,
+    ) where
         T: Source<Item = S> + Send + Sync + 'static,
         S: Sample + Send + 'static,
         MySample: FromSample<S>,
     {
-        let start_at_sample_number = (
-            (tick as f64 * self.sample_rate as f64 / self.tick_rate as f64) as i64 +
-            (self.sample_rate as i64 * offset_nanos as i64 / 1_000_000_000)
-        ) as i64;
-        self.play_at_sample_number(Some(start_at_sample_number), source, volume, pan);
+        let start_at_sample_number = ((tick as f64 * self.sample_rate as f64
+            / self.tick_rate as f64)
+            as i64
+            + (self.sample_rate as i64 * offset_nanos as i64 / 1_000_000_000))
+            as i64;
+        self.play_at_sample_number(
+            Some(start_at_sample_number),
+            source,
+            volume,
+            pan,
+        );
     }
 }
 
@@ -141,7 +176,8 @@ impl Iterator for PrecisionMixer {
     type Item = MySample;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.sample_count = self.controller.sample_count.load(MemOrdering::Relaxed);
+        self.sample_count =
+            self.controller.sample_count.load(MemOrdering::Relaxed);
         if self.controller.has_pending.load(MemOrdering::SeqCst) {
             self.process_pending();
         }
@@ -150,10 +186,16 @@ impl Iterator for PrecisionMixer {
         self.current_channel += 1;
         if self.current_channel >= self.channels() {
             self.current_channel = 0;
-            self.sample_count = self.controller.sample_count.fetch_add(1, MemOrdering::Relaxed);
+            self.sample_count = self
+                .controller
+                .sample_count
+                .fetch_add(1, MemOrdering::Relaxed);
         }
 
-        self.controller.has_playing.store(!self.playing.is_empty(), MemOrdering::Relaxed);
+        self.controller.has_playing.store(
+            !self.playing.is_empty(),
+            MemOrdering::Relaxed,
+        );
 
         if self.playing.is_empty() {
             Some(MySample::zero_value())
@@ -168,14 +210,17 @@ impl Source for PrecisionMixer {
     fn current_frame_len(&self) -> Option<usize> {
         None
     }
+
     #[inline]
     fn channels(&self) -> u16 {
         self.controller.channels
     }
+
     #[inline]
     fn sample_rate(&self) -> u32 {
         self.controller.sample_rate
     }
+
     #[inline]
     fn total_duration(&self) -> Option<Duration> {
         None
@@ -191,6 +236,7 @@ impl PrecisionMixer {
             controller: controller.clone(),
         }
     }
+
     pub fn controller(&self) -> Arc<PrecisionMixerController> {
         self.controller.clone()
     }
@@ -209,27 +255,34 @@ impl PrecisionMixer {
                     } else {
                         track.done = true;
                     }
-                }
+                },
                 (2, 1) => {
                     // only advance the mono source every other sample
                     // (mix one source sample into both L + R, with panning)
                     if self.current_channel == 0 {
-                        sum = sum.saturating_add(track.next_sample * track.volume * pan_l);
+                        sum = sum.saturating_add(
+                            track.next_sample * track.volume * pan_l,
+                        );
                     }
                     if self.current_channel == 1 {
-                        sum = sum.saturating_add(track.next_sample * track.volume * pan_r);
+                        sum = sum.saturating_add(
+                            track.next_sample * track.volume * pan_r,
+                        );
                         if let Some(value) = track.source.next() {
                             track.next_sample = value;
                         } else {
                             track.done = true;
                         }
                     }
-                }
+                },
                 (1, 2) => {
                     // consume 2 samples from source and mix them (stereo -> mono)
-                    sum = sum.saturating_add(track.next_sample * 0.5 * track.volume * pan_l);
+                    sum = sum.saturating_add(
+                        track.next_sample * 0.5 * track.volume * pan_l,
+                    );
                     if let Some(value) = track.source.next() {
-                        sum = sum.saturating_add(value * 0.5 * track.volume * pan_r);
+                        sum = sum
+                            .saturating_add(value * 0.5 * track.volume * pan_r);
                     } else {
                         track.done = true;
                     }
@@ -238,43 +291,56 @@ impl PrecisionMixer {
                     } else {
                         track.done = true;
                     }
-                }
+                },
                 (2, 2) => {
                     // make sure the channels are aligned and not swapped
-                    match (self.current_channel, track.current_channel) {
+                    match (
+                        self.current_channel,
+                        track.current_channel,
+                    ) {
                         (0, 0) => {
                             // left channel of both source and mixer
-                            sum = sum.saturating_add(track.next_sample * track.volume * pan_l);
+                            sum = sum.saturating_add(
+                                track.next_sample * track.volume * pan_l,
+                            );
                             if let Some(value) = track.source.next() {
                                 track.next_sample = value;
                                 track.current_channel += 1;
-                                if track.current_channel >= track.source.channels() {
+                                if track.current_channel
+                                    >= track.source.channels()
+                                {
                                     track.current_channel = 0;
                                 }
                             } else {
                                 track.done = true;
                             }
-                        }
+                        },
                         (1, 1) => {
                             // right channel of both source and mixer
-                            sum = sum.saturating_add(track.next_sample * track.volume * pan_r);
+                            sum = sum.saturating_add(
+                                track.next_sample * track.volume * pan_r,
+                            );
                             if let Some(value) = track.source.next() {
                                 track.next_sample = value;
                                 track.current_channel += 1;
-                                if track.current_channel >= track.source.channels() {
+                                if track.current_channel
+                                    >= track.source.channels()
+                                {
                                     track.current_channel = 0;
                                 }
                             } else {
                                 track.done = true;
                             }
-                        }
+                        },
                         (1, 0) | (0, 1) => {
                             // mismatch! output nothing for this sample to catch up
-                        }
+                        },
                         _ => unreachable!(),
                     }
-                }
-                _ => panic!("GameTickMixer does not support > 2 audio channels!")
+                },
+                _ => {
+                    panic!("GameTickMixer does not support > 2 audio channels!")
+                },
             }
         }
         self.playing.retain(|track| !track.done);
@@ -294,8 +360,8 @@ impl PrecisionMixer {
         // perfectly aligned to its desired sample number
 
         for track in pending.iter_mut() {
-            let start_at_sample_number = track.start_at_sample_number
-                .unwrap_or(self.sample_count);
+            let start_at_sample_number =
+                track.start_at_sample_number.unwrap_or(self.sample_count);
 
             if start_at_sample_number > self.sample_count {
                 // we are early, it's not time for this one yet
@@ -333,7 +399,9 @@ impl PrecisionMixer {
         pending.retain(|track| track.source.is_some());
 
         let has_pending = !pending.is_empty();
-        self.controller.has_pending.store(has_pending, MemOrdering::SeqCst);
+        self.controller
+            .has_pending
+            .store(has_pending, MemOrdering::SeqCst);
     }
 }
 
@@ -341,11 +409,15 @@ pub fn init_mixer(
     channels: u16,
     sample_rate: u32,
     tick_rate: f32,
-) -> (Arc<PrecisionMixerController>, PrecisionMixer) {
+) -> (
+    Arc<PrecisionMixerController>,
+    PrecisionMixer,
+) {
     if channels > 2 {
         panic!("GameTickMixer does not support > 2 audio channels!");
     }
-    let controller = PrecisionMixerController::new(channels, sample_rate, tick_rate);
+    let controller =
+        PrecisionMixerController::new(channels, sample_rate, tick_rate);
     let mixer = PrecisionMixer::new(controller.clone());
     (controller, mixer)
 }

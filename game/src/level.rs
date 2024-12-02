@@ -13,9 +13,10 @@
 //! Any of the stuff that actually *happens* within the map when you
 //! play the game, doesn't belong here. Put that stuff under [`crate::game`].
 
+use seek_ecs_tilemap::tiles::TilePos;
+
 use crate::parallax::{Parallax, ParallaxOffset};
 use crate::prelude::*;
-use seek_ecs_tilemap::tiles::TilePos;
 
 pub struct LevelManagerPlugin;
 
@@ -53,16 +54,16 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
     ));
 
     //#[cfg(not(feature = "dev"))]
-    /*#[cfg(feature = "dev")]
-    commands.spawn((
-        StateDespawnMarker,
-        LdtkWorldBundle {
-            ldtk_handle: preloaded
-                .get_single_asset("level.dev")
-                .expect("Expected asset key 'level.dev'"),
-            ..Default::default()
-        },
-    ));*/
+    // #[cfg(feature = "dev")]
+    // commands.spawn((
+    // StateDespawnMarker,
+    // LdtkWorldBundle {
+    // ldtk_handle: preloaded
+    // .get_single_asset("level.dev")
+    // .expect("Expected asset key 'level.dev'"),
+    // ..Default::default()
+    // },
+    // ));
 }
 
 /// when a specific entity is spawned on level load
@@ -168,8 +169,10 @@ fn attach_parallax(
                     depth: 1.0 + amount,
                 },
                 ParallaxOffset(Vec2::new(
-                    (layer_metadata.c_wid * layer_metadata.grid_size) as f32 * 0.5,
-                    (layer_metadata.c_hei * layer_metadata.grid_size) as f32 * 0.5,
+                    (layer_metadata.c_wid * layer_metadata.grid_size) as f32
+                        * 0.5,
+                    (layer_metadata.c_hei * layer_metadata.grid_size) as f32
+                        * 0.5,
                 )),
             ));
         }

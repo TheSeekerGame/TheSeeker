@@ -20,7 +20,12 @@ impl Projectile {
     /// set gravity to Playerconfig.fall_accel * time.hz
     /// since Playerconfig.fall_accel is in pixels/tick, you need to multiply by the time.hz
     /// to convert to per/second units, like velocity is.
-    pub fn with_vel(target: Vec2, start: Vec2, max_speed: f32, gravity: f32) -> Option<Self> {
+    pub fn with_vel(
+        target: Vec2,
+        start: Vec2,
+        max_speed: f32,
+        gravity: f32,
+    ) -> Option<Self> {
         let result = solve_ballistic_arc(start, max_speed, target, gravity);
         println!("result: {result:?}");
         if result.2 != 0 {
@@ -57,7 +62,8 @@ pub fn arc_projectile(
     for (mut transform, collider, mut projectile) in query.iter_mut() {
         projectile.vel.0.y -= fall_accel;
         let z = transform.translation.z;
-        transform.translation =
-            (transform.translation.xy() + *projectile.vel * (1.0 / time.hz as f32)).extend(z);
+        transform.translation = (transform.translation.xy()
+            + *projectile.vel * (1.0 / time.hz as f32))
+            .extend(z);
     }
 }

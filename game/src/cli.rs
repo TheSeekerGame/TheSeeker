@@ -27,7 +27,8 @@ fn cli_hello_args(In(args): In<Vec<String>>) {
 
 fn cli_help(clicommands: Res<iyes_cli::CliCommands>) {
     let mut aggregate: HashMap<&str, (bool, bool)> = HashMap::with_capacity(
-        clicommands.commands_noargs.capacity() + clicommands.commands_args.capacity(),
+        clicommands.commands_noargs.capacity()
+            + clicommands.commands_args.capacity(),
     );
 
     for noargscmd in clicommands.commands_noargs.keys() {

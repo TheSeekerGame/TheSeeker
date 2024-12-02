@@ -28,7 +28,7 @@ fn setup_precisionmixer(
         AudioSourceBundle {
             source: handle,
             ..Default::default()
-        }
+        },
     ));
 }
 

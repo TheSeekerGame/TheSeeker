@@ -7,12 +7,13 @@ impl Plugin for GentPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             PostUpdate,
-            (transform_gfx_from_gent.after(bevy::transform::TransformSystem::TransformPropagate),),
+            (transform_gfx_from_gent
+                .after(bevy::transform::TransformSystem::TransformPropagate),),
         );
     }
 }
 
-//todo move to physics
+// todo move to physics
 #[derive(Bundle)]
 pub struct GentPhysicsBundle {
     pub collider: Collider,
@@ -29,9 +30,9 @@ pub struct Gent {
 #[derive(Component)]
 pub struct TransformGfxFromGent {
     pub pixel_aligned: bool,
-    //TODO: remove gent here and refactor transfor_gfx_from_gent to use player gfx?
+    // TODO: remove gent here and refactor transfor_gfx_from_gent to use player gfx?
     pub gent: Entity,
-    //potential to add offset here?... or does it not make sense
+    // potential to add offset here?... or does it not make sense
 }
 
 fn transform_gfx_from_gent(

@@ -1,4 +1,4 @@
-use bevy::asset::{LoadedFolder, LoadState};
+use bevy::asset::{LoadState, LoadedFolder};
 use bevy_fluent::prelude::*;
 use fluent_content::Content;
 use unic_langid::LanguageIdentifier;
@@ -11,12 +11,14 @@ impl Plugin for LocalePlugin {
     fn build(&self, app: &mut App) {
         app.register_clicommand_args("locale", cli_locale);
         app.insert_resource(
-            Locale::new("en-US".parse().unwrap()).with_default("en-US".parse().unwrap()),
+            Locale::new("en-US".parse().unwrap())
+                .with_default("en-US".parse().unwrap()),
         );
-        app.add_systems(Update,
+        app.add_systems(
+            Update,
             init_l10n
                 .track_progress()
-                .run_if(in_state(AppState::AssetsLoading))
+                .run_if(in_state(AppState::AssetsLoading)),
         );
         app.add_systems(
             Update,
@@ -36,7 +38,11 @@ pub struct L10nKey(pub String);
 #[derive(Resource)]
 pub struct Locales(HashSet<LanguageIdentifier>);
 
-fn cli_locale(In(args): In<Vec<String>>, mut locale: ResMut<Locale>, locales: Res<Locales>) {
+fn cli_locale(
+    In(args): In<Vec<String>>,
+    mut locale: ResMut<Locale>,
+    locales: Res<Locales>,
+) {
     if args.len() != 1 {
         error!("\"locale <locale>\"");
         return;
@@ -69,19 +75,22 @@ fn init_l10n(
     match (*done, folder) {
         (false, None) => {
             commands.insert_resource(LocalesFolder(ass.load_folder("locale")));
-        }
+        },
         (false, Some(folder)) => {
             if let Some(LoadState::Loaded) = ass.get_load_state(&folder.0) {
-                let locales = Locales(l10n_bundles.iter()
-                    .map(|(_, bundle)| bundle.locales[0].clone())
-                    .collect());
+                let locales = Locales(
+                    l10n_bundles
+                        .iter()
+                        .map(|(_, bundle)| bundle.locales[0].clone())
+                        .collect(),
+                );
                 let l10n = l10n_builder.build(&folder.0);
                 commands.insert_resource(locales);
                 commands.insert_resource(l10n);
                 *done = true;
             }
-        }
-        (true, _) => {}
+        },
+        (true, _) => {},
     }
     (*done).into()
 }

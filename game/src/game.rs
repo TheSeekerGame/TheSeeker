@@ -2,12 +2,11 @@
 //!
 //! Create sub-modules for different aspects of the gameplay.
 
+use self::enemy::{EnemyBlueprintBundle, EnemySpawnerBundle};
+use self::player::PlayerBlueprintBundle;
 use crate::game::merchant::MerchantBlueprintBundle;
 use crate::game::yak::YakBlueprintBundle;
 use crate::prelude::*;
-
-use self::enemy::{EnemyBlueprintBundle, EnemySpawnerBundle};
-use self::player::PlayerBlueprintBundle;
 
 pub mod attack;
 pub mod enemy;

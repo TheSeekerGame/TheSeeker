@@ -1,11 +1,12 @@
-use crate::appstate::AppState;
-use crate::camera::MainCamera;
-use crate::game::attack::KillCount;
-use crate::prelude::*;
 use sickle_ui::ui_builder::{UiBuilderExt, UiRoot};
 use sickle_ui::ui_commands::SetTextExt;
 use sickle_ui::ui_style::*;
 use sickle_ui::widgets::prelude::*;
+
+use crate::appstate::AppState;
+use crate::camera::MainCamera;
+use crate::game::attack::KillCount;
+use crate::prelude::*;
 
 pub struct KillCounterPlugin;
 

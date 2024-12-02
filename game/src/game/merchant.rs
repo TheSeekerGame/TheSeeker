@@ -1,8 +1,9 @@
-use crate::prelude::*;
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::TransformGfxFromGent;
 use theseeker_engine::script::ScriptPlayer;
+
+use crate::prelude::*;
 
 pub struct MerchantPlugin;
 

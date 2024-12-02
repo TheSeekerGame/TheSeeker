@@ -2,8 +2,11 @@ use bevy::ecs::component::SparseStorage;
 
 use crate::prelude::*;
 
-//todo make generic
-pub fn transition(mut query: Query<(Entity, &mut TransitionQueue)>, mut commands: Commands) {
+// todo make generic
+pub fn transition(
+    mut query: Query<(Entity, &mut TransitionQueue)>,
+    mut commands: Commands,
+) {
     for (entity, mut trans) in query.iter_mut() {
         if !&trans.is_empty() {
             let transitions = std::mem::take(&mut trans.0);
@@ -17,7 +20,9 @@ pub fn transition(mut query: Query<(Entity, &mut TransitionQueue)>, mut commands
 pub trait Transitionable<T: GentState> {
     type Removals;
     /// StartingState::new_transition(EndingState)
-    fn new_transition(next: T) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>
+    fn new_transition(
+        next: T,
+    ) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>
     where
         Self: GentState + Component,
         <Self as Transitionable<T>>::Removals: Bundle,
@@ -31,9 +36,11 @@ pub trait Transitionable<T: GentState> {
     }
 }
 
-//make not component, make field of state machine
+// make not component, make field of state machine
 #[derive(Component, Deref, DerefMut, Default)]
-pub struct TransitionQueue(Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>);
+pub struct TransitionQueue(
+    Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>,
+);
 
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct AddQueue(Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>);
@@ -46,7 +53,10 @@ impl AddQueue {
     }
 }
 
-pub fn add_states(mut query: Query<(Entity, &mut AddQueue)>, mut commands: Commands) {
+pub fn add_states(
+    mut query: Query<(Entity, &mut AddQueue)>,
+    mut commands: Commands,
+) {
     for (entity, mut add_states) in query.iter_mut() {
         if !&add_states.is_empty() {
             let additions = std::mem::take(&mut add_states.0);
@@ -89,11 +99,11 @@ impl<T: GentState, N: GentState + GenericState> Transitionable<T> for N {
     type Removals = (N, Idle);
 }
 
-//on leaving some states the state machine should ensure we are not also in other specific states,
-//in that case do not implement GenericState for the state and instead implement
-//Transitionable with type Removals = (the states to remove)
+// on leaving some states the state machine should ensure we are not also in other specific states,
+// in that case do not implement GenericState for the state and instead implement
+// Transitionable with type Removals = (the states to remove)
 
-//common states
+// common states
 #[derive(Component, Default, Debug)]
 #[component(storage = "SparseSet")]
 pub struct Idle;

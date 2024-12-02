@@ -1,18 +1,19 @@
-use crate::game::attack::arc_attack::Projectile;
-use crate::prelude::{
-    App, Assets, Commands, Component, GlobalTransform, Handle,
-    Parent, Plugin, Res, ResMut, Resource, Startup, Update,
-};
 use bevy::ecs::system::EntityCommands;
 use bevy::prelude::{default, BuildChildren, Entity, Name, Query, Without};
 use bevy_hanabi::{
-    Attribute, ColorOverLifetimeModifier, EffectAsset, EffectProperties, ExprWriter,
-    Gradient, ParticleEffect, ParticleEffectBundle, SetAttributeModifier,
-    SetPositionCircleModifier, ShapeDimension, SizeOverLifetimeModifier, Spawner
+    Attribute, ColorOverLifetimeModifier, EffectAsset, EffectProperties,
+    ExprWriter, Gradient, ParticleEffect, ParticleEffectBundle,
+    SetAttributeModifier, SetPositionCircleModifier, ShapeDimension,
+    SizeOverLifetimeModifier, Spawner,
 };
 use glam::{Vec2, Vec3, Vec4};
-
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
+
+use crate::game::attack::arc_attack::Projectile;
+use crate::prelude::{
+    App, Assets, Commands, Component, GlobalTransform, Handle, Parent, Plugin,
+    Res, ResMut, Resource, Startup, Update,
+};
 
 pub struct AttackParticlesPlugin;
 
@@ -34,7 +35,10 @@ pub struct ArcParticleEffectHandle(pub Handle<EffectAsset>);
 #[derive(Component)]
 pub struct SystemLifetime(f32);
 
-fn attack_particles_setup(mut commands: Commands, mut effects: ResMut<Assets<EffectAsset>>) {
+fn attack_particles_setup(
+    mut commands: Commands,
+    mut effects: ResMut<Assets<EffectAsset>>,
+) {
     // Create a color gradient for the particles
     let mut gradient = Gradient::new();
     let r = 1.0 / 8.0;
@@ -81,7 +85,8 @@ fn attack_particles_setup(mut commands: Commands, mut effects: ResMut<Assets<Eff
     let init_age = SetAttributeModifier::new(Attribute::AGE, age);
 
     let lifetime = writer.lit(MAX_LIFETIME).expr();
-    let init_lifetime = SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
+    let init_lifetime =
+        SetAttributeModifier::new(Attribute::LIFETIME, lifetime);
 
     let emit_loc = writer.add_property("emit_loc", Vec3::splat(0.0).into());
     let dir = writer.add_property("dir", Vec3::splat(0.0).into());
@@ -98,7 +103,9 @@ fn attack_particles_setup(mut commands: Commands, mut effects: ResMut<Assets<Eff
     let particle_pos = writer.attr(Attribute::POSITION) - writer.prop(emit_loc);
     let projection = particle_pos.clone().dot(writer.prop(dir));
     let skewed_pos = particle_pos.clone()
-        + writer.prop(dir) * projection * (writer.prop(speed) - writer.lit(1.0));
+        + writer.prop(dir)
+            * projection
+            * (writer.prop(speed) - writer.lit(1.0));
 
     let modded_pos = SetAttributeModifier {
         attribute: Attribute::POSITION,
@@ -107,7 +114,9 @@ fn attack_particles_setup(mut commands: Commands, mut effects: ResMut<Assets<Eff
 
     let init_vel = SetAttributeModifier {
         attribute: Attribute::VELOCITY,
-        value: (writer.prop(dir) * writer.lit(-0.5) - particle_pos * writer.lit(5.5)).expr(),
+        value: (writer.prop(dir) * writer.lit(-0.5)
+            - particle_pos * writer.lit(5.5))
+        .expr(),
     };
 
     // Create a new effect asset spawning 30 particles per second from a circle
@@ -137,7 +146,10 @@ impl crate::graphics::particles_util::BuildParticles for EntityCommands<'_> {
     /// Attaches a particle bundle as a child entity to the entity being spawned
     /// When the parent entity is despawned, the particle bundles particles will
     /// stop emitting, and linger for [`MAX_LIFETIME`] seconds
-    fn with_lingering_particles(&mut self, handle: Handle<EffectAsset>) -> &mut Self {
+    fn with_lingering_particles(
+        &mut self,
+        handle: Handle<EffectAsset>,
+    ) -> &mut Self {
         self.with_children(|builder| {
             builder
                 .spawn((
