@@ -2,16 +2,19 @@
 
 use std::f32::consts::PI;
 
-use crate::game::player::Player;
-use crate::graphics::darkness::DarknessSettings;
-use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
-use crate::level::MainBackround;
-use crate::prelude::*;
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use iyes_perf_ui::PerfUiCompleteBundle;
 use ran::ran_f64_range;
+
+use crate::game::player::Player;
+use crate::graphics::darkness::DarknessSettings;
+use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
+use crate::level::MainBackround;
+use crate::prelude::*;
+
+const PROJECTION_SCALE: f32 = 1.0 / 5.0;
 
 pub struct CameraPlugin;
 
@@ -31,15 +34,19 @@ impl Plugin for CameraPlugin {
 
         app.insert_resource(CameraRig {
             target: Default::default(),
-            camera: Default::default(),
+            camera_position: Default::default(),
+            move_speed: 1.9,
+            lead_direction: LeadDirection::Forward,
+            lead_amount: 20.0,
+            lead_buffer: 10.0,
         });
-        app.add_systems(GameTickUpdate, camera_rig_follow_player);
         app.add_systems(
             GameTickUpdate,
             (
-                update_camera_rig.after(camera_rig_follow_player),
+                camera_rig_follow_player,
+                update_camera.after(camera_rig_follow_player),
                 update_screen_shake.run_if(resource_exists::<CameraShake>),
-            )
+            ),
         );
     }
 }
@@ -60,10 +67,24 @@ pub struct MainCamera;
 #[derive(Resource)]
 /// Tracks the target location of the camera, as well as internal state for interpolation.
 pub struct CameraRig {
-    /// The camera is moved towards this position smoothly
+    /// The camera is moved towards this position smoothly.
     target: Vec2,
-    /// the "base" position of the camera before screen shake is applied
-    camera: Vec2,
+    /// the "base" position of the camera before screen shake is applied.
+    camera_position: Vec2,
+    /// The factor used in lerping to move the rig.
+    move_speed: f32,
+    /// Keeps track if the camera is leading ahead, or behind the player.
+    lead_direction: LeadDirection,
+    /// Defines how far ahead the camera will lead the player by.
+    lead_amount: f32,
+    /// Defines how far away the player can get going in the unanticipated direction
+    /// before the camera switches to track that direction.
+    lead_buffer: f32,
+}
+
+enum LeadDirection {
+    Backward,
+    Forward,
 }
 
 /// Limits to the viewable gameplay area.
@@ -89,7 +110,7 @@ pub(crate) fn setup_main_camera(
         tonemapping: Tonemapping::None,
         ..default()
     };
-    camera.projection.scale = 1.0 / 5.0;
+    camera.projection.scale = PROJECTION_SCALE;
 
     let mut camera3d = Camera3dBundle {
         camera: Camera {
@@ -149,53 +170,58 @@ fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wit
 /// Updates the Camera rig (ie, the camera target) based on where the player is going.
 fn camera_rig_follow_player(
     mut rig: ResMut<CameraRig>,
-    q_player: Query<&Transform, (With<Player>, Without<MainCamera>)>,
-    // Keeps track if the camera is leading ahead, or behind the player
-    mut lead_bckwrd: Local<bool>,
+    player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
+    time: Res<Time>,
 ) {
-    let Ok(player_xform) = q_player.get_single() else {
+    let Ok(player_transform) = player_query.get_single() else {
         return;
     };
-    // define how far away the player can get going in the unanticipated direction
-    // before the camera switches to track that direction
-    let max_err = 10.0;
-    // Define how far ahead the camera will lead the player by
-    let lead_amnt = 20.0;
-
     // Default state is to predict the player goes forward, ie "right"
-    let delta_x = player_xform.translation.x - rig.target.x;
+    let delta_x = player_transform.translation.x - rig.target.x;
 
-    if !*lead_bckwrd {
-        if delta_x > -lead_amnt {
-            rig.target.x = player_xform.translation.x + lead_amnt
-        } else if delta_x < -lead_amnt - max_err {
-            *lead_bckwrd = !*lead_bckwrd
-        }
-    } else {
-        if delta_x < lead_amnt {
-            rig.target.x = player_xform.translation.x - lead_amnt
-        } else if delta_x > lead_amnt + max_err {
-            *lead_bckwrd = !*lead_bckwrd
-        }
+    match rig.lead_direction {
+        LeadDirection::Backward => {
+            if delta_x < rig.lead_amount {
+                rig.target.x = player_transform.translation.x - rig.lead_amount
+            } else if delta_x > rig.lead_amount + rig.lead_buffer {
+                rig.lead_direction = LeadDirection::Forward
+            }
+        },
+        LeadDirection::Forward => {
+            if delta_x > -rig.lead_amount {
+                rig.target.x = player_transform.translation.x + rig.lead_amount
+            } else if delta_x < -rig.lead_amount - rig.lead_buffer {
+                rig.lead_direction = LeadDirection::Backward
+            }
+        },
     }
-    //rig.position.x = player_xform.translation.x;
 
-    rig.target.y = player_xform.translation.y;
+    rig.target.y = player_transform.translation.y;
+
+    if (rig.camera_position - rig.target).length() < PROJECTION_SCALE {
+        // Stop lerping if already at the target
+        rig.camera_position = rig.target;
+    } else {
+        rig.camera_position = rig.camera_position.lerp(
+            rig.target,
+            time.delta_seconds() * rig.move_speed,
+        );
+    }
 }
 
 /// Camera updates the camera position to smoothly interpolate to the
 /// rig location. also applies camera shake, and limits camera within the level boundaries
-pub(crate) fn update_camera_rig(
-    mut q_cam: Query<(&mut Transform, &Projection), With<MainCamera>>,
-    mut rig: ResMut<CameraRig>,
+pub(crate) fn update_camera(
+    mut camera_query: Query<(&mut Transform, &Projection), With<MainCamera>>,
+    rig: Res<CameraRig>,
     backround_query: Query<
         (&LayerMetadata, &Transform),
         (With<MainBackround>, Without<MainCamera>),
     >,
-    shake_op: Option<Res<CameraShake>>,
-    time: Res<Time>,
+    camera_shake: Option<Res<CameraShake>>,
 ) {
-    let Ok((mut cam_xform, projection)) = q_cam.get_single_mut() else {
+    let Ok((mut camera_transform, projection)) = camera_query.get_single_mut()
+    else {
         return;
     };
 
@@ -203,60 +229,59 @@ pub(crate) fn update_camera_rig(
         return;
     };
 
-    let speed = 1.9;
+    camera_transform.translation.x = rig.camera_position.x;
+    camera_transform.translation.y = rig.camera_position.y;
 
-    let new_xy = rig.camera.lerp(rig.target, time.delta_seconds() * speed);
+    if let Ok((bg_layer, bg_transform)) = backround_query.get_single() {
+        let camera_rect = ortho_projection.area;
+        let background_rect = background_rect(bg_layer, bg_transform);
 
-    rig.camera = new_xy;
-
-    
-    // screen shake amounts
-    let offset = match shake_op {
-        Some(shake) => shake.c_offset,
-        None => Vec2::ZERO,
-    };
-
-    let offset_x = offset.x;
-    let offset_y = offset.y;
-
-    // cam_xform.rotation.z = 0.0 + angle;
-    cam_xform.translation.x = rig.camera.x;
-    cam_xform.translation.y = rig.camera.y;
-
-    if let Some((bg_layer, bg_transform)) = backround_query.iter().next() {
-        let bg_width = (bg_layer.c_wid * bg_layer.grid_size) as f32;
-        let bg_height = (bg_layer.c_hei * bg_layer.grid_size) as f32;
-
-        let cam_rect = ortho_projection.area;
-
-        // The backround width and height actually have 3 pixels extra padding on the far
-        // right/upper sides. This accounts for that.
-        let bg_max = Vec2::new(bg_width - 3.0, bg_height - 3.0);
-
-        // bottom left corner of the background is zero/minimum corner, because
-        // that's how LDtk imports it.
-        let limit_rect = Rect::from_corners(
-            bg_max + bg_transform.translation.xy(),
-            bg_transform.translation.xy(),
+        clamp_camera_to_edge(
+            &mut camera_transform,
+            background_rect,
+            camera_rect,
         );
-
-        let xy = cam_xform.translation.xy().clamp(
-            limit_rect.min + cam_rect.half_size(),
-            limit_rect.max - cam_rect.half_size(),
-        );
-        cam_xform.translation = xy.extend(cam_xform.translation.z);
 
         // Apply screen shake after camera is clamped so that camera still shakes at the edges
-        cam_xform.translation.x = cam_xform.translation.x + offset_x;
-        cam_xform.translation.y = cam_xform.translation.y + offset_y;
+        if let Some(camera_shake) = camera_shake {
+            camera_shake.apply(&mut camera_transform);
+        }
 
         // Apply another clamp so we don't show the edge of the level
-        let xy = cam_xform.translation.xy().clamp(
-            limit_rect.min + cam_rect.half_size(),
-            limit_rect.max - cam_rect.half_size(),
+        clamp_camera_to_edge(
+            &mut camera_transform,
+            background_rect,
+            camera_rect,
         );
-        cam_xform.translation = xy.extend(cam_xform.translation.z);
     }
+}
+
+fn background_rect(bg_layer: &LayerMetadata, bg_transform: &Transform) -> Rect {
+    let bg_width = (bg_layer.c_wid * bg_layer.grid_size) as f32;
+    let bg_height = (bg_layer.c_hei * bg_layer.grid_size) as f32;
+
+    // The backround width and height actually have 3 pixels extra padding on the far
+    // right/upper sides. This accounts for that.
+    let bg_max = Vec2::new(bg_width - 3.0, bg_height - 3.0);
+
+    // bottom left corner of the background is zero/minimum corner, because
+    // that's how LDtk imports it.
+    Rect::from_corners(
+        bg_max + bg_transform.translation.xy(),
+        bg_transform.translation.xy(),
+    )
+}
+
+fn clamp_camera_to_edge(
+    camera_transform: &mut Transform,
+    background_rect: Rect,
+    camera_rect: Rect,
+) {
+    let xy = camera_transform.translation.xy().clamp(
+        background_rect.min + camera_rect.half_size(),
+        background_rect.max - camera_rect.half_size(),
+    );
+    camera_transform.translation = xy.extend(camera_transform.translation.z);
 }
 
 #[derive(Resource, Clone)]
@@ -274,25 +299,28 @@ impl CameraShake {
         let rand_a = ran_f64_range(0.0..=360.0);
         let dir = Vec2::from_angle(rand_a as f32 * PI * 2.0);
 
-        Self { 
-            strength, 
+        Self {
+            strength,
             freq,
-            timer: Timer::from_seconds(t, TimerMode::Once), 
-            sub_timer: Timer::from_seconds(t / freq, TimerMode::Repeating), 
+            timer: Timer::from_seconds(t, TimerMode::Once),
+            sub_timer: Timer::from_seconds(t / freq, TimerMode::Repeating),
             c_offset: Vec2::ZERO,
             dir,
         }
     }
-}
 
+    pub fn apply(&self, camera_transform: &mut Transform) {
+        camera_transform.translation.x += self.c_offset.x;
+        camera_transform.translation.y += self.c_offset.y;
+    }
+}
 
 pub fn update_screen_shake(
     mut commands: Commands,
-//    mut cam_query: Query<(Entity, &mut CameraShake, &mut Transform), (With<PlayerCamera>)>,
+    //    mut cam_query: Query<(Entity, &mut CameraShake, &mut Transform), (With<PlayerCamera>)>,
     time: Res<Time<Virtual>>,
     mut shake: ResMut<CameraShake>,
 ) {
-
     let freq = shake.freq;
     let ratio = shake.timer.fraction();
     let decay = 1.0 - ratio.powi(2);
@@ -314,12 +342,10 @@ pub fn update_screen_shake(
     let tan_val = tan_s * decay * TAN_AMP_SCALE;
 
     let tan_dir = Vec3::Z.cross(shake.dir.extend(0.)).truncate();
-    
+
     let delta = shake.dir * val * shake.strength;
     let tan_delta = tan_dir * tan_val * shake.strength;
-//    let angle = val * shake.strength * 0.0001;
-
-    //println!("{}", delta);
+    //    let angle = val * shake.strength * 0.0001;
 
     shake.c_offset = delta + tan_delta;
 
@@ -329,9 +355,12 @@ pub fn update_screen_shake(
     if shake.timer.finished() {
         commands.remove_resource::<CameraShake>();
     }
-}   
+}
 
-fn cli_camera_at(In(args): In<Vec<String>>, mut q_cam: Query<&mut Transform, With<MainCamera>>) {
+fn cli_camera_at(
+    In(args): In<Vec<String>>,
+    mut q_cam: Query<&mut Transform, With<MainCamera>>,
+) {
     if args.len() != 2 {
         error!("\"camera_at <x> <y>\"");
         return;
