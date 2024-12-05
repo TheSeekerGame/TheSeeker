@@ -71,7 +71,7 @@ fn spawn_orbs_on_death(
     }
 }
 
-const DIST_THRESHOLD: f32 = 0.5;
+const DIST_THRESHOLD: f32 = 0.75;
 
 fn update_orbs_vel(
     mut commands: Commands,
@@ -99,9 +99,10 @@ fn update_orbs_vel(
             commands.entity(entity).despawn();
         }
         else {
-            let scaled_dist = ((100.0 - dist).powi(2) / 100.).clamp(0.0, 2.);
-
-            vel.0 = dir * (1.0 + scaled_dist * 2.0 ) * 20.0;
+            const SPEEDUP_DIST: f32 = 150.0;
+            //let scaled_dist = ((100.0 - dist).powi(2) / 100.).clamp(0.0, 2.);
+            let scaled_dist = (2. * (SPEEDUP_DIST - dist.min(SPEEDUP_DIST))/SPEEDUP_DIST).powi(2);
+            vel.0 = dir * (1.0 + scaled_dist * 2.0 ) * 25.0;
         }
     }
 }
