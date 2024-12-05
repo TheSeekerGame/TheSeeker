@@ -1461,7 +1461,7 @@ fn enemy_idle_animation(
 ) {
     for gent in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.spider.Idle");
+            enemy.play_key("anim.smallspider.Idle");
         }
     }
 }
@@ -1507,7 +1507,7 @@ fn enemy_walking_animation(
 ) {
     for gent in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.spider.Walk");
+            enemy.play_key("anim.smallspider.Walk");
         }
     }
 }
@@ -1518,7 +1518,7 @@ fn enemy_chasing_animation(
 ) {
     for gent in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.spider.Chase");
+            enemy.play_key("anim.smallspider.Chase");
         }
     }
 }
@@ -1540,7 +1540,7 @@ fn enemy_melee_attack_animation(
 ) {
     for gent in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.spider.OffensiveAttack");
+            enemy.play_key("anim.smallspider.MeleeAttack");
         }
     }
 }
@@ -1584,7 +1584,7 @@ fn enemy_death_animation(
 ) {
     for gent in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.spider.Death");
+            enemy.play_key("anim.smallspider.Death");
         }
     }
 }
@@ -1595,7 +1595,7 @@ fn enemy_decay_animation(
 ) {
     for gent in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.spider.Decay");
+            enemy.play_key("anim.smallspider.Decay");
         }
     }
 }

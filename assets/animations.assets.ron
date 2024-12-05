@@ -181,6 +181,18 @@
         rows: 1,
         columns: 17,
     ),
+    "anim.smallspider.Idle": File (
+        path: "animations/spider/small/tier1/Idle.anim.toml",
+    ),
+    "anim.smallspider.Idle.image": File (
+        path: "animations/spider/small/tier1/Idle.png",
+    ),
+    "anim.smallspider.Idle.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 6,
+    ),
     "anim.spider.Walk": File (
         path: "animations/spider/big/tier1/Walk.anim.toml",
     ),
@@ -192,6 +204,18 @@
         tile_size_y: 90.,
         rows: 1,
         columns: 10,
+    ),
+    "anim.smallspider.Walk": File (
+        path: "animations/spider/small/tier1/Walk.anim.toml",
+    ),
+    "anim.smallspider.Walk.image": File (
+        path: "animations/spider/small/tier1/Walk.png",
+    ),
+    "anim.smallspider.Walk.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 6,
     ),
     "anim.spider.RangedAttack": File (
         path: "animations/spider/big/tier1/RangedAttack.anim.toml",
@@ -205,29 +229,29 @@
         rows: 1,
         columns: 15,
     ),
-    "anim.spider.OffensiveAttack": File (
-        path: "animations/spider/big/tier1/OffensiveAttack.anim.toml",
+    "anim.smallspider.MeleeAttack": File (
+        path: "animations/spider/small/tier1/MeleeAttack.anim.toml",
     ),
-    "anim.spider.OffensiveAttack.image": File (
-        path: "animations/spider/big/tier1/OffensiveAttack.png",
+    "anim.smallspider.MeleeAttack.image": File (
+        path: "animations/spider/small/tier1/MeleeAttack.png",
     ),
-    "anim.spider.OffensiveAttack.atlas": TextureAtlasLayout (
-        tile_size_x: 90.,
-        tile_size_y: 90.,
+    "anim.smallspider.MeleeAttack.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
         rows: 1,
-        columns: 11,
+        columns: 5,
     ),
-    "anim.spider.Chase": File (
-            path: "animations/spider/big/tier1/Chase.anim.toml",
+    "anim.smallspider.Chase": File (
+            path: "animations/spider/small/tier1/Chase.anim.toml",
     ),
-        "anim.spider.Chase.image": File (
-            path: "animations/spider/big/tier1/Chase.png",
+        "anim.smallspider.Chase.image": File (
+            path: "animations/spider/small/tier1/Chase.png",
     ),
-        "anim.spider.Chase.atlas": TextureAtlasLayout (
-            tile_size_x: 90.,
-            tile_size_y: 90.,
+        "anim.smallspider.Chase.atlas": TextureAtlasLayout (
+            tile_size_x: 48.,
+            tile_size_y: 48.,
             rows: 1,
-            columns: 6,
+            columns: 4,
     ),
     "anim.spider.DefensiveAttack": File (
         path: "animations/spider/big/tier1/DefensiveAttack.anim.toml",
@@ -289,6 +313,18 @@
         rows: 1,
         columns: 7,
     ),
+    "anim.smallspider.Death": File (
+        path: "animations/spider/small/tier1/Death.anim.toml",
+    ),
+    "anim.smallspider.Death.image": File (
+        path: "animations/spider/small/tier1/Death.png",
+    ),
+    "anim.smallspider.Death.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 6,
+    ),
     "anim.spider.Decay": File (
         path: "animations/spider/big/tier1/Decay.anim.toml",
     ),
@@ -298,6 +334,18 @@
     "anim.spider.Decay.atlas": TextureAtlasLayout (
         tile_size_x: 90.,
         tile_size_y: 90.,
+        rows: 1,
+        columns: 4,
+    ),
+    "anim.smallspider.Decay": File (
+        path: "animations/spider/small/tier1/Decay.anim.toml",
+    ),
+    "anim.smallspider.Decay.image": File (
+        path: "animations/spider/small/tier1/Decay.png",
+    ),
+    "anim.smallspider.Decay.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
         rows: 1,
         columns: 4,
     ),
