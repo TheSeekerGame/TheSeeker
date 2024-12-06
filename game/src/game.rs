@@ -17,6 +17,7 @@ pub mod physics;
 pub mod player;
 mod wall;
 mod yak;
+mod xp_orbs;
 
 pub struct GameplayPlugin;
 
@@ -41,6 +42,8 @@ impl Plugin for GameplayPlugin {
             attack::AttackPlugin,
             wall::WallPlugin,
             game_over::GameOverPlugin,
+            xp_orbs::XpPlugin,
+
         ));
     }
 }
