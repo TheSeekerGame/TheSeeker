@@ -121,29 +121,53 @@
         rows: 1,
         columns: 20,
     ),
-    "anim.player.SwordBasicRun": File (
-        path: "animations/player/sword/BasicRun.anim.toml",
+    "anim.player.BowBasicIdle": File (
+        path: "animations/player/bow/BasicIdle.anim.toml",
     ),
-    "anim.player.SwordBasicRun.image": File (
-        path: "animations/player/sword/BasicRunSheet.png",
+    "anim.player.BowBasicIdle.image": File (
+        path: "animations/player/bow/BasicIdleSheet.png",
     ),
-    "anim.player.SwordBasicRun.atlas": TextureAtlasLayout (
+    "anim.player.BowBasicIdle.atlas": TextureAtlasLayout (
         tile_size_x: 48.,
         tile_size_y: 48.,
         rows: 1,
-        columns: 12,
+        columns: 8,
     ),
-    "anim.player.SwordBasicAir": File (
-        path: "animations/player/sword/BasicAir.anim.toml",
+    "anim.player.BowBasicRun": File (
+        path: "animations/player/bow/BasicRun.anim.toml",
     ),
-    "anim.player.SwordBasicAir.image": File (
-        path: "animations/player/sword/BasicAirSheet.png",
+    "anim.player.BowBasicRun.image": File (
+        path: "animations/player/bow/BasicRunSheet.png",
     ),
-    "anim.player.SwordBasicAir.atlas": TextureAtlasLayout (
+    "anim.player.BowBasicRun.atlas": TextureAtlasLayout (
         tile_size_x: 48.,
         tile_size_y: 48.,
         rows: 1,
-        columns: 20,
+        columns: 8,
+    ),
+    "anim.player.BowBasicAir": File (
+        path: "animations/player/bow/BasicAir.anim.toml",
+    ),
+    "anim.player.BowBasicAir.image": File (
+        path: "animations/player/bow/BasicAirSheet.png",
+    ),
+    "anim.player.BowBasicAir.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 5,
+    ),
+    "anim.player.BowBasicArrow": File (
+        path: "animations/player/bow/BasicArrow.anim.toml",
+    ),
+    "anim.player.BowBasicArrow.image": File (
+        path: "animations/player/bow/BasicArrowSheet.png",
+    ),
+    "anim.player.BowBasicArrow.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 1,
     ),
     "anim.player.SwordWhirling": File (
         path: "animations/player/sword/Whirling.anim.toml",
