@@ -33,6 +33,8 @@ impl Plugin for VignettePlugin {
             UniformComponentPlugin::<VignetteSettings>::default(),
         ));
 
+        app.register_type::<VignetteSettings>();
+
         let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
             warn!("Failed to get render app for VignettePlugin");
             return;
@@ -64,7 +66,7 @@ impl Plugin for VignettePlugin {
 }
 
 /// Component that controls the vignette post processing effect
-#[derive(Component, Clone, Copy, ExtractComponent, ShaderType)]
+#[derive(Component, Clone, Copy, ExtractComponent, ShaderType, Reflect)]
 pub struct VignetteSettings {
     /// The color of the vignette
     pub color: Vec3,
