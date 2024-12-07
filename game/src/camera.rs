@@ -10,7 +10,8 @@ use ran::ran_f64_range;
 
 use crate::game::player::Player;
 use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
-use crate::graphics::post_processing::DarknessSettings;
+// use crate::graphics::post_processing::darkness::DarknessSettings;
+use crate::graphics::post_processing::vignette::VignetteSettings;
 use crate::level::MainBackround;
 use crate::prelude::*;
 
@@ -75,7 +76,6 @@ pub struct GameViewLimits(Rect);
 
 pub(crate) fn setup_main_camera(
     mut commands: Commands,
-    mut meshes: ResMut<Assets<Mesh>>,
     mut materials: ResMut<Assets<StandardMaterial>>,
 ) {
     commands.spawn((
@@ -128,20 +128,19 @@ pub(crate) fn setup_main_camera(
             max_depth: 500.0,
         },
         BloomSettings::NATURAL,
-        DarknessSettings {
-            bg_light_level: 1.0,
-            lantern_position: Default::default(),
-            lantern: 0.0,
-            lantern_color: Vec3::new(0.965, 0.882, 0.678),
-            bg_light_color: Vec3::new(0.761, 0.773, 0.8),
-        },
+        // DarknessSettings {
+        //     bg_light_level: 1.0,
+        //     lantern_position: Default::default(),
+        //     lantern: 0.0,
+        //     lantern_color: Vec3::new(0.965, 0.882, 0.678),
+        //     bg_light_color: Vec3::new(0.761, 0.773, 0.8),
+        // },
+        VignetteSettings::default(),
         Name::new("MainCamera"),
     ));
-
-    let debug_material = materials.add(StandardMaterial { ..default() });
 }
 
-fn manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, With<MainCamera>>,
+fn _manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, With<MainCamera>>,
                             // mut q_window: Query<&Window, With<PrimaryWindow>>,
 ) {
     // TODO
@@ -172,12 +171,11 @@ fn camera_rig_follow_player(
         } else if delta_x < -lead_amnt - max_err {
             *lead_bckwrd = !*lead_bckwrd
         }
-    } else {
-        if delta_x < lead_amnt {
-            rig.target.x = player_xform.translation.x - lead_amnt
-        } else if delta_x > lead_amnt + max_err {
-            *lead_bckwrd = !*lead_bckwrd
-        }
+    }
+    if delta_x < lead_amnt {
+        rig.target.x = player_xform.translation.x - lead_amnt
+    } else if delta_x > lead_amnt + max_err {
+        *lead_bckwrd = !*lead_bckwrd
     }
     // rig.position.x = player_xform.translation.x;
 
@@ -247,8 +245,8 @@ pub(crate) fn update_camera_rig(
         cam_xform.translation = xy.extend(cam_xform.translation.z);
 
         // Apply screen shake after camera is clamped so that camera still shakes at the edges
-        cam_xform.translation.x = cam_xform.translation.x + offset_x;
-        cam_xform.translation.y = cam_xform.translation.y + offset_y;
+        cam_xform.translation.x += offset_x;
+        cam_xform.translation.y += offset_y;
 
         // Apply another clamp so we don't show the edge of the level
         let xy = cam_xform.translation.xy().clamp(

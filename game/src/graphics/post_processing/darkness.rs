@@ -52,7 +52,7 @@ use crate::parallax::Parallax;
 ///    },
 /// ));
 /// ```
-pub struct DarknessPlugin;
+pub(crate) struct DarknessPlugin;
 
 impl Plugin for DarknessPlugin {
     fn build(&self, app: &mut App) {
@@ -227,7 +227,7 @@ struct DarknessPostProcessNode;
 //     pub const NAME: &'static str = "darkness_post_process";
 // }
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-struct DarknessPostProcessLabel;
+pub(crate) struct DarknessPostProcessLabel;
 
 // The ViewNode trait is required by the ViewNodeRunner
 impl ViewNode for DarknessPostProcessNode {
