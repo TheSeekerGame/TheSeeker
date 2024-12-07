@@ -53,6 +53,9 @@ impl CommonScriptTracker {
 }
 
 impl ScriptTracker for CommonScriptTracker {
+    type ActionParams = CommonScriptParams;
+    type Carryover = CommonScriptCarryover;
+    type CarryoverParam = ();
     type InitParam = (
         SRes<Time>,
         SRes<GameTime>,
@@ -63,9 +66,6 @@ impl ScriptTracker for CommonScriptTracker {
     type RunIf = CommonScriptRunIf;
     type Settings = CommonScriptSettings;
     type UpdateParam = (SRes<Time>, SRes<GameTime>);
-    type ActionParams = CommonScriptParams;
-    type Carryover = CommonScriptCarryover;
-    type CarryoverParam = ();
 
     fn init(
         &mut self,
@@ -131,12 +131,12 @@ impl ScriptTracker for CommonScriptTracker {
                 match tick {
                     OneOrMany::Single(tick) => {
                         self.tick_actions.push((*tick, action_id));
-                    }
+                    },
                     OneOrMany::Many(ticks) => {
                         for tick in ticks.iter() {
                             self.tick_actions.push((*tick, action_id));
                         }
-                    }
+                    },
                 }
             },
             CommonScriptRunIf::TickQuant(quant) => {
@@ -149,7 +149,7 @@ impl ScriptTracker for CommonScriptTracker {
                             Duration::from_millis(*millis),
                             action_id,
                         ));
-                    }
+                    },
                     OneOrMany::Many(millis) => {
                         for millis in millis.iter() {
                             self.time_actions.push((
@@ -157,41 +157,49 @@ impl ScriptTracker for CommonScriptTracker {
                                 action_id,
                             ));
                         }
-                    }
+                    },
                 }
             },
             CommonScriptRunIf::Time(timespec) => {
                 match timespec {
                     OneOrMany::Single(timespec) => {
-                        self.time_actions.push((Duration::from(*timespec), action_id));
-                    }
+                        self.time_actions
+                            .push((Duration::from(*timespec), action_id));
+                    },
                     OneOrMany::Many(timespecs) => {
                         for timespec in timespecs.iter() {
-                            self.time_actions.push((Duration::from(*timespec), action_id));
+                            self.time_actions
+                                .push((Duration::from(*timespec), action_id));
                         }
-                    }
+                    },
                 }
             },
             CommonScriptRunIf::SlotEnable(slot) => {
-                if let Some(entry) = self.slot_enable_actions.get_mut(slot.as_str()) {
+                if let Some(entry) =
+                    self.slot_enable_actions.get_mut(slot.as_str())
+                {
                     entry.push(action_id);
                 } else {
-                    self.slot_enable_actions.insert(slot.clone(), vec![action_id]);
+                    self.slot_enable_actions
+                        .insert(slot.clone(), vec![action_id]);
                 }
-            }
+            },
             CommonScriptRunIf::SlotDisable(slot) => {
-                if let Some(entry) = self.slot_disable_actions.get_mut(slot.as_str()) {
+                if let Some(entry) =
+                    self.slot_disable_actions.get_mut(slot.as_str())
+                {
                     entry.push(action_id);
                 } else {
-                    self.slot_disable_actions.insert(slot.clone(), vec![action_id]);
+                    self.slot_disable_actions
+                        .insert(slot.clone(), vec![action_id]);
                 }
-            }
+            },
             CommonScriptRunIf::PlaybackControl(PlaybackControl::Start) => {
                 self.start_actions.push(action_id);
-            }
+            },
             CommonScriptRunIf::PlaybackControl(PlaybackControl::Stop) => {
                 self.stop_actions.push(action_id);
-            }
+            },
         }
     }
 
@@ -204,7 +212,10 @@ impl ScriptTracker for CommonScriptTracker {
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
-        (time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
+        (time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<
+            '_,
+            '_,
+        >,
         queue: &mut Vec<QueuedAction>,
     ) -> ScriptUpdateResult {
         // any delayed actions
@@ -276,26 +287,40 @@ impl ScriptTracker for CommonScriptTracker {
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
-        (_time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
+        (_time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<
+            '_,
+            '_,
+        >,
         queue: &mut Vec<QueuedAction>,
     ) {
-        queue.extend(self.start_actions.drain(..).map(|action| QueuedAction {
-            timing: ScriptActionTiming::Tick(game_time.tick()),
-            action,
-        }));
+        queue.extend(
+            self.start_actions.drain(..).map(|action| {
+                QueuedAction {
+                    timing: ScriptActionTiming::Tick(game_time.tick()),
+                    action,
+                }
+            }),
+        );
     }
 
     fn do_stop(
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
-        (_time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
+        (_time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<
+            '_,
+            '_,
+        >,
         queue: &mut Vec<QueuedAction>,
     ) {
-        queue.extend(self.stop_actions.drain(..).map(|action| QueuedAction {
-            timing: ScriptActionTiming::Tick(game_time.tick()),
-            action,
-        }));
+        queue.extend(
+            self.stop_actions.drain(..).map(|action| {
+                QueuedAction {
+                    timing: ScriptActionTiming::Tick(game_time.tick()),
+                    action,
+                }
+            }),
+        );
     }
 
     fn set_slot(
@@ -308,20 +333,22 @@ impl ScriptTracker for CommonScriptTracker {
             if !self.slots_enabled.contains(slot) {
                 self.slots_enabled.insert(slot.to_owned());
                 if let Some(actions) = self.slot_enable_actions.get(slot) {
-                    self.q_extra.extend(actions.iter().map(|&action| QueuedAction {
-                        timing,
-                        action,
-                    }));
+                    self.q_extra.extend(
+                        actions
+                            .iter()
+                            .map(|&action| QueuedAction { timing, action }),
+                    );
                 }
             }
         } else {
             if self.slots_enabled.contains(slot) {
                 self.slots_enabled.remove(slot);
                 if let Some(actions) = self.slot_disable_actions.get(slot) {
-                    self.q_extra.extend(actions.iter().map(|&action| QueuedAction {
-                        timing,
-                        action,
-                    }));
+                    self.q_extra.extend(
+                        actions
+                            .iter()
+                            .map(|&action| QueuedAction { timing, action }),
+                    );
                 }
             }
         }
@@ -331,31 +358,27 @@ impl ScriptTracker for CommonScriptTracker {
         self.slots_enabled.contains(slot)
     }
 
-    fn take_slots(
-        &mut self,
-        timing: ScriptActionTiming,
-    ) -> HashSet<String> {
+    fn take_slots(&mut self, timing: ScriptActionTiming) -> HashSet<String> {
         for slot in self.slots_enabled.iter() {
             if let Some(actions) = self.slot_disable_actions.get(slot) {
-                self.q_extra.extend(actions.iter().map(|&action| QueuedAction {
-                    timing,
-                    action,
-                }));
+                self.q_extra.extend(
+                    actions
+                        .iter()
+                        .map(|&action| QueuedAction { timing, action }),
+                );
             }
         }
         std::mem::take(&mut self.slots_enabled)
     }
 
-    fn clear_slots(
-        &mut self,
-        timing: ScriptActionTiming,
-    ) {
+    fn clear_slots(&mut self, timing: ScriptActionTiming) {
         for slot in self.slots_enabled.iter() {
             if let Some(actions) = self.slot_disable_actions.get(slot) {
-                self.q_extra.extend(actions.iter().map(|&action| QueuedAction {
-                    timing,
-                    action,
-                }));
+                self.q_extra.extend(
+                    actions
+                        .iter()
+                        .map(|&action| QueuedAction { timing, action }),
+                );
             }
         }
         self.slots_enabled.clear()
@@ -367,22 +390,30 @@ impl ScriptRunIf for CommonScriptRunIf {
 }
 
 impl ScriptActionParams for CommonScriptParams {
-    type Tracker = CommonScriptTracker;
     type ShouldRunParam = (SRes<Time>, SRes<GameTime>);
+    type Tracker = CommonScriptTracker;
 
     fn should_run(
         &self,
         _entity: Entity,
         tracker: &mut Self::Tracker,
         action_id: ActionId,
-        (_time, game_time): &mut <Self::ShouldRunParam as SystemParam>::Item<'_, '_>,
+        (_time, game_time): &mut <Self::ShouldRunParam as SystemParam>::Item<
+            '_,
+            '_,
+        >,
     ) -> Result<(), ScriptUpdateResult> {
-        if let Some(i_delayed) = tracker.q_delayed.iter()
-            .position(|(tick, aid)| *tick == game_time.tick() && *aid == action_id)
+        if let Some(i_delayed) =
+            tracker.q_delayed.iter().position(|(tick, aid)| {
+                *tick == game_time.tick() && *aid == action_id
+            })
         {
             tracker.q_delayed.remove(i_delayed);
         } else if let Some(delay_ticks) = self.delay_ticks {
-            tracker.q_delayed.push((game_time.tick() + delay_ticks as u64, action_id));
+            tracker.q_delayed.push((
+                game_time.tick() + delay_ticks as u64,
+                action_id,
+            ));
             return Err(ScriptUpdateResult::NormalRun);
         }
         if let Some(lt) = self.if_runcount_lt {
@@ -428,28 +459,43 @@ impl ScriptActionParams for CommonScriptParams {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
-        match (&self.if_previous_script_key, &tracker.old_key) {
-            (None, _) => {}
+        match (
+            &self.if_previous_script_key,
+            &tracker.old_key,
+        ) {
+            (None, _) => {},
             (Some(req), Some(old)) if req == old => {},
             _ => return Err(ScriptUpdateResult::NormalRun),
         }
-        if !self.forbid_slots_any.is_empty() &&
-            self.forbid_slots_any.iter().any(|s| tracker.slots_enabled.contains(s))
+        if !self.forbid_slots_any.is_empty()
+            && self
+                .forbid_slots_any
+                .iter()
+                .any(|s| tracker.slots_enabled.contains(s))
         {
             return Err(ScriptUpdateResult::NormalRun);
         }
-        if !self.forbid_slots_all.is_empty() &&
-            self.forbid_slots_all.iter().all(|s| tracker.slots_enabled.contains(s))
+        if !self.forbid_slots_all.is_empty()
+            && self
+                .forbid_slots_all
+                .iter()
+                .all(|s| tracker.slots_enabled.contains(s))
         {
             return Err(ScriptUpdateResult::NormalRun);
         }
-        if !self.require_slots_all.is_empty() &&
-           !self.require_slots_all.iter().all(|s| tracker.slots_enabled.contains(s))
+        if !self.require_slots_all.is_empty()
+            && !self
+                .require_slots_all
+                .iter()
+                .all(|s| tracker.slots_enabled.contains(s))
         {
             return Err(ScriptUpdateResult::NormalRun);
         }
-        if !self.require_slots_any.is_empty() &&
-           !self.require_slots_any.iter().any(|s| tracker.slots_enabled.contains(s))
+        if !self.require_slots_any.is_empty()
+            && !self
+                .require_slots_any
+                .iter()
+                .any(|s| tracker.slots_enabled.contains(s))
         {
             return Err(ScriptUpdateResult::NormalRun);
         }
@@ -508,23 +554,23 @@ impl ScriptAction for CommonScriptAction {
                 }
                 ScriptUpdateResult::NormalRun
             },
-            CommonScriptAction::SpawnScene { .. } => ScriptUpdateResult::NormalRun,
+            CommonScriptAction::SpawnScene { .. } => {
+                ScriptUpdateResult::NormalRun
+            },
             CommonScriptAction::SpawnScript { asset_key } => {
                 let mut player = ScriptPlayer::new();
                 player.play_key(asset_key.as_str());
-                commands.spawn(ScriptBundle {
-                    player,
-                });
+                commands.spawn(ScriptBundle { player });
                 ScriptUpdateResult::NormalRun
             },
             CommonScriptAction::SlotEnable { slot } => {
                 tracker.set_slot(timing, slot, true);
                 ScriptUpdateResult::NormalRun
-            }
+            },
             CommonScriptAction::SlotDisable { slot } => {
                 tracker.set_slot(timing, slot, false);
                 ScriptUpdateResult::NormalRun
-            }
+            },
             CommonScriptAction::SlotToggle { slot } => {
                 if tracker.has_slot(slot) {
                     tracker.set_slot(timing, slot, false);
@@ -532,35 +578,63 @@ impl ScriptAction for CommonScriptAction {
                     tracker.set_slot(timing, slot, true);
                 }
                 ScriptUpdateResult::NormalRun
-            }
-            CommonScriptAction::PlayAudio { asset_key, volume, pan } => {
+            },
+            CommonScriptAction::PlayAudio {
+                asset_key,
+                volume,
+                pan,
+            } => {
                 use rand::seq::SliceRandom;
                 let volume = volume.unwrap_or(1.0);
                 let pan = pan.unwrap_or(0.0);
-                let sounds: Vec<&AudioSource> = preloaded.get_multi_asset(asset_key)
+                let sounds: Vec<&AudioSource> = preloaded
+                    .get_multi_asset(asset_key)
                     .unwrap_or(&[])
                     .iter()
-                    .filter_map(|h_untyped| ass_audio.get(h_untyped.id().typed::<AudioSource>()))
+                    .filter_map(|h_untyped| {
+                        ass_audio.get(h_untyped.id().typed::<AudioSource>())
+                    })
                     .collect();
                 if let Some(sound) = sounds.choose(&mut rand::thread_rng()) {
                     let ctl = q_mixer.single();
                     match timing {
                         ScriptActionTiming::Unknown => {
-                            ctl.controller.play_immediately(sound.decoder(), volume, pan);
+                            ctl.controller.play_immediately(
+                                sound.decoder(),
+                                volume,
+                                pan,
+                            );
                         },
                         ScriptActionTiming::UnknownTick => {
-                            ctl.controller.play_at_tick(gt.tick() as u32, 0, sound.decoder(), volume, pan);
+                            ctl.controller.play_at_tick(
+                                gt.tick() as u32,
+                                0,
+                                sound.decoder(),
+                                volume,
+                                pan,
+                            );
                         },
                         ScriptActionTiming::Time(time) => {
-                            ctl.controller.play_at_time(time, sound.decoder(), volume, pan);
+                            ctl.controller.play_at_time(
+                                time,
+                                sound.decoder(),
+                                volume,
+                                pan,
+                            );
                         },
                         ScriptActionTiming::Tick(tick) => {
-                            ctl.controller.play_at_tick(tick as u32, 0, sound.decoder(), volume, pan);
+                            ctl.controller.play_at_tick(
+                                tick as u32,
+                                0,
+                                sound.decoder(),
+                                volume,
+                                pan,
+                            );
                         },
                     }
                 }
                 ScriptUpdateResult::NormalRun
-            }
+            },
         }
     }
 }
@@ -578,6 +652,12 @@ pub struct ExtendedScriptTracker<T: ScriptTracker> {
 }
 
 impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
+    type ActionParams = ExtendedScriptParams<T::ActionParams>;
+    type Carryover = ExtendedScriptCarryover<T::Carryover>;
+    type CarryoverParam = (
+        T::CarryoverParam,
+        <<CommonScriptRunIf as ScriptRunIf>::Tracker as ScriptTracker>::CarryoverParam,
+    );
     type InitParam = (
         T::InitParam,
         <<CommonScriptRunIf as ScriptRunIf>::Tracker as ScriptTracker>::InitParam,
@@ -588,12 +668,6 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         T::UpdateParam,
         <<CommonScriptRunIf as ScriptRunIf>::Tracker as ScriptTracker>::UpdateParam,
     );
-    type ActionParams = ExtendedScriptParams<T::ActionParams>;
-    type Carryover = ExtendedScriptCarryover<T::Carryover>;
-    type CarryoverParam = (
-        T::CarryoverParam,
-        <<CommonScriptRunIf as ScriptRunIf>::Tracker as ScriptTracker>::CarryoverParam,
-    );
 
     fn init(
         &mut self,
@@ -603,8 +677,20 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         carryover: Self::Carryover,
         param: &mut <Self::InitParam as SystemParam>::Item<'_, '_>,
     ) {
-        self.extended.init(entity, &settings.extended, metadata, carryover.extended, &mut param.0);
-        self.common.init(entity, &settings.common, metadata, carryover.common, &mut param.1);
+        self.extended.init(
+            entity,
+            &settings.extended,
+            metadata,
+            carryover.extended,
+            &mut param.0,
+        );
+        self.common.init(
+            entity,
+            &settings.common,
+            metadata,
+            carryover.common,
+            &mut param.1,
+        );
     }
 
     fn produce_carryover(
@@ -623,10 +709,16 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         self.common.transfer_progress(&other.common);
     }
 
-    fn track_action(&mut self, run_if: &Self::RunIf, params: &Self::ActionParams, action_id: ActionId) {
+    fn track_action(
+        &mut self,
+        run_if: &Self::RunIf,
+        params: &Self::ActionParams,
+        action_id: ActionId,
+    ) {
         match run_if {
             ExtendedScriptRunIf::Extended(run_if) => {
-                self.extended.track_action(run_if, &params.extended, action_id);
+                self.extended
+                    .track_action(run_if, &params.extended, action_id);
             },
             ExtendedScriptRunIf::Common(run_if) => {
                 self.common.track_action(run_if, &params.common, action_id);
@@ -659,7 +751,8 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
             queue,
         );
         match (r_extended, r_common) {
-            (ScriptUpdateResult::Terminated, _) | (_, ScriptUpdateResult::Terminated) => {
+            (ScriptUpdateResult::Terminated, _)
+            | (_, ScriptUpdateResult::Terminated) => {
                 ScriptUpdateResult::Terminated
             },
             (ScriptUpdateResult::Finished, ScriptUpdateResult::Finished) => {
@@ -685,8 +778,18 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         param: &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         queue: &mut Vec<QueuedAction>,
     ) {
-        self.extended.do_start(entity, &settings.extended, &mut param.0, queue);
-        self.common.do_start(entity, &settings.common, &mut param.1, queue);
+        self.extended.do_start(
+            entity,
+            &settings.extended,
+            &mut param.0,
+            queue,
+        );
+        self.common.do_start(
+            entity,
+            &settings.common,
+            &mut param.1,
+            queue,
+        );
     }
 
     fn do_stop(
@@ -696,8 +799,18 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         param: &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
         queue: &mut Vec<QueuedAction>,
     ) {
-        self.extended.do_stop(entity, &settings.extended, &mut param.0, queue);
-        self.common.do_stop(entity, &settings.common, &mut param.1, queue);
+        self.extended.do_stop(
+            entity,
+            &settings.extended,
+            &mut param.0,
+            queue,
+        );
+        self.common.do_stop(
+            entity,
+            &settings.common,
+            &mut param.1,
+            queue,
+        );
     }
 
     fn set_slot(
@@ -714,19 +827,13 @@ impl<T: ScriptTracker> ScriptTracker for ExtendedScriptTracker<T> {
         self.common.has_slot(slot) || self.extended.has_slot(slot)
     }
 
-    fn take_slots(
-        &mut self,
-        timing: ScriptActionTiming,
-    ) -> HashSet<String> {
+    fn take_slots(&mut self, timing: ScriptActionTiming) -> HashSet<String> {
         let mut r = self.common.take_slots(timing);
         r.extend(self.extended.take_slots(timing));
         r
     }
 
-    fn clear_slots(
-        &mut self,
-        timing: ScriptActionTiming,
-    ) {
+    fn clear_slots(&mut self, timing: ScriptActionTiming) {
         self.common.clear_slots(timing);
         self.extended.clear_slots(timing);
     }
@@ -737,11 +844,12 @@ impl<T: ScriptRunIf> ScriptRunIf for ExtendedScriptRunIf<T> {
 }
 
 impl<T: ScriptActionParams> ScriptActionParams for ExtendedScriptParams<T> {
-    type Tracker = ExtendedScriptTracker<T::Tracker>;
     type ShouldRunParam = (
         T::ShouldRunParam,
         <CommonScriptParams as ScriptActionParams>::ShouldRunParam,
     );
+    type Tracker = ExtendedScriptTracker<T::Tracker>;
+
     fn should_run(
         &self,
         entity: Entity,
@@ -749,10 +857,20 @@ impl<T: ScriptActionParams> ScriptActionParams for ExtendedScriptParams<T> {
         action_id: ActionId,
         (param_ext, param_common): &mut <Self::ShouldRunParam as SystemParam>::Item<'_, '_>,
     ) -> Result<(), ScriptUpdateResult> {
-        if let Err(r) = self.extended.should_run(entity, &mut tracker.extended, action_id, param_ext) {
+        if let Err(r) = self.extended.should_run(
+            entity,
+            &mut tracker.extended,
+            action_id,
+            param_ext,
+        ) {
             Err(r)
         } else {
-            self.common.should_run(entity, &mut tracker.common, action_id, param_common)
+            self.common.should_run(
+                entity,
+                &mut tracker.common,
+                action_id,
+                param_common,
+            )
         }
     }
 }
@@ -774,7 +892,10 @@ where
         timing: ScriptActionTiming,
         actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
-        (param_ext, param_common): &mut <Self::Param as SystemParam>::Item<'_, '_>,
+        (param_ext, param_common): &mut <Self::Param as SystemParam>::Item<
+            '_,
+            '_,
+        >,
     ) -> ScriptUpdateResult {
         match self {
             ExtendedScriptAction::Extended(action) => {

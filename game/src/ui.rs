@@ -1,10 +1,11 @@
+use sickle_ui::ui_builder::UiBuilder;
+use sickle_ui::widgets::prelude::UiContainerExt;
+
 use crate::assets::UiAssets;
 use crate::locale::L10nKey;
 use crate::prelude::*;
 use crate::ui::kill_counter::KillCounterPlugin;
 use crate::ui::skill_toolbar::SkillToolbarPlugin;
-use sickle_ui::ui_builder::UiBuilder;
-use sickle_ui::widgets::prelude::UiContainerExt;
 
 pub mod ability_widget;
 mod console;

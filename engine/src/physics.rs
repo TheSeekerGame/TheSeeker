@@ -1,12 +1,13 @@
-use crate::prelude::{GameTickUpdate, HashMap};
-use crate::script::ScriptSet;
+use std::f32::consts::PI;
+
 use bevy::prelude::*;
 use bevy::transform::TransformSystem::TransformPropagate;
 use rapier2d::na::{Unit, UnitComplex};
 use rapier2d::parry;
-use rapier2d::prelude::Collider as RapierCollider;
-use rapier2d::prelude::*;
-use std::f32::consts::PI;
+use rapier2d::prelude::{Collider as RapierCollider, *};
+
+use crate::prelude::{GameTickUpdate, HashMap};
+use crate::script::ScriptSet;
 
 /// A manual implementation of rapier to only use the features required by our project
 ///
@@ -149,7 +150,11 @@ pub struct AnimationCollider(pub Entity);
 pub struct Collider(pub RapierCollider);
 
 impl Collider {
-    pub fn cuboid(x_length: f32, y_length: f32, interaction: InteractionGroups) -> Self {
+    pub fn cuboid(
+        x_length: f32,
+        y_length: f32,
+        interaction: InteractionGroups,
+    ) -> Self {
         // Rapiers cuboid is subtely different from xpbd, as rapier is defined by its
         // half extents, and xpbd is by its extents.
         Self(
@@ -158,6 +163,7 @@ impl Collider {
                 .build(),
         )
     }
+
     /// You can use this if you want to use an animation collider
     ///
     /// Note: not actually empty, makes a 10x10cube.
@@ -328,7 +334,7 @@ impl PhysicsWorld {
         &self,
         point: Vec2,
         interaction: InteractionGroups,
-        //TODO: might want to be able to exclude multiple entities?
+        // TODO: might want to be able to exclude multiple entities?
         exclude: Option<Entity>,
     ) -> Option<(Entity, parry::query::PointProjection)> {
         let mut filter = QueryFilter::new().groups(interaction);
@@ -353,7 +359,10 @@ impl PhysicsWorld {
 
     /// Small utility function that gets the entity associated with the collider;
     /// panics if entity does not exist.
-    pub fn collider2entity(&self, handle: rapier2d::prelude::ColliderHandle) -> Option<Entity> {
+    pub fn collider2entity(
+        &self,
+        handle: rapier2d::prelude::ColliderHandle,
+    ) -> Option<Entity> {
         if let Some(result) = self.col_set.get(handle) {
             match Entity::try_from_bits(result.user_data as u64) {
                 Ok(e) => Some(e),
@@ -408,7 +417,7 @@ pub fn update_query_pipeline(
         rb_set,
         id_tracker,
     } = &mut *world;
-    //query_pipeline.cast_shape()
+    // query_pipeline.cast_shape()
     let mut modified_colliders = vec![];
     for (entity, trnsfm, transform, collider_info, handle) in &phys_obj_query {
         let col_id = if collider_info.is_added() && handle.is_none() {
@@ -422,8 +431,9 @@ pub fn update_query_pipeline(
             // Sets the user associated data on the collider to the entity id
             // so that when we get a query result with a collider id we can lookup
             // what entity its associated with.
-            col_set.get_mut(col_id).unwrap().user_data = entity.to_bits() as u128;
-            //println!("new collider added: {col_id:?}");
+            col_set.get_mut(col_id).unwrap().user_data =
+                entity.to_bits() as u128;
+            // println!("new collider added: {col_id:?}");
 
             col_set
                 .get_mut(col_id)
@@ -493,7 +503,7 @@ struct PhsyicsCollidersGizmos {}
 /// Draws colliders using bevy's gizmos to assist with debugging.
 pub fn debug_colliders(
     world: ResMut<PhysicsWorld>,
-    //mut gizmos: Gizmos,
+    // mut gizmos: Gizmos,
     mut collider_gizmos: Gizmos<PhsyicsCollidersGizmos>,
 ) {
     for (handle, collider) in world.col_set.iter() {
@@ -503,7 +513,8 @@ pub fn debug_colliders(
         );
         let rotation: f32 = collider.rotation().angle();
         if let Some(cube) = collider.shared_shape().as_cuboid() {
-            let half_extents = Vec2::new(cube.half_extents.x, cube.half_extents.y);
+            let half_extents =
+                Vec2::new(cube.half_extents.x, cube.half_extents.y);
             collider_gizmos.rect(
                 pos.extend(0.0002),
                 Quat::from_rotation_z(rotation - PI),

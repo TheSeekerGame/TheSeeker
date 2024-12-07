@@ -1,16 +1,19 @@
+use sickle_ui::ui_builder::{UiBuilderExt, UiRoot};
+use sickle_ui::ui_style::*;
+use sickle_ui::widgets::prelude::*;
+
 use crate::appstate::AppState;
 use crate::camera::MainCamera;
 use crate::game::player::{
-    Attacking, CanAttack, CanDash, CanStealth, Player, PlayerConfig, WhirlAbility,
+    Attacking, CanAttack, CanDash, CanStealth, Player, PlayerConfig,
+    WhirlAbility,
 };
 use crate::graphics::hp_bar::{HpBackground, HpBar, HpBarUiMaterial};
 use crate::prelude::*;
 use crate::ui::ability_widget::{
-    AbilityWidget, AbilityWidgetCommands, AbilityWidgetConfig, UiAbilityWidgetExt,
+    AbilityWidget, AbilityWidgetCommands, AbilityWidgetConfig,
+    UiAbilityWidgetExt,
 };
-use sickle_ui::ui_builder::{UiBuilderExt, UiRoot};
-use sickle_ui::ui_style::*;
-use sickle_ui::widgets::prelude::*;
 
 pub struct SkillToolbarPlugin;
 
@@ -101,7 +104,8 @@ fn spawn_toolbar(
                         },
                         material: ui_materials.add(HpBarUiMaterial {
                             factor: 1.0,
-                            background_color: Color::rgb(0.15, 0.15, 0.15).into(),
+                            background_color: Color::rgb(0.15, 0.15, 0.15)
+                                .into(),
                             filled_color: Color::rgb(0.8, 0.2, 0.2).into(),
                         }),
                         ..default()
@@ -170,7 +174,8 @@ fn spawn_toolbar(
                         },
                         material: ui_materials.add(HpBarUiMaterial {
                             factor: 1.0,
-                            background_color: Color::rgb(0.15, 0.15, 0.15).into(),
+                            background_color: Color::rgb(0.15, 0.15, 0.15)
+                                .into(),
                             filled_color: Color::rgb(0.1, 0.6, 0.1).into(),
                         }),
                         ..default()
@@ -250,7 +255,8 @@ fn update_dash_ability_ui(
         return;
     };
     for entity in ui.iter() {
-        let factor = can_dash.remaining_cooldown / config.dash_cooldown_duration;
+        let factor =
+            can_dash.remaining_cooldown / config.dash_cooldown_duration;
         commands.entity(entity).factor(factor);
     }
 }

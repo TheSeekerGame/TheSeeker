@@ -18,53 +18,61 @@
 use std::f32::consts::PI;
 use std::f32::INFINITY;
 
-use crate::prelude::*;
 use bevy::asset::{load_internal_asset, Handle};
 use bevy::core_pipeline::core_3d::graph::{Core3d, Node3d};
-use bevy::core_pipeline::core_3d::{AlphaMask3d, Camera3dDepthLoadOp, CORE_3D_DEPTH_FORMAT, Opaque3d, Transmissive3d, Transparent3d};
+use bevy::core_pipeline::core_3d::{
+    AlphaMask3d, Camera3dDepthLoadOp, Opaque3d, Transmissive3d, Transparent3d,
+    CORE_3D_DEPTH_FORMAT,
+};
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 use bevy::core_pipeline::prepass::DepthPrepass;
-use bevy::ecs::{
-    component::Component,
-    entity::Entity,
-    query::{QueryItem, With},
-    schedule::IntoSystemConfigs as _,
-    system::{lifetimeless::Read, Commands, Query, Res, ResMut, Resource},
-    world::{FromWorld, World},
+use bevy::ecs::component::Component;
+use bevy::ecs::entity::Entity;
+use bevy::ecs::query::{QueryItem, With};
+use bevy::ecs::schedule::IntoSystemConfigs as _;
+use bevy::ecs::system::lifetimeless::Read;
+use bevy::ecs::system::{Commands, Query, Res, ResMut, Resource};
+use bevy::ecs::world::{FromWorld, World};
+use bevy::render::camera::{
+    CameraMainTextureUsages, ExtractedCamera, PhysicalCameraParameters,
 };
-use bevy::render::render_graph::RenderLabel;
-use bevy::render::{
-    camera::PhysicalCameraParameters,
-    extract_component::{ComponentUniforms, DynamicUniformIndex, UniformComponentPlugin},
-    render_graph::{
-        NodeRunError, RenderGraphApp as _, RenderGraphContext, ViewNode, ViewNodeRunner,
-    },
-    render_resource::{
-        binding_types::{
-            sampler, texture_2d, texture_depth_2d, texture_depth_2d_multisampled, uniform_buffer,
-        },
-        BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries,
-        CachedRenderPipelineId, ColorTargetState, ColorWrites, FilterMode, FragmentState, LoadOp,
-        Operations, PipelineCache, RenderPassColorAttachment, RenderPassDescriptor,
-        RenderPipelineDescriptor, Sampler, SamplerBindingType, SamplerDescriptor, Shader,
-        ShaderStages, ShaderType, SpecializedRenderPipeline, SpecializedRenderPipelines, StoreOp,
-        TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType, TextureUsages,
-    },
-    renderer::{RenderContext, RenderDevice},
-    texture::{BevyDefault, CachedTexture, TextureCache},
-    view::{
-        prepare_view_targets, ExtractedView, Msaa, ViewDepthTexture, ViewTarget, ViewUniform,
-        ViewUniformOffset, ViewUniforms,
-    },
-    Extract, ExtractSchedule, Render, RenderApp, RenderSet,
+use bevy::render::extract_component::{
+    ComponentUniforms, DynamicUniformIndex, UniformComponentPlugin,
 };
-use bevy::render::camera::{CameraMainTextureUsages, ExtractedCamera};
+use bevy::render::render_graph::{
+    NodeRunError, RenderGraphApp as _, RenderGraphContext, RenderLabel,
+    ViewNode, ViewNodeRunner,
+};
 use bevy::render::render_phase::RenderPhase;
-use bevy::render::render_resource::Extent3d;
-use bevy::utils::{info_once, prelude::default, warn_once};
+use bevy::render::render_resource::binding_types::{
+    sampler, texture_2d, texture_depth_2d, texture_depth_2d_multisampled,
+    uniform_buffer,
+};
+use bevy::render::render_resource::{
+    BindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries,
+    CachedRenderPipelineId, ColorTargetState, ColorWrites, Extent3d,
+    FilterMode, FragmentState, LoadOp, Operations, PipelineCache,
+    RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
+    Sampler, SamplerBindingType, SamplerDescriptor, Shader, ShaderStages,
+    ShaderType, SpecializedRenderPipeline, SpecializedRenderPipelines, StoreOp,
+    TextureDescriptor, TextureDimension, TextureFormat, TextureSampleType,
+    TextureUsages,
+};
+use bevy::render::renderer::{RenderContext, RenderDevice};
+use bevy::render::texture::{BevyDefault, CachedTexture, TextureCache};
+use bevy::render::view::{
+    prepare_view_targets, ExtractedView, Msaa, ViewDepthTexture, ViewTarget,
+    ViewUniform, ViewUniformOffset, ViewUniforms,
+};
+use bevy::render::{Extract, ExtractSchedule, Render, RenderApp, RenderSet};
+use bevy::utils::prelude::default;
+use bevy::utils::{info_once, warn_once};
 use smallvec::SmallVec;
 
-const DOF_SHADER_HANDLE: Handle<Shader> = Handle::weak_from_u128(2126671480739266443);
+use crate::prelude::*;
+
+const DOF_SHADER_HANDLE: Handle<Shader> =
+    Handle::weak_from_u128(2126671480739266443);
 
 /// A plugin that adds support for the depth of field effect to Bevy.
 pub struct DepthOfFieldPlugin;
@@ -239,7 +247,8 @@ impl Plugin for DepthOfFieldPlugin {
             .add_systems(
                 Render,
                 configure_depth_of_field_view_targets_2
-                    .before(prepare_view_targets).in_set(RenderSet::ManageViews),
+                    .before(prepare_view_targets)
+                    .in_set(RenderSet::ManageViews),
             )
             .add_systems(
                 Render,
@@ -252,7 +261,8 @@ impl Plugin for DepthOfFieldPlugin {
             )
             .add_systems(
                 Render,
-                prepare_depth_of_field_global_bind_group.in_set(RenderSet::PrepareBindGroups),
+                prepare_depth_of_field_global_bind_group
+                    .in_set(RenderSet::PrepareBindGroups),
             )
             .add_render_graph_node::<ViewNodeRunner<DepthOfFieldNode>>(
                 Core3d,
@@ -262,10 +272,10 @@ impl Plugin for DepthOfFieldPlugin {
                 Core3d,
                 (
                     Node3d::MainOpaquePass,
-                    //Node3d::Bloom,
+                    // Node3d::Bloom,
                     DepthOfFieldPostProcessLabel,
                     Node3d::MainTransmissivePass,
-                    //Node3d::Tonemapping,
+                    // Node3d::Tonemapping,
                 ),
             );
     }
@@ -378,7 +388,7 @@ impl ViewNode for DepthOfFieldNode {
         ): QueryItem<'w, Self::ViewQuery>,
         world: &'w World,
     ) -> Result<(), NodeRunError> {
-        //println!("DepthOfFieldNode is running!");
+        // println!("DepthOfFieldNode is running!");
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_uniforms = world.resource::<ViewUniforms>();
         let global_bind_group = world.resource::<DepthOfFieldGlobalBindGroup>();
@@ -387,12 +397,19 @@ impl ViewNode for DepthOfFieldNode {
         // similar, consisting of two passes each. We factor out the information
         // specific to each pass into
         // [`DepthOfFieldPipelines::pipeline_render_info`].
-        for pipeline_render_info in view_pipelines.pipeline_render_info().iter() {
-            let (Some(render_pipeline), Some(view_uniforms_binding), Some(global_bind_group)) = (
-                pipeline_cache.get_render_pipeline(pipeline_render_info.pipeline),
+        for pipeline_render_info in view_pipelines.pipeline_render_info().iter()
+        {
+            let (
+                Some(render_pipeline),
+                Some(view_uniforms_binding),
+                Some(global_bind_group),
+            ) = (
+                pipeline_cache
+                    .get_render_pipeline(pipeline_render_info.pipeline),
                 view_uniforms.uniforms.binding(),
                 &**global_bind_group,
-            ) else {
+            )
+            else {
                 return Ok(());
             };
 
@@ -401,18 +418,22 @@ impl ViewNode for DepthOfFieldNode {
             // to manage a secondary *auxiliary* texture alongside the textures
             // managed by the postprocessing logic.
             let postprocess = view_target.post_process_write();
-            //let src = view_target.main_texture_view();
-            //let src = view_target.sampled_main_texture_view().unwrap();
+            // let src = view_target.main_texture_view();
+            // let src = view_target.sampled_main_texture_view().unwrap();
             let src = postprocess.source;
-            //let dst = view_target.main_texture_other_view();
-            //let dst = view_target.sampled_main_texture_view().unwrap();
+            // let dst = view_target.main_texture_other_view();
+            // let dst = view_target.sampled_main_texture_view().unwrap();
             let dst = postprocess.destination;
 
             let view_bind_group = if pipeline_render_info.is_dual_input {
-                let (Some(auxiliary_dof_texture), Some(dual_input_bind_group_layout)) = (
+                let (
+                    Some(auxiliary_dof_texture),
+                    Some(dual_input_bind_group_layout),
+                ) = (
                     auxiliary_dof_texture,
                     view_bind_group_layouts.dual_input.as_ref(),
-                ) else {
+                )
+                else {
                     warn_once!("Should have created the auxiliary depth of field texture by now");
                     continue;
                 };
@@ -470,20 +491,20 @@ impl ViewNode for DepthOfFieldNode {
 
             {
                 // take the main passes multisampled texture, and copy it to the src post process texture
-                /*let render_pass = render_context.command_encoder().begin_render_pass(&RenderPassDescriptor {
-                    label: Some("resolve_from_multisampled_texture"),
-                    color_attachments: &[Some(RenderPassColorAttachment {
-                        view: view_target.sampled_main_texture_view().unwrap(),
-                        resolve_target: Some(src),
-                        ops: Operations {
-                            load: LoadOp::Load,
-                            store: StoreOp::Store,
-                        },
-                    })],
-                    depth_stencil_attachment: None,
-                    timestamp_writes: None,
-                    occlusion_query_set: None,
-                });*/
+                // let render_pass = render_context.command_encoder().begin_render_pass(&RenderPassDescriptor {
+                // label: Some("resolve_from_multisampled_texture"),
+                // color_attachments: &[Some(RenderPassColorAttachment {
+                // view: view_target.sampled_main_texture_view().unwrap(),
+                // resolve_target: Some(src),
+                // ops: Operations {
+                // load: LoadOp::Load,
+                // store: StoreOp::Store,
+                // },
+                // })],
+                // depth_stencil_attachment: None,
+                // timestamp_writes: None,
+                // occlusion_query_set: None,
+                // });
             }
             {
                 let render_pass_descriptor = RenderPassDescriptor {
@@ -526,14 +547,14 @@ impl ViewNode for DepthOfFieldNode {
                 );
             }
 
-            //render_context.command_encoder().clear_texture(view_target.sampled_main_texture().unwrap(), &Default::default());
-            //render_context.command_encoder().clear_texture(view_target.main_texture(), &Default::default());
-            /*render_context.command_encoder().copy_texture_to_texture(
-                view_target.main_texture_other().as_image_copy(),
-                view_target.sampled_main_texture().unwrap().as_image_copy(),
-                view_target.sampled_main_texture().unwrap().size(),
-            );*/
-            //let postprocess = view_target.post_process_write();
+            // render_context.command_encoder().clear_texture(view_target.sampled_main_texture().unwrap(), &Default::default());
+            // render_context.command_encoder().clear_texture(view_target.main_texture(), &Default::default());
+            // render_context.command_encoder().copy_texture_to_texture(
+            // view_target.main_texture_other().as_image_copy(),
+            // view_target.sampled_main_texture().unwrap().as_image_copy(),
+            // view_target.sampled_main_texture().unwrap().size(),
+            // );
+            // let postprocess = view_target.post_process_write();
         }
 
         Ok(())
@@ -565,7 +586,9 @@ impl DepthOfFieldSettings {
     ///
     /// All fields of the returned [`DepthOfFieldSettings`] other than
     /// `focal_length` and `aperture_f_stops` are set to their default values.
-    pub fn from_physical_camera(camera: &PhysicalCameraParameters) -> DepthOfFieldSettings {
+    pub fn from_physical_camera(
+        camera: &PhysicalCameraParameters,
+    ) -> DepthOfFieldSettings {
         DepthOfFieldSettings {
             sensor_height: 0.01866,
             aperture_f_stops: camera.aperture_f_stops,
@@ -638,22 +661,28 @@ pub fn prepare_depth_of_field_view_bind_group_layouts(
         // which takes two inputs. We only need to do this if bokeh is in use.
         let dual_input = match dof_settings.mode {
             DepthOfFieldMode::Gaussian => None,
-            DepthOfFieldMode::Bokeh => Some(render_device.create_bind_group_layout(
-                Some("depth of field bind group layout (dual input)"),
-                &BindGroupLayoutEntries::sequential(
-                    ShaderStages::FRAGMENT,
-                    (
-                        uniform_buffer::<ViewUniform>(true),
-                        if *msaa != Msaa::Off {
-                            texture_depth_2d_multisampled()
-                        } else {
-                            texture_depth_2d()
-                        },
-                        texture_2d(TextureSampleType::Float { filterable: true }),
-                        texture_2d(TextureSampleType::Float { filterable: true }),
+            DepthOfFieldMode::Bokeh => {
+                Some(render_device.create_bind_group_layout(
+                    Some("depth of field bind group layout (dual input)"),
+                    &BindGroupLayoutEntries::sequential(
+                        ShaderStages::FRAGMENT,
+                        (
+                            uniform_buffer::<ViewUniform>(true),
+                            if *msaa != Msaa::Off {
+                                texture_depth_2d_multisampled()
+                            } else {
+                                texture_depth_2d()
+                            },
+                            texture_2d(TextureSampleType::Float {
+                                filterable: true,
+                            }),
+                            texture_2d(TextureSampleType::Float {
+                                filterable: true,
+                            }),
+                        ),
                     ),
-                ),
-            )),
+                ))
+            },
         };
 
         commands
@@ -673,10 +702,17 @@ pub fn prepare_depth_of_field_view_bind_group_layouts(
 /// need to set the appropriate flag to tell Bevy to make samplable depth
 /// buffers.
 pub fn configure_depth_of_field_view_targets(
-    mut view_targets: Query<(&mut Camera3d, &mut CameraMainTextureUsages), With<DepthOfFieldSettings>>,
+    mut view_targets: Query<
+        (
+            &mut Camera3d,
+            &mut CameraMainTextureUsages,
+        ),
+        With<DepthOfFieldSettings>,
+    >,
 ) {
     for (mut camera_3d, mut texture_usages) in view_targets.iter_mut() {
-        let mut depth_texture_usages = TextureUsages::from(camera_3d.depth_texture_usages);
+        let mut depth_texture_usages =
+            TextureUsages::from(camera_3d.depth_texture_usages);
         depth_texture_usages |= TextureUsages::TEXTURE_BINDING;
         camera_3d.depth_texture_usages = depth_texture_usages.into();
 
@@ -685,7 +721,13 @@ pub fn configure_depth_of_field_view_targets(
 }
 
 pub fn configure_depth_of_field_view_targets_2(
-    mut view_targets: Query<(&mut Camera3d, &mut CameraMainTextureUsages), With<DepthOfFieldSettings>>,
+    mut view_targets: Query<
+        (
+            &mut Camera3d,
+            &mut CameraMainTextureUsages,
+        ),
+        With<DepthOfFieldSettings>,
+    >,
 ) {
     for (mut camera_3d, mut texture_usages) in view_targets.iter_mut() {
         texture_usages.0 = texture_usages.0.union(TextureUsages::COPY_DST);
@@ -698,7 +740,12 @@ pub fn prepare_core_3d_depth_textures(
     msaa: Res<Msaa>,
     render_device: Res<RenderDevice>,
     views_3d: Query<
-        (Entity, &ExtractedCamera, Option<&DepthPrepass>, &Camera3d),
+        (
+            Entity,
+            &ExtractedCamera,
+            Option<&DepthPrepass>,
+            &Camera3d,
+        ),
         (
             With<RenderPhase<Opaque3d>>,
             With<RenderPhase<AlphaMask3d>>,
@@ -814,7 +861,8 @@ pub fn prepare_auxiliary_depth_of_field_textures(
             sample_count: view_target.main_texture().sample_count(),
             dimension: TextureDimension::D2,
             format: view_target.main_texture_format(),
-            usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::TEXTURE_BINDING,
+            usage: TextureUsages::RENDER_ATTACHMENT
+                | TextureUsages::TEXTURE_BINDING,
             view_formats: &[],
         };
 
@@ -840,7 +888,9 @@ pub fn prepare_depth_of_field_pipelines(
         &ViewDepthOfFieldBindGroupLayouts,
     )>,
 ) {
-    for (entity, view, dof_settings, view_bind_group_layouts) in view_targets.iter() {
+    for (entity, view, dof_settings, view_bind_group_layouts) in
+        view_targets.iter()
+    {
         let dof_pipeline = DepthOfFieldPipeline {
             view_bind_group_layouts: view_bind_group_layouts.clone(),
             global_bind_group_layout: global_bind_group_layout.layout.clone(),
@@ -852,9 +902,8 @@ pub fn prepare_depth_of_field_pipelines(
         // Go ahead and specialize the pipelines.
         match dof_settings.mode {
             DepthOfFieldMode::Gaussian => {
-                commands
-                    .entity(entity)
-                    .insert(DepthOfFieldPipelines::Gaussian {
+                commands.entity(entity).insert(
+                    DepthOfFieldPipelines::Gaussian {
                         horizontal: pipelines.specialize(
                             &pipeline_cache,
                             &dof_pipeline,
@@ -873,7 +922,8 @@ pub fn prepare_depth_of_field_pipelines(
                                 pass: DofPass::GaussianVertical,
                             },
                         ),
-                    });
+                    },
+                );
             },
 
             DepthOfFieldMode::Bokeh => {
@@ -989,7 +1039,8 @@ fn extract_depth_of_field_settings(
     }
 
     for (entity, dof_settings) in query.iter_mut() {
-        let focal_length = calculate_focal_length(dof_settings.sensor_height, PI / 4.0);
+        let focal_length =
+            calculate_focal_length(dof_settings.sensor_height, PI / 4.0);
         info_once!("Depth of field running!");
         // Convert `DepthOfFieldSettings` to `DepthOfFieldUniform`.
         commands.get_or_spawn(entity).insert((
@@ -998,8 +1049,10 @@ fn extract_depth_of_field_settings(
                 focal_distance: dof_settings.focal_distance,
                 focal_length,
                 coc_scale_factor: focal_length * focal_length
-                    / (dof_settings.sensor_height * dof_settings.aperture_f_stops),
-                max_circle_of_confusion_diameter: dof_settings.max_circle_of_confusion_diameter,
+                    / (dof_settings.sensor_height
+                        * dof_settings.aperture_f_stops),
+                max_circle_of_confusion_diameter: dof_settings
+                    .max_circle_of_confusion_diameter,
                 max_depth: dof_settings.max_depth,
                 pad_a: 0,
                 pad_b: 0,
@@ -1027,14 +1080,16 @@ impl DepthOfFieldPipelines {
             } => [
                 DepthOfFieldPipelineRenderInfo {
                     pass_label: "depth of field pass (horizontal Gaussian)",
-                    view_bind_group_label: "depth of field view bind group (horizontal Gaussian)",
+                    view_bind_group_label:
+                        "depth of field view bind group (horizontal Gaussian)",
                     pipeline: horizontal_pipeline,
                     is_dual_input: false,
                     is_dual_output: false,
                 },
                 DepthOfFieldPipelineRenderInfo {
                     pass_label: "depth of field pass (vertical Gaussian)",
-                    view_bind_group_label: "depth of field view bind group (vertical Gaussian)",
+                    view_bind_group_label:
+                        "depth of field view bind group (vertical Gaussian)",
                     pipeline: vertical_pipeline,
                     is_dual_input: false,
                     is_dual_output: false,
@@ -1044,22 +1099,26 @@ impl DepthOfFieldPipelines {
             DepthOfFieldPipelines::Bokeh {
                 pass_0: pass_0_pipeline,
                 pass_1: pass_1_pipeline,
-            } => [
-                DepthOfFieldPipelineRenderInfo {
-                    pass_label: "depth of field pass (bokeh pass 0)",
-                    view_bind_group_label: "depth of field view bind group (bokeh pass 0)",
-                    pipeline: pass_0_pipeline,
-                    is_dual_input: false,
-                    is_dual_output: true,
-                },
-                DepthOfFieldPipelineRenderInfo {
-                    pass_label: "depth of field pass (bokeh pass 1)",
-                    view_bind_group_label: "depth of field view bind group (bokeh pass 1)",
-                    pipeline: pass_1_pipeline,
-                    is_dual_input: true,
-                    is_dual_output: false,
-                },
-            ],
+            } => {
+                [
+                    DepthOfFieldPipelineRenderInfo {
+                        pass_label: "depth of field pass (bokeh pass 0)",
+                        view_bind_group_label:
+                            "depth of field view bind group (bokeh pass 0)",
+                        pipeline: pass_0_pipeline,
+                        is_dual_input: false,
+                        is_dual_output: true,
+                    },
+                    DepthOfFieldPipelineRenderInfo {
+                        pass_label: "depth of field pass (bokeh pass 1)",
+                        view_bind_group_label:
+                            "depth of field view bind group (bokeh pass 1)",
+                        pipeline: pass_1_pipeline,
+                        is_dual_input: true,
+                        is_dual_output: false,
+                    },
+                ]
+            },
         }
     }
 }

@@ -1,7 +1,8 @@
-use crate::prelude::*;
 use rapier2d::geometry::InteractionGroups;
 use rapier2d::prelude::Group;
 use theseeker_engine::physics::{Collider, GROUND};
+
+use crate::prelude::*;
 
 pub struct WallPlugin;
 
@@ -74,7 +75,8 @@ pub fn spawn_wall_collision(
     // This has two consequences in the resulting collision entities:
     // 1. it forces the walls to be split along level boundaries
     // 2. it lets us easily add the collision entities as children of the appropriate level entity
-    let mut level_to_wall_locations: HashMap<Entity, HashSet<GridCoords>> = HashMap::new();
+    let mut level_to_wall_locations: HashMap<Entity, HashSet<GridCoords>> =
+        HashMap::new();
 
     wall_query.iter().for_each(|(&grid_coords, parent)| {
         // An intgrid tile's direct parent will be a layer entity, not the level entity
@@ -173,19 +175,25 @@ pub fn spawn_wall_collision(
                 for wall_rect in wall_rects {
                     level.spawn((
                         Collider::cuboid(
-                            (wall_rect.right as f32 - wall_rect.left as f32 + 1.)
+                            (wall_rect.right as f32 - wall_rect.left as f32
+                                + 1.)
                                 * grid_size as f32,
-                            (wall_rect.top as f32 - wall_rect.bottom as f32 + 1.)
+                            (wall_rect.top as f32 - wall_rect.bottom as f32
+                                + 1.)
                                 * grid_size as f32,
                             InteractionGroups {
                                 memberships: GROUND,
-                                //TODO: layers, player and enemy ... and ranged attacks?
+                                // TODO: layers, player and enemy ... and ranged attacks?
                                 filter: Group::all(),
                             },
                         ),
                         Transform::from_xyz(
-                            (wall_rect.left + wall_rect.right + 1) as f32 * grid_size as f32 / 2.,
-                            (wall_rect.bottom + wall_rect.top + 1) as f32 * grid_size as f32 / 2.,
+                            (wall_rect.left + wall_rect.right + 1) as f32
+                                * grid_size as f32
+                                / 2.,
+                            (wall_rect.bottom + wall_rect.top + 1) as f32
+                                * grid_size as f32
+                                / 2.,
                             10.,
                         ),
                         GlobalTransform::default(),

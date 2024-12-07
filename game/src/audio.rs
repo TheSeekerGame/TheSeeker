@@ -51,12 +51,12 @@ fn manage_audio_delay(
     let range_max = gt.tick();
     let range_min = gt.tick().max(state.target * 2) - state.target * 2;
 
-    if (atick > range_max || atick < range_min) && !ctl.controller.has_playing() {
+    if (atick > range_max || atick < range_min) && !ctl.controller.has_playing()
+    {
         eprintln!("AUDIO RESET");
         let new_atick = gt.tick().max(state.target) - state.target;
-        ctl.controller.reset_sample_counter(
-            new_atick as i64 * samples_per_tick as i64
-        );
+        ctl.controller
+            .reset_sample_counter(new_atick as i64 * samples_per_tick as i64);
         state.last_at = new_atick;
     }
 }

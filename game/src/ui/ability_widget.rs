@@ -1,11 +1,13 @@
-use crate::graphics::hp_bar::HpBarUiMaterial;
-use crate::prelude::*;
+use std::f32::consts::PI;
+
 use bevy::ecs::system::{EntityCommand, EntityCommands};
 use sickle_ui::ui_builder::UiBuilder;
 use sickle_ui::ui_style::*;
 use sickle_ui::widgets::column::UiColumnExt;
 use sickle_ui::widgets::prelude::UiContainerExt;
-use std::f32::consts::PI;
+
+use crate::graphics::hp_bar::HpBarUiMaterial;
+use crate::prelude::*;
 
 #[derive(Component)]
 pub struct AbilityWidget;
@@ -58,15 +60,19 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                         };
                         let handle = ui_materials.add(HpBarUiMaterial {
                             factor: 0.3,
-                            background_color: Color::rgba(0.0, 0.0, 0.0, 0.0).into(),
-                            filled_color: Color::rgba(0.0, 0.0, 0.0, 0.6).into(),
+                            background_color: Color::rgba(0.0, 0.0, 0.0, 0.0)
+                                .into(),
+                            filled_color: Color::rgba(0.0, 0.0, 0.0, 0.6)
+                                .into(),
                         });
                         w.entity_mut(entity).insert(handle);
                         // Make the bar go from bottom to top
                         w.entity_mut(entity).insert(Transform::from_rotation(
                             Quat::from_axis_angle(
                                 Vec3::Z,
-                                if config.dir_up { -1.0 } else { 1.0 } * PI * 0.5,
+                                if config.dir_up { -1.0 } else { 1.0 }
+                                    * PI
+                                    * 0.5,
                             ),
                         ));
                     });
@@ -89,7 +95,11 @@ pub struct AbilityWidgetConfig<T: Component + Clone> {
 }
 
 impl<T: Component + Clone> AbilityWidgetConfig<T> {
-    pub fn from(image_path: impl Into<String>, tracking_component: T, dir_up: bool) -> Self {
+    pub fn from(
+        image_path: impl Into<String>,
+        tracking_component: T,
+        dir_up: bool,
+    ) -> Self {
         Self {
             image_path: image_path.into(),
             tracking_component,
@@ -102,11 +112,15 @@ struct SetFactor(f32);
 
 impl EntityCommand for SetFactor {
     fn apply(self, entity: Entity, world: &mut World) {
-        let Some(handle) = world.entity(entity).get::<Handle<HpBarUiMaterial>>() else {
+        let Some(handle) =
+            world.entity(entity).get::<Handle<HpBarUiMaterial>>()
+        else {
             return;
         };
         let handle = handle.clone();
-        let Some(mut assets) = world.get_resource_mut::<Assets<HpBarUiMaterial>>() else {
+        let Some(mut assets) =
+            world.get_resource_mut::<Assets<HpBarUiMaterial>>()
+        else {
             return;
         };
         let Some(material) = assets.get_mut(handle) else {

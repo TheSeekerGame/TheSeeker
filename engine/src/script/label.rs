@@ -61,14 +61,20 @@ impl EntityLabels {
         }
     }
 
-    pub fn iter_entity_labels(&self, entity: Entity) -> impl Iterator<Item = &str> {
+    pub fn iter_entity_labels(
+        &self,
+        entity: Entity,
+    ) -> impl Iterator<Item = &str> {
         self.e2l
             .get(&entity)
             .into_iter()
             .flat_map(|labels| labels.iter().map(|s| s.as_str()))
     }
 
-    pub fn iter_label_entities(&self, label: &str) -> impl Iterator<Item = &Entity> {
+    pub fn iter_label_entities(
+        &self,
+        label: &str,
+    ) -> impl Iterator<Item = &Entity> {
         self.l2e
             .get(label)
             .into_iter()

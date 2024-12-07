@@ -1,8 +1,7 @@
 use theseeker_engine::physics::LinearVelocity;
 
-use crate::prelude::*;
-
 use super::enemy::Defense;
+use crate::prelude::*;
 
 /// Knockback that can be applied to a gent. Velocity is applied Once and then blocks horizontal movement.
 #[derive(Component, Default, Clone, Copy, Debug)]

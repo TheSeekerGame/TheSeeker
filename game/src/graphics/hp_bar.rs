@@ -1,13 +1,14 @@
-use crate::appstate::StateDespawnMarker;
-use crate::camera::MainCamera;
-use crate::game::attack::Health;
-use crate::game::player::Player;
-use crate::prelude::Update;
 use bevy::prelude::*;
 use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
 use glam::Vec2;
 use theseeker_engine::physics::Collider;
+
+use crate::appstate::StateDespawnMarker;
+use crate::camera::MainCamera;
+use crate::game::attack::Health;
+use crate::game::player::Player;
+use crate::prelude::Update;
 
 pub struct HpBarsPlugin;
 
@@ -28,7 +29,10 @@ pub struct HpBackground(pub Entity);
 
 fn instance(
     mut commands: Commands,
-    entity_with_hp: Query<(Entity, Ref<Health>, Has<Player>), With<GlobalTransform>>,
+    entity_with_hp: Query<
+        (Entity, Ref<Health>, Has<Player>),
+        With<GlobalTransform>,
+    >,
     mut ui_materials: ResMut<Assets<HpBarUiMaterial>>,
 ) {
     for (entity, health, player) in entity_with_hp.iter() {
@@ -43,7 +47,8 @@ fn instance(
                                 padding: UiRect::all(Val::Px(3.0)),
                                 ..default()
                             },
-                            background_color: Color::rgb(0.75, 0.75, 0.75).into(),
+                            background_color: Color::rgb(0.75, 0.75, 0.75)
+                                .into(),
                             visibility: Visibility::Hidden,
                             ..default()
                         },
@@ -61,8 +66,14 @@ fn instance(
                                 },
                                 material: ui_materials.add(HpBarUiMaterial {
                                     factor: 1.0,
-                                    background_color: Color::rgb(0.15, 0.15, 0.15).into(),
-                                    filled_color: Color::rgb(0.635, 0.196, 0.306).into(),
+                                    background_color: Color::rgb(
+                                        0.15, 0.15, 0.15,
+                                    )
+                                    .into(),
+                                    filled_color: Color::rgb(
+                                        0.635, 0.196, 0.306,
+                                    )
+                                    .into(),
                                 }),
                                 ..default()
                             },
@@ -92,7 +103,9 @@ fn update_positions(
     };
 
     for (bg_entity, hp_bg, mut style) in hp_bar.iter_mut() {
-        if let Ok((global_transform, collider, has_player)) = entity_with_hp.get(hp_bg.0) {
+        if let Ok((global_transform, collider, has_player)) =
+            entity_with_hp.get(hp_bg.0)
+        {
             if has_player {
                 continue;
             }
@@ -102,7 +115,8 @@ fn update_positions(
             // Makes the health bar float above the collider, if it exists
             world_position += match collider {
                 Some(collider) => {
-                    let collider_height = collider.0.compute_aabb().half_extents().y;
+                    let collider_height =
+                        collider.0.compute_aabb().half_extents().y;
                     Vec3::new(0.0, collider_height, 0.0)
                 },
                 None => Vec3::ZERO,

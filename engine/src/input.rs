@@ -2,17 +2,6 @@
 /// in our custom fixed timestep
 use core::hash::Hash;
 use core::marker::PhantomData;
-use leafwing_input_manager::action_state::{ActionData, ActionState};
-use leafwing_input_manager::axislike::{
-    AxisType, DualAxis, DualAxisData, MouseMotionAxisType, MouseWheelAxisType, SingleAxis,
-    VirtualAxis, VirtualDPad,
-};
-use leafwing_input_manager::buttonlike::{MouseMotionDirection, MouseWheelDirection};
-use leafwing_input_manager::clashing_inputs::ClashStrategy;
-use leafwing_input_manager::input_map::InputMap;
-use leafwing_input_manager::input_processing::*;
-use leafwing_input_manager::user_input::{InputKind, Modifier, UserInput};
-use leafwing_input_manager::Actionlike;
 use std::fmt::Debug;
 
 use bevy::app::{App, Plugin, Update};
@@ -20,8 +9,22 @@ use bevy::ecs::prelude::*;
 use bevy::input::{ButtonState, InputSystem};
 use bevy::prelude::{PostUpdate, PreUpdate};
 use bevy::reflect::TypePath;
+use leafwing_input_manager::action_state::{ActionData, ActionState};
+use leafwing_input_manager::axislike::{
+    AxisType, DualAxis, DualAxisData, MouseMotionAxisType, MouseWheelAxisType,
+    SingleAxis, VirtualAxis, VirtualDPad,
+};
+use leafwing_input_manager::buttonlike::{
+    MouseMotionDirection, MouseWheelDirection,
+};
+use leafwing_input_manager::clashing_inputs::ClashStrategy;
+use leafwing_input_manager::input_map::InputMap;
+use leafwing_input_manager::input_processing::*;
+use leafwing_input_manager::user_input::{InputKind, Modifier, UserInput};
+use leafwing_input_manager::Actionlike;
 
-use crate::{time::GameTickPost, GameTickSet};
+use crate::time::GameTickPost;
+use crate::GameTickSet;
 
 /// A [`Plugin`] that collects [`ButtonInput`](bevy::input::ButtonInput) from disparate sources,
 /// producing an [`ActionState`] that can be conveniently checked

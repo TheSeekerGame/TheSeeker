@@ -15,13 +15,19 @@ pub enum GameState {
     Paused,
 }
 
-pub fn pause(mut next_state: ResMut<NextState<GameState>>, input: Res<ButtonInput<KeyCode>>) {
+pub fn pause(
+    mut next_state: ResMut<NextState<GameState>>,
+    input: Res<ButtonInput<KeyCode>>,
+) {
     if input.just_pressed(KeyCode::KeyP) {
         next_state.set(GameState::Paused);
     }
 }
 
-pub fn unpause(mut next_state: ResMut<NextState<GameState>>, input: Res<ButtonInput<KeyCode>>) {
+pub fn unpause(
+    mut next_state: ResMut<NextState<GameState>>,
+    input: Res<ButtonInput<KeyCode>>,
+) {
     if input.just_pressed(KeyCode::KeyP) {
         next_state.set(GameState::Playing);
     }

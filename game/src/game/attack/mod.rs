@@ -4,13 +4,16 @@ pub mod particles;
 use std::mem;
 
 use theseeker_engine::gent::Gent;
-use theseeker_engine::physics::{update_sprite_colliders, Collider, PhysicsWorld, GROUND};
+use theseeker_engine::physics::{
+    update_sprite_colliders, Collider, PhysicsWorld, GROUND,
+};
 
 use super::enemy::{Defense, EnemyGfx, EnemyStateSet, JustGotHitMarker};
 use super::gentstate::{Dead, Facing};
 use super::physics::Knockback;
 use super::player::{
-    on_hit_exit_stealthing, on_hit_stealth_reset, Passive, Passives, Player, PlayerGfx, PlayerStateSet, StatusModifier
+    on_hit_exit_stealthing, on_hit_stealth_reset, Passive, Passives, Player,
+    PlayerGfx, PlayerStateSet, StatusModifier,
 };
 use crate::camera::CameraShake;
 use crate::game::attack::arc_attack::{arc_projectile, Projectile};
@@ -35,9 +38,9 @@ impl Plugin for AttackPlugin {
                 (
                     determine_attack_targets,
                     apply_attack_modifications,
-                    //DamageInfo event emited here
+                    // DamageInfo event emited here
                     apply_attack_damage,
-                    //OnAttackFirstHitSet
+                    // OnAttackFirstHitSet
                     track_crits,
                     on_hit_cam_shake,
                     on_hit_self_pushback,
@@ -54,7 +57,7 @@ impl Plugin for AttackPlugin {
                     .chain()
                     .in_set(RespondToDamageInfoSet)
                     .after(apply_attack_damage),
-                //cleanup
+                // cleanup
                 attack_tick,
                 despawn_projectile,
                 attack_cleanup,
@@ -69,11 +72,11 @@ impl Plugin for AttackPlugin {
     }
 }
 
-///Effects that care about the first time an attack hits should go here
+/// Effects that care about the first time an attack hits should go here
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct OnAttackFirstHitSet;
 
-///Effects that are applied when an instance of damage is dealt should go here
+/// Effects that are applied when an instance of damage is dealt should go here
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct RespondToDamageInfoSet;
 
@@ -83,7 +86,7 @@ pub struct Health {
     pub max: u32,
 }
 
-///Component applied to Gfx entity sibling of Gent which has been damaged
+/// Component applied to Gfx entity sibling of Gent which has been damaged
 #[derive(Component)]
 pub struct DamageFlash {
     pub current_ticks: u32,
@@ -149,31 +152,31 @@ pub struct DamageInfo {
     pub stealthed: bool,
 }
 
-///Component added to attack entity to indicate it causes Knockback to the Gent it damages
+/// Component added to attack entity to indicate it causes Knockback to the Gent it damages
 #[derive(Component, Default, Deref)]
 pub struct Pushback(pub Knockback);
 
-///Component added to attack entity to indicate it causes Knockback to the attacker
+/// Component added to attack entity to indicate it causes Knockback to the attacker
 #[derive(Component, Default, Deref)]
 pub struct SelfPushback(pub Knockback);
 
-///Component added to attack entity to indicate it was initiated by a Stealthing Gent
+/// Component added to attack entity to indicate it was initiated by a Stealthing Gent
 #[derive(Component)]
 pub struct Stealthed;
 
-///Component added to an Attack entity the first time it hits something
+/// Component added to an Attack entity the first time it hits something
 #[derive(Component)]
 pub struct Hit;
 
-///Component added to an Attack entity that indicates it *Can* backstab
+/// Component added to an Attack entity that indicates it *Can* backstab
 #[derive(Component)]
 pub struct Backstab;
 
-///Component added to an Attack entity to indicate that it is a crit
+/// Component added to an Attack entity to indicate that it is a crit
 #[derive(Component, Debug)]
 pub struct Crit;
 
-//checks nearest entities, modifies attacks targets
+// checks nearest entities, modifies attacks targets
 pub fn determine_attack_targets(
     mut attack_query: Query<(
         Entity,
@@ -181,7 +184,10 @@ pub fn determine_attack_targets(
         &mut Attack,
         &Collider,
     )>,
-    damageable_query: Query<&GlobalTransform, (With<Collider>, With<Health>, With<Gent>)>,
+    damageable_query: Query<
+        &GlobalTransform,
+        (With<Collider>, With<Health>, With<Gent>),
+    >,
     spatial_query: Res<PhysicsWorld>,
 ) {
     for (entity, transform, mut attack, collider) in attack_query.iter_mut() {
@@ -199,7 +205,9 @@ pub fn determine_attack_targets(
             .into_iter()
             // Filters out everything that's not damageable or one of the nearest max_targets entities to attack
             .filter_map(|colliding_entity| {
-                if let Ok(damageable_transform) = damageable_query.get(colliding_entity) {
+                if let Ok(damageable_transform) =
+                    damageable_query.get(colliding_entity)
+                {
                     newly_collided.insert(entity);
                     let dist = damageable_transform
                         .translation()
@@ -221,12 +229,12 @@ pub fn determine_attack_targets(
             .collect::<Vec<_>>();
 
         for entity in valid_targets.iter() {
-            //if we already damaged this entity
+            // if we already damaged this entity
             if attack.damaged_set.contains(entity) {
                 continue;
             };
 
-            //if the entity is not damageable
+            // if the entity is not damageable
             if damageable_query.get(*entity).is_err() {
                 continue;
             }
@@ -236,39 +244,49 @@ pub fn determine_attack_targets(
     }
 }
 
-//could switch to command/component based approach for attack modifications
+// could switch to command/component based approach for attack modifications
 pub fn apply_attack_modifications(
-    mut attack_query: Query<(Entity, &mut Attack, Has<Crit>, Has<Hit>), Without<Gent>>,
-    mut attacker_query: Query<(Option<&mut Crits>, Option<&Passives>), With<Gent>>,
+    mut attack_query: Query<
+        (Entity, &mut Attack, Has<Crit>, Has<Hit>),
+        Without<Gent>,
+    >,
+    mut attacker_query: Query<
+        (Option<&mut Crits>, Option<&Passives>),
+        With<Gent>,
+    >,
     mut commands: Commands,
 ) {
     for (entity, mut attack, is_crit, has_hit) in attack_query.iter_mut() {
-        //if there are no targets we dont want to do anything
+        // if there are no targets we dont want to do anything
         if attack.target_set.is_empty() {
             continue;
         }
-        //if there is an attacker, apply relevant buffs
-        if let Ok((maybe_crits, maybe_passives)) = attacker_query.get_mut(attack.attacker) {
-            //TODO: attack should keep its original damage and modify only the multipliers
+        // if there is an attacker, apply relevant buffs
+        if let Ok((maybe_crits, maybe_passives)) =
+            attacker_query.get_mut(attack.attacker)
+        {
+            // TODO: attack should keep its original damage and modify only the multipliers
             // crit multiplier
             //
             if let Some(mut crit) = maybe_crits {
                 if crit.next_hit_is_critical && !is_crit {
                     commands.entity(entity).insert(Crit);
-                    attack.damage = (attack.damage as f32 * crit.crit_damage_multiplier) as u32;
+                    attack.damage = (attack.damage as f32
+                        * crit.crit_damage_multiplier)
+                        as u32;
                     crit.next_hit_is_critical = false;
                 }
 
-                //increment hit count the first time we hit something with an attack
+                // increment hit count the first time we hit something with an attack
                 if !has_hit {
                     crit.hit_count += 1;
                 }
             }
 
-            //passives
+            // passives
             if let Some(passives) = maybe_passives {
-                //backstab
-                //check this later on application of damage for each enemy
+                // backstab
+                // check this later on application of damage for each enemy
                 if passives.contains(&Passive::Backstab) {
                     commands.entity(entity).insert(Backstab);
                 }
@@ -280,7 +298,7 @@ pub fn apply_attack_modifications(
     }
 }
 
-//Now we only have the attack and target
+// Now we only have the attack and target
 pub fn apply_attack_damage(
     mut attack_query: Query<(
         Entity,
@@ -304,24 +322,42 @@ pub fn apply_attack_damage(
     mut damage_events: EventWriter<DamageInfo>,
     mut commands: Commands,
 ) {
-    for (a_entity, mut attack, transform, is_stealthed, can_backstab, is_crit, maybe_pushback) in
-        attack_query.iter_mut()
+    for (
+        a_entity,
+        mut attack,
+        transform,
+        is_stealthed,
+        can_backstab,
+        is_crit,
+        maybe_pushback,
+    ) in attack_query.iter_mut()
     {
-        //we take this and dont put it back each tick
+        // we take this and dont put it back each tick
         let target_set = mem::take(&mut attack.target_set);
-        //this gets put back
+        // this gets put back
         let damaged_set = mem::take(&mut attack.damaged_set);
         for target in target_set.difference(&damaged_set) {
-            if let Ok((t_entity, mut health, t_transform, t_facing, is_defending)) =
-                target_query.get_mut(*target)
+            if let Ok((
+                t_entity,
+                mut health,
+                t_transform,
+                t_facing,
+                is_defending,
+            )) = target_query.get_mut(*target)
             {
                 let mut damage = attack.damage;
-                //modify damage based on target specific qualities
-                //target defenses...
+                // modify damage based on target specific qualities
+                // target defenses...
                 if can_backstab {
                     let is_backstab = match *t_facing {
-                        Facing::Right => t_transform.translation().x > transform.translation().x,
-                        Facing::Left => t_transform.translation().x < transform.translation().x,
+                        Facing::Right => {
+                            t_transform.translation().x
+                                > transform.translation().x
+                        },
+                        Facing::Left => {
+                            t_transform.translation().x
+                                < transform.translation().x
+                        },
                     };
                     if is_backstab {
                         damage *= 2;
@@ -331,16 +367,16 @@ pub fn apply_attack_damage(
                     damage /= 4;
                 }
 
-                //TODO:
+                // TODO:
                 // Apply Stat Modifier (if exists)
                 if let Some(stat_modifier) = &attack.status_mod {
                     commands.entity(t_entity).insert(stat_modifier.clone());
                 }
 
-                //apply JustGotHitMarker TODO: switch hitspark to damage_info events
+                // apply JustGotHitMarker TODO: switch hitspark to damage_info events
                 commands.entity(t_entity).insert(JustGotHitMarker);
 
-                //apply damage to the targets health
+                // apply damage to the targets health
                 health.current = health.current.saturating_sub(damage);
                 let damage_info = DamageInfo {
                     attacker: attack.attacker,
@@ -353,7 +389,7 @@ pub fn apply_attack_damage(
                 attack.damaged_set.insert(t_entity);
                 damage_events.send(damage_info);
 
-                //apply Knockback
+                // apply Knockback
                 if let Some(pushback) = maybe_pushback {
                     commands.entity(t_entity).insert(pushback.0);
                 }
@@ -390,7 +426,7 @@ pub fn kill_on_damage(
     }
 }
 
-///Applies camera shaker on first hit if attacker is player
+/// Applies camera shaker on first hit if attacker is player
 fn on_hit_cam_shake(
     query: Query<&Attack, Added<Hit>>,
     p_query: Query<Entity, With<Player>>,
@@ -403,7 +439,7 @@ fn on_hit_cam_shake(
     }
 }
 
-///Applies pushback to attacker on first hit of an attack with SelfPushback
+/// Applies pushback to attacker on first hit of an attack with SelfPushback
 fn on_hit_self_pushback(
     query: Query<(&Attack, &SelfPushback), Added<Hit>>,
     mut commands: Commands,
@@ -413,19 +449,19 @@ fn on_hit_self_pushback(
     }
 }
 
-///Heals attacker on first hit of a Stealthed attack
+/// Heals attacker on first hit of a Stealthed attack
 fn on_hit_lifesteal(
     query: Query<(&Attack, Has<Crit>), (Added<Hit>, With<Stealthed>)>,
     mut health_query: Query<&mut Health, Without<Attack>>,
 ) {
     for (attack, is_crit) in query.iter() {
         if let Ok(mut health) = health_query.get_mut(attack.attacker) {
-            //heal by 100 percent or 20 percent max health
+            // heal by 100 percent or 20 percent max health
             let stealth_lifesteal = if is_crit { 1. } else { 0.2 };
             health.current = u32::min(
-                health
-                    .current
-                    .saturating_add((stealth_lifesteal * health.max as f32) as u32),
+                health.current.saturating_add(
+                    (stealth_lifesteal * health.max as f32) as u32,
+                ),
                 health.max,
             );
         }
@@ -457,7 +493,10 @@ fn apply_damage_flash(
     }
 }
 
-fn damage_flash(mut query: Query<(Entity, &mut Sprite, &mut DamageFlash)>, mut commands: Commands) {
+fn damage_flash(
+    mut query: Query<(Entity, &mut Sprite, &mut DamageFlash)>,
+    mut commands: Commands,
+) {
     for (entity, mut sprite, mut damage_flash) in query.iter_mut() {
         sprite.color = Color::rgb(2.5, 2.5, 2.5);
 
@@ -488,11 +527,13 @@ fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
 #[derive(Resource, Debug, Default, Deref, DerefMut)]
 pub struct KillCount(pub u32);
 
-//TODO:
-//add crit passive
+// TODO:
+// add crit passive
 fn track_crits(mut query: Query<&mut Crits>) {
     for mut crits in query.iter_mut() {
-        if crits.hit_count != 0 && (crits.hit_count % 17 == 0 || crits.hit_count % 19 == 0) {
+        if crits.hit_count != 0
+            && (crits.hit_count % 17 == 0 || crits.hit_count % 19 == 0)
+        {
             crits.next_hit_is_critical = true;
         }
     }

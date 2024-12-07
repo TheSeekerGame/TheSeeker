@@ -123,7 +123,9 @@ fn spawn_mainmenu(
     commands
         .entity(e_menu_root)
         .push_children(&[e_logo_image, e_menu_wrapper]);
-    commands
-        .entity(e_menu_wrapper)
-        .push_children(&[e_butt_play, e_butt_settings, e_butt_exit]);
+    commands.entity(e_menu_wrapper).push_children(&[
+        e_butt_play,
+        e_butt_settings,
+        e_butt_exit,
+    ]);
 }
