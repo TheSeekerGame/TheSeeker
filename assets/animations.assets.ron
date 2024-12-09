@@ -121,6 +121,54 @@
         rows: 1,
         columns: 20,
     ),
+    "anim.player.SwordBasicRun": File (
+        path: "animations/player/sword/BasicRun.anim.toml",
+    ),
+    "anim.player.SwordBasicRun.image": File (
+        path: "animations/player/sword/BasicRunSheet.png",
+    ),
+    "anim.player.SwordBasicRun.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 12,
+    ),
+    "anim.player.SwordBasicAir": File (
+        path: "animations/player/sword/BasicAir.anim.toml",
+    ),
+    "anim.player.SwordBasicAir.image": File (
+        path: "animations/player/sword/BasicAirSheet.png",
+    ),
+    "anim.player.SwordBasicAir.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 20,
+    ),
+    "anim.player.SwordWhirling": File (
+        path: "animations/player/sword/Whirling.anim.toml",
+    ),
+    "anim.player.SwordWhirling.image": File (
+        path: "animations/player/sword/WhirlingSheet.png",
+    ),
+    "anim.player.SwordWhirling.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 6,
+    ),
+    "anim.player.SwordDashDown": File (
+        path: "animations/player/sword/DashDown.anim.toml",
+    ),
+    "anim.player.SwordDashDown.image": File (
+        path: "animations/player/sword/DashDownSheet.png",
+    ),
+    "anim.player.SwordDashDown.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 6,
+    ),
     "anim.player.BowBasicIdle": File (
         path: "animations/player/bow/BasicIdle.anim.toml",
     ),
@@ -168,30 +216,6 @@
         tile_size_y: 12.,
         rows: 1,
         columns: 1,
-    ),
-    "anim.player.SwordWhirling": File (
-        path: "animations/player/sword/Whirling.anim.toml",
-    ),
-    "anim.player.SwordWhirling.image": File (
-        path: "animations/player/sword/WhirlingSheet.png",
-    ),
-    "anim.player.SwordWhirling.atlas": TextureAtlasLayout (
-        tile_size_x: 48.,
-        tile_size_y: 48.,
-        rows: 1,
-        columns: 6,
-    ),
-    "anim.player.SwordDashDown": File (
-        path: "animations/player/sword/DashDown.anim.toml",
-    ),
-    "anim.player.SwordDashDown.image": File (
-        path: "animations/player/sword/DashDownSheet.png",
-    ),
-    "anim.player.SwordDashDown.atlas": TextureAtlasLayout (
-        tile_size_x: 48.,
-        tile_size_y: 48.,
-        rows: 1,
-        columns: 6,
     ),
     "anim.spider.Idle": File (
         path: "animations/spider/big/tier1/Idle.anim.toml",
