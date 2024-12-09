@@ -438,8 +438,10 @@ struct MeleeAttack {
 }
 impl MeleeAttack {
     // const RECOVERY: u32 = 9;
-    const MAX: u32 = 10;
-    const STARTUP: u32 = 7;
+    // const MAX: u32 = 10;
+    // const STARTUP: u32 = 7;
+    const MAX: u32 = 5;
+    const STARTUP: u32 = 3;
 }
 impl GentState for MeleeAttack {}
 impl GenericState for MeleeAttack {}
@@ -1347,7 +1349,7 @@ pub fn dead(
             **kill_count += 1;
             commands
                 .entity(entity)
-                .retain::<(TransformBundle, Gent, Dead, Enemy)>();
+                .retain::<(TransformBundle, Gent, Dead, Enemy, Role)>();
         }
         if dead.ticks == 8 * 7 {
             commands.entity(entity).remove::<Dead>().insert(Decay);
@@ -1420,16 +1422,6 @@ impl Plugin for EnemyAnimationPlugin {
     }
 }
 
-fn enemy_idle_animation(
-    i_query: Query<&Gent, (Added<Idle>, With<Enemy>)>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-) {
-    for gent in i_query.iter() {
-        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.smallspider.Idle");
-        }
-    }
-}
 fn enemy_sparks_on_hit_animation(
     i_query: Query<(Entity, &Gent), (Added<JustGotHitMarker>, With<Enemy>)>,
     mut gfx_query: Query<
@@ -1466,13 +1458,30 @@ fn enemy_sparks_on_hit_animation(
     }
 }
 
-fn enemy_walking_animation(
-    i_query: Query<&Gent, (Added<Walking>, With<Enemy>)>,
+fn enemy_idle_animation(
+    i_query: Query<(&Gent, &Role), (Added<Idle>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for gent in i_query.iter() {
+    for (gent, role) in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.smallspider.Walk");
+            match role {
+                Role::Melee => enemy.play_key("anim.smallspider.Idle"),
+                Role::Ranged => enemy.play_key("anim.spider.Idle"),
+            }
+        }
+    }
+}
+
+fn enemy_walking_animation(
+    i_query: Query<(&Gent, &Role), (Added<Walking>, With<Enemy>)>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+) {
+    for (gent, role) in i_query.iter() {
+        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
+            match role {
+                Role::Melee => enemy.play_key("anim.smallspider.Walk"),
+                Role::Ranged => enemy.play_key("anim.spider.Walk"),
+            }
         }
     }
 }
@@ -1545,23 +1554,29 @@ fn enemy_retreat_animation(
 }
 
 fn enemy_death_animation(
-    i_query: Query<&Gent, (Added<Dead>, With<Enemy>)>,
+    i_query: Query<(&Gent, &Role), (Added<Dead>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for gent in i_query.iter() {
+    for (gent, role) in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.smallspider.Death");
+            match role {
+                Role::Melee => enemy.play_key("anim.smallspider.Death"),
+                Role::Ranged => enemy.play_key("anim.spider.Death"),
+            }
         }
     }
 }
 
 fn enemy_decay_animation(
-    i_query: Query<&Gent, (Added<Decay>, With<Enemy>)>,
+    i_query: Query<(&Gent, &Role), (Added<Decay>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for gent in i_query.iter() {
+    for (gent, role) in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.smallspider.Decay");
+            match role {
+                Role::Melee => enemy.play_key("anim.smallspider.Decay"),
+                Role::Ranged => enemy.play_key("anim.spider.Decay"),
+            }
         }
     }
 }
