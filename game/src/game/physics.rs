@@ -26,12 +26,14 @@ pub fn knockback(
         Entity,
         &mut Knockback,
         &mut LinearVelocity,
+        Has<Defense>,
     )>,
     mut commands: Commands,
 ) {
-    for (entity, mut knockback, mut velocity) in query.iter_mut() {
+    for (entity, mut knockback, mut velocity, is_defending) in query.iter_mut()
+    {
         knockback.ticks += 1;
-        if knockback.is_added() {
+        if knockback.is_added() && !is_defending {
             **velocity = knockback.strength;
         }
         if knockback.ticks > knockback.max_ticks {
