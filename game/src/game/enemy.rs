@@ -552,6 +552,7 @@ fn check_player_range(
             &mut Range,
             &mut Target,
             &mut Facing,
+            &Role,
             &GlobalTransform,
             Has<Aggroed>,
             Has<MeleeAttack>,
@@ -572,6 +573,7 @@ fn check_player_range(
         mut range,
         mut target,
         mut facing,
+        role,
         trans,
         is_aggroed,
         is_meleeing,
@@ -609,10 +611,12 @@ fn check_player_range(
             } else if distance <= Range::AGGRO {
                 *range = Range::Aggro;
                 target.0 = Some(player_e);
-            } else if distance <= Range::RANGED {
+            } else if matches!(role, Role::Ranged) && distance <= Range::RANGED
+            {
                 *range = Range::Ranged;
                 target.0 = Some(player_e);
-            } else if distance <= Range::DEAGGRO {
+            } else if matches!(role, Role::Melee) && distance <= Range::DEAGGRO
+            {
                 *range = Range::Deaggro;
                 target.0 = Some(player_e);
                 // target.0 = None;
@@ -718,13 +722,6 @@ fn defense(
                 Waiting::default(),
             ));
         }
-        // defense.cooldown_ticks += 1;
-        // if defense.cooldown_ticks == Defense::COOLDOWN * 8 {
-        //     transitions.push(Defense::new_transition(
-        //         PushbackAttack::default(),
-        //     ));
-        //     defense.cooldown_ticks = 0;
-        // }
     }
 }
 
@@ -775,7 +772,6 @@ fn aggro(
             &Role,
             &Range,
             &Target,
-            // Has<Grouped>,
             &mut TransitionQueue,
         ),
         (
@@ -788,16 +784,11 @@ fn aggro(
     >,
 ) {
     for (role, range, target, mut transitions) in query.iter_mut() {
-        if target.0.is_some() {
+        if let Some(p_entity) = target.0 {
             let mut rng = rand::thread_rng();
             // return to patrol if out of aggro range
             if matches!(range, Range::Far) {
                 transitions.push(Aggroed::new_transition(Patrolling));
-            // } else if !is_grouped {
-            //     transitions.push(Waiting::new_transition(Retreating {
-            //         ticks: 0,
-            //         max_ticks: rng.gen_range(24..300),
-            //     }));
             } else if matches!(range, Range::Melee) {
                 match role {
                     Role::Melee => {
@@ -811,11 +802,13 @@ fn aggro(
                         ));
                     },
                 }
-                // TODO: ?? should ranged chase? maybe targeting state?
             } else if matches!(role, Role::Melee) {
                 transitions.push(Waiting::new_transition(Chasing));
             } else if matches!(role, Role::Ranged) {
-                transitions.push(Waiting::new_transition(Chasing));
+                transitions.push(Waiting::new_transition(RangedAttack {
+                    target: p_entity,
+                    ticks: 0,
+                }));
             }
 
             // if there is no player it should also return to patrol state
@@ -1188,76 +1181,37 @@ fn chasing(
     for (target, facing, role, range, mut nav, mut velocity, mut transitions) in
         query.iter_mut()
     {
-        // TODO: else transition back to waiting?
-        let mut continue_chasing = false;
+        // only melee chase
+        if !matches!(role, Role::Melee) {
+            continue;
+        }
         if let Some(p_entity) = target.0 {
             // check if we need to transition
-            match role {
-                Role::Ranged => {
-                    match *range {
-                        Range::Ranged | Range::Aggro => {
-                            transitions.push(Chasing::new_transition(
-                                RangedAttack {
-                                    target: p_entity,
-                                    ticks: 0,
-                                },
-                            ));
-                        },
-                        // Range::Melee => transitions.push(Chasing::new_transition(
-                        // MeleeAttack::default(),
-                        // )),
-                        Range::Melee => {
-                            transitions.push(Chasing::new_transition(
-                                Defense::default(),
-                            ))
-                        },
-                        Range::Deaggro => {
-                            continue_chasing = true;
-                        },
-                        _ => {
-                            transitions.push(Chasing::new_transition(
-                                Waiting::default(),
-                            ))
-                        },
-                    }
-                },
-
-                Role::Melee => {
-                    match *range {
-                        Range::Melee => {
-                            transitions.push(Chasing::new_transition(
-                                MeleeAttack::default(),
-                            ))
-                        },
-                        Range::Ranged | Range::Aggro | Range::Deaggro => {
-                            continue_chasing = true;
-                        },
-                        _ => {
-                            transitions.push(Chasing::new_transition(
-                                Waiting::default(),
-                            ))
-                        },
-                    }
-                },
-            }
-
-            // if we are outside our target range, walk closer.
-            // TODO: change to add random offsets?
-            if continue_chasing {
-                velocity.x = -35. * facing.direction();
-                // if we cant get any closer because of edge
-                if let Navigation::Blocked = *nav {
+            match *range {
+                Range::Melee => {
                     velocity.x = 0.;
-                    *nav = Navigation::Grounded;
-                    // println!("chasing but blocked");
-                    transitions.push(Chasing::new_transition(RangedAttack {
-                        target: p_entity,
-                        ticks: 0,
-                    }));
-                }
-            // if not continuing to chase, set velocity to 0 before leaving state
-            } else {
-                velocity.x = 0.;
+                    transitions.push(Chasing::new_transition(
+                        MeleeAttack::default(),
+                    ));
+                },
+                Range::Ranged | Range::Aggro | Range::Deaggro => {
+                    velocity.x = -35. * facing.direction();
+                    // if we cant get any closer because of edge
+                    if let Navigation::Blocked = *nav {
+                        velocity.x = 0.;
+                        *nav = Navigation::Grounded;
+                        // println!("chasing but blocked");
+                        transitions.push(Chasing::new_transition(
+                            Waiting::default(),
+                        ));
+                    }
+                },
+                _ => {
+                    velocity.x = 0.;
+                    transitions.push(Chasing::new_transition(
+                        Waiting::default(),
+                    ))
+                },
             }
         // if there is no target, stop chasing
         } else {
@@ -1578,6 +1532,7 @@ fn enemy_defense_animation(
     }
 }
 
+// no longer used?
 fn enemy_retreat_animation(
     i_query: Query<&Gent, (Added<Retreating>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
