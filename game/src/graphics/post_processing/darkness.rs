@@ -1,4 +1,4 @@
-use bevy::core_pipeline::core_2d;
+use bevy::core_pipeline::core_3d;
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 use bevy::ecs::query::QueryItem;
 use bevy::prelude::*;
@@ -52,7 +52,7 @@ use crate::parallax::Parallax;
 ///    },
 /// ));
 /// ```
-pub struct DarknessPlugin;
+pub(crate) struct DarknessPlugin;
 
 impl Plugin for DarknessPlugin {
     fn build(&self, app: &mut App) {
@@ -98,24 +98,24 @@ impl Plugin for DarknessPlugin {
             // matching the [`ViewQuery`]
             .add_render_graph_node::<ViewNodeRunner<DarknessPostProcessNode>>(
                 // Specify the name of the graph, in this case we want the graph for 3d
-                core_2d::graph::Core2d,
+                core_3d::graph::Core3d,
                 // It also needs the name of the node
                 DarknessPostProcessLabel,
                 // DarknessPostProcessNode::NAME,
             )
             .add_render_graph_edges(
-                core_2d::graph::Core2d,
+                core_3d::graph::Core3d,
                 // core_2d::graph::NAME,
                 // Specify the node ordering.
                 // This will automatically create all required node edges to enforce the given ordering.
                 // Currently runs after ToneMapping, which seems to give best appearance... might need to revisit
                 // to handle bloom/ other glowing objects.
                 (
-                    core_2d::graph::Node2d::Tonemapping,
+                    core_3d::graph::Node3d::Tonemapping,
                     // core_2d::graph::node::TONEMAPPING,
                     DarknessPostProcessLabel,
                     // DarknessPostProcessNode::NAME,
-                    core_2d::graph::Node2d::EndMainPassPostProcessing,
+                    core_3d::graph::Node3d::EndMainPassPostProcessing,
                     // core_2d::graph::node::END_MAIN_PASS_POST_PROCESSING,
                 ),
             );
@@ -147,12 +147,12 @@ pub struct DarknessSettings {
     /// RGB
     pub bg_light_color: Vec3,
     // WebGL2 structs must be 16 byte aligned.
-    #[cfg(feature = "webgl2")]
+    #[cfg(target_arch = "wasm32")]
     _webgl2_padding: Vec2,
 }
 
 /// Changes the intensity over time to show that the effect is controlled from the main world
-fn darkness_dynamics(
+fn _darkness_dynamics(
     mut settings: Query<&mut DarknessSettings>,
     time: Res<Time>,
     camera: Query<&Transform, (With<MainCamera>, Without<Player>)>,
@@ -168,7 +168,7 @@ fn darkness_dynamics(
     };
 
     for mut setting in &mut settings {
-        let seconds_per_day_cycle = 300000.0;
+        let _seconds_per_day_cycle = 300000.0;
 
         let mut intensity = 1.0;
         // remaps sines normal output to the 0-1 range
@@ -197,7 +197,7 @@ fn darkness_dynamics(
 /// Currently only applies to [`bevy_ecs_tilemap::tiles::TileColor`]'s
 /// Might need modifications if we draw other things in the backround and
 /// want it to work with darkness properly.
-fn darkness_parallax(
+fn _darkness_parallax(
     settings: Query<&DarknessSettings>,
     parallaxed_bgs: Query<(Entity, &Parallax)>,
     children: Query<&Children>,
@@ -227,7 +227,7 @@ struct DarknessPostProcessNode;
 //     pub const NAME: &'static str = "darkness_post_process";
 // }
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-struct DarknessPostProcessLabel;
+pub(crate) struct DarknessPostProcessLabel;
 
 // The ViewNode trait is required by the ViewNodeRunner
 impl ViewNode for DarknessPostProcessNode {
@@ -387,7 +387,7 @@ impl FromWorld for DarknessPostProcessPipeline {
         // Get the shader handle
         let shader = world
             .resource::<AssetServer>()
-            .load("shaders/darkness_post_processing.wgsl");
+            .load("shaders/post_processing/darkness.wgsl");
 
         let pipeline_id = world
             .resource_mut::<PipelineCache>()
