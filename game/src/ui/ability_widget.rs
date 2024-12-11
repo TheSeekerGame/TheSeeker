@@ -6,7 +6,7 @@ use sickle_ui::ui_style::*;
 use sickle_ui::widgets::column::UiColumnExt;
 use sickle_ui::widgets::prelude::UiContainerExt;
 
-use crate::graphics::hp_bar::HpBarUiMaterial;
+use crate::graphics::ability_cooldown::CooldownMaterial;
 use crate::prelude::*;
 
 #[derive(Component)]
@@ -45,7 +45,7 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
             );
             column.container(
                 (
-                    MaterialNodeBundle::<HpBarUiMaterial>::default(),
+                    MaterialNodeBundle::<CooldownMaterial>::default(),
                     config.tracking_component,
                 ),
                 |ability_card| {
@@ -54,11 +54,11 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                     // Someone tell me theres a better way then this. I mean it works at least
                     ability_card.commands().add(move |w: &mut World| {
                         let Some(mut ui_materials) =
-                            w.get_resource_mut::<Assets<HpBarUiMaterial>>()
+                            w.get_resource_mut::<Assets<CooldownMaterial>>()
                         else {
                             return;
                         };
-                        let handle = ui_materials.add(HpBarUiMaterial {
+                        let handle = ui_materials.add(CooldownMaterial {
                             factor: 0.3,
                             background_color: Color::rgba(0.0, 0.0, 0.0, 0.0)
                                 .into(),
@@ -113,13 +113,13 @@ struct SetFactor(f32);
 impl EntityCommand for SetFactor {
     fn apply(self, entity: Entity, world: &mut World) {
         let Some(handle) =
-            world.entity(entity).get::<Handle<HpBarUiMaterial>>()
+            world.entity(entity).get::<Handle<CooldownMaterial>>()
         else {
             return;
         };
         let handle = handle.clone();
         let Some(mut assets) =
-            world.get_resource_mut::<Assets<HpBarUiMaterial>>()
+            world.get_resource_mut::<Assets<CooldownMaterial>>()
         else {
             return;
         };

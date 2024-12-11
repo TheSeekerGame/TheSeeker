@@ -10,9 +10,9 @@ use crate::game::attack::Health;
 use crate::game::player::Player;
 use crate::prelude::Update;
 
-pub struct HpBarsPlugin;
+pub struct EnemyHpBarPlugin;
 
-impl Plugin for HpBarsPlugin {
+impl Plugin for EnemyHpBarPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(UiMaterialPlugin::<HpBarUiMaterial>::default());
         app.add_systems(Update, instance);
@@ -195,6 +195,6 @@ pub struct HpBarUiMaterial {
 
 impl UiMaterial for HpBarUiMaterial {
     fn fragment_shader() -> ShaderRef {
-        "shaders/hp_bar.wgsl".into()
+        "shaders/enemy_hp_bar.wgsl".into()
     }
 }

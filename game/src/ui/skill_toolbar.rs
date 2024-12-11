@@ -8,7 +8,7 @@ use crate::game::player::{
     Attacking, CanAttack, CanDash, CanStealth, Player, PlayerConfig,
     WhirlAbility,
 };
-use crate::graphics::hp_bar::{HpBackground, HpBar, HpBarUiMaterial};
+use crate::graphics::player_hp_bar::{HpBackground, HpBar, HpBarUiMaterial};
 use crate::prelude::*;
 use crate::ui::ability_widget::{
     AbilityWidget, AbilityWidgetCommands, AbilityWidgetConfig,
