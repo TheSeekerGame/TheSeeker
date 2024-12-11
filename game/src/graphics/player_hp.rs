@@ -31,7 +31,7 @@ pub struct Material {
 
 impl UiMaterial for Material {
     fn fragment_shader() -> ShaderRef {
-        "shaders/player_hp_bar.wgsl".into()
+        "shaders/player_hp.wgsl".into()
     }
 }
 
