@@ -10,11 +10,6 @@ impl Plugin for AbilityCooldownPlugin {
     }
 }
 
-#[derive(Component)]
-pub struct Bar(pub Entity);
-#[derive(Component)]
-pub struct Background(pub Entity);
-
 #[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
 pub struct Material {
     /// A number between `0` and `1` indicating how much of the bar should be filled.
