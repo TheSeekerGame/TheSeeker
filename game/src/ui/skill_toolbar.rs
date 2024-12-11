@@ -91,7 +91,6 @@ fn spawn_toolbar(
                     ..default()
                 },
                 Name::new("hp_bg"),
-                player_hp::Background(Entity::PLACEHOLDER),
             ),
             |parent| {
                 parent.spawn((
