@@ -6,7 +6,7 @@ use sickle_ui::ui_style::*;
 use sickle_ui::widgets::column::UiColumnExt;
 use sickle_ui::widgets::prelude::UiContainerExt;
 
-use crate::graphics::ability_cooldown::CooldownMaterial;
+use crate::graphics::ability_cooldown;
 use crate::prelude::*;
 
 #[derive(Component)]
@@ -45,7 +45,7 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
             );
             column.container(
                 (
-                    MaterialNodeBundle::<CooldownMaterial>::default(),
+                    MaterialNodeBundle::<ability_cooldown::Material>::default(),
                     config.tracking_component,
                 ),
                 |ability_card| {
@@ -54,17 +54,20 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                     // Someone tell me theres a better way then this. I mean it works at least
                     ability_card.commands().add(move |w: &mut World| {
                         let Some(mut ui_materials) =
-                            w.get_resource_mut::<Assets<CooldownMaterial>>()
+                            w.get_resource_mut::<Assets<ability_cooldown::Material>>()
                         else {
                             return;
                         };
-                        let handle = ui_materials.add(CooldownMaterial {
-                            factor: 0.3,
-                            background_color: Color::rgba(0.0, 0.0, 0.0, 0.0)
+                        let handle =
+                            ui_materials.add(ability_cooldown::Material {
+                                factor: 0.3,
+                                background_color: Color::rgba(
+                                    0.0, 0.0, 0.0, 0.0,
+                                )
                                 .into(),
-                            filled_color: Color::rgba(0.0, 0.0, 0.0, 0.6)
-                                .into(),
-                        });
+                                filled_color: Color::rgba(0.0, 0.0, 0.0, 0.6)
+                                    .into(),
+                            });
                         w.entity_mut(entity).insert(handle);
                         // Make the bar go from bottom to top
                         w.entity_mut(entity).insert(Transform::from_rotation(
@@ -112,14 +115,15 @@ struct SetFactor(f32);
 
 impl EntityCommand for SetFactor {
     fn apply(self, entity: Entity, world: &mut World) {
-        let Some(handle) =
-            world.entity(entity).get::<Handle<CooldownMaterial>>()
+        let Some(handle) = world
+            .entity(entity)
+            .get::<Handle<ability_cooldown::Material>>()
         else {
             return;
         };
         let handle = handle.clone();
         let Some(mut assets) =
-            world.get_resource_mut::<Assets<CooldownMaterial>>()
+            world.get_resource_mut::<Assets<ability_cooldown::Material>>()
         else {
             return;
         };
@@ -131,11 +135,11 @@ impl EntityCommand for SetFactor {
 }
 
 pub trait AbilityWidgetCommands<'a> {
-    fn factor(&'a mut self, factor: f32) -> &mut EntityCommands<'a>;
+    fn factor(&'a mut self, factor: f32) -> &'a mut EntityCommands<'a>;
 }
 
 impl<'a> AbilityWidgetCommands<'a> for EntityCommands<'a> {
-    fn factor(&'a mut self, factor: f32) -> &mut EntityCommands<'a> {
+    fn factor(&'a mut self, factor: f32) -> &'a mut EntityCommands<'a> {
         self.add(SetFactor(factor))
     }
 }

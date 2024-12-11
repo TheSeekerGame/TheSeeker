@@ -10,11 +10,11 @@ use crate::game::attack::Health;
 use crate::game::player::Player;
 use crate::prelude::Update;
 
-pub struct EnemyHpBarPlugin;
+pub struct PlayerHpBarPlugin;
 
-impl Plugin for EnemyHpBarPlugin {
+impl Plugin for PlayerHpBarPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(UiMaterialPlugin::<HpBarUiMaterial>::default());
+        app.add_plugins(UiMaterialPlugin::<Material>::default());
         app.add_systems(Update, instance);
         app.add_systems(Update, update_positions);
         app.add_systems(Update, update_hp);
@@ -23,9 +23,27 @@ impl Plugin for EnemyHpBarPlugin {
 }
 
 #[derive(Component)]
-pub struct HpBar(pub Entity);
+pub struct Bar(pub Entity);
+
 #[derive(Component)]
-pub struct HpBackground(pub Entity);
+pub struct Background(pub Entity);
+
+#[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
+pub struct Material {
+    /// A number between `0` and `1` indicating how much of the bar should be filled.
+    #[uniform(0)]
+    pub factor: f32,
+    #[uniform(1)]
+    pub background_color: Color,
+    #[uniform(2)]
+    pub filled_color: Color,
+}
+
+impl UiMaterial for Material {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/player_hp_bar.wgsl".into()
+    }
+}
 
 fn instance(
     mut commands: Commands,
@@ -33,7 +51,7 @@ fn instance(
         (Entity, Ref<Health>, Has<Player>),
         With<GlobalTransform>,
     >,
-    mut ui_materials: ResMut<Assets<HpBarUiMaterial>>,
+    mut ui_materials: ResMut<Assets<Material>>,
 ) {
     for (entity, health, player) in entity_with_hp.iter() {
         if health.is_added() {
@@ -52,7 +70,7 @@ fn instance(
                             visibility: Visibility::Hidden,
                             ..default()
                         },
-                        HpBackground(entity),
+                        Background(entity),
                         StateDespawnMarker,
                     ))
                     .with_children(|parent| {
@@ -64,7 +82,7 @@ fn instance(
                                     align_self: AlignSelf::Center,
                                     ..default()
                                 },
-                                material: ui_materials.add(HpBarUiMaterial {
+                                material: ui_materials.add(Material {
                                     factor: 1.0,
                                     background_color: Color::rgb(
                                         0.15, 0.15, 0.15,
@@ -77,7 +95,7 @@ fn instance(
                                 }),
                                 ..default()
                             },
-                            HpBar(entity),
+                            Bar(entity),
                         ));
                     });
             }
@@ -95,7 +113,7 @@ fn update_positions(
         ),
         With<Health>,
     >,
-    mut hp_bar: Query<(Entity, &HpBackground, &mut Style)>,
+    mut hp_bar: Query<(Entity, &Background, &mut Style)>,
     mut q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
 ) {
     let Some((camera_transform, camera)) = q_cam.iter().next() else {
@@ -146,8 +164,8 @@ fn update_positions(
 
 fn update_hp(
     entity_with_hp: Query<&Health>,
-    mut hp_bar: Query<(&HpBar, &Handle<HpBarUiMaterial>)>,
-    mut ui_materials: ResMut<Assets<HpBarUiMaterial>>,
+    mut hp_bar: Query<(&Bar, &Handle<Material>)>,
+    mut ui_materials: ResMut<Assets<Material>>,
 ) {
     for (hpbar, ui_mat_handle) in hp_bar.iter() {
         if let Ok(health) = entity_with_hp.get(hpbar.0) {
@@ -164,7 +182,7 @@ fn update_hp(
 
 fn update_visibility(
     entity_with_hp: Query<(Ref<Health>, Option<&Player>)>,
-    mut hp_bar: Query<(&HpBackground, &mut Visibility)>,
+    mut hp_bar: Query<(&Background, &mut Visibility)>,
 ) {
     for (hpbar, mut visibility) in hp_bar.iter_mut() {
         if let Ok((health, player)) = entity_with_hp.get(hpbar.0) {
@@ -179,22 +197,5 @@ fn update_visibility(
                 }
             }
         }
-    }
-}
-
-#[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
-pub struct HpBarUiMaterial {
-    /// A number between `0` and `1` indicating how much of the bar should be filled.
-    #[uniform(0)]
-    pub factor: f32,
-    #[uniform(1)]
-    pub background_color: Color,
-    #[uniform(2)]
-    pub filled_color: Color,
-}
-
-impl UiMaterial for HpBarUiMaterial {
-    fn fragment_shader() -> ShaderRef {
-        "shaders/enemy_hp_bar.wgsl".into()
     }
 }

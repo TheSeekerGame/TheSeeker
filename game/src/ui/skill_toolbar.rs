@@ -8,7 +8,7 @@ use crate::game::player::{
     Attacking, CanAttack, CanDash, CanStealth, Player, PlayerConfig,
     WhirlAbility,
 };
-use crate::graphics::player_hp_bar::{HpBackground, HpBar, HpBarUiMaterial};
+use crate::graphics::{ability_cooldown, player_hp};
 use crate::prelude::*;
 use crate::ui::ability_widget::{
     AbilityWidget, AbilityWidgetCommands, AbilityWidgetConfig,
@@ -38,7 +38,7 @@ impl Plugin for SkillToolbarPlugin {
 fn spawn_toolbar(
     mut commands: Commands,
     q_cam: Query<Entity, With<MainCamera>>,
-    mut ui_materials: ResMut<Assets<HpBarUiMaterial>>,
+    mut ui_materials: ResMut<Assets<player_hp::Material>>,
 ) {
     let Ok(cam_e) = q_cam.get_single() else {
         return;
@@ -91,7 +91,7 @@ fn spawn_toolbar(
                     ..default()
                 },
                 Name::new("hp_bg"),
-                HpBackground(Entity::PLACEHOLDER),
+                player_hp::Background(Entity::PLACEHOLDER),
             ),
             |parent| {
                 parent.spawn((
@@ -102,7 +102,7 @@ fn spawn_toolbar(
                             align_self: AlignSelf::Center,
                             ..default()
                         },
-                        material: ui_materials.add(HpBarUiMaterial {
+                        material: ui_materials.add(player_hp::Material {
                             factor: 1.0,
                             background_color: Color::rgb(0.15, 0.15, 0.15)
                                 .into(),
@@ -110,7 +110,7 @@ fn spawn_toolbar(
                         }),
                         ..default()
                     },
-                    HpBar(Entity::PLACEHOLDER),
+                    player_hp::Bar(Entity::PLACEHOLDER),
                     Name::new("hp_bar"),
                     PlayerHpUI,
                 ));
@@ -172,7 +172,7 @@ fn spawn_toolbar(
                             align_self: AlignSelf::Center,
                             ..default()
                         },
-                        material: ui_materials.add(HpBarUiMaterial {
+                        material: ui_materials.add(player_hp::Material {
                             factor: 1.0,
                             background_color: Color::rgb(0.15, 0.15, 0.15)
                                 .into(),
@@ -191,7 +191,7 @@ fn despawn_toolbar() {}
 
 fn assign_hp_bar(
     player: Query<Entity, Added<Player>>,
-    mut hp_bar_q: Query<&mut HpBar, With<PlayerHpUI>>,
+    mut hp_bar_q: Query<&mut player_hp::Bar, With<PlayerHpUI>>,
 ) {
     let Some(player) = player.iter().next() else {
         return;
