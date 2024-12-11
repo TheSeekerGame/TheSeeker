@@ -3,6 +3,7 @@ use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
 
 use crate::game::attack::Health;
+use crate::game::player::Player;
 use crate::prelude::Update;
 
 pub struct PlayerHpBarPlugin;
@@ -35,17 +36,17 @@ impl UiMaterial for Material {
 }
 
 fn update_hp(
-    entity_with_hp: Query<&Health>,
-    mut hp_bar: Query<(&Bar, &Handle<Material>)>,
-    mut ui_materials: ResMut<Assets<Material>>,
+    player_q: Query<&Health, With<Player>>,
+    mut hp_bar_q: Query<(&Bar, &Handle<Material>)>,
+    mut material: ResMut<Assets<Material>>,
 ) {
-    for (hpbar, ui_mat_handle) in hp_bar.iter() {
-        if let Ok(health) = entity_with_hp.get(hpbar.0) {
-            if let Some(mat) = ui_materials.get_mut(ui_mat_handle) {
+    for (hp_bar, material_handle) in hp_bar_q.iter() {
+        if let Ok(health) = player_q.get(hp_bar.0) {
+            if let Some(mat) = material.get_mut(material_handle) {
                 mat.factor = 1.0 * (health.current as f32 / health.max as f32)
             }
         } else {
-            if let Some(mat) = ui_materials.get_mut(ui_mat_handle) {
+            if let Some(mat) = material.get_mut(material_handle) {
                 mat.factor = 0.0;
             }
         }

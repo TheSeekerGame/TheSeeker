@@ -7,7 +7,7 @@ use theseeker_engine::physics::Collider;
 use crate::appstate::StateDespawnMarker;
 use crate::camera::MainCamera;
 use crate::game::attack::Health;
-use crate::game::player::Player;
+use crate::game::enemy::Enemy;
 use crate::prelude::Update;
 
 pub struct EnemyHpBarPlugin;
@@ -23,93 +23,91 @@ impl Plugin for EnemyHpBarPlugin {
 }
 
 #[derive(Component)]
-pub struct Bar(pub Entity);
+pub struct Root(pub Entity);
+
 #[derive(Component)]
-pub struct Background(pub Entity);
+pub struct Bar(pub Entity);
+
+#[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
+pub struct Material {
+    /// A number between `0` and `1` indicating how much of the bar should be filled.
+    #[uniform(0)]
+    pub factor: f32,
+    #[uniform(1)]
+    pub background_color: Color,
+    #[uniform(2)]
+    pub filled_color: Color,
+}
+
+impl UiMaterial for Material {
+    fn fragment_shader() -> ShaderRef {
+        "shaders/enemy_hp_bar.wgsl".into()
+    }
+}
 
 fn instance(
     mut commands: Commands,
-    entity_with_hp: Query<
-        (Entity, Ref<Health>, Has<Player>),
-        With<GlobalTransform>,
-    >,
-    mut ui_materials: ResMut<Assets<Material>>,
+    enemy_q: Query<(Entity, Ref<Health>), (With<GlobalTransform>, With<Enemy>)>,
+    mut material: ResMut<Assets<Material>>,
 ) {
-    for (entity, health, player) in entity_with_hp.iter() {
+    for (entity, health) in enemy_q.iter() {
         if health.is_added() {
-            if !player {
-                commands
-                    .spawn((
-                        NodeBundle {
-                            style: Style {
-                                width: Val::Px(75.0),
-                                height: Val::Px(14.0),
-                                padding: UiRect::all(Val::Px(3.0)),
-                                ..default()
-                            },
-                            background_color: Color::rgb(0.75, 0.75, 0.75)
-                                .into(),
-                            visibility: Visibility::Hidden,
+            commands
+                .spawn((
+                    NodeBundle {
+                        style: Style {
+                            width: Val::Px(75.0),
+                            height: Val::Px(14.0),
+                            padding: UiRect::all(Val::Px(3.0)),
                             ..default()
                         },
-                        Background(entity),
-                        StateDespawnMarker,
-                    ))
-                    .with_children(|parent| {
-                        parent.spawn((
-                            MaterialNodeBundle {
-                                style: Style {
-                                    width: Val::Percent(100.0),
-                                    height: Val::Percent(100.0),
-                                    align_self: AlignSelf::Center,
-                                    ..default()
-                                },
-                                material: ui_materials.add(Material {
-                                    factor: 1.0,
-                                    background_color: Color::rgb(
-                                        0.15, 0.15, 0.15,
-                                    )
-                                    .into(),
-                                    filled_color: Color::rgb(
-                                        0.635, 0.196, 0.306,
-                                    )
-                                    .into(),
-                                }),
+                        background_color: Color::rgb(0.75, 0.75, 0.75).into(),
+                        visibility: Visibility::Hidden,
+                        ..default()
+                    },
+                    Root(entity),
+                    StateDespawnMarker,
+                ))
+                .with_children(|parent| {
+                    parent.spawn((
+                        MaterialNodeBundle {
+                            style: Style {
+                                width: Val::Percent(100.0),
+                                height: Val::Percent(100.0),
+                                align_self: AlignSelf::Center,
                                 ..default()
                             },
-                            Bar(entity),
-                        ));
-                    });
-            }
+                            material: material.add(Material {
+                                factor: 1.0,
+                                background_color: Color::rgb(0.15, 0.15, 0.15)
+                                    .into(),
+                                filled_color: Color::rgb(0.635, 0.196, 0.306)
+                                    .into(),
+                            }),
+                            ..default()
+                        },
+                        Bar(entity),
+                    ));
+                });
         }
     }
 }
 
 fn update_positions(
     mut commands: Commands,
-    entity_with_hp: Query<
-        (
-            &GlobalTransform,
-            Option<&Collider>,
-            Has<Player>,
-        ),
-        With<Health>,
+    enemy_q: Query<
+        (&GlobalTransform, Option<&Collider>),
+        (With<Health>, With<Enemy>),
     >,
-    mut hp_bar: Query<(Entity, &Background, &mut Style)>,
-    mut q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
+    mut hp_root_q: Query<(Entity, &Root, &mut Style)>,
+    mut camera_q: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
 ) {
-    let Some((camera_transform, camera)) = q_cam.iter().next() else {
+    let Some((camera_transform, camera)) = camera_q.iter().next() else {
         return;
     };
 
-    for (bg_entity, hp_bg, mut style) in hp_bar.iter_mut() {
-        if let Ok((global_transform, collider, has_player)) =
-            entity_with_hp.get(hp_bg.0)
-        {
-            if has_player {
-                continue;
-            }
-
+    for (bg_entity, hp_bg, mut style) in hp_root_q.iter_mut() {
+        if let Ok((global_transform, collider)) = enemy_q.get(hp_bg.0) {
             let mut world_position = global_transform.translation();
 
             // Makes the health bar float above the collider, if it exists
@@ -145,17 +143,17 @@ fn update_positions(
 }
 
 fn update_hp(
-    entity_with_hp: Query<&Health>,
-    mut hp_bar: Query<(&Bar, &Handle<Material>)>,
-    mut ui_materials: ResMut<Assets<Material>>,
+    enemy_q: Query<&Health, With<Enemy>>,
+    mut hp_bar_q: Query<(&Bar, &Handle<Material>)>,
+    mut material: ResMut<Assets<Material>>,
 ) {
-    for (hpbar, ui_mat_handle) in hp_bar.iter() {
-        if let Ok(health) = entity_with_hp.get(hpbar.0) {
-            if let Some(mat) = ui_materials.get_mut(ui_mat_handle) {
+    for (hp_bar, ui_mat_handle) in hp_bar_q.iter() {
+        if let Ok(health) = enemy_q.get(hp_bar.0) {
+            if let Some(mat) = material.get_mut(ui_mat_handle) {
                 mat.factor = 1.0 * (health.current as f32 / health.max as f32)
             }
         } else {
-            if let Some(mat) = ui_materials.get_mut(ui_mat_handle) {
+            if let Some(mat) = material.get_mut(ui_mat_handle) {
                 mat.factor = 0.0;
             }
         }
@@ -163,14 +161,11 @@ fn update_hp(
 }
 
 fn update_visibility(
-    entity_with_hp: Query<(Ref<Health>, Option<&Player>)>,
-    mut hp_bar: Query<(&Background, &mut Visibility)>,
+    enemy_q: Query<Ref<Health>, With<Enemy>>,
+    mut hp_root_q: Query<(&Root, &mut Visibility)>,
 ) {
-    for (hpbar, mut visibility) in hp_bar.iter_mut() {
-        if let Ok((health, player)) = entity_with_hp.get(hpbar.0) {
-            if player.is_some() {
-                continue;
-            }
+    for (hp_bar, mut visibility) in hp_root_q.iter_mut() {
+        if let Ok(health) = enemy_q.get(hp_bar.0) {
             if health.is_changed() {
                 if health.current == health.max {
                     *visibility = Visibility::Hidden
@@ -179,22 +174,5 @@ fn update_visibility(
                 }
             }
         }
-    }
-}
-
-#[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
-pub struct Material {
-    /// A number between `0` and `1` indicating how much of the bar should be filled.
-    #[uniform(0)]
-    pub factor: f32,
-    #[uniform(1)]
-    pub background_color: Color,
-    #[uniform(2)]
-    pub filled_color: Color,
-}
-
-impl UiMaterial for Material {
-    fn fragment_shader() -> ShaderRef {
-        "shaders/enemy_hp_bar.wgsl".into()
     }
 }
