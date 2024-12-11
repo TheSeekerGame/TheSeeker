@@ -346,7 +346,7 @@ impl Plugin for EnemyBehaviorPlugin {
                         ),
                         (
                             walking.run_if(any_with_component::<Walking>),
-                            retreating.run_if(any_with_component::<Retreating>),
+                            // retreating.run_if(any_with_component::<Retreating>),
                             chasing.run_if(any_with_component::<Chasing>),
                         ),
                     )
@@ -380,14 +380,14 @@ struct Walking {
 impl GentState for Walking {}
 impl GenericState for Walking {}
 
-#[derive(Component, Debug)]
-#[component(storage = "SparseSet")]
-struct Retreating {
-    ticks: u32,
-    max_ticks: u32,
-}
-impl GentState for Retreating {}
-impl GenericState for Retreating {}
+// #[derive(Component, Debug)]
+// #[component(storage = "SparseSet")]
+// struct Retreating {
+//     ticks: u32,
+//     max_ticks: u32,
+// }
+// impl GentState for Retreating {}
+// impl GenericState for Retreating {}
 
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
@@ -774,6 +774,7 @@ fn aggro(
             &Role,
             &Range,
             &Target,
+            &mut LinearVelocity,
             &mut TransitionQueue,
         ),
         (
@@ -785,7 +786,8 @@ fn aggro(
         ),
     >,
 ) {
-    for (role, range, target, mut transitions) in query.iter_mut() {
+    for (role, range, target, mut velocity, mut transitions) in query.iter_mut()
+    {
         if let Some(p_entity) = target.0 {
             let mut rng = rand::thread_rng();
             // return to patrol if out of aggro range
@@ -799,6 +801,7 @@ fn aggro(
                         ))
                     },
                     Role::Ranged => {
+                        velocity.x = 0.;
                         transitions.push(Waiting::new_transition(
                             Defense::default(),
                         ));
@@ -1041,7 +1044,7 @@ fn walking(
         ),
         (
             With<Enemy>,
-            Without<Retreating>,
+            // Without<Retreating>,
             Without<Knockback>,
         ),
     >,
@@ -1082,85 +1085,81 @@ fn walking(
     }
 }
 
-fn retreating(
-    mut query: Query<
-        (
-            &Range,
-            &Facing,
-            &mut Navigation,
-            &mut LinearVelocity,
-            &mut Retreating,
-            &mut TransitionQueue,
-        ),
-        (
-            With<Enemy>,
-            Without<Walking>,
-            Without<Knockback>,
-        ),
-    >,
-    player_query: Query<Entity, With<Player>>,
-) {
-    for (
-        range,
-        facing,
-        mut nav,
-        mut velocity,
-        mut retreating,
-        mut transitions,
-    ) in query.iter_mut()
-    {
-        velocity.x = 12. * facing.direction();
-        if matches!(*nav, Navigation::Blocked)
-            || retreating.ticks > retreating.max_ticks
-        {
-            velocity.x = 0.;
-            *nav = Navigation::Grounded;
-            match range {
-                Range::Melee => {
-                    transitions.push(Retreating::new_transition(
-                        Defense::default(),
-                    ));
-                },
-                Range::Ranged | Range::Aggro => {
-                    transitions.push(Retreating::new_transition(
-                        RangedAttack {
-                            target: player_query
-                                .get_single()
-                                .expect("no player"),
-                            ticks: 0,
-                        },
-                    ))
-                },
-                _ => {
-                    transitions.push(Retreating::new_transition(
-                        // RangedAttack {
-                        //     target: player_query.get_single().expect("no player"),
-                        //     ticks: 0,
-                        // },
-                        Waiting::default(),
-                    ))
-                },
-            }
-        } else if matches!(range, Range::Melee) {
-            velocity.x = 0.;
-            transitions.push(Retreating::new_transition(
-                Defense::default(),
-            ));
-        } else if matches!(range, Range::Ranged)
-            || matches!(range, Range::Aggro)
-        {
-            velocity.x = 0.;
-            transitions.push(Retreating::new_transition(
-                RangedAttack {
-                    target: player_query.get_single().expect("no player"),
-                    ticks: 0,
-                },
-            ));
-        }
-
-        retreating.ticks += 1;
-    }
-}
+// fn retreating(
+//     mut query: Query<
+//         (
+//             &Range,
+//             &Facing,
+//             &mut Navigation,
+//             &mut LinearVelocity,
+//             &mut Retreating,
+//             &mut TransitionQueue,
+//         ),
+//         (
+//             With<Enemy>,
+//             Without<Walking>,
+//             Without<Knockback>,
+//         ),
+//     >,
+//     player_query: Query<Entity, With<Player>>,
+// ) {
+//     for (
+//         range,
+//         facing,
+//         mut nav,
+//         mut velocity,
+//         mut retreating,
+//         mut transitions,
+//     ) in query.iter_mut()
+//     {
+//         velocity.x = 12. * facing.direction();
+//         if matches!(*nav, Navigation::Blocked)
+//             || retreating.ticks > retreating.max_ticks
+//         {
+//             velocity.x = 0.;
+//             *nav = Navigation::Grounded;
+//             match range {
+//                 Range::Melee => {
+//                     transitions.push(Retreating::new_transition(
+//                         Defense::default(),
+//                     ));
+//                 },
+//                 Range::Ranged | Range::Aggro => transitions.push(
+//                     Retreating::new_transition(RangedAttack {
+//                         target: player_query.get_single().expect("no player"),
+//                         ticks: 0,
+//                     }),
+//                 ),
+//                 _ => {
+//                     transitions.push(Retreating::new_transition(
+//                         // RangedAttack {
+//                         //     target: player_query.get_single().expect("no player"),
+//                         //     ticks: 0,
+//                         // },
+//                         Waiting::default(),
+//                     ))
+//                 },
+//             }
+//         } else if matches!(range, Range::Melee) {
+//             velocity.x = 0.;
+//             transitions.push(Retreating::new_transition(
+//                 Defense::default(),
+//             ));
+//         } else if matches!(range, Range::Ranged)
+//             || matches!(range, Range::Aggro)
+//         {
+//             velocity.x = 0.;
+//             transitions.push(Retreating::new_transition(
+//                 RangedAttack {
+//                     target: player_query.get_single().expect("no player"),
+//                     ticks: 0,
+//                 },
+//             ));
+//         }
+//
+//         retreating.ticks += 1;
+//     }
+// }
 
 fn chasing(
     mut query: Query<
@@ -1405,7 +1404,7 @@ impl Plugin for EnemyAnimationPlugin {
                 enemy_defense_animation,
                 enemy_walking_animation,
                 enemy_chasing_animation,
-                enemy_retreat_animation,
+                // enemy_retreat_animation,
                 enemy_ranged_attack_animation,
                 enemy_melee_attack_animation,
                 // enemy_pushback_attack_animation,
@@ -1542,16 +1541,16 @@ fn enemy_defense_animation(
 }
 
 // no longer used?
-fn enemy_retreat_animation(
-    i_query: Query<&Gent, (Added<Retreating>, With<Enemy>)>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-) {
-    for gent in i_query.iter() {
-        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.spider.Retreat");
-        }
-    }
-}
+// fn enemy_retreat_animation(
+//     i_query: Query<&Gent, (Added<Retreating>, With<Enemy>)>,
+//     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+// ) {
+//     for gent in i_query.iter() {
+//         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
+//             enemy.play_key("anim.spider.Retreat");
+//         }
+//     }
+// }
 
 fn enemy_death_animation(
     i_query: Query<(&Gent, &Role), (Added<Dead>, With<Enemy>)>,
