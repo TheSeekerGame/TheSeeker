@@ -16,8 +16,8 @@ mod merchant;
 pub mod physics;
 pub mod player;
 mod wall;
-mod yak;
 mod xp_orbs;
+mod yak;
 
 pub struct GameplayPlugin;
 
@@ -27,6 +27,9 @@ impl Plugin for GameplayPlugin {
         // so it is all in one place and easy to change!
         // Don't scatter it across the sub-modules/plugins!
         app.register_ldtk_int_cell::<wall::WallBundle>(17);
+        app.register_ldtk_int_cell::<wall::WallBundle>(18);
+        app.register_ldtk_int_cell::<wall::WallBundle>(19);
+        app.register_ldtk_int_cell::<wall::WallBundle>(20);
         app.register_ldtk_entity::<PlayerBlueprintBundle>("Player");
         app.register_ldtk_entity::<MerchantBlueprintBundle>("Merchant");
         app.register_ldtk_entity::<YakBlueprintBundle>("Yak");
@@ -43,7 +46,6 @@ impl Plugin for GameplayPlugin {
             wall::WallPlugin,
             game_over::GameOverPlugin,
             xp_orbs::XpPlugin,
-
         ));
     }
 }

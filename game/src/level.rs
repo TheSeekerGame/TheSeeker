@@ -136,9 +136,13 @@ fn attach_parallax(
         let mut use_parallax = true;
         let amount = match &*layer_metadata.identifier {
             "Background" => 0.4,
+            "TundraBackground" => 0.4,
             "FarBackground" => 0.3,
+            "TundraFarBackground" => 0.3,
             "MiddleBackground" => 0.2,
+            "TundraMiddleBackground" => 0.2,
             "NearBackground" => 0.1,
+            "TundraNearBackground" => 0.1,
             "Main" => {
                 commands.entity(entity).insert(MainBackround);
                 use_parallax = false;
