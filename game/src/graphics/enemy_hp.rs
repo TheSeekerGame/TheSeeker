@@ -17,6 +17,8 @@ use crate::game::gentstate::Dead;
 use crate::prelude::Update;
 
 const BACKGROUND_COLOR: Color = Color::rgba(0.5, 0.5, 0.5, 0.5);
+const ANIMATION_DELAY_IN_MILLIS: u64 = 600;
+const ANIMATION_SPEED: f32 = 0.2;
 
 pub struct EnemyHpBarPlugin;
 
@@ -111,7 +113,9 @@ fn instance(
                         Bar { parent: entity },
                         DamageAnimation {
                             delay: Timer::new(
-                                Duration::from_millis(1100),
+                                Duration::from_millis(
+                                    ANIMATION_DELAY_IN_MILLIS,
+                                ),
                                 TimerMode::Once,
                             ),
                             progress: Stopwatch::new(),
@@ -192,7 +196,8 @@ fn update_hp(
         }
 
         if damage_animation.delay.finished() {
-            material.damage = material.damage.lerp(health_factor, 0.1);
+            material.damage =
+                material.damage.lerp(health_factor, ANIMATION_SPEED);
         }
 
         material.health = health_factor;
