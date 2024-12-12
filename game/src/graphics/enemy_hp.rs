@@ -4,7 +4,6 @@ use anyhow::{anyhow, Result};
 use bevy::prelude::*;
 use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
-use bevy::time::Stopwatch;
 use bevy::utils;
 use glam::Vec2;
 use theseeker_engine::physics::Collider;
@@ -52,7 +51,6 @@ pub struct Bar {
 #[derive(Component)]
 pub struct DamageAnimation {
     delay: Timer,
-    progress: Stopwatch,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
@@ -118,7 +116,6 @@ fn instance(
                                 ),
                                 TimerMode::Once,
                             ),
-                            progress: Stopwatch::new(),
                         },
                     ));
                 });
@@ -192,7 +189,6 @@ fn update_hp(
         // Reset the damage animation on taking damage
         if material.health != health_factor {
             damage_animation.delay.reset();
-            damage_animation.progress.reset();
         }
 
         if damage_animation.delay.finished() {
@@ -212,9 +208,6 @@ fn tick_damage_animation(
 ) {
     for mut damage_animation in &mut damage_animation {
         damage_animation.delay.tick(time.delta());
-        if damage_animation.delay.finished() {
-            damage_animation.progress.tick(time.delta());
-        }
     }
 }
 
