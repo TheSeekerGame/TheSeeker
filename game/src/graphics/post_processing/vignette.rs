@@ -86,8 +86,8 @@ impl Default for VignetteSettings {
         Self {
             color: Vec3::new(0.0, 0.0, 0.0),
             base_brightness: 0.15,
-            radius: 0.4,
-            smoothness: 0.3,
+            radius: 0.1,
+            smoothness: 0.6,
             offset: Vec2::ZERO,
         }
     }
