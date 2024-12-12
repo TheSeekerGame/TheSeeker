@@ -1,6 +1,8 @@
+use anyhow::{anyhow, Result};
 use bevy::prelude::*;
 use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
+use bevy::utils;
 use glam::Vec2;
 use theseeker_engine::physics::Collider;
 
@@ -19,7 +21,7 @@ impl Plugin for EnemyHpBarPlugin {
         app.add_plugins(UiMaterialPlugin::<Material>::default());
         app.add_systems(Update, instance);
         app.add_systems(Update, update_positions);
-        app.add_systems(Update, update_hp);
+        app.add_systems(Update, update_hp.map(utils::dbg));
         app.add_systems(Update, update_visibility);
     }
 }
@@ -32,9 +34,12 @@ pub struct Bar(pub Entity);
 
 #[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
 pub struct Material {
-    /// A number between `0` and `1` indicating how much of the bar should be filled.
+    /// A number between `0` and `1` indicating the health amount.
     #[uniform(0)]
-    pub factor: f32,
+    pub health: f32,
+    /// A number between `0` and `1` indicating recent damage taken.
+    #[uniform(1)]
+    pub damaged: f32,
 }
 
 impl UiMaterial for Material {
@@ -75,7 +80,10 @@ fn instance(
                                 align_self: AlignSelf::Center,
                                 ..default()
                             },
-                            material: material.add(Material { factor: 1.0 }),
+                            material: material.add(Material {
+                                health: 1.0,
+                                damaged: 1.0,
+                            }),
                             ..default()
                         },
                         Bar(entity),
@@ -138,18 +146,17 @@ fn update_hp(
     enemy_q: Query<&Health, With<Enemy>>,
     mut hp_bar_q: Query<(&Bar, &Handle<Material>)>,
     mut material: ResMut<Assets<Material>>,
-) {
-    for (hp_bar, ui_mat_handle) in hp_bar_q.iter() {
-        if let Ok(health) = enemy_q.get(hp_bar.0) {
-            if let Some(mat) = material.get_mut(ui_mat_handle) {
-                mat.factor = 1.0 * (health.current as f32 / health.max as f32)
-            }
-        } else {
-            if let Some(mat) = material.get_mut(ui_mat_handle) {
-                mat.factor = 0.0;
-            }
-        }
+) -> Result<()> {
+    for (hp_bar, handle) in &hp_bar_q {
+        let health = enemy_q.get(hp_bar.0)?;
+        let material = material.get_mut(handle).ok_or(anyhow!(
+            "Enemy health bar material not found"
+        ))?;
+
+        material.health = 1.0 * (health.current as f32 / health.max as f32);
     }
+
+    Ok(())
 }
 
 fn update_visibility(
