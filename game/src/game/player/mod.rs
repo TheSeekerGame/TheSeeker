@@ -171,7 +171,8 @@ pub enum Passive {
     Speedy,
 }
 
-fn _debug_player_states(
+#[cfg(feature = "dev")]
+fn debug_player_states(
     query: Query<
         AnyOf<(
             Ref<Running>,
