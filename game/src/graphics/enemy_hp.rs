@@ -7,9 +7,7 @@ use bevy::render::render_resource::*;
 use bevy::time::Stopwatch;
 use bevy::utils;
 use glam::Vec2;
-use iyes_bevy_extras::system::any_added_component;
 use theseeker_engine::physics::Collider;
-use theseeker_engine::time::GameTickUpdate;
 
 use crate::appstate::StateDespawnMarker;
 use crate::camera::MainCamera;
@@ -31,7 +29,7 @@ impl Plugin for EnemyHpBarPlugin {
                 instance,
                 update_positions.map(utils::dbg),
                 update_hp.map(utils::dbg),
-                update_visibility,
+                update_visibility.map(utils::dbg),
                 tick_damage_animation,
                 despawn,
             ),
@@ -218,18 +216,18 @@ fn tick_damage_animation(
 fn update_visibility(
     enemy_q: Query<Ref<Health>, With<Enemy>>,
     mut hp_root_q: Query<(&Root, &mut Visibility)>,
-) {
+) -> Result<()> {
     for (hp_bar, mut visibility) in hp_root_q.iter_mut() {
-        if let Ok(health) = enemy_q.get(hp_bar.parent) {
-            if health.is_changed() {
-                if health.current == health.max {
-                    *visibility = Visibility::Hidden
-                } else {
-                    *visibility = Visibility::Inherited
-                }
+        let health = enemy_q.get(hp_bar.parent)?;
+        if health.is_changed() {
+            if health.current == health.max {
+                *visibility = Visibility::Hidden
+            } else {
+                *visibility = Visibility::Inherited
             }
         }
     }
+    Ok(())
 }
 
 fn despawn(
