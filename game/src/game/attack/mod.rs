@@ -287,7 +287,7 @@ pub fn apply_attack_modifications(
             if let Some(passives) = maybe_passives {
                 // backstab
                 // check this later on application of damage for each enemy
-                if passives.contains(&Passive::Backstab) {
+                if passives.contains(&Passive::IceDagger) {
                     commands.entity(entity).insert(Backstab);
                 }
             }

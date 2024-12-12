@@ -162,13 +162,17 @@ impl Passives {
 #[derive(Debug, Eq, PartialEq, Hash, EnumIter)]
 pub enum Passive {
     /// Heal when killing an enemy
-    Absorption,
+    Bloodstone,
     /// Crit every 3rd and 5th hit when low health
-    CritResolve,
-    Backstab,
-    CrowdCtrl,
-    Unmoving,
-    Speedy,
+    FlamingHeart,
+    /// Deal extra damage when backstabbing
+    IceDagger,
+    // TODO:
+    WhiteGlove,
+    GlowingShard,
+    ObsidionNecklace,
+    HeavyBoots,
+    SerpentRing,
 }
 
 #[cfg(feature = "dev")]
