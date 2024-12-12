@@ -65,7 +65,7 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                                     0.0, 0.0, 0.0, 0.0,
                                 )
                                 .into(),
-                                filled_color: Color::rgba(0.0, 0.0, 0.0, 0.6)
+                                filled_color: Color::rgba(0.25, 0.25, 0.0, 0.75)
                                     .into(),
                             });
                         w.entity_mut(entity).insert(handle);
