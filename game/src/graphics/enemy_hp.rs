@@ -7,12 +7,15 @@ use bevy::render::render_resource::*;
 use bevy::time::Stopwatch;
 use bevy::utils;
 use glam::Vec2;
+use iyes_bevy_extras::system::any_added_component;
 use theseeker_engine::physics::Collider;
+use theseeker_engine::time::GameTickUpdate;
 
 use crate::appstate::StateDespawnMarker;
 use crate::camera::MainCamera;
 use crate::game::attack::Health;
 use crate::game::enemy::Enemy;
+use crate::game::gentstate::Dead;
 use crate::prelude::Update;
 
 const BACKGROUND_COLOR: Color = Color::rgba(0.5, 0.5, 0.5, 0.5);
@@ -26,10 +29,11 @@ impl Plugin for EnemyHpBarPlugin {
             Update,
             (
                 instance,
-                update_positions,
+                update_positions.map(utils::dbg),
                 update_hp.map(utils::dbg),
                 update_visibility,
                 tick_damage_animation,
+                despawn,
             ),
         );
     }
@@ -81,6 +85,7 @@ fn instance(
                             width: Val::Px(60.0),
                             height: Val::Px(10.0),
                             padding: UiRect::horizontal(Val::Px(2.0)),
+                            position_type: PositionType::Absolute,
                             ..default()
                         },
                         background_color: BACKGROUND_COLOR.into(),
@@ -120,52 +125,49 @@ fn instance(
 }
 
 fn update_positions(
-    mut commands: Commands,
     enemy_q: Query<
         (&GlobalTransform, Option<&Collider>),
         (With<Health>, With<Enemy>),
     >,
-    mut hp_root_q: Query<(Entity, &Root, &mut Style)>,
+    mut hp_root_q: Query<(&Root, &mut Style)>,
     mut camera_q: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
-) {
-    let Some((camera_transform, camera)) = camera_q.iter().next() else {
-        return;
-    };
+) -> Result<()> {
+    let (camera_transform, camera) = camera_q.get_single()?;
 
-    for (bg_entity, hp_bg, mut style) in hp_root_q.iter_mut() {
-        if let Ok((global_transform, collider)) = enemy_q.get(hp_bg.parent) {
-            let mut world_position = global_transform.translation();
+    for (hp_root, mut style) in hp_root_q.iter_mut() {
+        let (global_transform, collider) = enemy_q.get(hp_root.parent)?;
+        let mut world_position = global_transform.translation();
 
-            // Makes the health bar float above the collider, if it exists
-            world_position += match collider {
-                Some(collider) => {
-                    let collider_height =
-                        collider.0.compute_aabb().half_extents().y;
-                    Vec3::new(0.0, collider_height, 0.0)
-                },
-                None => Vec3::ZERO,
-            };
+        // Makes the health bar float above the collider, if it exists
+        world_position += match collider {
+            Some(collider) => {
+                let collider_height =
+                    collider.0.compute_aabb().half_extents().y;
+                Vec3::new(0.0, collider_height, 0.0)
+            },
+            None => Vec3::ZERO,
+        };
 
-            let screen_position = camera
-                .world_to_viewport(camera_transform, world_position)
-                .unwrap_or_default();
+        let screen_position = camera
+            .world_to_viewport(camera_transform, world_position)
+            .ok_or(anyhow!(
+                "Unable to get screen position from camera."
+            ))?;
 
-            let width = match style.width {
-                Val::Px(value) => value,
-                _ => 100.0,
-            };
+        let width = match style.width {
+            Val::Px(value) => value,
+            _ => 100.0,
+        };
 
-            // center the bar, and make it hover above the collider
-            let mut offset = Vec2::ZERO + Vec2::new(-width * 0.5, -30.0);
+        // center the bar, and make it hover above the collider
+        let offset = Vec2::ZERO + Vec2::new(-width * 0.5, -30.0);
 
-            // Update the position of the health bar UI
-            style.left = Val::Px(screen_position.x + offset.x);
-            style.top = Val::Px(screen_position.y + offset.y);
-            style.position_type = PositionType::Absolute;
-        } else if hp_bg.parent != Entity::PLACEHOLDER {
-            commands.entity(bg_entity).despawn();
-        }
+        // Update the position of the health bar UI
+        style.left = Val::Px(screen_position.x + offset.x);
+        style.top = Val::Px(screen_position.y + offset.y);
     }
+
+    Ok(())
 }
 
 fn update_hp(
@@ -226,6 +228,22 @@ fn update_visibility(
                     *visibility = Visibility::Inherited
                 }
             }
+        }
+    }
+}
+
+fn despawn(
+    mut commands: Commands,
+    enemy_q: Query<Option<&Dead>, With<Enemy>>,
+    hp_root_q: Query<(Entity, &Root)>,
+) {
+    for (hp_entity, hp_root) in &hp_root_q {
+        match enemy_q.get(hp_root.parent) {
+            // Despawn if entity can't be found or is marked as dead.
+            Ok(Some(_)) | Err(_) => {
+                commands.entity(hp_entity).despawn_recursive()
+            },
+            Ok(None) => {},
         }
     }
 }
