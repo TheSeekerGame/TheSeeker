@@ -28,7 +28,7 @@ impl Plugin for DevPlugin {
             // FilterQueryInspectorPlugin::<(With<Enemy>)>::default(),
             // SteppingEguiPlugin::default().add_schedule(GameTickUpdate),
         ));
-        #[cfg(feature = "dev")]
+        #[cfg(feature = "inspector")]
         app.add_plugins(
             bevy_inspector_egui::quick::WorldInspectorPlugin::new(),
         );

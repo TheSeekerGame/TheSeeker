@@ -119,7 +119,7 @@ fn main() {
         crate::graphics::GraphicsFxPlugin,
     ));
 
-    //#[cfg(feature = "dev")]
+    #[cfg(feature = "dev")]
     app.add_plugins(crate::dev::DevPlugin);
 
     app.run();

@@ -52,6 +52,7 @@ path = "game/src/main.rs"
 
 [features]
 dev = ["bevy/file_watcher"]
+inspector = []
 
 # dev: Enable max optimizations for dependencies, but not for our code
 [profile.dev.package."*"]
