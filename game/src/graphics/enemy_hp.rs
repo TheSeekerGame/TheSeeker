@@ -1,7 +1,10 @@
+use std::time::Duration;
+
 use anyhow::{anyhow, Result};
 use bevy::prelude::*;
 use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
+use bevy::time::Stopwatch;
 use bevy::utils;
 use glam::Vec2;
 use theseeker_engine::physics::Collider;
@@ -19,27 +22,43 @@ pub struct EnemyHpBarPlugin;
 impl Plugin for EnemyHpBarPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(UiMaterialPlugin::<Material>::default());
-        app.add_systems(Update, instance);
-        app.add_systems(Update, update_positions);
-        app.add_systems(Update, update_hp.map(utils::dbg));
-        app.add_systems(Update, update_visibility);
+        app.add_systems(
+            Update,
+            (
+                instance,
+                update_positions,
+                update_hp.map(utils::dbg),
+                update_visibility,
+                tick_damage_animation,
+            ),
+        );
     }
 }
 
 #[derive(Component)]
-pub struct Root(pub Entity);
+pub struct Root {
+    pub parent: Entity,
+}
 
 #[derive(Component)]
-pub struct Bar(pub Entity);
+pub struct Bar {
+    pub parent: Entity,
+}
+
+#[derive(Component)]
+pub struct DamageAnimation {
+    delay: Timer,
+    progress: Stopwatch,
+}
 
 #[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
 pub struct Material {
     /// A number between `0` and `1` indicating the health amount.
     #[uniform(0)]
-    pub health: f32,
-    /// A number between `0` and `1` indicating recent damage taken.
+    health: f32,
+    /// The current position of the damage taken indicator.
     #[uniform(1)]
-    pub damaged: f32,
+    damage: f32,
 }
 
 impl UiMaterial for Material {
@@ -68,7 +87,7 @@ fn instance(
                         visibility: Visibility::Hidden,
                         ..default()
                     },
-                    Root(entity),
+                    Root { parent: entity },
                     StateDespawnMarker,
                 ))
                 .with_children(|parent| {
@@ -82,11 +101,18 @@ fn instance(
                             },
                             material: material.add(Material {
                                 health: 1.0,
-                                damaged: 1.0,
+                                damage: 1.0,
                             }),
                             ..default()
                         },
-                        Bar(entity),
+                        Bar { parent: entity },
+                        DamageAnimation {
+                            delay: Timer::new(
+                                Duration::from_millis(1100),
+                                TimerMode::Once,
+                            ),
+                            progress: Stopwatch::new(),
+                        },
                     ));
                 });
         }
@@ -107,7 +133,7 @@ fn update_positions(
     };
 
     for (bg_entity, hp_bg, mut style) in hp_root_q.iter_mut() {
-        if let Ok((global_transform, collider)) = enemy_q.get(hp_bg.0) {
+        if let Ok((global_transform, collider)) = enemy_q.get(hp_bg.parent) {
             let mut world_position = global_transform.translation();
 
             // Makes the health bar float above the collider, if it exists
@@ -136,7 +162,7 @@ fn update_positions(
             style.left = Val::Px(screen_position.x + offset.x);
             style.top = Val::Px(screen_position.y + offset.y);
             style.position_type = PositionType::Absolute;
-        } else if hp_bg.0 != Entity::PLACEHOLDER {
+        } else if hp_bg.parent != Entity::PLACEHOLDER {
             commands.entity(bg_entity).despawn();
         }
     }
@@ -144,19 +170,47 @@ fn update_positions(
 
 fn update_hp(
     enemy_q: Query<&Health, With<Enemy>>,
-    mut hp_bar_q: Query<(&Bar, &Handle<Material>)>,
+    mut hp_bar_q: Query<(
+        &Bar,
+        &Handle<Material>,
+        &mut DamageAnimation,
+    )>,
     mut material: ResMut<Assets<Material>>,
 ) -> Result<()> {
-    for (hp_bar, handle) in &hp_bar_q {
-        let health = enemy_q.get(hp_bar.0)?;
+    for (hp_bar, handle, mut damage_animation) in &mut hp_bar_q {
+        let health = enemy_q.get(hp_bar.parent)?;
         let material = material.get_mut(handle).ok_or(anyhow!(
             "Enemy health bar material not found"
         ))?;
 
-        material.health = 1.0 * (health.current as f32 / health.max as f32);
+        let health_factor = 1.0 * (health.current as f32 / health.max as f32);
+
+        // Reset the damage animation on taking damage
+        if material.health != health_factor {
+            damage_animation.delay.reset();
+            damage_animation.progress.reset();
+        }
+
+        if damage_animation.delay.finished() {
+            material.damage = material.damage.lerp(health_factor, 0.1);
+        }
+
+        material.health = health_factor;
     }
 
     Ok(())
+}
+
+fn tick_damage_animation(
+    mut damage_animation: Query<&mut DamageAnimation>,
+    time: Res<Time>,
+) {
+    for mut damage_animation in &mut damage_animation {
+        damage_animation.delay.tick(time.delta());
+        if damage_animation.delay.finished() {
+            damage_animation.progress.tick(time.delta());
+        }
+    }
 }
 
 fn update_visibility(
@@ -164,7 +218,7 @@ fn update_visibility(
     mut hp_root_q: Query<(&Root, &mut Visibility)>,
 ) {
     for (hp_bar, mut visibility) in hp_root_q.iter_mut() {
-        if let Ok(health) = enemy_q.get(hp_bar.0) {
+        if let Ok(health) = enemy_q.get(hp_bar.parent) {
             if health.is_changed() {
                 if health.current == health.max {
                     *visibility = Visibility::Hidden
