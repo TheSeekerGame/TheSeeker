@@ -148,11 +148,6 @@ fn attach_parallax(
                 use_parallax = false;
                 -transform.translation.z * 0.000001
             },
-            "TundraMain" => {
-                commands.entity(entity).insert(MainBackround);
-                use_parallax = false;
-                -transform.translation.z * 0.000001
-            },
             "Entities" => {
                 commands.entity(entity).try_insert(StateDespawnMarker);
                 continue;
