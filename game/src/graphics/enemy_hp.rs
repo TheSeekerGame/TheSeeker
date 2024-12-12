@@ -10,6 +10,8 @@ use crate::game::attack::Health;
 use crate::game::enemy::Enemy;
 use crate::prelude::Update;
 
+const BACKGROUND_COLOR: Color = Color::rgba(0.5, 0.5, 0.5, 0.5);
+
 pub struct EnemyHpBarPlugin;
 
 impl Plugin for EnemyHpBarPlugin {
@@ -33,10 +35,6 @@ pub struct Material {
     /// A number between `0` and `1` indicating how much of the bar should be filled.
     #[uniform(0)]
     pub factor: f32,
-    #[uniform(1)]
-    pub background_color: Color,
-    #[uniform(2)]
-    pub filled_color: Color,
 }
 
 impl UiMaterial for Material {
@@ -56,12 +54,12 @@ fn instance(
                 .spawn((
                     NodeBundle {
                         style: Style {
-                            width: Val::Px(75.0),
-                            height: Val::Px(14.0),
-                            padding: UiRect::all(Val::Px(3.0)),
+                            width: Val::Px(60.0),
+                            height: Val::Px(10.0),
+                            padding: UiRect::horizontal(Val::Px(2.0)),
                             ..default()
                         },
-                        background_color: Color::rgb(0.75, 0.75, 0.75).into(),
+                        background_color: BACKGROUND_COLOR.into(),
                         visibility: Visibility::Hidden,
                         ..default()
                     },
@@ -73,17 +71,11 @@ fn instance(
                         MaterialNodeBundle {
                             style: Style {
                                 width: Val::Percent(100.0),
-                                height: Val::Percent(100.0),
+                                height: Val::Percent(200.0),
                                 align_self: AlignSelf::Center,
                                 ..default()
                             },
-                            material: material.add(Material {
-                                factor: 1.0,
-                                background_color: Color::rgb(0.15, 0.15, 0.15)
-                                    .into(),
-                                filled_color: Color::rgb(0.635, 0.196, 0.306)
-                                    .into(),
-                            }),
+                            material: material.add(Material { factor: 1.0 }),
                             ..default()
                         },
                         Bar(entity),
