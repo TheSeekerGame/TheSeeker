@@ -350,7 +350,7 @@ fn setup_player(
                         KeyCode::KeyC,
                     ),
             },
-            // bundling things up becuase we reached max tuple
+            // bundling things up because we reached max tuple
             (
                 Falling,
                 CanDash {
@@ -645,7 +645,7 @@ pub struct PlayerConfig {
     /// How many seconds does our characters innate hover boots work?
     max_coyote_time: f32,
 
-    /// Onlly applies in the downward y direction while the player is falling
+    /// Only applies in the downward y direction while the player is falling
     /// and trying to walk into the wall
     sliding_friction: f32,
 
@@ -801,7 +801,7 @@ pub struct StatusModifier {
 
     /// Multiplying Factor on Stat, e.g. 102.0 * 0.5 = 51.0
     scalar: Vec<f32>,
-    /// Offseting Value on Stat, e.g. 100.0 - 10.0 = 90.0
+    /// Offsetting Value on Stat, e.g. 100.0 - 10.0 = 90.0
     delta: Vec<f32>,
 
     effect_col: Color,
