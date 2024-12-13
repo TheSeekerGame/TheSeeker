@@ -1,5 +1,6 @@
 mod player_anim;
 mod player_behaviour;
+mod player_weapon;
 use bevy::utils::hashbrown::HashMap;
 use leafwing_input_manager::action_state::ActionState;
 use leafwing_input_manager::axislike::VirtualAxis;
@@ -7,6 +8,7 @@ use leafwing_input_manager::input_map::InputMap;
 use leafwing_input_manager::{Actionlike, InputManagerBundle};
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
+use player_weapon::PlayerWeaponPlugin;
 use rapier2d::geometry::{Group, InteractionGroups};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -59,6 +61,7 @@ impl Plugin for PlayerPlugin {
             PlayerBehaviorPlugin,
             PlayerTransitionPlugin,
             PlayerAnimationPlugin,
+            PlayerWeaponPlugin,
         ));
 
         #[cfg(feature = "dev")]
