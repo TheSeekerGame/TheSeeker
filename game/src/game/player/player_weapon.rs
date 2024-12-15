@@ -1,4 +1,5 @@
 use leafwing_input_manager::prelude::ActionState;
+use strum_macros::Display;
 
 use crate::game::player::{Player, PlayerAction};
 use crate::prelude::{
@@ -14,11 +15,18 @@ impl Plugin for PlayerWeaponPlugin {
     }
 }
 
-#[derive(Resource, Default, PartialEq, Eq)]
+#[derive(Resource, Default, PartialEq, Eq, Display)]
 pub enum PlayerWeapon {
     Bow,
     #[default]
     Sword,
+}
+
+impl PlayerWeapon {
+    pub fn get_anim_key(&self, action: &str) -> String {
+        let weapon_str = self.to_string();
+        format!("anim.player.{weapon_str}{action}")
+    }
 }
 
 fn swap_weapon(
