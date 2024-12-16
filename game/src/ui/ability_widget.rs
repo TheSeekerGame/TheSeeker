@@ -20,7 +20,7 @@ pub trait UiAbilityWidgetExt<'w, 's> {
 }
 
 impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
-    /// Draws a 96.0x96.0 tile with a progress bar overlayed.
+    /// Draws a 96.0x96.0 tile with a progress bar overlaid.
     /// modify
     fn ability_widget<'a, T: Component + Clone>(
         &'a mut self,
@@ -49,7 +49,7 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                     config.tracking_component,
                 ),
                 |ability_card| {
-                    let entity = ability_card.context().clone();
+                    let entity = ability_card.context();
                     // Adds the progress bar material to the ui node
                     // Someone tell me theres a better way then this. I mean it works at least
                     ability_card.commands().add(move |w: &mut World| {
@@ -61,12 +61,8 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                         let handle =
                             ui_materials.add(ability_cooldown::Material {
                                 factor: 0.3,
-                                background_color: Color::rgba(
-                                    0.0, 0.0, 0.0, 0.0,
-                                )
-                                .into(),
-                                filled_color: Color::rgba(0.0, 0.0, 0.0, 0.6)
-                                    .into(),
+                                background_color: Color::rgba(0.0, 0.0, 0.0, 0.0),
+                                filled_color: Color::rgba(0.25, 0.25, 0.0, 0.75),
                             });
                         w.entity_mut(entity).insert(handle);
                         // Make the bar go from bottom to top
