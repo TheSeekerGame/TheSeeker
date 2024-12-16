@@ -1,6 +1,10 @@
+use std::time::Duration;
+
+use anyhow::{anyhow, Result};
 use bevy::prelude::*;
 use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
+use bevy::utils;
 use glam::Vec2;
 use theseeker_engine::physics::Collider;
 
@@ -8,35 +12,55 @@ use crate::appstate::StateDespawnMarker;
 use crate::camera::MainCamera;
 use crate::game::attack::Health;
 use crate::game::enemy::Enemy;
+use crate::game::gentstate::Dead;
 use crate::prelude::Update;
+
+const BACKGROUND_COLOR: Color = Color::rgba(0.5, 0.5, 0.5, 0.5);
+const ANIMATION_DELAY_IN_MILLIS: u64 = 600;
+const ANIMATION_SPEED: f32 = 0.2;
 
 pub struct EnemyHpBarPlugin;
 
 impl Plugin for EnemyHpBarPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(UiMaterialPlugin::<Material>::default());
-        app.add_systems(Update, instance);
-        app.add_systems(Update, update_positions);
-        app.add_systems(Update, update_hp);
-        app.add_systems(Update, update_visibility);
+        app.add_systems(
+            Update,
+            (
+                instance,
+                update_positions.map(utils::dbg),
+                update_hp.map(utils::dbg),
+                update_visibility.map(utils::dbg),
+                tick_damage_animation,
+                despawn,
+            ),
+        );
     }
 }
 
 #[derive(Component)]
-pub struct Root(pub Entity);
+pub struct Root {
+    pub parent: Entity,
+}
 
 #[derive(Component)]
-pub struct Bar(pub Entity);
+pub struct Bar {
+    pub parent: Entity,
+}
+
+#[derive(Component)]
+pub struct DamageAnimation {
+    delay: Timer,
+}
 
 #[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
 pub struct Material {
-    /// A number between `0` and `1` indicating how much of the bar should be filled.
+    /// A number between `0` and `1` indicating the health amount.
     #[uniform(0)]
-    pub factor: f32,
+    health: f32,
+    /// The current position of the damage taken indicator.
     #[uniform(1)]
-    pub background_color: Color,
-    #[uniform(2)]
-    pub filled_color: Color,
+    damage: f32,
 }
 
 impl UiMaterial for Material {
@@ -56,16 +80,17 @@ fn instance(
                 .spawn((
                     NodeBundle {
                         style: Style {
-                            width: Val::Px(75.0),
-                            height: Val::Px(14.0),
-                            padding: UiRect::all(Val::Px(3.0)),
+                            width: Val::Px(60.0),
+                            height: Val::Px(10.0),
+                            padding: UiRect::horizontal(Val::Px(2.0)),
+                            position_type: PositionType::Absolute,
                             ..default()
                         },
-                        background_color: Color::rgb(0.75, 0.75, 0.75).into(),
+                        background_color: BACKGROUND_COLOR.into(),
                         visibility: Visibility::Hidden,
                         ..default()
                     },
-                    Root(entity),
+                    Root { parent: entity },
                     StateDespawnMarker,
                 ))
                 .with_children(|parent| {
@@ -73,20 +98,25 @@ fn instance(
                         MaterialNodeBundle {
                             style: Style {
                                 width: Val::Percent(100.0),
-                                height: Val::Percent(100.0),
+                                height: Val::Percent(200.0),
                                 align_self: AlignSelf::Center,
                                 ..default()
                             },
                             material: material.add(Material {
-                                factor: 1.0,
-                                background_color: Color::rgb(0.15, 0.15, 0.15)
-                                    .into(),
-                                filled_color: Color::rgb(0.635, 0.196, 0.306)
-                                    .into(),
+                                health: 1.0,
+                                damage: 1.0,
                             }),
                             ..default()
                         },
-                        Bar(entity),
+                        Bar { parent: entity },
+                        DamageAnimation {
+                            delay: Timer::new(
+                                Duration::from_millis(
+                                    ANIMATION_DELAY_IN_MILLIS,
+                                ),
+                                TimerMode::Once,
+                            ),
+                        },
                     ));
                 });
         }
@@ -94,85 +124,122 @@ fn instance(
 }
 
 fn update_positions(
-    mut commands: Commands,
     enemy_q: Query<
         (&GlobalTransform, Option<&Collider>),
         (With<Health>, With<Enemy>),
     >,
-    mut hp_root_q: Query<(Entity, &Root, &mut Style)>,
+    mut hp_root_q: Query<(&Root, &mut Style)>,
     mut camera_q: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
-) {
-    let Some((camera_transform, camera)) = camera_q.iter().next() else {
-        return;
-    };
+) -> Result<()> {
+    let (camera_transform, camera) = camera_q.get_single()?;
 
-    for (bg_entity, hp_bg, mut style) in hp_root_q.iter_mut() {
-        if let Ok((global_transform, collider)) = enemy_q.get(hp_bg.0) {
-            let mut world_position = global_transform.translation();
+    for (hp_root, mut style) in hp_root_q.iter_mut() {
+        let (global_transform, collider) = enemy_q.get(hp_root.parent)?;
+        let mut world_position = global_transform.translation();
 
-            // Makes the health bar float above the collider, if it exists
-            world_position += match collider {
-                Some(collider) => {
-                    let collider_height =
-                        collider.0.compute_aabb().half_extents().y;
-                    Vec3::new(0.0, collider_height, 0.0)
-                },
-                None => Vec3::ZERO,
-            };
+        // Makes the health bar float above the collider, if it exists
+        world_position += match collider {
+            Some(collider) => {
+                let collider_height =
+                    collider.0.compute_aabb().half_extents().y;
+                Vec3::new(0.0, collider_height, 0.0)
+            },
+            None => Vec3::ZERO,
+        };
 
-            let screen_position = camera
-                .world_to_viewport(camera_transform, world_position)
-                .unwrap_or_default();
+        let screen_position = camera
+            .world_to_viewport(camera_transform, world_position)
+            .ok_or(anyhow!(
+                "Unable to get screen position from camera."
+            ))?;
 
-            let width = match style.width {
-                Val::Px(value) => value,
-                _ => 100.0,
-            };
+        let width = match style.width {
+            Val::Px(value) => value,
+            _ => 100.0,
+        };
 
-            // center the bar, and make it hover above the collider
-            let mut offset = Vec2::ZERO + Vec2::new(-width * 0.5, -30.0);
+        // center the bar, and make it hover above the collider
+        let offset = Vec2::ZERO + Vec2::new(-width * 0.5, -30.0);
 
-            // Update the position of the health bar UI
-            style.left = Val::Px(screen_position.x + offset.x);
-            style.top = Val::Px(screen_position.y + offset.y);
-            style.position_type = PositionType::Absolute;
-        } else if hp_bg.0 != Entity::PLACEHOLDER {
-            commands.entity(bg_entity).despawn();
-        }
+        // Update the position of the health bar UI
+        style.left = Val::Px(screen_position.x + offset.x);
+        style.top = Val::Px(screen_position.y + offset.y);
     }
+
+    Ok(())
 }
 
 fn update_hp(
     enemy_q: Query<&Health, With<Enemy>>,
-    mut hp_bar_q: Query<(&Bar, &Handle<Material>)>,
+    mut hp_bar_q: Query<(
+        &Bar,
+        &Handle<Material>,
+        &mut DamageAnimation,
+    )>,
     mut material: ResMut<Assets<Material>>,
-) {
-    for (hp_bar, ui_mat_handle) in hp_bar_q.iter() {
-        if let Ok(health) = enemy_q.get(hp_bar.0) {
-            if let Some(mat) = material.get_mut(ui_mat_handle) {
-                mat.factor = 1.0 * (health.current as f32 / health.max as f32)
-            }
-        } else {
-            if let Some(mat) = material.get_mut(ui_mat_handle) {
-                mat.factor = 0.0;
-            }
+) -> Result<()> {
+    for (hp_bar, handle, mut damage_animation) in &mut hp_bar_q {
+        let health = enemy_q.get(hp_bar.parent)?;
+        let material = material.get_mut(handle).ok_or(anyhow!(
+            "Enemy health bar material not found"
+        ))?;
+
+        let health_factor = 1.0 * (health.current as f32 / health.max as f32);
+
+        // Reset the damage animation on taking damage
+        if material.health != health_factor {
+            damage_animation.delay.reset();
         }
+
+        if damage_animation.delay.finished() {
+            material.damage =
+                material.damage.lerp(health_factor, ANIMATION_SPEED);
+        }
+
+        material.health = health_factor;
+    }
+
+    Ok(())
+}
+
+fn tick_damage_animation(
+    mut damage_animation: Query<&mut DamageAnimation>,
+    time: Res<Time>,
+) {
+    for mut damage_animation in &mut damage_animation {
+        damage_animation.delay.tick(time.delta());
     }
 }
 
 fn update_visibility(
     enemy_q: Query<Ref<Health>, With<Enemy>>,
     mut hp_root_q: Query<(&Root, &mut Visibility)>,
-) {
+) -> Result<()> {
     for (hp_bar, mut visibility) in hp_root_q.iter_mut() {
-        if let Ok(health) = enemy_q.get(hp_bar.0) {
-            if health.is_changed() {
-                if health.current == health.max {
-                    *visibility = Visibility::Hidden
-                } else {
-                    *visibility = Visibility::Inherited
-                }
+        let health = enemy_q.get(hp_bar.parent)?;
+        if health.is_changed() {
+            if health.current == health.max {
+                *visibility = Visibility::Hidden
+            } else {
+                *visibility = Visibility::Inherited
             }
+        }
+    }
+    Ok(())
+}
+
+fn despawn(
+    mut commands: Commands,
+    enemy_q: Query<Option<&Dead>, With<Enemy>>,
+    hp_root_q: Query<(Entity, &Root)>,
+) {
+    for (hp_entity, hp_root) in &hp_root_q {
+        match enemy_q.get(hp_root.parent) {
+            // Despawn if entity can't be found or is marked as dead.
+            Ok(Some(_)) | Err(_) => {
+                commands.entity(hp_entity).despawn_recursive()
+            },
+            Ok(None) => {},
         }
     }
 }
