@@ -66,7 +66,7 @@ lto = false
 # release: Enable LTO and limit codegen units for better codegen
 [profile.release]
 opt-level = 3
-#lto = true
+lto = "thin"
 #codegen-units = 1
 debug = false
 
