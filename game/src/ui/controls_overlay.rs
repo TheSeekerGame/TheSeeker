@@ -30,6 +30,7 @@ fn setup(mut commands: Commands) {
                 row.text(" or ");
                 row.control_icon("[^]");
             });
+            container.spacer();
             container.row().with_children(|row| {
                 row.text("Attack: ");
                 row.control_icon("J");
@@ -60,10 +61,12 @@ fn setup(mut commands: Commands) {
                 row.text(" or ");
                 row.control_icon("`");
             });
+            container.spacer();
             container.row().with_children(|row| {
                 row.text("Interact: ");
                 row.control_icon("F");
             });
+            container.spacer();
             container.row().with_children(|row| {
                 row.text("Show/Hide Controls: ");
                 row.control_icon("C");
@@ -78,6 +81,7 @@ trait ControlsOverlay {
     fn row(&mut self) -> EntityCommands;
     fn text(&mut self, string: impl Into<String>) -> EntityCommands;
     fn control_icon(&mut self, string: impl Into<String>) -> EntityCommands;
+    fn spacer(&mut self) -> EntityCommands;
 }
 
 impl<T: Spawn> ControlsOverlay for T {
@@ -182,5 +186,21 @@ impl<T: Spawn> ControlsOverlay for T {
         });
 
         entity
+    }
+
+    fn spacer(&mut self) -> EntityCommands {
+        self.spawn((
+            Name::new("controls_overlay_spacer"),
+            NodeBundle {
+                style: Style {
+                    height: Val::Px(1.0),
+                    width: Val::Percent(100.0),
+                    margin: UiRect::all(Val::Px(2.0)),
+                    ..default()
+                },
+                background_color: BackgroundColor(Color::rgb(0.2, 0.1, 0.15)),
+                ..default()
+            },
+        ))
     }
 }
