@@ -9,18 +9,21 @@ pub(super) fn plugin(app: &mut App) {
 
 fn setup(mut commands: Commands) {
     commands.root().with_children(|root| {
-        root.container();
+        root.container().with_children(|container| {
+            container.text("Test");
+        });
     });
 }
 
 trait ControlsOverlay {
     fn root(&mut self) -> EntityCommands;
     fn container(&mut self) -> EntityCommands;
+    fn text(&mut self, string: impl Into<String>) -> EntityCommands;
 }
 
 impl<T: Spawn> ControlsOverlay for T {
     fn root(&mut self) -> EntityCommands {
-        self.ui_spawn((
+        self.spawn((
             Name::new("controls_overlay_root"),
             StateDespawnMarker,
             NodeBundle {
@@ -42,7 +45,7 @@ impl<T: Spawn> ControlsOverlay for T {
     }
 
     fn container(&mut self) -> EntityCommands {
-        self.ui_spawn((
+        self.spawn((
             Name::new("controls_overlay_container"),
             NodeBundle {
                 style: Style {
@@ -54,6 +57,20 @@ impl<T: Spawn> ControlsOverlay for T {
                 background_color: BackgroundColor(Color::rgb(0.3, 0.32, 0.28)),
                 ..default()
             },
+        ))
+    }
+
+    fn text(&mut self, value: impl Into<String>) -> EntityCommands {
+        self.spawn((
+            Name::new("controls_overlay_text"),
+            TextBundle::from_section(
+                value,
+                TextStyle {
+                    font_size: 12.0,
+                    color: Color::rgb(1.0, 1.0, 1.0),
+                    ..default()
+                },
+            ),
         ))
     }
 }

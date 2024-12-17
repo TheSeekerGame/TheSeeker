@@ -120,17 +120,17 @@ pub fn button<'w, 's, 'a>(
 }
 
 trait Spawn {
-    fn ui_spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands;
+    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands;
 }
 
 impl Spawn for Commands<'_, '_> {
-    fn ui_spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
+    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
         Commands::spawn(self, bundle)
     }
 }
 
 impl Spawn for ChildBuilder<'_> {
-    fn ui_spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
+    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
         ChildBuilder::spawn(self, bundle)
     }
 }
