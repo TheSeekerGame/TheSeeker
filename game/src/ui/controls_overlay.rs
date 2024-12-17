@@ -27,8 +27,10 @@ impl<T: Spawn> ControlsOverlay for T {
                 style: Style {
                     display: Display::Flex,
                     position_type: PositionType::Absolute,
-                    width: Val::Px(100.0),
-                    height: Val::Px(100.0),
+                    width: Val::Percent(100.0),
+                    height: Val::Percent(100.0),
+                    justify_content: JustifyContent::Center,
+                    align_items: AlignItems::Center,
                     ..default()
                 },
                 background_color: BackgroundColor(Color::rgba(
@@ -49,7 +51,7 @@ impl<T: Spawn> ControlsOverlay for T {
                     height: Val::Px(100.0),
                     ..default()
                 },
-                background_color: BackgroundColor(Color::rgb(1.0, 1.0, 1.0)),
+                background_color: BackgroundColor(Color::rgb(0.3, 0.32, 0.28)),
                 ..default()
             },
         ))
