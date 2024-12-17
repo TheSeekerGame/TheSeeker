@@ -3,6 +3,12 @@ use bevy::prelude::*;
 
 use super::{AppState, Spawn, StateDespawnMarker};
 
+const OVERLAY_COLOR: Color = Color::rgba(0.08, 0.10, 0.06, 0.65);
+const BACKGROUND_COLOR: Color = Color::rgb(0.22, 0.27, 0.18);
+const ICON_BACKGROUND_COLOR: Color = Color::rgb(0.32, 0.37, 0.28);
+const TEXT_COLOR: Color = Color::rgb(0.98, 0.99, 0.94);
+const SPACER_COLOR: Color = Color::rgb(0.20, 0.25, 0.15);
+
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(OnEnter(AppState::InGame), setup);
 }
@@ -99,9 +105,7 @@ impl<T: Spawn> ControlsOverlay for T {
                     align_items: AlignItems::Center,
                     ..default()
                 },
-                background_color: BackgroundColor(Color::rgba(
-                    0.0, 0.0, 0.0, 0.5,
-                )),
+                background_color: BackgroundColor(OVERLAY_COLOR),
                 ..default()
             },
         ))
@@ -117,7 +121,7 @@ impl<T: Spawn> ControlsOverlay for T {
                     padding: UiRect::all(Val::Px(12.0)),
                     ..default()
                 },
-                background_color: BackgroundColor(Color::rgb(0.3, 0.32, 0.28)),
+                background_color: BackgroundColor(BACKGROUND_COLOR),
                 ..default()
             },
         ))
@@ -148,7 +152,7 @@ impl<T: Spawn> ControlsOverlay for T {
                 value,
                 TextStyle {
                     font_size: 14.0,
-                    color: Color::rgb(1.0, 1.0, 1.0),
+                    color: TEXT_COLOR,
                     ..default()
                 },
             ),
@@ -166,7 +170,7 @@ impl<T: Spawn> ControlsOverlay for T {
                     min_width: Val::Px(20.0),
                     ..default()
                 },
-                background_color: BackgroundColor(Color::rgb(0.2, 0.2, 0.2)),
+                background_color: BackgroundColor(ICON_BACKGROUND_COLOR),
                 ..default()
             },
         ));
@@ -178,7 +182,7 @@ impl<T: Spawn> ControlsOverlay for T {
                     value,
                     TextStyle {
                         font_size: 14.0,
-                        color: Color::rgb(1.0, 1.0, 1.0),
+                        color: TEXT_COLOR,
                         ..default()
                     },
                 ),
@@ -193,12 +197,12 @@ impl<T: Spawn> ControlsOverlay for T {
             Name::new("controls_overlay_spacer"),
             NodeBundle {
                 style: Style {
-                    height: Val::Px(1.0),
+                    height: Val::Px(2.0),
                     width: Val::Percent(100.0),
-                    margin: UiRect::all(Val::Px(2.0)),
+                    margin: UiRect::vertical(Val::Px(7.0)),
                     ..default()
                 },
-                background_color: BackgroundColor(Color::rgb(0.2, 0.1, 0.15)),
+                background_color: BackgroundColor(SPACER_COLOR),
                 ..default()
             },
         ))
