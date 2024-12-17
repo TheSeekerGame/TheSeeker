@@ -54,7 +54,7 @@ fn main() {
     let bevy_plugins = bevy_plugins.set(WindowPlugin {
         primary_window: Some(Window {
             title: "The Seeker (PRE-ALPHA)".into(),
-            present_mode: bevy::window::PresentMode::Fifo,
+            present_mode: bevy::window::PresentMode::AutoNoVsync,
             resizable: true,
             ..Default::default()
         }),
