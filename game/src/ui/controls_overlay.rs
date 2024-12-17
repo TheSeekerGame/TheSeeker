@@ -30,6 +30,44 @@ fn setup(mut commands: Commands) {
                 row.text(" or ");
                 row.control_icon("[^]");
             });
+            container.row().with_children(|row| {
+                row.text("Attack: ");
+                row.control_icon("J");
+                row.text(" or ");
+                row.control_icon("1");
+            });
+            container.row().with_children(|row| {
+                row.text("Dash: ");
+                row.control_icon("K");
+                row.text(" or ");
+                row.control_icon("2");
+            });
+            container.row().with_children(|row| {
+                row.text("Whirl: ");
+                row.control_icon("L");
+                row.text(" or ");
+                row.control_icon("3");
+            });
+            container.row().with_children(|row| {
+                row.text("Stealth: ");
+                row.control_icon(";");
+                row.text(" or ");
+                row.control_icon("4");
+            });
+            container.row().with_children(|row| {
+                row.text("Swap Weapon: ");
+                row.control_icon("H");
+                row.text(" or ");
+                row.control_icon("`");
+            });
+            container.row().with_children(|row| {
+                row.text("Interact: ");
+                row.control_icon("F");
+            });
+            container.row().with_children(|row| {
+                row.text("Show/Hide Controls: ");
+                row.control_icon("C");
+            });
         });
     });
 }
@@ -91,7 +129,7 @@ impl<T: Spawn> ControlsOverlay for T {
                     height: Val::Auto,
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Start,
-                    padding: UiRect::vertical(Val::Px(4.0)),
+                    padding: UiRect::vertical(Val::Px(2.0)),
                     ..default()
                 },
                 ..default()
@@ -121,7 +159,7 @@ impl<T: Spawn> ControlsOverlay for T {
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Center,
                     padding: UiRect::all(Val::Px(4.0)),
-                    min_width: Val::Px(24.0),
+                    min_width: Val::Px(20.0),
                     ..default()
                 },
                 background_color: BackgroundColor(Color::rgb(0.2, 0.2, 0.2)),
@@ -135,7 +173,7 @@ impl<T: Spawn> ControlsOverlay for T {
                 TextBundle::from_section(
                     value,
                     TextStyle {
-                        font_size: 16.0,
+                        font_size: 14.0,
                         color: Color::rgb(1.0, 1.0, 1.0),
                         ..default()
                     },
