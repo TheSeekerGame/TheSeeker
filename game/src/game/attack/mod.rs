@@ -8,7 +8,7 @@ use theseeker_engine::physics::{
     update_sprite_colliders, Collider, PhysicsWorld, GROUND,
 };
 
-use super::enemy::{Defense, EnemyGfx, EnemyStateSet, JustGotHitMarker};
+use super::enemy::{Defense, EnemyGfx, EnemyStateSet};
 use super::gentstate::{Dead, Facing};
 use super::physics::Knockback;
 use super::player::{
@@ -291,6 +291,9 @@ pub fn apply_attack_modifications(
                     commands.entity(entity).insert(Backstab);
                 }
             }
+
+            //damage multiplier?
+            //for crits and closeness and whatnot
         }
         if !has_hit {
             commands.entity(entity).insert(Hit);
@@ -360,10 +363,11 @@ pub fn apply_attack_damage(
                         },
                     };
                     if is_backstab {
-                        damage *= 2;
+                        damage *= 3;
                     }
                 }
                 if is_defending {
+                    //TODO: switch to defense modifiers
                     damage /= 4;
                 }
 
@@ -372,9 +376,6 @@ pub fn apply_attack_damage(
                 if let Some(stat_modifier) = &attack.status_mod {
                     commands.entity(t_entity).insert(stat_modifier.clone());
                 }
-
-                // apply JustGotHitMarker TODO: switch hitspark to damage_info events
-                commands.entity(t_entity).insert(JustGotHitMarker);
 
                 // apply damage to the targets health
                 health.current = health.current.saturating_sub(damage);
@@ -412,6 +413,7 @@ pub fn despawn_projectile(
     }
 }
 
+//TODO: move into apply damage
 pub fn kill_on_damage(
     query: Query<(Entity, &Health), With<Gent>>,
     mut damage_events: EventReader<DamageInfo>,
@@ -425,6 +427,9 @@ pub fn kill_on_damage(
         }
     }
 }
+
+///
+// on_kill_lifesteal
 
 /// Applies camera shaker on first hit if attacker is player
 fn on_hit_cam_shake(
@@ -451,10 +456,13 @@ fn on_hit_self_pushback(
 
 /// Heals attacker on first hit of a Stealthed attack
 fn on_hit_lifesteal(
-    query: Query<(&Attack, Has<Crit>), (Added<Hit>, With<Stealthed>)>,
+    query: Query<
+        (&Attack, Has<Crit>, Has<Stealthed>),
+        (Added<Hit>, With<Stealthed>),
+    >,
     mut health_query: Query<&mut Health, Without<Attack>>,
 ) {
-    for (attack, is_crit) in query.iter() {
+    for (attack, is_crit, is_stealthed) in query.iter() {
         if let Ok(mut health) = health_query.get_mut(attack.attacker) {
             // heal by 100 percent or 20 percent max health
             let stealth_lifesteal = if is_crit { 1. } else { 0.2 };

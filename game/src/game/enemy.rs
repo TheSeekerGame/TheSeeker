@@ -476,9 +476,6 @@ impl Waiting {
 impl GentState for Waiting {}
 impl GenericState for Waiting {}
 
-#[derive(Component)]
-pub struct JustGotHitMarker;
-
 #[derive(Component, Reflect)]
 enum Navigation {
     Grounded,
@@ -795,11 +792,9 @@ fn aggro(
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if matches!(range, Range::Melee) {
                 match role {
-                    Role::Melee => {
-                        transitions.push(Waiting::new_transition(
-                            MeleeAttack::default(),
-                        ))
-                    },
+                    Role::Melee => transitions.push(Waiting::new_transition(
+                        MeleeAttack::default(),
+                    )),
                     Role::Ranged => {
                         velocity.x = 0.;
                         transitions.push(Waiting::new_transition(
@@ -1422,37 +1417,38 @@ impl Plugin for EnemyAnimationPlugin {
 }
 
 fn enemy_sparks_on_hit_animation(
-    i_query: Query<(Entity, &Gent), (Added<JustGotHitMarker>, With<Enemy>)>,
+    i_query: Query<&Gent, With<Enemy>>,
+    mut damage_events: EventReader<DamageInfo>,
     mut gfx_query: Query<
         &mut ScriptPlayer<SpriteAnimation>,
         With<EnemyEffectGfx>,
     >,
-    mut commands: Commands,
     player_facing_dir: Query<&Facing, With<Player>>,
 ) {
-    for (e, gent) in i_query.iter() {
-        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_effects_gfx) {
-            let mut rng = thread_rng();
-            let picked_spark = rng.gen_range(1..=6);
-            enemy.play_key("anim.spider.Sparks");
-            enemy.clear_slots();
-            enemy.set_slot(
-                format!("Spark{picked_spark}").as_str(),
-                true,
-            );
-            if let Ok(direction) = player_facing_dir.get_single() {
-                match direction {
-                    Facing::Right => {
-                        enemy.set_slot("DirectionRight", true);
-                        enemy.set_slot("DirectionLeft", false);
-                    },
-                    Facing::Left => {
-                        enemy.set_slot("DirectionRight", false);
-                        enemy.set_slot("DirectionLeft", true);
-                    },
-                };
+    for damage_info in damage_events.read() {
+        if let Ok(enemy) = i_query.get(damage_info.target) {
+            if let Ok(mut hit_gfx) = gfx_query.get_mut(enemy.e_effects_gfx) {
+                let mut rng = thread_rng();
+                let picked_spark = rng.gen_range(1..=6);
+                hit_gfx.play_key("anim.spider.Sparks");
+                hit_gfx.clear_slots();
+                hit_gfx.set_slot(
+                    format!("Spark{picked_spark}").as_str(),
+                    true,
+                );
+                if let Ok(direction) = player_facing_dir.get_single() {
+                    match direction {
+                        Facing::Right => {
+                            hit_gfx.set_slot("DirectionRight", true);
+                            hit_gfx.set_slot("DirectionLeft", false);
+                        },
+                        Facing::Left => {
+                            hit_gfx.set_slot("DirectionRight", false);
+                            hit_gfx.set_slot("DirectionLeft", true);
+                        },
+                    };
+                }
             }
-            commands.entity(e).remove::<JustGotHitMarker>();
         }
     }
 }

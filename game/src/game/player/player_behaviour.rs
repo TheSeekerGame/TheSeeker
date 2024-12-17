@@ -14,9 +14,9 @@ use theseeker_engine::physics::{
 use theseeker_engine::script::ScriptPlayer;
 
 use super::{
-    dash_icon_fx, player_dash_fx, player_new_stats_mod, AttackBundle,
-    CanStealth, DashIcon, JumpCount, KillCount, Knockback, Passives,
-    PlayerStats, Pushback, StatType, Stealthing, Whirling,
+    dash_icon_fx, player_dash_fx, AttackBundle, CanStealth, DashIcon,
+    JumpCount, Knockback, Passives, PlayerStats, Pushback, StatType,
+    Stealthing, Whirling,
 };
 use crate::camera::CameraShake;
 use crate::game::attack::{Attack, SelfPushback, Stealthed};
@@ -28,10 +28,9 @@ use crate::game::player::{
     PlayerGfx, PlayerStateSet, Running, WallSlideTime, WhirlAbility,
 };
 use crate::prelude::{
-    any_with_component, resource_changed, App, BuildChildren, Commands,
-    DetectChanges, Direction2d, Entity, GameTickUpdate, GameTime, Has,
-    IntoSystemConfigs, Plugin, Query, Res, Transform, TransformBundle, With,
-    Without,
+    any_with_component, App, BuildChildren, Commands, DetectChanges,
+    Direction2d, Entity, GameTickUpdate, GameTime, Has, IntoSystemConfigs,
+    Plugin, Query, Res, Transform, TransformBundle, With, Without,
 };
 
 /// Player behavior systems.
@@ -44,10 +43,8 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                (gain_passives.run_if(resource_changed::<KillCount>)),
                 (
                     player_idle.run_if(any_with_component::<Idle>),
-                    player_new_stats_mod,
                     add_attack,
                     player_stealth,
                     player_whirl_charge.before(player_whirl),
@@ -91,19 +88,6 @@ impl Plugin for PlayerBehaviorPlugin {
             )
                 .chain(),
         );
-    }
-}
-
-fn gain_passives(
-    mut query: Query<&mut Passives, With<Player>>,
-    kills: Res<KillCount>,
-    player_config: Res<PlayerConfig>,
-) {
-    for mut passives in query.iter_mut() {
-        if **kills % player_config.passive_gain_rate == 0 {
-            passives.gain();
-            println!("{:?}", passives);
-        }
     }
 }
 

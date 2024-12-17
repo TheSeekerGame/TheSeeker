@@ -32,11 +32,13 @@ impl Plugin for PlayerPlugin {
             GameTickUpdate,
             (
                 load_player_config,
-                load_player_stats
-                    .before(PlayerStateSet::Behavior)
-                    .after(load_player_config)
-                    .run_if(resource_changed::<PlayerConfig>),
-            ),
+                load_player_stats.run_if(resource_changed::<PlayerConfig>),
+                player_update_stats_mod,
+                gain_passives.run_if(resource_changed::<KillCount>),
+                player_update_passive_buffs,
+            )
+                .chain()
+                .before(PlayerStateSet::Behavior),
         );
         app.add_systems(Startup, load_dash_asset);
         app.add_systems(
@@ -159,6 +161,7 @@ impl Passives {
     }
 }
 
+//they could also be components...limit only by the pickup/gain function instead of sized hashmap
 #[derive(Debug, Eq, PartialEq, Hash, EnumIter)]
 pub enum Passive {
     /// Heal when killing an enemy
@@ -167,12 +170,29 @@ pub enum Passive {
     FlamingHeart,
     /// Deal extra damage when backstabbing
     IceDagger,
-    // TODO:
+    // TODO: skill switch damage boost
     WhiteGlove,
+    // TODO: damage scaling based on number of enemies nearby
     GlowingShard,
+    // TODO: crits lower cooldown of all abilities by 0.5 sec
     ObsidionNecklace,
+    // TODO: increased damage while standing still, decreased while moving
     HeavyBoots,
+    // TODO: move faster, get cdr, take double damage
     SerpentRing,
+}
+
+fn gain_passives(
+    mut query: Query<&mut Passives, With<Player>>,
+    kills: Res<KillCount>,
+    player_config: Res<PlayerConfig>,
+) {
+    for mut passives in query.iter_mut() {
+        if **kills % player_config.passive_gain_rate == 0 {
+            passives.gain();
+            println!("{:?}", passives);
+        }
+    }
 }
 
 #[cfg(feature = "dev")]
@@ -773,6 +793,8 @@ pub enum StatType {
     MoveVelMax,
     MoveAccelInit,
     MoveAccel,
+    AttackMulti,
+    DefenseMulti,
 }
 /// For now, Status Modifier is implemented so that only one Status Modifier is active at a time.
 /// However, a single Status Modifier can modify multiple Stats.
@@ -869,13 +891,47 @@ impl PlayerStats {
     }
 }
 
-fn player_new_stats_mod(
+//TODO: only for SerpentRing and GlowingShard currently
+fn player_update_passive_buffs(
+    mut query: Query<(
+        &Passives,
+        &LinearVelocity,
+        &mut PlayerStats,
+    )>,
+) {
+    for (passives, vel, mut stats) in query.iter_mut() {
+        let mut attack_multi = 1.0;
+        let mut defense_multi = 1.0;
+        let mut speed_multi = 1.0;
+        if passives.contains(&Passive::GlowingShard) {
+            //TODO: need spatial index check, +10% for every enemy nearby
+            attack_multi += 0.1;
+        }
+        if passives.contains(&Passive::SerpentRing) {
+            speed_multi *= 1.2;
+            defense_multi * 0.5;
+        }
+        if passives.contains(&Passive::HeavyBoots) {
+            //if we are moving
+            if vel.length() > 0.0001 {
+                attack_multi * 0.5;
+                defense_multi * 0.5;
+            } else {
+                attack_multi *= 2.;
+                defense_multi *= 2.;
+            };
+        }
+    }
+}
+
+fn player_update_stats_mod(
     mut query: Query<(
         Entity,
         &mut StatusModifier,
         &mut PlayerStats,
     )>,
     mut gfx_query: Query<(&PlayerGfx, &mut Sprite)>,
+    //TODO: switch to ticks
     time: Res<Time<Virtual>>,
     mut commands: Commands,
 ) {
@@ -892,6 +948,7 @@ fn player_new_stats_mod(
 
         sprite.color = modifier.effect_col;
 
+        //TODO: switch to ticks
         modifier.time_remaining -= time.delta_seconds();
 
         if modifier.time_remaining < 0. {
