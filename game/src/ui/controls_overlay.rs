@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::Result;
 use bevy::ecs::system::EntityCommands;
 use bevy::prelude::*;
@@ -12,6 +14,15 @@ const BACKGROUND_COLOR: Color = Color::rgb(0.22, 0.27, 0.18);
 const ICON_BACKGROUND_COLOR: Color = Color::rgb(0.32, 0.37, 0.28);
 const TEXT_COLOR: Color = Color::rgb(0.98, 0.99, 0.94);
 const SPACER_COLOR: Color = Color::rgb(0.20, 0.25, 0.15);
+const POPUP_DURATION_SECONDS: u64 = 5;
+
+#[derive(Component)]
+struct ControlsOverlay;
+
+#[derive(Component)]
+struct ControlsPopup {
+    timer: Timer,
+}
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
@@ -23,7 +34,10 @@ pub(super) fn plugin(app: &mut App) {
     )
     .add_systems(
         Update,
-        toggle_control_overlay.map(utils::dbg),
+        (
+            toggle_control_overlay.map(utils::dbg),
+            hide_popup,
+        ),
     );
 }
 
@@ -105,10 +119,7 @@ fn spawn_control_overlay(mut commands: Commands) {
     });
 }
 
-#[derive(Component)]
-struct ControlOverlayRoot;
-
-trait ControlsOverlay {
+trait ControlsOverlayUi {
     fn root(&mut self) -> EntityCommands;
     fn container(&mut self) -> EntityCommands;
     fn row(&mut self) -> EntityCommands;
@@ -118,11 +129,11 @@ trait ControlsOverlay {
     fn popup(&mut self) -> EntityCommands;
 }
 
-impl<T: Spawn> ControlsOverlay for T {
+impl<T: Spawn> ControlsOverlayUi for T {
     fn root(&mut self) -> EntityCommands {
         self.spawn((
             Name::new("controls_overlay_root"),
-            ControlOverlayRoot,
+            ControlsOverlay,
             StateDespawnMarker,
             NodeBundle {
                 style: Style {
@@ -241,6 +252,12 @@ impl<T: Spawn> ControlsOverlay for T {
     fn popup(&mut self) -> EntityCommands {
         self.spawn((
             Name::new("controls_popup"),
+            ControlsPopup {
+                timer: Timer::new(
+                    Duration::from_secs(POPUP_DURATION_SECONDS),
+                    TimerMode::Once,
+                ),
+            },
             NodeBundle {
                 style: Style {
                     margin: UiRect::new(
@@ -261,7 +278,7 @@ impl<T: Spawn> ControlsOverlay for T {
 
 fn toggle_control_overlay(
     action_state_q: Query<&ActionState<PlayerAction>>,
-    mut control_overlay_q: Query<&mut Visibility, With<ControlOverlayRoot>>,
+    mut control_overlay_q: Query<&mut Visibility, With<ControlsOverlay>>,
 ) -> Result<()> {
     let action_state = action_state_q.get_single()?;
     if action_state.just_pressed(&PlayerAction::ToggleControlOverlay) {
@@ -276,4 +293,17 @@ fn toggle_control_overlay(
     }
 
     Ok(())
+}
+
+fn hide_popup(
+    mut control_overlay_q: Query<(Entity, &mut ControlsPopup)>,
+    time: Res<Time>,
+    mut commands: Commands,
+) {
+    for (entity, mut popup) in &mut control_overlay_q {
+        popup.timer.tick(time.delta());
+        if popup.timer.finished() {
+            commands.entity(entity).despawn_recursive();
+        }
+    }
 }
