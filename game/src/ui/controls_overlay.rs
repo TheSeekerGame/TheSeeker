@@ -1,7 +1,11 @@
+use anyhow::Result;
 use bevy::ecs::system::EntityCommands;
 use bevy::prelude::*;
+use bevy::utils;
+use leafwing_input_manager::prelude::ActionState;
 
 use super::{AppState, Spawn, StateDespawnMarker};
+use crate::game::player::PlayerAction;
 
 const OVERLAY_COLOR: Color = Color::rgba(0.08, 0.10, 0.06, 0.65);
 const BACKGROUND_COLOR: Color = Color::rgb(0.22, 0.27, 0.18);
@@ -10,7 +14,11 @@ const TEXT_COLOR: Color = Color::rgb(0.98, 0.99, 0.94);
 const SPACER_COLOR: Color = Color::rgb(0.20, 0.25, 0.15);
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(AppState::InGame), setup);
+    app.add_systems(OnEnter(AppState::InGame), setup)
+        .add_systems(
+            Update,
+            toggle_control_overlay.map(utils::dbg),
+        );
 }
 
 fn setup(mut commands: Commands) {
@@ -81,6 +89,9 @@ fn setup(mut commands: Commands) {
     });
 }
 
+#[derive(Component)]
+struct ControlOverlayRoot;
+
 trait ControlsOverlay {
     fn root(&mut self) -> EntityCommands;
     fn container(&mut self) -> EntityCommands;
@@ -94,6 +105,7 @@ impl<T: Spawn> ControlsOverlay for T {
     fn root(&mut self) -> EntityCommands {
         self.spawn((
             Name::new("controls_overlay_root"),
+            ControlOverlayRoot,
             StateDespawnMarker,
             NodeBundle {
                 style: Style {
@@ -105,6 +117,7 @@ impl<T: Spawn> ControlsOverlay for T {
                     align_items: AlignItems::Center,
                     ..default()
                 },
+                visibility: Visibility::Hidden,
                 background_color: BackgroundColor(OVERLAY_COLOR),
                 ..default()
             },
@@ -207,4 +220,23 @@ impl<T: Spawn> ControlsOverlay for T {
             },
         ))
     }
+}
+
+fn toggle_control_overlay(
+    action_state_q: Query<&ActionState<PlayerAction>>,
+    mut control_overlay_q: Query<&mut Visibility, With<ControlOverlayRoot>>,
+) -> Result<()> {
+    let action_state = action_state_q.get_single()?;
+    if action_state.just_pressed(&PlayerAction::ToggleControlOverlay) {
+        for mut visibility in &mut control_overlay_q {
+            *visibility = match *visibility {
+                Visibility::Inherited | Visibility::Visible => {
+                    Visibility::Hidden
+                },
+                Visibility::Hidden => Visibility::Visible,
+            }
+        }
+    }
+
+    Ok(())
 }
