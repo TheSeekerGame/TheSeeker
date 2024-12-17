@@ -104,6 +104,7 @@ smallvec = "1.13.2"
 
 bevy_sprite3d = "2.8"
 iyes_perf_ui = "0.2.3"
+num_cpus = "1.16.0"
 
 [dependencies.serde]
 version = "1.0.196"

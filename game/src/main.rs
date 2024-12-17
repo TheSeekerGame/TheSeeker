@@ -9,6 +9,7 @@ mod prelude {
     pub use crate::gamestate::GameState;
 }
 
+use bevy::core::TaskPoolThreadAssignmentPolicy;
 use bevy::ecs::schedule::ExecutorKind;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
@@ -64,6 +65,31 @@ fn main() {
     let bevy_plugins = bevy_plugins.set(RenderPlugin {
         render_creation: wgpu_settings.into(),
         synchronous_pipeline_compilation: false,
+    });
+
+    let cpus = num_cpus::get_physical();
+    let cpus_io = (cpus * 3 / 4).max(2);
+    let cpus_async_compute = (cpus / 4).max(2);
+    let bevy_plugins = bevy_plugins.set(TaskPoolPlugin {
+        task_pool_options: TaskPoolOptions {
+            min_total_threads: 1,
+            max_total_threads: usize::MAX,
+            io: TaskPoolThreadAssignmentPolicy {
+                min_threads: cpus_io,
+                max_threads: cpus_io,
+                percent: 1.0,
+            },
+            async_compute: TaskPoolThreadAssignmentPolicy {
+                min_threads: cpus_async_compute,
+                max_threads: cpus_async_compute,
+                percent: 1.0,
+            },
+            compute: TaskPoolThreadAssignmentPolicy {
+                min_threads: cpus,
+                max_threads: cpus,
+                percent: 1.0,
+            },
+        },
     });
 
     #[cfg(feature = "dev")]
