@@ -10,8 +10,10 @@ pub(super) fn plugin(app: &mut App) {
 fn setup(mut commands: Commands) {
     commands.root().with_children(|root| {
         root.container().with_children(|container| {
-            container.text("Move Left: ");
-            container.control_icon("A");
+            container.row().with_children(|row| {
+                row.text("Move Left: ");
+                row.control_icon("A");
+            });
         });
     });
 }
@@ -19,6 +21,7 @@ fn setup(mut commands: Commands) {
 trait ControlsOverlay {
     fn root(&mut self) -> EntityCommands;
     fn container(&mut self) -> EntityCommands;
+    fn row(&mut self) -> EntityCommands;
     fn text(&mut self, string: impl Into<String>) -> EntityCommands;
     fn control_icon(&mut self, string: impl Into<String>) -> EntityCommands;
 }
@@ -51,12 +54,27 @@ impl<T: Spawn> ControlsOverlay for T {
             Name::new("controls_overlay_container"),
             NodeBundle {
                 style: Style {
-                    display: Display::Flex,
-                    width: Val::Px(200.0),
-                    height: Val::Px(100.0),
+                    padding: UiRect::all(Val::Px(12.0)),
                     ..default()
                 },
                 background_color: BackgroundColor(Color::rgb(0.3, 0.32, 0.28)),
+                ..default()
+            },
+        ))
+    }
+
+    fn row(&mut self) -> EntityCommands {
+        self.spawn((
+            Name::new("controls_overlay_row"),
+            NodeBundle {
+                style: Style {
+                    display: Display::Flex,
+                    width: Val::Percent(100.0),
+                    height: Val::Auto,
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Start,
+                    ..default()
+                },
                 ..default()
             },
         ))
@@ -68,7 +86,7 @@ impl<T: Spawn> ControlsOverlay for T {
             TextBundle::from_section(
                 value,
                 TextStyle {
-                    font_size: 12.0,
+                    font_size: 16.0,
                     color: Color::rgb(1.0, 1.0, 1.0),
                     ..default()
                 },
@@ -84,6 +102,8 @@ impl<T: Spawn> ControlsOverlay for T {
                     align_items: AlignItems::Center,
                     justify_content: JustifyContent::Center,
                     padding: UiRect::all(Val::Px(4.0)),
+                    min_width: Val::Px(24.0),
+                    height: Val::Px(24.0),
                     ..default()
                 },
                 background_color: BackgroundColor(Color::rgb(0.2, 0.2, 0.2)),
@@ -97,7 +117,7 @@ impl<T: Spawn> ControlsOverlay for T {
                 TextBundle::from_section(
                     value,
                     TextStyle {
-                        font_size: 12.0,
+                        font_size: 18.0,
                         color: Color::rgb(1.0, 1.0, 1.0),
                         ..default()
                     },
