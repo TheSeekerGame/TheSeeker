@@ -1,4 +1,4 @@
-use bevy::ecs::schedule::ScheduleLabel;
+use bevy::ecs::schedule::{ExecutorKind, ScheduleLabel};
 
 use crate::prelude::*;
 
@@ -8,6 +8,12 @@ impl Plugin for GameTimePlugin {
     fn build(&self, app: &mut App) {
         app.init_schedule(GameTickUpdate);
         app.init_schedule(GameTickPost);
+        app.edit_schedule(GameTickUpdate, |s| {
+            s.set_executor_kind(ExecutorKind::SingleThreaded);
+        });
+        app.edit_schedule(GameTickPost, |s| {
+            s.set_executor_kind(ExecutorKind::SingleThreaded);
+        });
         app.init_resource::<GameTime>();
         app.add_systems(
             Update,

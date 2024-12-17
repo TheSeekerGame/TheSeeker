@@ -9,6 +9,7 @@ mod prelude {
     pub use crate::gamestate::GameState;
 }
 
+use bevy::ecs::schedule::ExecutorKind;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use iyes_perf_ui::PerfUiPlugin;
@@ -121,6 +122,10 @@ fn main() {
 
     #[cfg(feature = "dev")]
     app.add_plugins(crate::dev::DevPlugin);
+
+    app.edit_schedule(Update, |s| {
+        s.set_executor_kind(ExecutorKind::SingleThreaded);
+    });
 
     app.run();
 }
