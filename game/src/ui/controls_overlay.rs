@@ -10,7 +10,8 @@ pub(super) fn plugin(app: &mut App) {
 fn setup(mut commands: Commands) {
     commands.root().with_children(|root| {
         root.container().with_children(|container| {
-            container.text("Test");
+            container.text("Move Left: ");
+            container.control_icon("A");
         });
     });
 }
@@ -19,6 +20,7 @@ trait ControlsOverlay {
     fn root(&mut self) -> EntityCommands;
     fn container(&mut self) -> EntityCommands;
     fn text(&mut self, string: impl Into<String>) -> EntityCommands;
+    fn control_icon(&mut self, string: impl Into<String>) -> EntityCommands;
 }
 
 impl<T: Spawn> ControlsOverlay for T {
@@ -72,5 +74,37 @@ impl<T: Spawn> ControlsOverlay for T {
                 },
             ),
         ))
+    }
+
+    fn control_icon(&mut self, value: impl Into<String>) -> EntityCommands {
+        let mut entity = self.spawn((
+            Name::new("controls_overlay_icon"),
+            NodeBundle {
+                style: Style {
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    padding: UiRect::all(Val::Px(4.0)),
+                    ..default()
+                },
+                background_color: BackgroundColor(Color::rgb(0.2, 0.2, 0.2)),
+                ..default()
+            },
+        ));
+
+        entity.with_children(|node| {
+            node.spawn((
+                Name::new("controls_overlay_icon_text"),
+                TextBundle::from_section(
+                    value,
+                    TextStyle {
+                        font_size: 12.0,
+                        color: Color::rgb(1.0, 1.0, 1.0),
+                        ..default()
+                    },
+                ),
+            ));
+        });
+
+        entity
     }
 }
