@@ -14,14 +14,30 @@ const TEXT_COLOR: Color = Color::rgb(0.98, 0.99, 0.94);
 const SPACER_COLOR: Color = Color::rgb(0.20, 0.25, 0.15);
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(OnEnter(AppState::InGame), setup)
-        .add_systems(
-            Update,
-            toggle_control_overlay.map(utils::dbg),
-        );
+    app.add_systems(
+        OnEnter(AppState::InGame),
+        (
+            spawn_control_overlay,
+            spawn_control_hint,
+        ),
+    )
+    .add_systems(
+        Update,
+        toggle_control_overlay.map(utils::dbg),
+    );
 }
 
-fn setup(mut commands: Commands) {
+fn spawn_control_hint(mut commands: Commands) {
+    commands.popup().with_children(|popup| {
+        popup.row().with_children(|row| {
+            row.text("Press ");
+            row.control_icon("C");
+            row.text(" to show Controls");
+        });
+    });
+}
+
+fn spawn_control_overlay(mut commands: Commands) {
     commands.root().with_children(|root| {
         root.container().with_children(|container| {
             container.row().with_children(|row| {
@@ -99,6 +115,7 @@ trait ControlsOverlay {
     fn text(&mut self, string: impl Into<String>) -> EntityCommands;
     fn control_icon(&mut self, string: impl Into<String>) -> EntityCommands;
     fn spacer(&mut self) -> EntityCommands;
+    fn popup(&mut self) -> EntityCommands;
 }
 
 impl<T: Spawn> ControlsOverlay for T {
@@ -216,6 +233,26 @@ impl<T: Spawn> ControlsOverlay for T {
                     ..default()
                 },
                 background_color: BackgroundColor(SPACER_COLOR),
+                ..default()
+            },
+        ))
+    }
+
+    fn popup(&mut self) -> EntityCommands {
+        self.spawn((
+            Name::new("controls_popup"),
+            NodeBundle {
+                style: Style {
+                    margin: UiRect::new(
+                        Val::Auto,
+                        Val::Auto,
+                        Val::Percent(65.0),
+                        Val::Auto,
+                    ),
+                    padding: UiRect::axes(Val::Px(16.0), Val::Px(4.0)),
+                    ..default()
+                },
+                background_color: BackgroundColor(OVERLAY_COLOR),
                 ..default()
             },
         ))
