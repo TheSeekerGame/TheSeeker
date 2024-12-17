@@ -118,7 +118,6 @@ fn main() {
     // external plugins
     app.add_plugins((
         LdtkPlugin,
-        bevy_tweening::TweeningPlugin,
         bevy_fluent::FluentPlugin,
         iyes_bevy_extras::d2::WorldCursorPlugin,
         ProgressPlugin::new(AppState::AssetsLoading)

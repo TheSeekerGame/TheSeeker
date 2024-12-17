@@ -132,9 +132,6 @@ version = "0.1.16"
 git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
 features = ["default", "use_3d_pipeline", "background_tiles"]
 
-[dependencies.bevy_tweening]
-version = "0.10"
-
 [dependencies.iyes_bevy_extras]
 git = "https://github.com/IyesGames/iyes_bevy_extras"
 rev = "3b016ca6e2c3dc4b0cae1b037f0ae25c48ca0878"
