@@ -118,7 +118,7 @@ impl<T: Spawn> ControlsOverlay for T {
                 style: Style {
                     display: Display::Flex,
                     flex_direction: FlexDirection::Column,
-                    padding: UiRect::all(Val::Px(12.0)),
+                    padding: UiRect::axes(Val::Px(24.0), Val::Px(12.0)),
                     ..default()
                 },
                 background_color: BackgroundColor(BACKGROUND_COLOR),
