@@ -36,7 +36,7 @@ pub(super) fn plugin(app: &mut App) {
         Update,
         (
             toggle_control_overlay.map(utils::dbg),
-            hide_popup,
+            hide_popup.map(utils::dbg),
         ),
     );
 }
@@ -300,14 +300,22 @@ fn toggle_control_overlay(
 }
 
 fn hide_popup(
+    action_state_q: Query<&ActionState<PlayerAction>>,
     mut control_overlay_q: Query<(Entity, &mut ControlsPopup)>,
     time: Res<Time>,
     mut commands: Commands,
-) {
+) -> Result<()> {
     for (entity, mut popup) in &mut control_overlay_q {
         popup.timer.tick(time.delta());
         if popup.timer.finished() {
             commands.entity(entity).despawn_recursive();
+        } else {
+            let action_state = action_state_q.get_single()?;
+            if action_state.just_pressed(&PlayerAction::ToggleControlOverlay) {
+                commands.entity(entity).despawn_recursive();
+            }
         }
     }
+
+    Ok(())
 }
