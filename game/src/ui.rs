@@ -1,3 +1,4 @@
+use bevy::ecs::system::EntityCommands;
 use sickle_ui::ui_builder::UiBuilder;
 use sickle_ui::widgets::prelude::UiContainerExt;
 
@@ -9,6 +10,7 @@ use crate::ui::skill_toolbar::SkillToolbarPlugin;
 
 pub mod ability_widget;
 mod console;
+mod controls_overlay;
 mod kill_counter;
 mod mainmenu;
 mod skill_toolbar;
@@ -19,6 +21,7 @@ impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(iyes_ui::UiExtrasPlugin);
         app.add_plugins((
+            controls_overlay::plugin,
             self::console::UiConsolePlugin,
             self::mainmenu::MainMenuPlugin,
             SkillToolbarPlugin,
@@ -114,4 +117,20 @@ pub fn button<'w, 's, 'a>(
             ));
         },
     )
+}
+
+trait Spawn {
+    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands;
+}
+
+impl Spawn for Commands<'_, '_> {
+    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
+        Commands::spawn(self, bundle)
+    }
+}
+
+impl Spawn for ChildBuilder<'_> {
+    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
+        ChildBuilder::spawn(self, bundle)
+    }
 }

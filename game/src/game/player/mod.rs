@@ -121,6 +121,9 @@ pub enum PlayerAction {
     Dash,
     Whirl,
     Stealth,
+    SwapWeapon,
+    Interact,
+    ToggleControlOverlay,
 }
 
 #[derive(Component, Debug, Deref, DerefMut)]
@@ -322,11 +325,27 @@ fn setup_player(
                             KeyCode::ArrowRight,
                         ),
                     )
-                    .with(PlayerAction::Attack, KeyCode::Enter)
+                    .with(PlayerAction::Attack, KeyCode::Digit1)
                     .with(PlayerAction::Attack, KeyCode::KeyJ)
                     .with(PlayerAction::Dash, KeyCode::KeyK)
+                    .with(PlayerAction::Dash, KeyCode::Digit2)
                     .with(PlayerAction::Whirl, KeyCode::KeyL)
-                    .with(PlayerAction::Stealth, KeyCode::KeyI),
+                    .with(PlayerAction::Whirl, KeyCode::Digit3)
+                    .with(
+                        PlayerAction::Stealth,
+                        KeyCode::Semicolon,
+                    )
+                    .with(PlayerAction::Stealth, KeyCode::Digit4)
+                    .with(PlayerAction::SwapWeapon, KeyCode::KeyH)
+                    .with(
+                        PlayerAction::SwapWeapon,
+                        KeyCode::Backquote,
+                    )
+                    .with(PlayerAction::Interact, KeyCode::KeyF)
+                    .with(
+                        PlayerAction::ToggleControlOverlay,
+                        KeyCode::KeyC,
+                    ),
             },
             // bundling things up becuase we reached max tuple
             (
