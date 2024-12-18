@@ -86,3 +86,6 @@ melee_pushback_ticks = 12.0
 
 # Number of kills to trigger passive gain
 passive_gain_rate = 3.0
+
+# Velocity of the projectiles fired by the Bow weapon
+arrow_velocity = 1000.0
