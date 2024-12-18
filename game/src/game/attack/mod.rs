@@ -135,6 +135,11 @@ impl Attack {
         self.status_mod = Some(modif);
         self
     }
+
+    pub fn with_max_targets(mut self, max_targets: u32) -> Self {
+        self.max_targets = max_targets;
+        self
+    }
 }
 
 /// Event sent when damage is applied
