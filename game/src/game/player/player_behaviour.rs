@@ -581,7 +581,7 @@ pub fn player_collisions(
                             if dashing.is_none() && whirling.is_none() {
                                 let sliding_plane =
                                     into_vec2(first_hit.normal1);
-                                // configurable theshold for collision normal/sliding plane in case of physics instability
+                                // configurable threshold for collision normal/sliding plane in case of physics instability
                                 let threshold = 0.000001;
                                 if !(1. - threshold..=1. + threshold)
                                     .contains(&sliding_plane.y)
@@ -634,7 +634,7 @@ pub fn player_collisions(
                             let friction_force = if projected_velocity.y < -0.0
                             {
                                 // make sure at least 1/2 of player is against the wall
-                                // (because it looks wierd to have the character hanging by their head)
+                                // (because it looks weird to have the character hanging by their head)
                                 if spatial_query
                                     .ray_cast(
                                         pos.translation.xy(),
