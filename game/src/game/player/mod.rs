@@ -696,6 +696,9 @@ pub struct PlayerConfig {
     /// Ticks for melee knockback velocity; determines how long movement is locked for
     melee_pushback_ticks: u32,
 
+    /// Velocity of the projectiles fired by the Bow weapon
+    arrow_velocity: f32,
+
     /// How many kills to trigger a passive gain
     passive_gain_rate: u32,
 }
@@ -769,6 +772,7 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
     update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "passive_gain_rate", |val| config.passive_gain_rate = val as u32);
+    update_field(&mut errors, &cfg.0, "arrow_velocity", |val| config.arrow_velocity = val);
 
     for error in errors{
        warn!("failed to load player cfg value: {}", error);
