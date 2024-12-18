@@ -10,8 +10,8 @@ use super::{AppState, Spawn, StateDespawnMarker};
 use crate::game::player::PlayerAction;
 
 const OVERLAY_COLOR: Color = Color::rgba(0.08, 0.10, 0.06, 0.65);
-const BACKGROUND_COLOR: Color = Color::rgb(0.22, 0.27, 0.18);
-const ICON_BACKGROUND_COLOR: Color = Color::rgb(0.32, 0.37, 0.28);
+const BACKGROUND_COLOR: Color = Color::rgba(0.22, 0.27, 0.18, 0.8);
+const ICON_BACKGROUND_COLOR: Color = Color::rgba(0.32, 0.37, 0.28, 0.8);
 const TEXT_COLOR: Color = Color::rgb(0.98, 0.99, 0.94);
 const SPACER_COLOR: Color = Color::rgb(0.20, 0.25, 0.15);
 const POPUP_DURATION_SECONDS: u64 = 5;
@@ -137,12 +137,9 @@ impl<T: Spawn> ControlsOverlayUi for T {
             StateDespawnMarker,
             NodeBundle {
                 style: Style {
-                    display: Display::Flex,
                     position_type: PositionType::Absolute,
                     width: Val::Percent(100.0),
                     height: Val::Percent(100.0),
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
                     ..default()
                 },
                 visibility: Visibility::Hidden,
@@ -157,6 +154,13 @@ impl<T: Spawn> ControlsOverlayUi for T {
             Name::new("controls_overlay_container"),
             NodeBundle {
                 style: Style {
+                    position_type: PositionType::Absolute,
+                    margin: UiRect {
+                        left: Val::Percent(25.0),
+                        right: Val::Auto,
+                        top: Val::Auto,
+                        bottom: Val::Auto,
+                    },
                     display: Display::Flex,
                     flex_direction: FlexDirection::Column,
                     padding: UiRect::axes(Val::Px(24.0), Val::Px(12.0)),
@@ -269,7 +273,7 @@ impl<T: Spawn> ControlsOverlayUi for T {
                     padding: UiRect::axes(Val::Px(16.0), Val::Px(4.0)),
                     ..default()
                 },
-                background_color: BackgroundColor(OVERLAY_COLOR),
+                background_color: BackgroundColor(BACKGROUND_COLOR),
                 ..default()
             },
         ))
