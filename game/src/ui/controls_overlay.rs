@@ -11,7 +11,7 @@ use crate::game::player::PlayerAction;
 
 const OVERLAY_COLOR: Color = Color::rgba(0.08, 0.10, 0.06, 0.65);
 const BACKGROUND_COLOR: Color = Color::rgba(0.22, 0.27, 0.18, 0.8);
-const ICON_BACKGROUND_COLOR: Color = Color::rgba(0.32, 0.37, 0.28, 0.8);
+const ICON_BACKGROUND_COLOR: Color = Color::rgba(0.32, 0.37, 0.28, 1.0);
 const TEXT_COLOR: Color = Color::rgb(0.98, 0.99, 0.94);
 const SPACER_COLOR: Color = Color::rgb(0.20, 0.25, 0.15);
 const POPUP_DURATION_SECONDS: u64 = 5;
