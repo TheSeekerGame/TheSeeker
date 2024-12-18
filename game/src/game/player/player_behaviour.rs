@@ -1,4 +1,4 @@
-use bevy::sprite::Sprite;
+use bevy::sprite::{Sprite, SpriteSheetBundle};
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
@@ -13,6 +13,8 @@ use theseeker_engine::physics::{
 };
 use theseeker_engine::script::ScriptPlayer;
 
+use super::arc_attack::Projectile;
+use super::player_weapon::PlayerWeapon;
 use super::{
     dash_icon_fx, player_dash_fx, player_new_stats_mod, AttackBundle,
     CanStealth, DashIcon, JumpCount, KillCount, Knockback, Passives,
@@ -33,6 +35,7 @@ use crate::prelude::{
     IntoSystemConfigs, Plugin, Query, Res, Transform, TransformBundle, With,
     Without,
 };
+use crate::StateDespawnMarker;
 
 /// Player behavior systems.
 /// Do stuff here in states and add transitions to other states by pushing
@@ -976,6 +979,7 @@ fn player_attack(
             Entity,
             &Gent,
             &Facing,
+            &Transform,
             &mut Attacking,
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
@@ -985,11 +989,13 @@ fn player_attack(
     >,
     mut commands: Commands,
     config: Res<PlayerConfig>,
+    weapon: Res<PlayerWeapon>,
 ) {
     for (
         entity,
         gent,
         facing,
+        transform,
         mut attacking,
         mut transitions,
         action_state,
@@ -997,35 +1003,78 @@ fn player_attack(
     ) in query.iter_mut()
     {
         if attacking.ticks == 0 {
-            let attack = commands
-                .spawn((
-                    TransformBundle::from_transform(Transform::from_xyz(
-                        0.0, 0.0, 0.0,
-                    )),
-                    AnimationCollider(gent.e_gfx),
-                    // TODO: ? ColliderMeta
-                    Collider::empty(InteractionGroups::new(
-                        PLAYER_ATTACK,
-                        ENEMY_HURT,
-                    )),
-                    Attack::new(16, entity),
-                    SelfPushback(Knockback::new(
-                        Vec2::new(
-                            config.melee_self_pushback * -facing.direction(),
-                            0.,
-                        ),
-                        config.melee_self_pushback_ticks,
-                    )),
-                    Pushback(Knockback::new(
-                        Vec2::new(
-                            facing.direction() * config.melee_pushback,
-                            0.,
-                        ),
-                        config.melee_pushback_ticks,
-                    )),
-                ))
-                .set_parent(entity)
-                .id();
+            let attack = match *weapon {
+                PlayerWeapon::Bow => {
+                    let mut animation: ScriptPlayer<SpriteAnimation> =
+                        ScriptPlayer::default();
+                    animation.play_key("anim.player.BowBasicArrow");
+                    animation.set_slot("Start", true);
+
+                    let vel = LinearVelocity(
+                        Vec2::X * facing.direction() * config.arrow_velocity,
+                    );
+
+                    commands
+                        .spawn((
+                            SpriteSheetBundle {
+                                transform: *transform,
+                                ..Default::default()
+                            },
+                            Projectile { vel },
+                            Collider::cuboid(
+                                12.0,
+                                12.0,
+                                InteractionGroups::new(
+                                    PLAYER_ATTACK,
+                                    ENEMY_HURT | GROUND,
+                                ),
+                            ),
+                            Attack::new(16, entity).with_max_targets(1),
+                            Pushback(Knockback::new(
+                                Vec2::new(
+                                    facing.direction() * config.melee_pushback,
+                                    0.,
+                                ),
+                                config.melee_pushback_ticks,
+                            )),
+                            animation,
+                            StateDespawnMarker,
+                        ))
+                        .id()
+                },
+                PlayerWeapon::Sword => {
+                    commands
+                        .spawn((
+                            TransformBundle::from_transform(
+                                Transform::from_xyz(0.0, 0.0, 0.0),
+                            ),
+                            AnimationCollider(gent.e_gfx),
+                            // TODO: ? ColliderMeta
+                            Collider::empty(InteractionGroups::new(
+                                PLAYER_ATTACK,
+                                ENEMY_HURT,
+                            )),
+                            Attack::new(16, entity),
+                            SelfPushback(Knockback::new(
+                                Vec2::new(
+                                    config.melee_self_pushback
+                                        * -facing.direction(),
+                                    0.,
+                                ),
+                                config.melee_self_pushback_ticks,
+                            )),
+                            Pushback(Knockback::new(
+                                Vec2::new(
+                                    facing.direction() * config.melee_pushback,
+                                    0.,
+                                ),
+                                config.melee_pushback_ticks,
+                            )),
+                        ))
+                        .set_parent(entity)
+                        .id()
+                },
+            };
 
             if stealthed {
                 commands.entity(attack).insert(Stealthed);
