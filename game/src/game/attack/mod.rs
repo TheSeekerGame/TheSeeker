@@ -38,7 +38,7 @@ impl Plugin for AttackPlugin {
                 (
                     determine_attack_targets,
                     apply_attack_modifications,
-                    // DamageInfo event emited here
+                    // DamageInfo event emitted here
                     apply_attack_damage,
                     // OnAttackFirstHitSet
                     track_crits,
@@ -133,6 +133,11 @@ impl Attack {
 
     pub fn set_stat_mod(mut self, modif: StatusModifier) -> Self {
         self.status_mod = Some(modif);
+        self
+    }
+
+    pub fn with_max_targets(mut self, max_targets: u32) -> Self {
+        self.max_targets = max_targets;
         self
     }
 }
