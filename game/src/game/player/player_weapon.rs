@@ -1,17 +1,16 @@
+use bevy::app::Update;
 use leafwing_input_manager::prelude::ActionState;
 use strum_macros::Display;
 
 use crate::game::player::{Player, PlayerAction};
-use crate::prelude::{
-    App, GameTickUpdate, Plugin, Query, ResMut, Resource, With,
-};
+use crate::prelude::{App, Plugin, Query, ResMut, Resource, With};
 
 pub(crate) struct PlayerWeaponPlugin;
 
 impl Plugin for PlayerWeaponPlugin {
     fn build(&self, app: &mut App) {
         app.insert_resource(PlayerWeapon::default());
-        app.add_systems(GameTickUpdate, swap_weapon);
+        app.add_systems(Update, swap_weapon);
     }
 }
 
