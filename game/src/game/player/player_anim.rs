@@ -238,11 +238,7 @@ fn sprite_flip(
 
             // Have the player face away from the wall if they are attacking while wall sliding
             let pressed_on_wall = wall_slide_time
-                // checks that player is actually against the wall, rather then it being close
-                // enough time from the player having left the wall to still jump
-                // (ie: not wall_jump_coyote_time)
-                .map(|s| s.0 <= 1.0 / time.hz as f32)
-                .unwrap_or(false);
+                .is_some_and(|s| s.is_pressed_against_wall(&time));
             let is_attacking_while_falling =
                 player.current_key() == Some(&weapon.get_anim_key("BasicAir"));
             if pressed_on_wall && is_attacking_while_falling {
