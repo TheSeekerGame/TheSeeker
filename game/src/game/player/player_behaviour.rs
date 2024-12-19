@@ -13,7 +13,7 @@ use theseeker_engine::physics::{
 };
 use theseeker_engine::script::ScriptPlayer;
 
-use super::arc_attack::Projectile;
+use super::arc_attack::{Arrow, Projectile};
 use super::player_weapon::PlayerWeapon;
 use super::{
     dash_icon_fx, player_dash_fx, player_new_stats_mod, AttackBundle,
@@ -1026,6 +1026,7 @@ fn player_attack(
 
                     commands
                         .spawn((
+                            Arrow,
                             SpriteSheetBundle {
                                 transform: *transform,
                                 ..Default::default()
