@@ -1029,7 +1029,7 @@ fn player_attack(
                                     ENEMY_HURT | GROUND,
                                 ),
                             ),
-                            Attack::new(16, entity).with_max_targets(1),
+                            Attack::new(192, entity).with_max_targets(1),
                             Pushback(Knockback::new(
                                 Vec2::new(
                                     facing.direction() * config.melee_pushback,
