@@ -595,6 +595,13 @@ impl WallSlideTime {
     fn strict_sliding(&self, cfg: &PlayerConfig) -> bool {
         self.0 <= cfg.max_coyote_time * 1.0
     }
+
+    /// Checks that player is actually against the wall, rather then it being close
+    /// enough time from the player having left the wall to still jump
+    /// (ie: not wall_jump_coyote_time)
+    fn is_pressed_against_wall(&self, time: &Res<GameTime>) -> bool {
+        self.0 <= 1.0 / time.hz as f32
+    }
 }
 
 /// Tracks the cooldown for the available energy for the players whirl
