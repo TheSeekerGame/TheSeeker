@@ -980,6 +980,7 @@ fn player_attack(
             &Gent,
             &Facing,
             &Transform,
+            Option<&WallSlideTime>,
             &mut Attacking,
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
@@ -990,12 +991,14 @@ fn player_attack(
     mut commands: Commands,
     config: Res<PlayerConfig>,
     weapon: Res<PlayerWeapon>,
+    time: Res<GameTime>,
 ) {
     for (
         entity,
         gent,
         facing,
         transform,
+        wall_slide_time,
         mut attacking,
         mut transitions,
         action_state,
@@ -1010,8 +1013,15 @@ fn player_attack(
                     animation.play_key("anim.player.BowBasicArrow");
                     animation.set_slot("Start", true);
 
+                    let is_player_pressed_against_wall = wall_slide_time
+                        .is_some_and(|s| s.is_pressed_against_wall(&time));
+                    let arrow_direction = if is_player_pressed_against_wall {
+                        -facing.direction()
+                    } else {
+                        facing.direction()
+                    };
                     let vel = LinearVelocity(
-                        Vec2::X * facing.direction() * config.arrow_velocity,
+                        Vec2::X * arrow_direction * config.arrow_velocity,
                     );
 
                     commands
