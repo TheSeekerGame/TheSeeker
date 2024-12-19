@@ -1023,7 +1023,7 @@ fn player_attack(
                             Projectile { vel },
                             Collider::cuboid(
                                 12.0,
-                                12.0,
+                                3.0,
                                 InteractionGroups::new(
                                     PLAYER_ATTACK,
                                     ENEMY_HURT | GROUND,
