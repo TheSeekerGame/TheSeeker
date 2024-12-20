@@ -362,7 +362,11 @@ fn setup_player(
                     remaining_cooldown: 0.0,
                 },
             ),
-            PlayerStats::init_from_config(&config),
+            (
+                PlayerStats::init_from_config(&config),
+                //maybe consolidate with PlayerStats
+                PlayerStatMod::new(),
+            ),
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
             JumpCount(0),
@@ -891,35 +895,71 @@ impl PlayerStats {
     }
 }
 
+#[derive(Component)]
+pub struct PlayerStatMod {
+    attack: f32,
+    defense: f32,
+    speed: f32,
+    cdr: f32,
+}
+
+impl PlayerStatMod {
+    fn new() -> PlayerStatMod {
+        PlayerStatMod {
+            attack: 1.,
+            defense: 1.,
+            speed: 1.,
+            cdr: 1.,
+        }
+    }
+}
+
+//TODO: stealth??
 //TODO: only for SerpentRing and GlowingShard currently
 fn player_update_passive_buffs(
     mut query: Query<(
         &Passives,
         &LinearVelocity,
         &mut PlayerStats,
+        &mut PlayerStatMod,
+        Has<Stealthing>,
     )>,
 ) {
-    for (passives, vel, mut stats) in query.iter_mut() {
-        let mut attack_multi = 1.0;
-        let mut defense_multi = 1.0;
-        let mut speed_multi = 1.0;
+    for (passives, vel, mut stats, mut stat_mod, is_stealth) in query.iter_mut()
+    {
+        let mut attack = 1.;
+        let mut defense = 1.;
+        let mut speed = 1.;
+        let mut cdr = 1.;
+        let num = 1.;
         if passives.contains(&Passive::GlowingShard) {
             //TODO: need spatial index check, +10% for every enemy nearby
-            attack_multi += 0.1;
+            attack *= (1. + 0.1 * num);
         }
         if passives.contains(&Passive::SerpentRing) {
-            speed_multi *= 1.2;
-            defense_multi * 0.5;
+            speed += 0.2;
+            cdr += 0.33;
+            defense *= 0.5;
         }
         if passives.contains(&Passive::HeavyBoots) {
             //if we are moving
             if vel.length() > 0.0001 {
-                attack_multi * 0.5;
-                defense_multi * 0.5;
+                attack *= 0.5;
+                defense *= 0.5;
             } else {
-                attack_multi *= 2.;
-                defense_multi *= 2.;
+                //should they be additive or multi?
+                attack *= 2.;
+                defense *= 2.;
             };
+        }
+        if is_stealth {
+            attack *= 2.;
+        }
+        *stat_mod = PlayerStatMod {
+            attack,
+            defense,
+            speed,
+            cdr,
         }
     }
 }
