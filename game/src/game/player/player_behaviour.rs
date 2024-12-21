@@ -8,13 +8,13 @@ use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
     into_vec2, update_sprite_colliders, AnimationCollider, Collider,
-    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY_HURT, ENEMY_INSIDE,
+    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_HURT, ENEMY_INSIDE,
     GROUND, PLAYER, PLAYER_ATTACK,
 };
 use theseeker_engine::script::ScriptPlayer;
 
 use super::arc_attack::{Arrow, Projectile};
-use super::player_weapon::PlayerWeapon;
+use super::player_weapon::{is_player_using_bow, PlayerWeapon};
 use super::{
     dash_icon_fx, player_dash_fx, player_new_stats_mod, AttackBundle,
     CanStealth, DashIcon, JumpCount, KillCount, Knockback, Passives,
@@ -78,6 +78,9 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_sliding
                         .before(player_jump)
                         .run_if(any_with_component::<Falling>),
+                    bow_auto_aim
+                        .before(player_attack)
+                        .run_if(is_player_using_bow),
                 )
                     .in_set(PlayerStateSet::Behavior)
                     .before(update_sprite_colliders),
@@ -1209,6 +1212,46 @@ pub fn player_whirl(
             transitions.push(Whirling::new_transition(
                 CanAttack::default(),
             ));
+        }
+    }
+}
+
+pub fn bow_auto_aim(
+    mut q_gent: Query<(&mut Facing, &Transform), (With<Player>, With<Gent>)>,
+    q_enemy: Query<Entity, With<Enemy>>,
+    spatial_query: Res<PhysicsWorld>,
+) {
+    for (mut facing, transform) in q_gent.iter_mut() {
+        let is_facing_enemies = spatial_query
+            .ray_cast(
+                transform.translation.xy(),
+                Vec2::X * facing.direction(),
+                f32::MAX,
+                true,
+                InteractionGroups {
+                    memberships: PLAYER,
+                    filter: ENEMY | GROUND,
+                },
+                None,
+            )
+            .is_some_and(|(entity, _)| q_enemy.contains(entity));
+
+        let is_facing_away_from_enemy = spatial_query
+            .ray_cast(
+                transform.translation.xy(),
+                Vec2::NEG_X * facing.direction(),
+                f32::MAX,
+                true,
+                InteractionGroups {
+                    memberships: PLAYER,
+                    filter: ENEMY | GROUND,
+                },
+                None,
+            )
+            .is_some_and(|(entity, _)| q_enemy.contains(entity));
+
+        if !is_facing_enemies && is_facing_away_from_enemy {
+            *facing = facing.invert();
         }
     }
 }
