@@ -395,7 +395,7 @@ fn init_physics_world(mut world: ResMut<PhysicsWorld>) {
 ///
 /// Make sure if you are reading from this in a system, you run after this finishes
 ///
-/// TODO make sure this always runs after the GameTickUpdate; consider creating a seperate
+/// TODO make sure this always runs after the GameTickUpdate; consider creating a separate
 /// [`ScheduleLabel`] for immediately after transform propagation
 pub fn update_query_pipeline(
     // Mutable reference because collider data is stored in an Arena that pipeline modifies
