@@ -81,6 +81,14 @@ impl Facing {
             Facing::Left => -1.,
         }
     }
+
+    /// Returns the opposite of a given [`Facing`] variant.
+    pub fn invert(&self) -> Self {
+        match self {
+            Facing::Right => Facing::Left,
+            Facing::Left => Facing::Right,
+        }
+    }
 }
 
 /// States
