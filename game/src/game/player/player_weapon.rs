@@ -1,4 +1,5 @@
 use bevy::app::Update;
+use bevy::prelude::Res;
 use leafwing_input_manager::prelude::ActionState;
 use strum_macros::Display;
 
@@ -40,4 +41,9 @@ fn swap_weapon(
             };
         }
     }
+}
+
+/// Run condition that checks if the Player is using the Bow
+pub fn is_player_using_bow(weapon: Res<PlayerWeapon>) -> bool {
+    weapon.eq(&PlayerWeapon::Bow)
 }
