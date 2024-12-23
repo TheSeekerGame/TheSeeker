@@ -139,6 +139,11 @@ impl Attack {
         self
     }
 
+    pub fn with_damage(mut self, damage: u32) -> Self {
+        self.damage = damage;
+        self
+    }
+
     pub fn with_max_targets(mut self, max_targets: u32) -> Self {
         self.max_targets = max_targets;
         self
