@@ -169,6 +169,18 @@
         rows: 1,
         columns: 6,
     ),
+    "anim.player.SwordDashDownStrike": File (
+        path: "animations/player/sword/DashDownStrike.anim.toml",
+    ),
+    "anim.player.SwordDashDownStrike.image": File (
+        path: "animations/player/sword/DashDownSheet.png",
+    ),
+    "anim.player.SwordDashDownStrike.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 6,
+    ),
     "anim.player.BowBasicIdle": File (
         path: "animations/player/bow/BasicIdle.anim.toml",
     ),

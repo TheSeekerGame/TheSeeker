@@ -4,10 +4,9 @@ tick_quant = "8"
 ticks_per_frame = 8
 frame_min = 1
 frame_max = 6
-frame_start = 1
+frame_start = 5
 
-# LOOP
 [[script]]
-run_at_frame = 4
-action = "SetFrameNext"
-frame_index = 2
+run_at_frame = [5]
+action = "PlayAudio"
+asset_key = "audio.game.HammerImpact"

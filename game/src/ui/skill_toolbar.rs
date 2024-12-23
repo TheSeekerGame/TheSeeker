@@ -254,8 +254,7 @@ fn update_dash_ability_ui(
         return;
     };
     for entity in ui.iter() {
-        let factor =
-            can_dash.remaining_cooldown / config.dash_cooldown_duration;
+        let factor = can_dash.remaining_cooldown / can_dash.total_cooldown;
         commands.entity(entity).factor(factor);
     }
 }
