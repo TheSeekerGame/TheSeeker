@@ -1,15 +1,13 @@
-use std::{cmp::Ordering, f32::consts::PI};
+use std::cmp::Ordering;
 
 use bevy::prelude::*;
 use strum_macros::Display;
 use theseeker_engine::physics::{LinearVelocity, PhysicsWorld, ShapeCaster};
 
-use crate::game::player::{CanDash, Dashing, Falling, Grounded, Player};
+use crate::game::player::{CanDash, Dashing, Grounded, Player};
 
 use super::CameraRig;
 
-// TODO: Should depend on bevy Window Resolution
-const CENTER_SCREEN: Vec2 = Vec2::new(1280./2., 720./2.);
 const INITIAL_POSITION: Vec2 = Vec2::new(300.0, 605.6115);
 
 #[derive(Default, Display, Debug)]
@@ -20,16 +18,6 @@ pub enum SpringPhase {
     Resetting,
     Snapping,
     Reset,
-}
-
-impl SpringPhase {
-    pub fn debug_print(&self) {
-        // print!("\x1B[2J\x1B[1;1H");
-        println!("---------------------------------");
-        println!("SpringPhase Debug:");
-        println!("---------------------------------");
-        println!("  Current Phase: {}", self);
-    }
 }
 
 #[derive(Default, Display)]
@@ -43,14 +31,6 @@ pub enum FollowStrategy {
 }
 
 impl FollowStrategy {
-    pub fn debug_print(&self) {
-        //print!("\x1B[2J\x1B[1;1H");
-        println!("---------------------------------");
-        println!("FollowStrategy Debug:");
-        println!("---------------------------------");
-        println!("  Current Phase: {}", self);
-    }
-
     pub fn follow (&self,
         spring: &RigSpring,
         rig: &CameraRig,
@@ -157,30 +137,6 @@ pub struct RigSpring {
 }
 
 impl RigSpring {
-    pub fn debug_print(&self) {
-        print!("\x1B[2J\x1B[1;1H");
-        println!("---------------------------------");
-        println!("RigSpring Debug:");
-        println!("---------------------------------");
-        println!("  Floor: {}", self.floor);
-        println!("  Ceiling: {}", self.ceiling);
-        println!("  Fall Buffer: {}", self.fall_buffer);
-        println!("  Limit Override: {}", self.limit_override);
-        println!("  Spring Constant (k): {}", self.k);
-        println!("  Fast Spring Constant (k_fast): {}", self.k_fast);
-        println!("  Regular Spring Constant (k_reg): {}", self.k_reg);
-        println!("  Damping Coefficient: {}", self.damping_coefficient);
-        println!("  Velocity: {}", self.velocity);
-        println!("  Vertical Reset: {}", self.vertical_reset);
-        println!("  Horizontal Snapped: {}", self.horizontal_snapped);
-        println!("  Vertical Snapped: {}", self.vertical_snapped);
-        println!("  Reset Threshold: {}", self.reset_threshold);
-        println!("  Snap Threshold: {}", self.snap_threshold);
-        println!("  Horizontal Phase: {}", self.x_phase);
-        println!("  Vertical Phase: {}", self.y_phase);
-        println!("  Follow Strategy: {}", self.follow_strategy);
-        println!("---------------------------------");
-    }
     pub fn default() -> Self {
         RigSpring {
             floor: 37.5,
@@ -209,20 +165,6 @@ impl RigSpring {
 
         }
     }
-    pub fn calculate_spring(
-        &self,
-        rig: &mut ResMut<CameraRig>,
-        delta_seconds: f32,
-        vertical: bool,
-    ) -> f32 {
-        let displacement = if vertical { rig.displacement.y } else { rig.displacement.x };
-        let position = if vertical { rig.camera_position.y } else { rig.camera_position.x };
-        let velocity = if vertical { self.velocity.abs() } else { 0.0 };
-        let spring_force = self.k * displacement;
-        let damping_force = self.damping_coefficient * self.velocity;
-        let camera_acceleration = spring_force - damping_force;
-        position + camera_acceleration * delta_seconds
-    }
     pub fn update_follow_strategy(&mut self, player_tracker: &Res<PlayerTracker>) {
         if player_tracker.ground_distance <= self.floor {
             self.follow_strategy = FollowStrategy::GroundFollow;
@@ -234,17 +176,13 @@ impl RigSpring {
             self.follow_strategy = FollowStrategy::FallFollow;
         }
         if player_tracker.just_dashed {
-            // todo
+            // TODO:
             // move dash logic here
         }
-        self.debug_print();
         if let FollowStrategy::InitFollow = self.follow_strategy {
-            //print!("\x1B[2J\x1B[1;1H");
-            //println!("Fired init follow");
+            // may need strategy for player spawn
         } else {
-            //println!("{}", self.follow_strategy);
         }
-        //player_tracker.debug_print();
        
     }
     // should ONLY be in the active range, no other range
@@ -293,12 +231,6 @@ impl RigSpring {
         if self.vertical_snapped {
             self.y_phase = SpringPhase::Snapped;
         }
-       /*  if self.is_in_active_range(displacement) {
-            self.y_phase = SpringPhase::Active;
-        } 
-        if self.is_in_snap_zone(displacement) {
-            self.y_phase = SpringPhase::Snapping;
-        }*/
     }
 
     pub fn update_horizontal_phase(&mut self, displacement: f32) {
@@ -317,7 +249,6 @@ impl RigSpring {
         if self.horizontal_snapped {
             self.x_phase = SpringPhase::Snapped;
         }
-        //self.x_phase.debug_print();
     }
 
     
@@ -329,50 +260,42 @@ pub(super) fn track_player(
     mut dashing_removed: RemovedComponents<Dashing>,
     mut player_tracker: ResMut<super::PlayerTracker>,
     player_query: Query<Entity, With<Player>>,
-    player_query2: Query<Entity, With<Player>>,
     mut removed_grounded: RemovedComponents<Grounded>,
-    mut dashing_added: Query<Entity, (With<Player>, Added<Dashing>)>,
 ) {
-    for (e, t, caster) in grounded_query.iter() {
+    for (_e, t, _caster) in grounded_query.iter() {
         player_tracker.last_grounded_y = t.translation.y;
         player_tracker.is_grounded = true;
         
     }
 
     for entity in removed_grounded.read() {
-        if let Ok(player) = player_query.get(entity) {
+        if let Ok(_player) = player_query.get(entity) {
             player_tracker.is_grounded = false;
         }
     }
 
     for entity in dashing_removed.read() {
-        if let Ok(player) = can_dash_query.get(entity) {
+        if let Ok(_player) = can_dash_query.get(entity) {
             //spring.k = spring.k_fast * 2.0;
             player_tracker.just_dashed = true;
         }
     }
-
-    // player_tracker.debug_print();
 }
 
 
 pub(super) fn track_player_dashed(
     dashing_added: Query<Entity, (With<Player>, Added<Dashing>)>,
-    player_query: Query<Entity, With<Player>>,
     mut player_tracker: ResMut<super::PlayerTracker>,
 ) {
-    for player in dashing_added.iter() {
+    for _player in dashing_added.iter() {
         player_tracker.just_dashed = false;
-        println!("TEST");
-        
     }
-    player_tracker.debug_print();
 }
 
 
 pub(super) fn track_player_ground_distance(
     spatial_query: Res<PhysicsWorld>,
-    mut query: Query<(Entity, &mut ShapeCaster, &Transform), (With<Player>)>,
+    mut query: Query<(Entity, &mut ShapeCaster, &Transform), With<Player>>,
     mut player_tracker: ResMut<super::PlayerTracker>,
 ) {
     for (entity, ray_cast_info, position) in query.iter_mut() {
@@ -403,13 +326,11 @@ pub(super) fn snap_after_dash(
     player_query: Query<&Transform, (With<Player>, With<CanDash>)>,
     mut removed: RemovedComponents<Dashing>,
     mut spring: ResMut<RigSpring>,
-    mut rig: ResMut<CameraRig>,
-    time: Res<Time>,
 
 ) {
     
     for entity in removed.read() {
-        if let Ok(player) = player_query.get(entity) {
+        if let Ok(_player) = player_query.get(entity) {
             spring.k = spring.k_fast ;
             
         }
@@ -425,19 +346,6 @@ pub(super) struct PlayerTracker {
     pub(super) velocity: Vec2, 
     pub(super) position: Vec2,
     pub(super) just_dashed: bool,
-}
-
-impl PlayerTracker {
-    pub fn debug_print(&self) {
-        print!("\x1B[2J\x1B[1;1H");
-        println!("PlayerTracker Debug:");
-        println!("  Last Grounded Y: {}", self.last_grounded_y);
-        println!("  Ground Distance: {}", self.ground_distance);
-        println!("  Ground?: {}", self.is_grounded);
-        println!("  Velocity: {}", self.velocity);
-        println!("  Position: {}", self.position);
-        println!("  Just Dashed: {}", self.just_dashed);
-    }
 }
 
 
