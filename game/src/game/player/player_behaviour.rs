@@ -1,4 +1,4 @@
-use bevy::sprite::Sprite;
+use bevy::sprite::{Sprite, SpriteSheetBundle};
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
@@ -8,11 +8,13 @@ use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
     into_vec2, update_sprite_colliders, AnimationCollider, Collider,
-    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY_HURT, ENEMY_INSIDE,
+    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_HURT, ENEMY_INSIDE,
     GROUND, PLAYER, PLAYER_ATTACK,
 };
 use theseeker_engine::script::ScriptPlayer;
 
+use super::arc_attack::{Arrow, Projectile};
+use super::player_weapon::{is_player_using_bow, PlayerWeapon};
 use super::{
     dash_icon_fx, player_dash_fx, player_new_stats_mod, AttackBundle,
     CanStealth, DashIcon, JumpCount, KillCount, Knockback, Passives,
@@ -33,6 +35,7 @@ use crate::prelude::{
     IntoSystemConfigs, Plugin, Query, Res, Transform, TransformBundle, With,
     Without,
 };
+use crate::StateDespawnMarker;
 
 /// Player behavior systems.
 /// Do stuff here in states and add transitions to other states by pushing
@@ -75,6 +78,9 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_sliding
                         .before(player_jump)
                         .run_if(any_with_component::<Falling>),
+                    bow_auto_aim
+                        .before(player_attack)
+                        .run_if(is_player_using_bow),
                 )
                     .in_set(PlayerStateSet::Behavior)
                     .before(update_sprite_colliders),
@@ -578,7 +584,7 @@ pub fn player_collisions(
                             if dashing.is_none() && whirling.is_none() {
                                 let sliding_plane =
                                     into_vec2(first_hit.normal1);
-                                // configurable theshold for collision normal/sliding plane in case of physics instability
+                                // configurable threshold for collision normal/sliding plane in case of physics instability
                                 let threshold = 0.000001;
                                 if !(1. - threshold..=1. + threshold)
                                     .contains(&sliding_plane.y)
@@ -631,7 +637,7 @@ pub fn player_collisions(
                             let friction_force = if projected_velocity.y < -0.0
                             {
                                 // make sure at least 1/2 of player is against the wall
-                                // (because it looks wierd to have the character hanging by their head)
+                                // (because it looks weird to have the character hanging by their head)
                                 if spatial_query
                                     .ray_cast(
                                         pos.translation.xy(),
@@ -976,6 +982,8 @@ fn player_attack(
             Entity,
             &Gent,
             &Facing,
+            &Transform,
+            Option<&WallSlideTime>,
             &mut Attacking,
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
@@ -985,11 +993,15 @@ fn player_attack(
     >,
     mut commands: Commands,
     config: Res<PlayerConfig>,
+    weapon: Res<PlayerWeapon>,
+    time: Res<GameTime>,
 ) {
     for (
         entity,
         gent,
         facing,
+        transform,
+        wall_slide_time,
         mut attacking,
         mut transitions,
         action_state,
@@ -997,35 +1009,98 @@ fn player_attack(
     ) in query.iter_mut()
     {
         if attacking.ticks == 0 {
-            let attack = commands
-                .spawn((
-                    TransformBundle::from_transform(Transform::from_xyz(
-                        0.0, 0.0, 0.0,
-                    )),
-                    AnimationCollider(gent.e_gfx),
-                    // TODO: ? ColliderMeta
-                    Collider::empty(InteractionGroups::new(
-                        PLAYER_ATTACK,
-                        ENEMY_HURT,
-                    )),
-                    Attack::new(16, entity),
-                    SelfPushback(Knockback::new(
-                        Vec2::new(
-                            config.melee_self_pushback * -facing.direction(),
-                            0.,
-                        ),
-                        config.melee_self_pushback_ticks,
-                    )),
-                    Pushback(Knockback::new(
-                        Vec2::new(
-                            facing.direction() * config.melee_pushback,
-                            0.,
-                        ),
-                        config.melee_pushback_ticks,
-                    )),
-                ))
-                .set_parent(entity)
-                .id();
+            let attack = match *weapon {
+                PlayerWeapon::Bow => {
+                    let mut animation: ScriptPlayer<SpriteAnimation> =
+                        ScriptPlayer::default();
+                    animation.play_key("anim.player.BowBasicArrow");
+                    animation.set_slot("Start", true);
+
+                    let is_player_pressed_against_wall = wall_slide_time
+                        .is_some_and(|s| s.is_pressed_against_wall(&time));
+                    let arrow_direction = if is_player_pressed_against_wall {
+                        -facing.direction()
+                    } else {
+                        facing.direction()
+                    };
+                    let vel = LinearVelocity(
+                        Vec2::X * arrow_direction * config.arrow_velocity,
+                    );
+
+                    if !is_player_pressed_against_wall {
+                        commands.entity(entity).insert(Knockback::new(
+                            Vec2::new(
+                                -facing.direction() * config.bow_self_pushback,
+                                0.,
+                            ),
+                            config.bow_self_pushback_ticks,
+                        ));
+                    }
+
+                    commands
+                        .spawn((
+                            Arrow,
+                            SpriteSheetBundle {
+                                transform: *transform,
+                                ..Default::default()
+                            },
+                            Projectile { vel },
+                            Collider::cuboid(
+                                12.0,
+                                3.0,
+                                InteractionGroups::new(
+                                    PLAYER_ATTACK,
+                                    ENEMY_HURT | GROUND,
+                                ),
+                            ),
+                            Attack::new(192, entity)
+                                .with_damage(config.bow_attack_damage)
+                                .with_max_targets(1),
+                            Pushback(Knockback::new(
+                                Vec2::new(
+                                    facing.direction() * config.bow_pushback,
+                                    0.,
+                                ),
+                                config.bow_pushback_ticks,
+                            )),
+                            animation,
+                            StateDespawnMarker,
+                        ))
+                        .id()
+                },
+                PlayerWeapon::Sword => {
+                    commands
+                        .spawn((
+                            TransformBundle::from_transform(
+                                Transform::from_xyz(0.0, 0.0, 0.0),
+                            ),
+                            AnimationCollider(gent.e_gfx),
+                            // TODO: ? ColliderMeta
+                            Collider::empty(InteractionGroups::new(
+                                PLAYER_ATTACK,
+                                ENEMY_HURT,
+                            )),
+                            Attack::new(16, entity),
+                            SelfPushback(Knockback::new(
+                                Vec2::new(
+                                    config.melee_self_pushback
+                                        * -facing.direction(),
+                                    0.,
+                                ),
+                                config.melee_self_pushback_ticks,
+                            )),
+                            Pushback(Knockback::new(
+                                Vec2::new(
+                                    facing.direction() * config.melee_pushback,
+                                    0.,
+                                ),
+                                config.melee_pushback_ticks,
+                            )),
+                        ))
+                        .set_parent(entity)
+                        .id()
+                },
+            };
 
             if stealthed {
                 commands.entity(attack).insert(Stealthed);
@@ -1149,6 +1224,46 @@ pub fn player_whirl(
             transitions.push(Whirling::new_transition(
                 CanAttack::default(),
             ));
+        }
+    }
+}
+
+pub fn bow_auto_aim(
+    mut q_gent: Query<(&mut Facing, &Transform), (With<Player>, With<Gent>)>,
+    q_enemy: Query<Entity, With<Enemy>>,
+    spatial_query: Res<PhysicsWorld>,
+) {
+    for (mut facing, transform) in q_gent.iter_mut() {
+        let is_facing_enemies = spatial_query
+            .ray_cast(
+                transform.translation.xy(),
+                Vec2::X * facing.direction(),
+                f32::MAX,
+                true,
+                InteractionGroups {
+                    memberships: PLAYER,
+                    filter: ENEMY | GROUND,
+                },
+                None,
+            )
+            .is_some_and(|(entity, _)| q_enemy.contains(entity));
+
+        let is_facing_away_from_enemy = spatial_query
+            .ray_cast(
+                transform.translation.xy(),
+                Vec2::NEG_X * facing.direction(),
+                f32::MAX,
+                true,
+                InteractionGroups {
+                    memberships: PLAYER,
+                    filter: ENEMY | GROUND,
+                },
+                None,
+            )
+            .is_some_and(|(entity, _)| q_enemy.contains(entity));
+
+        if !is_facing_enemies && is_facing_away_from_enemy {
+            *facing = facing.invert();
         }
     }
 }
