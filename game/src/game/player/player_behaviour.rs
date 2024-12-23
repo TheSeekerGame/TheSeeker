@@ -1046,10 +1046,10 @@ fn player_attack(
                             Attack::new(192, entity).with_max_targets(1),
                             Pushback(Knockback::new(
                                 Vec2::new(
-                                    facing.direction() * config.melee_pushback,
+                                    facing.direction() * config.bow_pushback,
                                     0.,
                                 ),
-                                config.melee_pushback_ticks,
+                                config.bow_pushback_ticks,
                             )),
                             animation,
                             StateDespawnMarker,

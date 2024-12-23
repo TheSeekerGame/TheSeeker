@@ -84,6 +84,18 @@ melee_pushback = 60.0
 # Ticks for melee knockback velocity; determines how long movement is locked for
 melee_pushback_ticks = 12.0
 
+# Pushback velocity on basic bow shots
+bow_self_pushback = 60.0
+
+# Ticks for bow pushback velocity; determines how long movement is locked for
+bow_self_pushback_ticks = 3.0
+
+# Knockback velocity applied to enemy on basic bow hit
+bow_pushback = 60.0
+
+# Ticks for melee knockback velocity; determines how long movement is locked for
+bow_pushback_ticks = 12.0
+
 # Number of kills to trigger passive gain
 passive_gain_rate = 3.0
 
