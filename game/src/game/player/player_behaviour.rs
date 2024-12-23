@@ -1043,7 +1043,9 @@ fn player_attack(
                                     ENEMY_HURT | GROUND,
                                 ),
                             ),
-                            Attack::new(192, entity).with_max_targets(1),
+                            Attack::new(192, entity)
+                                .with_damage(config.bow_attack_damage)
+                                .with_max_targets(1),
                             Pushback(Knockback::new(
                                 Vec2::new(
                                     facing.direction() * config.bow_pushback,
