@@ -1027,6 +1027,16 @@ fn player_attack(
                         Vec2::X * arrow_direction * config.arrow_velocity,
                     );
 
+                    if !is_player_pressed_against_wall {
+                        commands.entity(entity).insert(Knockback::new(
+                            Vec2::new(
+                                -facing.direction() * config.bow_self_pushback,
+                                0.,
+                            ),
+                            config.bow_self_pushback_ticks,
+                        ));
+                    }
+
                     commands
                         .spawn((
                             Arrow,
