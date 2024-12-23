@@ -15,8 +15,8 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::{
     dash_icon_fx, player_dash_fx, player_new_stats_mod, AttackBundle,
-    CanStealth, DashIcon, JumpCount, KillCount, Knockback, Passives,
-    PlayerStats, Pushback, StatType, Stealthing, Whirling,
+    CanStealth, DashIcon, DashStrike, DashType, JumpCount, KillCount,
+    Knockback, Passives, PlayerStats, Pushback, StatType, Stealthing, Whirling,
 };
 use crate::camera::CameraShake;
 use crate::game::attack::{Attack, SelfPushback, Stealthed};
@@ -58,6 +58,7 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_can_stealth.run_if(any_with_component::<CanStealth>),
                     player_run.run_if(any_with_component::<Running>),
                     player_jump.run_if(any_with_component::<Jumping>),
+                    player_dash_strike.run_if(any_with_component::<DashStrike>),
                     player_dash.run_if(any_with_component::<Dashing>),
                     player_dash_fx
                         .after(player_dash)
@@ -441,17 +442,62 @@ pub fn player_can_dash(
         can_dash.remaining_cooldown -= 1.0 / time.hz as f32;
         if action_state.just_pressed(&PlayerAction::Dash) {
             if can_dash.remaining_cooldown <= 0.0 {
-                transition_queue.push(CanDash::new_transition(
-                    Dashing::default(),
-                ));
-                velocity.x = config.dash_velocity * facing.direction();
-                velocity.y = 0.0;
+                let dash_action = Dashing::from_action_state(action_state);
+                dash_action.set_player_velocity(&mut velocity, facing, &config);
+                transition_queue.push(CanDash::new_transition(dash_action));
+
                 if let Some(mut hitfreeze) = hitfreeze {
                     *hitfreeze = HitFreezeTime(u32::MAX, None)
                 }
             } else {
                 commands.insert_resource(CameraShake::new(2.0, 1.0, 5.0));
             }
+        }
+    }
+}
+
+pub fn player_dash_strike(
+    mut query: Query<
+        (
+            Entity,
+            &Gent,
+            &Facing,
+            &mut DashStrike,
+            &mut TransitionQueue,
+            Has<Grounded>,
+            Has<Stealthing>,
+        ),
+        With<Player>,
+    >,
+    mut commands: Commands,
+    config: Res<PlayerConfig>,
+) {
+    for (
+        entity,
+        gent,
+        facing,
+        mut strike,
+        mut transitions,
+        is_grounded,
+        is_stealthed,
+    ) in query.iter_mut()
+    {
+        if strike.ticks == 10 {
+            add_dash_strike_collider(
+                &mut commands,
+                &config,
+                entity,
+                gent,
+                facing,
+                is_stealthed,
+            );
+        }
+        strike.ticks += 1;
+        if strike.ticks == DashStrike::MAX * 8 {
+            transitions.push(DashStrike::new_transition(
+                CanDash::new(&config, &DashType::Downward),
+            ));
+            exit_dash(&mut transitions, is_grounded);
         }
     }
 }
@@ -481,29 +527,86 @@ pub fn player_dash(
     ) in query.iter_mut()
     {
         if dashing.is_added() {
-            velocity.x = config.dash_velocity * facing.direction();
-            velocity.y = 0.0;
+            dashing.set_player_velocity(&mut velocity, facing, &config);
             if let Some(mut hitfreeze) = hitfreeze {
                 *hitfreeze = HitFreezeTime(u32::MAX, None)
             }
         } else {
             dashing.duration += 1.0 / time.hz as f32;
-            if dashing.duration > config.dash_duration {
+            if dashing.duration > dashing.dash_duration(&config) {
                 dashing.duration = 0.0;
-                transitions.push(Dashing::new_transition(CanDash::new(
-                    &config,
-                )));
-                if is_grounded {
-                    transitions.push(Running::new_transition(Idle));
+                if dashing.hit {
+                    transitions.push(Dashing::new_transition(
+                        DashStrike::default(),
+                    ));
                 } else {
-                    transitions.push(Running::new_transition(Falling));
+                    transitions.push(Dashing::new_transition(CanDash::new(
+                        &config,
+                        &dashing.dash_type,
+                    )));
+                    exit_dash(&mut transitions, is_grounded);
                 }
-                transitions.push(Attacking::new_transition(
-                    CanAttack::default(),
-                ));
             }
         }
     }
+}
+
+fn exit_dash(transitions: &mut TransitionQueue, is_grounded: bool) {
+    if is_grounded {
+        transitions.push(Running::new_transition(Idle));
+    } else {
+        transitions.push(Running::new_transition(Falling));
+    }
+    transitions.push(Attacking::new_transition(
+        CanAttack::default(),
+    ));
+}
+
+fn trigger_dash_strike(mut commands: &mut Commands, mut dashing: &mut Dashing) {
+    dashing.duration = f32::MAX;
+    dashing.hit = true;
+    commands.insert_resource(CameraShake::new(3.5, 0.4, 2.0));
+}
+
+fn add_dash_strike_collider(
+    mut commands: &mut Commands,
+    config: &PlayerConfig,
+    entity: Entity,
+    gent: &Gent,
+    facing: &Facing,
+    stealthed: bool,
+) {
+    let attack = commands
+        .spawn((
+            TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+            AnimationCollider(gent.e_gfx),
+            // TODO: ? ColliderMeta
+            Collider::empty(InteractionGroups::new(
+                PLAYER_ATTACK,
+                ENEMY_HURT,
+            )),
+            Attack::new(16, entity),
+            SelfPushback(Knockback::new(
+                Vec2::new(
+                    config.melee_self_pushback * -facing.direction(),
+                    0.,
+                ),
+                config.melee_self_pushback_ticks,
+            )),
+            Pushback(Knockback::new(
+                Vec2::new(
+                    facing.direction() * config.melee_pushback,
+                    0.,
+                ),
+                config.melee_pushback_ticks,
+            )),
+        ))
+        .set_parent(entity)
+        .id();
+
+    if stealthed {
+        commands.entity(attack).insert(Stealthed);
+    };
 }
 
 pub fn player_collisions(
@@ -531,7 +634,7 @@ pub fn player_collisions(
         mut linear_velocity,
         collider,
         slide,
-        dashing,
+        mut dashing,
         whirling,
     ) in q_gent.iter_mut()
     {
@@ -574,7 +677,14 @@ pub fn player_collisions(
                         // if we are not yet inside the enemy, collide, but not if we are falling
                         // from above
                         TOIStatus::Converged | TOIStatus::OutOfIterations => {
-                            // if we are also dashing, or whirling, ignore the collision entirely
+                            // If we are dashing downwards, immediately cancel the dash, shake the camera, and start the attack animation, but don't do anything else.
+                            if let Some(mut dashing) = dashing.as_mut() {
+                                if dashing.is_down_dash() {
+                                    trigger_dash_strike(&mut commands, dashing);
+                                }
+                            }
+
+                            // if we are also dashing, or whirling, ignore the collision
                             if dashing.is_none() && whirling.is_none() {
                                 let sliding_plane =
                                     into_vec2(first_hit.normal1);
@@ -605,7 +715,9 @@ pub fn player_collisions(
                                 .insert(crate::game::enemy::Inside);
                         },
                         // maybe failed never happens?
-                        TOIStatus::Failed => println!("failed"),
+                        TOIStatus::Failed => {
+                            println!("player collision failed")
+                        },
                     }
                 // otherwise we are colliding with the ground
                 } else {
@@ -614,6 +726,13 @@ pub fn player_collisions(
                             // Applies a very small amount of bounce, as well as sliding to the character
                             // the bounce helps prevent the player from getting stuck.
                             let sliding_plane = into_vec2(first_hit.normal1);
+
+                            // If we are dashing downwards, immediately cancel the dash, shake the camera, and start the attack animation
+                            if let Some(mut dashing) = dashing.as_mut() {
+                                if dashing.is_down_dash() {
+                                    trigger_dash_strike(&mut commands, dashing);
+                                }
+                            }
 
                             let bounce_coefficient =
                                 if dashing.is_some() { 0.0 } else { 0.05 };
