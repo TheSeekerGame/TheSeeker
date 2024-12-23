@@ -703,6 +703,18 @@ pub struct PlayerConfig {
     /// Ticks for melee knockback velocity; determines how long movement is locked for
     melee_pushback_ticks: u32,
 
+    /// Pushback velocity on basic bow shots
+    bow_self_pushback: f32,
+
+    /// Ticks for bow pushback velocity; determines how long movement is locked for
+    bow_self_pushback_ticks: u32,
+
+    /// Knockback velocity applied to enemy on basic bow hit
+    bow_pushback: f32,
+
+    /// Ticks for melee knockback velocity; determines how long movement is locked for
+    bow_pushback_ticks: u32,
+
     /// Velocity of the projectiles fired by the Bow weapon
     arrow_velocity: f32,
 
@@ -778,6 +790,10 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "melee_self_pushback_ticks", |val| config.melee_self_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
     update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "bow_self_pushback", |val| config.bow_self_pushback = val);
+    update_field(&mut errors, &cfg.0, "bow_self_pushback_ticks", |val| config.bow_self_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "bow_pushback", |val| config.bow_pushback = val);
+    update_field(&mut errors, &cfg.0, "bow_pushback_ticks", |val| config.bow_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "passive_gain_rate", |val| config.passive_gain_rate = val as u32);
     update_field(&mut errors, &cfg.0, "arrow_velocity", |val| config.arrow_velocity = val);
 
