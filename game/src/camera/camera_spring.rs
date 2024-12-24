@@ -237,7 +237,6 @@ impl RigSpring {
             // todo
             // move dash logic here
         }
-        self.debug_print();
         if let FollowStrategy::InitFollow = self.follow_strategy {
             //print!("\x1B[2J\x1B[1;1H");
             //println!("Fired init follow");
@@ -366,7 +365,6 @@ pub(super) fn track_player_dashed(
         println!("TEST");
         
     }
-    player_tracker.debug_print();
 }
 
 
@@ -440,6 +438,16 @@ impl PlayerTracker {
     }
 }
 
+pub(super) fn debug_update(
+    spring: Res<RigSpring>,
+    rig: Res<CameraRig>,
+    player_tracker: Res<PlayerTracker>,
+
+) {
+    rig.debug_print();
+    player_tracker.debug_print();
+    spring.debug_print();
+}
 
 #[cfg(test)]
 mod tests {

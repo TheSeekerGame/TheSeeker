@@ -53,7 +53,8 @@ stealth_cooldown = 5.0
 dash_velocity = 400.0
 
 # How long before the player can dash again?
-dash_cooldown_duration = 1.0
+#dash_cooldown_duration = 1.0
+dash_cooldown_duration = 0.6
 
 max_whirl_energy = 5.0
 

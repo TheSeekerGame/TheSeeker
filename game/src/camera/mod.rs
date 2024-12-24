@@ -1,5 +1,4 @@
 //! Everything to do with the in-game camera(s)
-#![allow(warnings)]
 use std::f32::consts::PI;
 use std::ops;
 
@@ -70,6 +69,7 @@ impl Plugin for CameraPlugin {
                 track_player_velocity,
                 snap_after_dash,
                 update_camera.after(camera_rig_follow_player),
+                debug_update,
             ),
         );
         // Debugging systems
@@ -217,7 +217,6 @@ fn camera_rig_follow_player(
     time: Res<Time>,
 ) {
     let player = if let Ok(transform) = player_query.get_single() {
-        //rig.debug_print();
         
         transform.translation
     } else {
@@ -239,8 +238,7 @@ fn camera_rig_follow_player(
         spring.k = spring.k_reg;
         dbg!(spring.k);
     }
-    //rig.debug_print();
-    //spring.x_phase.debug_print();
+    
     match spring.y_phase {
         SpringPhase::Active => {
             rig.camera_position.y = spring.follow_strategy.follow(&*spring, &*rig, &player_tracker,time.delta_seconds(), true);
