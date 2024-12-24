@@ -3,6 +3,7 @@ use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
 use rapier2d::geometry::{Group, InteractionGroups};
+use rapier2d::na::ComplexField;
 use rapier2d::parry::query::TOIStatus;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
@@ -246,9 +247,10 @@ fn player_move(
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
             &mut Facing,
-            Option<&Grounded>,
-            Option<&Stealthing>,
-            Option<&Dashing>,
+            Has<Grounded>,
+            Has<Stealthing>,
+            Has<Dashing>,
+            Has<DashStrike>,
         ),
         (Without<Knockback>, With<Player>),
     >,
@@ -258,9 +260,10 @@ fn player_move(
         mut velocity,
         action_state,
         mut facing,
-        grounded,
-        stealth,
-        dashing,
+        is_grounded,
+        is_stealth,
+        is_dashing,
+        is_dash_strike,
     ) in q_gent.iter_mut()
     {
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
@@ -271,20 +274,23 @@ fn player_move(
         // What "%" does our character get slowed down per game tick.
         // Todo: Have this value be determined by tile type at some point?
         let ground_friction = 0.7;
-        let stealth_boost = if stealth.is_some() { 1.15 } else { 1.0 };
+        let stealth_boost = get_stealth_boost(is_stealth);
+        let controllable = !is_dash_strike;
         let mut direction = action_state.value(&PlayerAction::Move);
         let new_vel = if action_state.just_pressed(&PlayerAction::Move)
             && action_state.value(&PlayerAction::Move) != 0.0
+            && controllable
         {
             (velocity.x + accel * direction * ground_friction) * stealth_boost
         } else if action_state.pressed(&PlayerAction::Move)
             && action_state.value(&PlayerAction::Move) != 0.0
+            && controllable
         {
             (velocity.x + initial_accel * direction * ground_friction)
                 * stealth_boost
         } else {
             // de-acceleration profile
-            if grounded.is_some() {
+            if is_grounded {
                 velocity.x + ground_friction * -velocity.x
             } else {
                 // airtime de-acceleration profile
@@ -301,7 +307,7 @@ fn player_move(
             }
         };
 
-        if dashing.is_none() {
+        if !is_dashing {
             velocity.x = new_vel.clamp(
                 -stats.get(StatType::MoveVelMax) * stealth_boost,
                 stats.get(StatType::MoveVelMax) * stealth_boost,
@@ -312,6 +318,14 @@ fn player_move(
         } else if direction < 0.0 {
             *facing = Facing::Left;
         }
+    }
+}
+
+fn get_stealth_boost(stealth: bool) -> f32 {
+    if stealth {
+        1.15
+    } else {
+        1.0
     }
 }
 
@@ -505,11 +519,13 @@ pub fn player_dash_strike(
 pub fn player_dash(
     mut query: Query<
         (
+            &PlayerStats,
             &Facing,
             &mut LinearVelocity,
             &mut Dashing,
             &mut TransitionQueue,
             Has<Grounded>,
+            Has<Stealthing>,
             Option<&mut HitFreezeTime>,
         ),
         With<Player>,
@@ -518,11 +534,13 @@ pub fn player_dash(
     time: Res<GameTime>,
 ) {
     for (
+        stats,
         facing,
         mut velocity,
         mut dashing,
         mut transitions,
         is_grounded,
+        is_stealth,
         hitfreeze,
     ) in query.iter_mut()
     {
@@ -535,7 +553,22 @@ pub fn player_dash(
             dashing.duration += 1.0 / time.hz as f32;
             if dashing.duration > dashing.dash_duration(&config) {
                 dashing.duration = 0.0;
+                // slow our velocity to the players normal max velocity, without adjusting our trajectory
+                let stealth_boost = get_stealth_boost(is_stealth);
+                let max_x_vel = stats.get(StatType::MoveVelMax) * stealth_boost;
+
+                if velocity.x.abs() > max_x_vel {
+                    let slowdown_factor = max_x_vel / velocity.x.abs();
+                    velocity.x *= slowdown_factor;
+                    velocity.y *= slowdown_factor;
+                }
+
                 if dashing.hit {
+                    // stop all movement when we slam into the ground, but leave our velocity when we hit through an enemy
+                    if dashing.hit_ground {
+                        velocity.x = 0.0;
+                        velocity.y = 0.0;
+                    }
                     transitions.push(Dashing::new_transition(
                         DashStrike::default(),
                     ));
@@ -562,9 +595,14 @@ fn exit_dash(transitions: &mut TransitionQueue, is_grounded: bool) {
     ));
 }
 
-fn trigger_dash_strike(mut commands: &mut Commands, mut dashing: &mut Dashing) {
+fn trigger_dash_strike(
+    mut commands: &mut Commands,
+    mut dashing: &mut Dashing,
+    grounded: bool,
+) {
     dashing.duration = f32::MAX;
     dashing.hit = true;
+    dashing.hit_ground = grounded;
     commands.insert_resource(CameraShake::new(3.5, 0.4, 2.0));
 }
 
@@ -619,6 +657,7 @@ pub fn player_collisions(
             &Collider,
             Option<&mut WallSlideTime>,
             Option<&mut Dashing>,
+            Has<DashStrike>,
             Option<&mut Whirling>,
         ),
         With<Player>,
@@ -635,6 +674,7 @@ pub fn player_collisions(
         collider,
         slide,
         mut dashing,
+        is_dash_strike,
         whirling,
     ) in q_gent.iter_mut()
     {
@@ -680,12 +720,19 @@ pub fn player_collisions(
                             // If we are dashing downwards, immediately cancel the dash, shake the camera, and start the attack animation, but don't do anything else.
                             if let Some(mut dashing) = dashing.as_mut() {
                                 if dashing.is_down_dash() {
-                                    trigger_dash_strike(&mut commands, dashing);
+                                    trigger_dash_strike(
+                                        &mut commands,
+                                        dashing,
+                                        false,
+                                    );
                                 }
                             }
 
                             // if we are also dashing, or whirling, ignore the collision
-                            if dashing.is_none() && whirling.is_none() {
+                            if dashing.is_none()
+                                && whirling.is_none()
+                                && !is_dash_strike
+                            {
                                 let sliding_plane =
                                     into_vec2(first_hit.normal1);
                                 // configurable theshold for collision normal/sliding plane in case of physics instability
@@ -716,7 +763,7 @@ pub fn player_collisions(
                         },
                         // maybe failed never happens?
                         TOIStatus::Failed => {
-                            println!("player collision failed")
+                            println!("player/enemy collision failed")
                         },
                     }
                 // otherwise we are colliding with the ground
@@ -730,12 +777,20 @@ pub fn player_collisions(
                             // If we are dashing downwards, immediately cancel the dash, shake the camera, and start the attack animation
                             if let Some(mut dashing) = dashing.as_mut() {
                                 if dashing.is_down_dash() {
-                                    trigger_dash_strike(&mut commands, dashing);
+                                    trigger_dash_strike(
+                                        &mut commands,
+                                        dashing,
+                                        true,
+                                    );
                                 }
                             }
 
                             let bounce_coefficient =
-                                if dashing.is_some() { 0.0 } else { 0.05 };
+                                if dashing.is_some() || is_dash_strike {
+                                    0.0
+                                } else {
+                                    0.05
+                                };
                             let bounce_force = -sliding_plane
                                 * linear_velocity.dot(sliding_plane)
                                 * bounce_coefficient;
@@ -791,7 +846,9 @@ pub fn player_collisions(
                             projected_velocity += depenetration;
                             possible_pos = original_pos;
                         },
-                        TOIStatus::Failed => println!("failed"),
+                        TOIStatus::Failed => {
+                            println!("player/ground collision failed")
+                        },
                     }
                 }
                 linear_velocity.0 = projected_velocity;
@@ -1048,6 +1105,7 @@ fn add_attack(
             Without<Attacking>,
             Without<Whirling>,
             Without<Dashing>,
+            Without<DashStrike>,
             With<Player>,
         ),
     >,
@@ -1197,7 +1255,11 @@ pub fn player_whirl(
             Has<Stealthing>,
             &Gent,
         ),
-        (With<Player>, Without<Dashing>),
+        (
+            With<Player>,
+            Without<Dashing>,
+            Without<DashStrike>,
+        ),
     >,
     // attacks which have had their collider changed by the AnimationCollider system
     // TODO: need to not change collider unless there is a collider?

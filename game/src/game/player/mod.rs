@@ -521,6 +521,7 @@ impl Default for DashType {
 pub struct Dashing {
     duration: f32,
     hit: bool,
+    hit_ground: bool,
     dash_type: DashType,
 }
 impl Dashing {
