@@ -720,11 +720,14 @@ pub fn player_collisions(
                             // If we are dashing downwards, immediately cancel the dash, shake the camera, and start the attack animation, but don't do anything else.
                             if let Some(mut dashing) = dashing.as_mut() {
                                 if dashing.is_down_dash() {
-                                    trigger_dash_strike(
-                                        &mut commands,
-                                        dashing,
-                                        false,
-                                    );
+                                    // currently, this feels out of place, as the strike stops just short of the ground.
+                                    // we currently do not have any flying enemies, so disabling dash strikes for enemies.
+
+                                    // trigger_dash_strike(
+                                    //     &mut commands,
+                                    //     dashing,
+                                    //     false,
+                                    // );
                                 }
                             }
 
