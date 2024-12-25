@@ -45,7 +45,7 @@ impl Plugin for CameraPlugin {
             lead_buffer: 10.0,
             displacement: Vec2::new(1.0, 1.0),
         });
-        app.insert_resource(RigSpring::default());
+        app.insert_resource(Spring::default());
         app.insert_resource(PlayerTracker::default());
         app.add_systems(
             GameTickUpdate,
@@ -112,11 +112,9 @@ pub struct CameraRig {
 
 impl CameraRig {
     pub fn debug_print(&self) {
-        //print!("\x1B[2J\x1B[1;1H");
         println!("CameraRig Debug:");
         println!("  Target: {}", self.target);
         println!("  Camera Position: {}", self.camera_position);
-        //println!("  MoveSpeed: {}", self.move_speed);
         println!("  Displacement: {}", self.displacement);
     }
 
@@ -231,7 +229,7 @@ fn _manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wi
 
 fn camera_rig_follow_player(
     mut rig: ResMut<CameraRig>,
-    mut spring: ResMut<RigSpring>,
+    mut spring: ResMut<Spring>,
     player_query: Query<&Transform, (With<Player>, Without<Dashing>)>,
     player_tracker: Res<PlayerTracker>,
     time: Res<Time>,

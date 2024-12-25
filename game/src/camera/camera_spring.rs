@@ -25,7 +25,6 @@ pub enum SpringPhase {
 
 impl SpringPhase {
     pub fn debug_print(&self) {
-        // print!("\x1B[2J\x1B[1;1H");
         println!("---------------------------------");
         println!("SpringPhase Debug:");
         println!("---------------------------------");
@@ -45,7 +44,6 @@ pub enum FollowStrategy {
 
 impl FollowStrategy {
     pub fn debug_print(&self) {
-        //print!("\x1B[2J\x1B[1;1H");
         println!("---------------------------------");
         println!("FollowStrategy Debug:");
         println!("---------------------------------");
@@ -53,7 +51,7 @@ impl FollowStrategy {
         println!("---------------------------------");
     }
 
-    pub fn update(mut spring: &mut RigSpring, player_tracker: &Res<PlayerTracker>) -> FollowStrategy {
+    pub fn update(mut spring: &mut Spring, player_tracker: &Res<PlayerTracker>) -> FollowStrategy {
         if player_tracker.ground_distance <= spring.floor {
             return FollowStrategy::GroundFollow;
         }
@@ -64,11 +62,9 @@ impl FollowStrategy {
             return FollowStrategy::FallFollow;
         }
         if player_tracker.just_dashed {
-            // todo
-            // move dash logic here
             return FollowStrategy::DashFollow;
         }
-        /// add Init logic here and return FollowStrategy::Init
+        /// TODO: add Init logic here and return FollowStrategy::Init
         return FollowStrategy::default();
        
     }
@@ -78,37 +74,46 @@ impl FollowStrategy {
 
 #[derive(Resource, Default)]
 /// Data structure to configure simplified damped spring for camera movement
-pub struct RigSpring {
+pub struct Spring {
     /// The vertical point at which the spring action kicks in
     pub(super) floor: f32,
     /// Never let the rig get this far away without following
     pub(super) ceiling: f32,
+    /// Additional vertical space from ground required to consider the player "falling"
     pub(super) fall_buffer: f32,
+    /// Used to override any limits placed on the spring 
+    // TODO: Likely unnecessary for logic in final form, take out if possible
     pub(super) limit_override: bool,
     /// spring constant (k) is the constant used to calculate "restoring force"
-    /// in this case k has an x and y component so we can have different restoraction 
-    /// forces (spring stiffness) for horizontal vs vertical.
     pub(super) k: f32,
+    /// "faster" restoring force for "tighter" spring follows for spring constant (k) 
     pub(super) k_fast: f32,
+    /// holds "normal" k-value so we can change current k back at any time
     pub(super) k_reg: f32,
-    /// Damping ratio
-    pub(super) damping_coefficient: f32,
+    /// Damping ratio (damping coefficient or oscillation decay). Controls how quickly the system settles to equilibrium  
+    pub(super) damping_ratio: f32,
     /// Current velocity of the spring
     pub(super) velocity: f32,
+    /// determine if spring is reset or not
     pub(super) vertical_reset: bool,
+    /// is the spring snapped to the horizontal target?
     pub(super) horizontal_snapped: bool,
+    /// is the spring snapped to the vertical target?
     pub(super) vertical_snapped: bool,
+    /// point at which the spring will be reset
     pub(super) reset_threshold: f32,
-    /// Distance 
+    /// distance from target when snapping will take effect
     pub(super) snap_threshold: f32,
+    /// The horizontal "phase" of the spring.
     pub (super) x_phase: SpringPhase,
+    /// The vertical "phase" of the spring.
     pub (super) y_phase: SpringPhase, 
+    /// The current "strategy" used by the spring to follow the player.
     pub (super) follow_strategy: FollowStrategy, 
 }
 
-impl RigSpring {
+impl Spring {
     pub fn debug_print(&self) {
-        //print!("\x1B[2J\x1B[1;1H");
         println!("---------------------------------");
         println!("RigSpring Debug:");
         println!("---------------------------------");
@@ -119,7 +124,7 @@ impl RigSpring {
         println!("  Spring Constant (k): {}", self.k);
         println!("  Fast Spring Constant (k_fast): {}", self.k_fast);
         println!("  Regular Spring Constant (k_reg): {}", self.k_reg);
-        println!("  Damping Coefficient: {}", self.damping_coefficient);
+        println!("  Damping Coefficient: {}", self.damping_ratio);
         println!("  Velocity: {}", self.velocity);
         println!("  Vertical Reset: {}", self.vertical_reset);
         println!("  Horizontal Snapped: {}", self.horizontal_snapped);
@@ -132,7 +137,7 @@ impl RigSpring {
         println!("---------------------------------");
     }
     pub fn default() -> Self {
-        RigSpring {
+        Spring {
             floor: 37.5,
             ceiling: 500.0,
             fall_buffer: 30.0,
@@ -140,13 +145,7 @@ impl RigSpring {
             k_reg: 3.553,
             k_fast: 7.106,
             k: 3.553,
-            //k: Vec2::new(3.553,3.553), 
-            //k_fast: Vec2::new(3.553, 3.553),
-            /*k: Vec2::new(1.0,5.0), 
-            k_reg: Vec2::new(2.0,5.0), 
-            k_fast: Vec2::new(10.0, 10.0),*/
-            damping_coefficient:  1.131,
-            //damping_coefficient:  0.3, // less intense
+            damping_ratio:  1.131,
             velocity: 0.0,
             vertical_reset: false,
             horizontal_snapped: false,
@@ -208,7 +207,7 @@ impl RigSpring {
 
     fn calculate(
         &self,
-        spring: &RigSpring, 
+        spring: &Spring, 
         rig: &CameraRig,
         delta_seconds: f32,
         vertical: bool,
@@ -217,7 +216,7 @@ impl RigSpring {
         let position = if vertical { rig.camera_position.y } else { rig.camera_position.x };
         let velocity = if vertical { spring.velocity.abs() } else { 0.0 };
         let spring_force = spring.k * displacement;
-        let damping_force = spring.damping_coefficient * spring.velocity;
+        let damping_force = spring.damping_ratio * spring.velocity;
         let camera_acceleration = spring_force - damping_force;
         position + camera_acceleration * delta_seconds
     }
@@ -225,7 +224,7 @@ impl RigSpring {
     fn reset(
         &self,
         displacement: f32, 
-        spring: &RigSpring, 
+        spring: &Spring, 
         rig: &CameraRig,
         delta_seconds: f32,
         vertical: bool,
@@ -233,7 +232,7 @@ impl RigSpring {
         let position = if vertical { rig.camera_position.y } else { rig.camera_position.x };
         let velocity = if vertical { spring.velocity.abs() } else { 0.0 };
         let spring_force = spring.k * displacement;
-        let damping_force = spring.damping_coefficient * spring.velocity;
+        let damping_force = spring.damping_ratio * spring.velocity;
         let camera_acceleration = spring_force - damping_force;
         position + camera_acceleration * delta_seconds
     }
@@ -285,12 +284,6 @@ impl RigSpring {
         if self.vertical_snapped {
             self.y_phase = SpringPhase::Snapped;
         }
-       /*  if self.is_in_active_range(displacement) {
-            self.y_phase = SpringPhase::Active;
-        } 
-        if self.is_in_snap_zone(displacement) {
-            self.y_phase = SpringPhase::Snapping;
-        }*/
     }
 
     pub fn update_horizontal_phase(&mut self, displacement: f32) {
@@ -309,7 +302,6 @@ impl RigSpring {
         if self.horizontal_snapped {
             self.x_phase = SpringPhase::Snapped;
         }
-        //self.x_phase.debug_print();
     }
 
     
@@ -395,7 +387,7 @@ pub(super) fn track_player_velocity(
 pub(super) fn snap_after_dash(
     player_query: Query<&Transform, (With<Player>, With<CanDash>)>,
     mut removed: RemovedComponents<Dashing>,
-    mut spring: ResMut<RigSpring>,
+    mut spring: ResMut<Spring>,
     mut rig: ResMut<CameraRig>,
     time: Res<Time>,
 
@@ -434,7 +426,7 @@ impl PlayerTracker {
 }
 
 pub(super) fn debug_update(
-    spring: Res<RigSpring>,
+    spring: Res<Spring>,
     rig: Res<CameraRig>,
     player_tracker: Res<PlayerTracker>,
     camera_query: Query<&Transform, With<Camera>>,
@@ -460,7 +452,7 @@ mod tests {
 
     #[test]
     fn test_is_in_active_range() {
-        let mut spring = RigSpring {
+        let mut spring = Spring {
             floor: 2.0,
             ceiling: 10.0,
             snap_threshold: 1.0,
