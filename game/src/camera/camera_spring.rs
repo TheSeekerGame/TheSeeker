@@ -414,7 +414,6 @@ pub(super) struct PlayerTracker {
 
 impl PlayerTracker {
     pub fn debug_print(&self) {
-        //print!("\x1B[2J\x1B[1;1H");
         println!("PlayerTracker Debug:");
         println!("  Last Grounded Y: {}", self.last_grounded_y);
         println!("  Ground Distance: {}", self.ground_distance);
