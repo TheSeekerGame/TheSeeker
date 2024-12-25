@@ -1,3 +1,4 @@
+#![allow(warnings)]
 use std::{cmp::Ordering, f32::consts::PI};
 
 use bevy::prelude::*;
@@ -34,8 +35,8 @@ impl SpringPhase {
 
 #[derive(Default, Display)]
 pub enum FollowStrategy {
-    #[default]
     InitFollow, 
+    #[default]
     GroundFollow, 
     JumpFollow, 
     FallFollow,
@@ -49,81 +50,30 @@ impl FollowStrategy {
         println!("FollowStrategy Debug:");
         println!("---------------------------------");
         println!("  Current Phase: {}", self);
+        println!("---------------------------------");
     }
 
-    pub fn follow (&self,
-        spring: &RigSpring,
-        rig: &CameraRig,
-        player_tracker: &PlayerTracker,
-        delta_seconds: f32,
-        vertical: bool,
-     ) -> f32 {
-        match self {
-            Self::GroundFollow => {
-                if !vertical {
-                    self.calculate_spring(&spring, rig, delta_seconds, false)
-                } else {
-                        if !matches!(spring.y_phase, SpringPhase::Snapping)   {
-                            let displacement = rig.target.y - rig.camera_position.y;
-                            self.reset_spring(displacement, spring, rig, delta_seconds, vertical)
-                        } else {
-                                rig.camera_position.y
-                        }
-                        
-                }
-            }
-            Self::JumpFollow => {
-                self.calculate_spring(&spring, rig, delta_seconds, vertical)
-            }
-            Self::FallFollow => {
-                if !vertical {
-                    self.calculate_spring(&spring, rig, delta_seconds, false)
-                } else {
-                    
-                        let displacement = rig.target.y - (rig.camera_position.y + 10.0);
-                        self.reset_spring(displacement, spring, rig, delta_seconds, vertical)
-                }
-            }
-            _ => {
-                self.calculate_spring(&spring, rig, delta_seconds, vertical)
-            
-            }
-
+    pub fn update(mut spring: &mut RigSpring, player_tracker: &Res<PlayerTracker>) -> FollowStrategy {
+        if player_tracker.ground_distance <= spring.floor {
+            return FollowStrategy::GroundFollow;
         }
-
+        if player_tracker.ground_distance > spring.floor && player_tracker.ground_distance < (spring.floor + spring.fall_buffer) {
+            return FollowStrategy::JumpFollow;
+        }
+        if player_tracker.ground_distance > (spring.floor + spring.fall_buffer) {
+            return FollowStrategy::FallFollow;
+        }
+        if player_tracker.just_dashed {
+            // todo
+            // move dash logic here
+            return FollowStrategy::DashFollow;
+        }
+        /// add Init logic here and return FollowStrategy::Init
+        return FollowStrategy::default();
+       
     }
 
-    fn reset_spring(
-        &self,
-        displacement: f32, 
-        spring: &RigSpring, 
-        rig: &CameraRig,
-        delta_seconds: f32,
-        vertical: bool,
-    ) -> f32 {
-        let position = if vertical { rig.camera_position.y } else { rig.camera_position.x };
-        let velocity = if vertical { spring.velocity.abs() } else { 0.0 };
-        let spring_force = spring.k * displacement;
-        let damping_force = spring.damping_coefficient * spring.velocity;
-        let camera_acceleration = spring_force - damping_force;
-        position + camera_acceleration * delta_seconds
-    }
-
-    fn calculate_spring(
-        &self,
-        spring: &RigSpring, 
-        rig: &CameraRig,
-        delta_seconds: f32,
-        vertical: bool,
-    ) -> f32 {
-        let displacement = if vertical { rig.displacement.y } else { rig.displacement.x };
-        let position = if vertical { rig.camera_position.y } else { rig.camera_position.x };
-        let velocity = if vertical { spring.velocity.abs() } else { 0.0 };
-        let spring_force = spring.k * displacement;
-        let damping_force = spring.damping_coefficient * spring.velocity;
-        let camera_acceleration = spring_force - damping_force;
-        position + camera_acceleration * delta_seconds
-    }
+    
 }
 
 #[derive(Resource, Default)]
@@ -158,7 +108,7 @@ pub struct RigSpring {
 
 impl RigSpring {
     pub fn debug_print(&self) {
-        print!("\x1B[2J\x1B[1;1H");
+        //print!("\x1B[2J\x1B[1;1H");
         println!("---------------------------------");
         println!("RigSpring Debug:");
         println!("---------------------------------");
@@ -209,43 +159,86 @@ impl RigSpring {
 
         }
     }
-    pub fn calculate_spring(
+
+    pub fn follow (&mut self,
+        rig: &CameraRig,
+        player_tracker: &PlayerTracker,
+        delta_seconds: f32,
+        vertical: bool,
+     ) -> f32 {
+        match self.follow_strategy {
+            FollowStrategy::GroundFollow => {
+                if !vertical {
+                    self.calculate(&self, rig, delta_seconds, false)
+                } else {
+                        if !matches!(self.y_phase, SpringPhase::Snapping)   {
+                            let displacement = rig.target.y - rig.camera_position.y;
+                            self.reset(displacement, self, rig, delta_seconds, vertical)
+                        } else {
+                                rig.camera_position.y
+                        } 
+                }
+            }
+            FollowStrategy::JumpFollow => {
+                self.calculate(self, rig, delta_seconds, vertical)
+            }
+            FollowStrategy::FallFollow => {
+                self.k = self.k_fast;
+                if !vertical {
+                    self.calculate(self, rig, delta_seconds, false)
+                } else {
+                    
+                        let displacement = rig.target.y - (rig.camera_position.y + 10.0);
+                        self.reset(displacement, self, rig, delta_seconds, vertical)
+                }
+            }
+            FollowStrategy::DashFollow => {
+                self.k = self.k_fast;
+                self.calculate(self, rig, delta_seconds, vertical)
+            }
+            _ => {
+                self.k = self.k_reg;
+                self.calculate(self, rig, delta_seconds, vertical)
+            
+            }
+
+        }
+
+    }
+
+    fn calculate(
         &self,
-        rig: &mut ResMut<CameraRig>,
+        spring: &RigSpring, 
+        rig: &CameraRig,
         delta_seconds: f32,
         vertical: bool,
     ) -> f32 {
         let displacement = if vertical { rig.displacement.y } else { rig.displacement.x };
         let position = if vertical { rig.camera_position.y } else { rig.camera_position.x };
-        let velocity = if vertical { self.velocity.abs() } else { 0.0 };
-        let spring_force = self.k * displacement;
-        let damping_force = self.damping_coefficient * self.velocity;
+        let velocity = if vertical { spring.velocity.abs() } else { 0.0 };
+        let spring_force = spring.k * displacement;
+        let damping_force = spring.damping_coefficient * spring.velocity;
         let camera_acceleration = spring_force - damping_force;
         position + camera_acceleration * delta_seconds
     }
-    pub fn update_follow_strategy(&mut self, player_tracker: &Res<PlayerTracker>) {
-        if player_tracker.ground_distance <= self.floor {
-            self.follow_strategy = FollowStrategy::GroundFollow;
-        }
-        if player_tracker.ground_distance > self.floor && player_tracker.ground_distance < (self.floor + self.fall_buffer) {
-            self.follow_strategy = FollowStrategy::JumpFollow;
-        }
-        if player_tracker.ground_distance > (self.floor + self.fall_buffer) {
-            self.follow_strategy = FollowStrategy::FallFollow;
-        }
-        if player_tracker.just_dashed {
-            // todo
-            // move dash logic here
-        }
-        if let FollowStrategy::InitFollow = self.follow_strategy {
-            //print!("\x1B[2J\x1B[1;1H");
-            //println!("Fired init follow");
-        } else {
-            //println!("{}", self.follow_strategy);
-        }
-        //player_tracker.debug_print();
-       
+
+    fn reset(
+        &self,
+        displacement: f32, 
+        spring: &RigSpring, 
+        rig: &CameraRig,
+        delta_seconds: f32,
+        vertical: bool,
+    ) -> f32 {
+        let position = if vertical { rig.camera_position.y } else { rig.camera_position.x };
+        let velocity = if vertical { spring.velocity.abs() } else { 0.0 };
+        let spring_force = spring.k * displacement;
+        let damping_force = spring.damping_coefficient * spring.velocity;
+        let camera_acceleration = spring_force - damping_force;
+        position + camera_acceleration * delta_seconds
     }
+
+    
     // should ONLY be in the active range, no other range
     pub fn is_in_active_range(&mut self, value: f32) -> bool{
         let full_range = value.abs() > self.floor && value.abs() < self.ceiling;
@@ -326,26 +319,28 @@ pub(super) fn track_player(
     grounded_query: Query<(Entity, &Transform, &mut ShapeCaster), (Added<Grounded>, With<Player>)>,
     can_dash_query: Query<&Transform, (With<Player>, With<CanDash>)>,
     mut dashing_removed: RemovedComponents<Dashing>,
-    mut player_tracker: ResMut<super::PlayerTracker>,
+    mut player_tracker: ResMut<PlayerTracker>,
     player_query: Query<Entity, With<Player>>,
-    player_query2: Query<Entity, With<Player>>,
+    transform_query: Query<&Transform, With<Player>>,
     mut removed_grounded: RemovedComponents<Grounded>,
     mut dashing_added: Query<Entity, (With<Player>, Added<Dashing>)>,
 ) {
-    for (e, t, caster) in grounded_query.iter() {
+    for transform in transform_query.iter() {
+        player_tracker.position = transform.translation.xy();
+    }
+    for (_, t, _) in grounded_query.iter() {
         player_tracker.last_grounded_y = t.translation.y;
         player_tracker.is_grounded = true;
-        
     }
 
     for entity in removed_grounded.read() {
-        if let Ok(player) = player_query.get(entity) {
+        if let Ok(_player) = player_query.get(entity) {
             player_tracker.is_grounded = false;
         }
     }
 
     for entity in dashing_removed.read() {
-        if let Ok(player) = can_dash_query.get(entity) {
+        if let Ok(_player) = can_dash_query.get(entity) {
             //spring.k = spring.k_fast * 2.0;
             player_tracker.just_dashed = true;
         }
@@ -427,7 +422,7 @@ pub(super) struct PlayerTracker {
 
 impl PlayerTracker {
     pub fn debug_print(&self) {
-        print!("\x1B[2J\x1B[1;1H");
+        //print!("\x1B[2J\x1B[1;1H");
         println!("PlayerTracker Debug:");
         println!("  Last Grounded Y: {}", self.last_grounded_y);
         println!("  Ground Distance: {}", self.ground_distance);
@@ -442,11 +437,20 @@ pub(super) fn debug_update(
     spring: Res<RigSpring>,
     rig: Res<CameraRig>,
     player_tracker: Res<PlayerTracker>,
-
+    camera_query: Query<&Transform, With<Camera>>,
 ) {
+    let Ok((mut camera)) = camera_query.get_single() else {return;};
+
+    print!("\x1B[2J\x1B[1;1H");
     rig.debug_print();
     player_tracker.debug_print();
     spring.debug_print();
+    spring.follow_strategy.debug_print();
+    if let Err(e) = std::panic::catch_unwind(|| {
+        println!("CAMERA_X: {:.2}, CAMERA_Y: {:.2}", camera.translation.x, camera.translation.y);
+    }) {
+        println!("Oops, something went wrong while updating the camera position. Error: {:?}", e);
+    }
 }
 
 #[cfg(test)]
