@@ -247,16 +247,18 @@ fn camera_rig_follow_player(
     spring.x_phase = SpringPhase::update(&mut spring, &player_tracker, rig.displacement.x,  false);
     spring.follow_strategy = FollowStrategy::update(&mut *spring, &player_tracker);
 
-    match spring.y_phase {
-        SpringPhase::Active => {
+    spring.follow(&mut rig, &player_tracker, time.delta_seconds());
+
+    /*match spring.y_phase {
+        SpringPhase::Active => { //
             rig.camera_position.y = spring.follow(&*rig, time.delta_seconds(), true);
         }
-        SpringPhase::Snapping => {
+        SpringPhase::Snapping => { //
             if player_tracker.is_grounded {
                 spring.snap_vertical(&mut rig, &player);
             }
         }
-        SpringPhase::Snapped => {
+        SpringPhase::Snapped => { //
             if player_tracker.grounded_y != player_tracker.previous_grounded_y {
                 spring.y_phase = SpringPhase::Reset;
             }
@@ -264,11 +266,11 @@ fn camera_rig_follow_player(
         _ => {
             rig.camera_position.y = spring.follow( &*rig, time.delta_seconds(), true);
         } 
-    }
+    } */
     
-    match spring.x_phase {
+    /*match spring.x_phase {
         SpringPhase::Resetting => {
-            rig.camera_position.x = spring.follow(&*rig, time.delta_seconds(), false);
+            rig.camera_position.x = spring.follow(&*rig, time.delta_seconds(), false); //
         }
         SpringPhase::Snapping => {
             if player_tracker.is_grounded {
@@ -281,7 +283,7 @@ fn camera_rig_follow_player(
         _ => {
             rig.camera_position.x = spring.follow(&*rig, time.delta_seconds(), false);
         }
-    }
+    }*/
 }
 
 

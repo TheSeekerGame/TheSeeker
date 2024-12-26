@@ -177,12 +177,66 @@ impl CameraSpring {
     }
 
     pub fn follow (&mut self,
-        rig: &CameraRig,
+        rig: &mut ResMut<CameraRig>,
+        player_tracker: &Res<PlayerTracker>,
         delta_seconds: f32,
-        vertical: bool,
-     ) -> f32 {
+     ) -> () {
         match self.follow_strategy {
             FollowStrategy::GroundFollow => {
+                // vertical spring phases
+                rig.camera_position.y = 
+                match self.y_phase {
+                    SpringPhase::Active => {
+                        let displacement = rig.target.y - rig.camera_position.y;
+                        self.reset(displacement, self, rig, delta_seconds, true)
+                    }
+                    SpringPhase::Resetting => {self.calculate(&self, rig, delta_seconds, true)}
+                    SpringPhase::Reset => {self.calculate(&self, rig, delta_seconds, true)}
+                    SpringPhase::Snapping => {
+                        if player_tracker.is_grounded {
+                           // rig.target.y = player_tracker.position.y;
+                            self.y_phase = SpringPhase::Snapped;
+                            rig.target.y
+                        } else {
+                            self.calculate(&self, rig, delta_seconds, true)
+                        }
+                    }
+                    SpringPhase::Snapped => {
+                        if player_tracker.grounded_y != player_tracker.previous_grounded_y {
+                            self.y_phase = SpringPhase::Reset;
+                            self.calculate(&self, rig, delta_seconds, true)
+                        }
+                        else {
+                            //rig.target.y = player_tracker.position.y;
+                            rig.target.y
+                        }
+                    }
+                };
+                // horizontal spring phases
+                rig.camera_position.x = 
+                match self.x_phase {
+                    SpringPhase::Active => {
+                        self.calculate(&self, rig, delta_seconds, false)
+                    }
+                    SpringPhase::Resetting => { self.calculate(&self, rig, delta_seconds, false) }
+                    SpringPhase::Reset => {self.calculate(&self, rig, delta_seconds, false)}
+                    SpringPhase::Snapping => {
+                        if player_tracker.is_grounded {
+                            // rig.target.x = player_tracker.position.x;
+                            self.x_phase = SpringPhase::Snapped;
+                            rig.target.x
+                        } else {
+                            self.calculate(&self, rig, delta_seconds, false)
+                        }
+                    }
+                    SpringPhase::Snapped => {
+                        self.x_phase = SpringPhase::Snapped;
+                        println!("Snapped on X");
+                        rig.target.x
+                            
+                    }
+                };
+                /* 
                 if !vertical {
                     self.calculate(&self, rig, delta_seconds, false)
                 } else {
@@ -192,28 +246,27 @@ impl CameraSpring {
                         } else {
                                 rig.camera_position.y
                         } 
-                }
+                }*/
             }
             FollowStrategy::JumpFollow => {
-                self.calculate(self, rig, delta_seconds, vertical)
+                rig.camera_position.x = self.calculate(self, rig, delta_seconds, false);
+                rig.camera_position.y = self.calculate(self, rig, delta_seconds, true);
             }
             FollowStrategy::FallFollow => {
                 self.k = self.k_fast;
-                if !vertical {
-                    self.calculate(self, rig, delta_seconds, false)
-                } else {
-                    
-                        let displacement = rig.target.y - (rig.camera_position.y + 10.0);
-                        self.reset(displacement, self, rig, delta_seconds, vertical)
-                }
+                rig.camera_position.x = self.calculate(self, rig, delta_seconds, false);
+                rig.camera_position.y = self.calculate(self, rig, delta_seconds, true);
+                
             }
             FollowStrategy::DashFollow => {
                 self.k = self.k_fast;
-                self.calculate(self, rig, delta_seconds, vertical)
+                rig.camera_position.x = self.calculate(self, rig, delta_seconds, false);
+                rig.camera_position.y = self.calculate(self, rig, delta_seconds, true);
             }
             _ => {
                 self.k = self.k_reg;
-                self.calculate(self, rig, delta_seconds, vertical)
+                rig.camera_position.x = self.calculate(self, rig, delta_seconds, false);
+                rig.camera_position.y = self.calculate(self, rig, delta_seconds, true);
             
             }
 
@@ -375,7 +428,7 @@ pub(super) fn snap_after_dash(
     }
 }
 
-#[derive(Resource, Default)]
+#[derive(Resource, Default, Clone)]
 pub(super) struct PlayerTracker {
     pub(super) previous_grounded_y: f32, 
     pub(super) grounded_y: f32, 
