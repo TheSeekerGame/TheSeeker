@@ -45,7 +45,7 @@ impl Plugin for CameraPlugin {
             lead_buffer: 10.0,
             displacement: Vec2::new(1.0, 1.0),
         });
-        app.insert_resource(Spring::default());
+        app.insert_resource(CameraSpring::default());
         app.insert_resource(PlayerTracker::default());
         app.add_systems(
             GameTickUpdate,
@@ -229,7 +229,7 @@ fn _manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wi
 
 fn camera_rig_follow_player(
     mut rig: ResMut<CameraRig>,
-    mut spring: ResMut<Spring>,
+    mut spring: ResMut<CameraSpring>,
     player_query: Query<&Transform, (With<Player>, Without<Dashing>)>,
     player_tracker: Res<PlayerTracker>,
     time: Res<Time>,
@@ -243,22 +243,13 @@ fn camera_rig_follow_player(
     rig.target.y = player.y; // poi
     rig.calculate_displacement();
 
-    spring.update_vertical_phase(rig.displacement.y);
-    spring.update_horizontal_phase(rig.displacement.x);
+    spring.y_phase = SpringPhase::update(&mut spring, rig.displacement.y, true);
+    spring.x_phase = SpringPhase::update(&mut spring, rig.displacement.x, false);
     spring.follow_strategy = FollowStrategy::update(&mut *spring, &player_tracker);
-
-    // if let FollowStrategy::FallFollow | FollowStrategy::DashFollow = spring.follow_strategy  {
-    //     spring.k = spring.k_fast;
-    //     dbg!(spring.k);
-    // } else if matches!(spring.x_phase, SpringPhase::Resetting) || matches!(spring.y_phase, SpringPhase::Resetting) {
-    //     spring.k = spring.k_reg;
-    //     dbg!(spring.k);
-    // }
 
     match spring.y_phase {
         SpringPhase::Active => {
-            rig.camera_position.y = spring.follow(&*rig, &player_tracker,time.delta_seconds(), true);
-            //rig.camera_position.y = spring.calculate_spring(&mut rig, time.delta_seconds(), true);
+            rig.camera_position.y = spring.follow(&*rig, time.delta_seconds(), true);
         }
         SpringPhase::Snapping => {
             spring.snap_vertical(&mut rig, &player);
@@ -267,13 +258,13 @@ fn camera_rig_follow_player(
             
         }
         _ => {
-            rig.camera_position.y = spring.follow( &*rig, &player_tracker, time.delta_seconds(), true);
+            rig.camera_position.y = spring.follow( &*rig, time.delta_seconds(), true);
         } 
     }
     
     match spring.x_phase {
         SpringPhase::Resetting => {
-            rig.camera_position.x = spring.follow(&*rig, &player_tracker, time.delta_seconds(), false);
+            rig.camera_position.x = spring.follow(&*rig, time.delta_seconds(), false);
         }
         SpringPhase::Snapping => {
             spring.snap_horizontal(&mut rig, &player, false);
@@ -282,14 +273,9 @@ fn camera_rig_follow_player(
             
         }
         _ => {
-            rig.camera_position.x = spring.follow(&*rig, &player_tracker,time.delta_seconds(), false);
+            rig.camera_position.x = spring.follow(&*rig, time.delta_seconds(), false);
         }
     }
-    
-   /*else if !is_in_spring_reset_zone(rig.displacement.x, &spring) {
-        spring.horizontal_snapped = false;
-        rig.camera_position.x = spring.calculate_spring(&mut rig, time.delta_seconds(), false);
-    }*/
 }
 
 
@@ -299,7 +285,6 @@ fn draw_debug_gizmos(
     mut gizmos: Gizmos,
 ) {
     gizmos.circle_2d(
-        //  Vec3::new(CENTER_SCREEN.x, CENTER_SCREEN.y, 0.),
         Vec2::new(rig.camera_position.x, rig.camera_position.y),
           4.0,
           Color::GREEN,
