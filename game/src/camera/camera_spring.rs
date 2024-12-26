@@ -1,12 +1,9 @@
-//#![allow(warnings)]
+#![allow(warnings)]
 use std::{cmp::Ordering, f32::consts::PI};
-
 use bevy::prelude::*;
 use strum_macros::Display;
 use theseeker_engine::physics::{LinearVelocity, PhysicsWorld, ShapeCaster};
-
 use crate::game::player::{CanDash, Dashing, Falling, Grounded, Player};
-
 use super::CameraRig;
 
 // TODO: Should depend on bevy Window Resolution
@@ -31,7 +28,7 @@ impl SpringPhase {
         println!("  Current Phase: {}", self);
     }
 
-    pub fn update(spring: &mut ResMut<CameraSpring>, displacement: f32, vertical: bool) -> SpringPhase {
+    pub fn update(spring: &mut ResMut<CameraSpring>, player_tracker: &Res<PlayerTracker>, displacement: f32, vertical: bool) -> SpringPhase {
         let mut phase = if vertical {&spring.y_phase} else {&spring.x_phase};
         if CameraSpring::is_in_active_range(&mut spring.clone(), displacement)  {
             phase = &SpringPhase::Active;
@@ -41,10 +38,11 @@ impl SpringPhase {
         } else { }
 
         if spring.is_in_reset_zone(displacement) && spring.is_in_snap_zone(displacement) {
-            phase = &SpringPhase::Snapping
-        } 
-        if spring.vertical_snapped {
-            phase = &SpringPhase::Snapped;
+            if player_tracker.is_grounded && player_tracker.grounded_y == player_tracker.previous_grounded_y {
+                phase = &SpringPhase::Snapping
+            } else {
+                phase = &SpringPhase::Reset
+            }
         } 
         phase.clone()
     }
@@ -304,7 +302,8 @@ pub(super) fn track_player(
         player_tracker.position = transform.translation.xy();
     }
     for (_, t, _) in grounded_query.iter() {
-        player_tracker.last_grounded_y = t.translation.y;
+        player_tracker.previous_grounded_y = player_tracker.grounded_y;
+        player_tracker.grounded_y = t.translation.y;
         player_tracker.is_grounded = true;
     }
 
@@ -378,7 +377,8 @@ pub(super) fn snap_after_dash(
 
 #[derive(Resource, Default)]
 pub(super) struct PlayerTracker {
-    pub(super) last_grounded_y: f32, 
+    pub(super) previous_grounded_y: f32, 
+    pub(super) grounded_y: f32, 
     pub(super) ground_distance: f32,
     pub(super) is_grounded: bool,
     pub(super) velocity: Vec2, 
@@ -389,7 +389,8 @@ pub(super) struct PlayerTracker {
 impl PlayerTracker {
     pub fn debug_print(&self) {
         println!("PlayerTracker Debug:");
-        println!("  Last Grounded Y: {}", self.last_grounded_y);
+        println!("  Grounded Y: {}", self.grounded_y);
+        println!("  Previous Grounded Y: {}", self.previous_grounded_y);
         println!("  Ground Distance: {}", self.ground_distance);
         println!("  Ground?: {}", self.is_grounded);
         println!("  Velocity: {}", self.velocity);
