@@ -3,7 +3,7 @@ use std::{cmp::Ordering, f32::consts::PI};
 use bevy::prelude::*;
 use strum_macros::Display;
 use theseeker_engine::physics::{LinearVelocity, PhysicsWorld, ShapeCaster};
-use crate::game::player::{CanDash, Dashing, Falling, Grounded, Player};
+use crate::game::player::{self, CanDash, Dashing, Falling, Grounded, Player, PlayerConfig};
 use super::CameraRig;
 
 // TODO: Should depend on bevy Window Resolution
@@ -69,20 +69,20 @@ impl FollowStrategy {
     }
 
     pub fn update(mut spring: &mut CameraSpring, player_tracker: &Res<PlayerTracker>) -> FollowStrategy {
-        if player_tracker.ground_distance <= spring.floor {
+        dbg!(player_tracker.just_dashed);
+        if (player_tracker.ground_distance <= spring.floor) {
             return FollowStrategy::GroundFollow;
-        }
-        if player_tracker.ground_distance > spring.floor && player_tracker.ground_distance < (spring.floor + spring.fall_buffer) {
+        } else if (player_tracker.ground_distance > spring.floor 
+        && player_tracker.ground_distance < (spring.floor + spring.fall_buffer)) {
             return FollowStrategy::JumpFollow;
         }
-        if player_tracker.ground_distance > (spring.floor + spring.fall_buffer) {
+        else if (player_tracker.ground_distance > (spring.floor + spring.fall_buffer)) {
             return FollowStrategy::FallFollow;
         }
-        if player_tracker.just_dashed {
-            return FollowStrategy::DashFollow;
-        }
+         else {
         /// TODO: add Init logic here and return FollowStrategy::Init
-        return FollowStrategy::default();
+            return FollowStrategy::default();
+        }
        
     }
 
@@ -183,6 +183,7 @@ impl CameraSpring {
      ) -> () {
         match self.follow_strategy {
             FollowStrategy::GroundFollow => {
+                self.k = if player_tracker.just_dashed {self.k_fast} else {self.k_reg};
                 // vertical spring phases
                 rig.camera_position.y = 
                 match self.y_phase {
@@ -249,22 +250,23 @@ impl CameraSpring {
                 }*/
             }
             FollowStrategy::JumpFollow => {
+                self.k = if player_tracker.just_dashed {self.k_fast} else {self.k_reg};
                 rig.camera_position.x = self.calculate(self, rig, delta_seconds, false);
                 rig.camera_position.y = self.calculate(self, rig, delta_seconds, true);
             }
             FollowStrategy::FallFollow => {
-                self.k = self.k_fast;
+                self.k = if player_tracker.just_dashed {self.k_fast} else {self.k_reg};
                 rig.camera_position.x = self.calculate(self, rig, delta_seconds, false);
                 rig.camera_position.y = self.calculate(self, rig, delta_seconds, true);
                 
             }
             FollowStrategy::DashFollow => {
-                self.k = self.k_fast;
+                self.k = if player_tracker.just_dashed {self.k_fast} else {self.k_reg};
                 rig.camera_position.x = self.calculate(self, rig, delta_seconds, false);
                 rig.camera_position.y = self.calculate(self, rig, delta_seconds, true);
             }
             _ => {
-                self.k = self.k_reg;
+                self.k = if player_tracker.just_dashed {self.k_fast} else {self.k_reg};
                 rig.camera_position.x = self.calculate(self, rig, delta_seconds, false);
                 rig.camera_position.y = self.calculate(self, rig, delta_seconds, true);
             
@@ -350,6 +352,8 @@ pub(super) fn track_player(
     transform_query: Query<&Transform, With<Player>>,
     mut removed_grounded: RemovedComponents<Grounded>,
     mut dashing_added: Query<Entity, (With<Player>, Added<Dashing>)>,
+    spring: Res<CameraSpring>,
+    player_config: Res<PlayerConfig>, 
 ) {
     for transform in transform_query.iter() {
         player_tracker.position = transform.translation.xy();
@@ -366,23 +370,45 @@ pub(super) fn track_player(
         }
     }
 
+    /*for entity in dashing_removed.read() {
+        if let Ok(_player) = can_dash_query.get(entity) {
+            player_tracker.dash_complete = true;
+        }
+    }*/
+
+    if let Ok(_player) = dashing_added.get_single() {
+        player_tracker.just_dashed = false;
+    }
+    
+    /*if matches!(spring.x_phase, SpringPhase::Reset) {
+        player_tracker.just_dashed = false;
+    }*/
+}
+
+
+pub(super) fn update_dash_timer(
+    mut player_tracker: ResMut<PlayerTracker>, 
+    time: Res<Time>,
+) { 
+    if player_tracker.after_dash_timer > 0.0 && player_tracker.just_dashed == true {
+        player_tracker.after_dash_timer -= time.delta_seconds();
+    } else if player_tracker.after_dash_timer <= 0.0 {
+        player_tracker.just_dashed = false;
+        player_tracker.after_dash_timer = 1.0;
+    }
+}
+
+pub(super) fn track_player_dashed(
+    mut dashing_removed: RemovedComponents<Dashing>,
+    can_dash_query: Query<&Transform, (With<Player>, With<CanDash>)>,
+    mut player_tracker: ResMut<super::PlayerTracker>,
+) {
     for entity in dashing_removed.read() {
         if let Ok(_player) = can_dash_query.get(entity) {
             player_tracker.just_dashed = true;
         }
     }
 }
-
-
-pub(super) fn track_player_dashed(
-    dashing_added: Query<Entity, (With<Player>, Added<Dashing>)>,
-    mut player_tracker: ResMut<super::PlayerTracker>,
-) {
-    for _player in dashing_added.iter() {
-        player_tracker.just_dashed = false;
-    }
-}
-
 
 pub(super) fn track_player_ground_distance(
     spatial_query: Res<PhysicsWorld>,
@@ -413,7 +439,7 @@ pub(super) fn track_player_velocity(
     }
 }
 
-pub(super) fn snap_after_dash(
+/*pub(super) fn snap_after_dash(
     player_query: Query<&Transform, (With<Player>, With<CanDash>)>,
     mut removed: RemovedComponents<Dashing>,
     mut spring: ResMut<CameraSpring>,
@@ -422,11 +448,10 @@ pub(super) fn snap_after_dash(
     
     for entity in removed.read() {
         if let Ok(_player) = player_query.get(entity) {
-            spring.k = spring.k_fast ;
             
         }
     }
-}
+}*/
 
 #[derive(Resource, Default, Clone)]
 pub(super) struct PlayerTracker {
@@ -437,6 +462,7 @@ pub(super) struct PlayerTracker {
     pub(super) velocity: Vec2, 
     pub(super) position: Vec2,
     pub(super) just_dashed: bool,
+    pub(super) after_dash_timer: f32,
 }
 
 impl PlayerTracker {
@@ -449,6 +475,7 @@ impl PlayerTracker {
         println!("  Velocity: {}", self.velocity);
         println!("  Position: {}", self.position);
         println!("  Just Dashed: {}", self.just_dashed);
+        println!("  Dash Timer: {}", self.after_dash_timer);
     }
 }
 

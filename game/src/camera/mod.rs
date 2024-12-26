@@ -33,7 +33,7 @@ impl Plugin for CameraPlugin {
         );
         app.register_clicommand_args("camera_limits", cli_camera_limits_args);
         app.add_systems(
-            OnEnter(AppState::InGame),setup_main_camera);
+            OnEnter(AppState::InGame),(setup_main_camera));
         // app.add_systems(Update, (manage_camera_projection,));
 
         app.insert_resource(CameraRig {
@@ -46,13 +46,14 @@ impl Plugin for CameraPlugin {
             displacement: Vec2::new(1.0, 1.0),
         });
         app.insert_resource(CameraSpring::default());
-        app.insert_resource(PlayerTracker::default());
+        app.insert_resource(PlayerTracker{after_dash_timer: 1.0, ..Default::default()});
         app.add_systems(
             GameTickUpdate,
             (
                 update_screen_shake.run_if(resource_exists::<CameraShake>),
             ),
         );
+
         app.add_systems(
             Update, 
             (
@@ -62,7 +63,8 @@ impl Plugin for CameraPlugin {
                 track_player_dashed,
                 track_player_ground_distance,
                 track_player_velocity,
-                snap_after_dash,
+                update_dash_timer,
+                // snap_after_dash,
                 update_camera.after(camera_rig_follow_player),
                 debug_update.after(update_camera),
             ),
@@ -245,6 +247,7 @@ fn camera_rig_follow_player(
 
     spring.y_phase = SpringPhase::update(&mut spring, &player_tracker, rig.displacement.y, true);
     spring.x_phase = SpringPhase::update(&mut spring, &player_tracker, rig.displacement.x,  false);
+    dbg!(player_tracker.just_dashed);
     spring.follow_strategy = FollowStrategy::update(&mut *spring, &player_tracker);
 
     spring.follow(&mut rig, &player_tracker, time.delta_seconds());
