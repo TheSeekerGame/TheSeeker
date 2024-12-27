@@ -1,20 +1,14 @@
 //! Everything to do with the in-game camera(s)
-
 use std::f32::consts::PI;
-use std::ops;
 
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use iyes_perf_ui::PerfUiCompleteBundle;
 use ran::ran_f64_range;
-use rapier2d::math::Translation;
-use theseeker_engine::time;
 
-use crate::game::player::{self, CanDash, Dashing, Falling, Grounded, Player, PlayerConfig};
-use theseeker_engine::physics::LinearVelocity;
+use crate::game::player::{Dashing, Player};
 use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
-// use crate::graphics::post_processing::darkness::DarknessSettings;
 use crate::graphics::post_processing::vignette::VignetteSettings;
 use crate::level::MainBackround;
 use crate::prelude::*;
@@ -35,18 +29,16 @@ impl Plugin for CameraPlugin {
         );
         app.register_clicommand_args("camera_limits", cli_camera_limits_args);
         app.add_systems(
-            OnEnter(AppState::InGame),(setup_main_camera));
-        // app.add_systems(Update, (manage_camera_projection,));
+            OnEnter(AppState::InGame),setup_main_camera);
 
         app.insert_resource(CameraRig {
             target: Vec2::new(300.0, 582.0),
             camera_position: Vec2::new(300.0, 582.0),
-            //move_speed: 1.9,
             lead_direction: LeadDirection::Forward,
             lead_amount: 20.0,
             lead_buffer: 10.0,
             displacement: Vec2::new(1.0, 1.0),
-            equilibrium_y: f32::default(),
+            equilibrium_y: 1.0,
         });
         app.insert_resource(CameraSpring::default());
         app.insert_resource(PlayerTracker{after_dash_timer: 1.0, ..Default::default()});
@@ -61,25 +53,15 @@ impl Plugin for CameraPlugin {
             Update, 
             (
                 camera_rig_follow_player,
-                draw_debug_gizmos,
                 update_fall_factor,
                 track_player,
                 track_player_dashed,
                 track_player_ground_distance,
                 track_player_velocity,
                 update_dash_timer,
-                // snap_after_dash,
                 update_camera.after(camera_rig_follow_player),
-                debug_update.after(update_camera),
             ),
         );
-        // Debugging systems
-       /*  app.add_systems(
-            Update, 
-            (
-                draw_debug_gizmos,
-            ),
-        );*/
     }
 }
 
@@ -103,8 +85,6 @@ pub struct CameraRig {
     target: Vec2,
     /// the "base" position of the camera before screen shake is applied.
     camera_position: Vec2,
-    /// The factor used in lerping to move the rig.
-    //move_speed: f32,
     /// Keeps track if the camera is leading ahead, or behind the player.
     lead_direction: LeadDirection,
     /// Defines how far ahead the camera will lead the player by.
@@ -119,14 +99,6 @@ pub struct CameraRig {
 }
 
 impl CameraRig {
-    pub fn debug_print(&self) {
-        println!("CameraRig Debug:");
-        println!("  Target: {}", self.target);
-        println!("  Camera Position: {}", self.camera_position);
-        println!("  Displacement: {}", self.displacement);
-        println!("  Equilibrium_y: {}", self.equilibrium_y);
-    }
-
     pub fn calculate_displacement(&mut self) {
         self.displacement = self.target - self.camera_position;
     }
@@ -255,71 +227,11 @@ fn camera_rig_follow_player(
 
     spring.y_phase = SpringPhase::update(&mut spring, &player_tracker, rig.displacement.y, true);
     spring.x_phase = SpringPhase::update(&mut spring, &player_tracker, rig.displacement.x,  false);
-    dbg!(player_tracker.just_dashed);
     spring.follow_strategy = FollowStrategy::update(&mut *spring, &player_tracker);
 
     spring.follow(&mut rig, &player_tracker, time.delta_seconds());
 
-    /*match spring.y_phase {
-        SpringPhase::Active => { //
-            rig.camera_position.y = spring.follow(&*rig, time.delta_seconds(), true);
-        }
-        SpringPhase::Snapping => { //
-            if player_tracker.is_grounded {
-                spring.snap_vertical(&mut rig, &player);
-            }
-        }
-        SpringPhase::Snapped => { //
-            if player_tracker.grounded_y != player_tracker.previous_grounded_y {
-                spring.y_phase = SpringPhase::Reset;
-            }
-        }
-        _ => {
-            rig.camera_position.y = spring.follow( &*rig, time.delta_seconds(), true);
-        } 
-    } */
-    
-    /*match spring.x_phase {
-        SpringPhase::Resetting => {
-            rig.camera_position.x = spring.follow(&*rig, time.delta_seconds(), false); //
-        }
-        SpringPhase::Snapping => {
-            if player_tracker.is_grounded {
-                spring.snap_horizontal(&mut rig, &player, false);
-            }
-        }
-        SpringPhase::Snapped => {
-            
-        }
-        _ => {
-            rig.camera_position.x = spring.follow(&*rig, time.delta_seconds(), false);
-        }
-    }*/
 }
-
-   
-
-
-fn draw_debug_gizmos(
-    rig: Res<CameraRig>,
-    mut gizmos: Gizmos,
-) {
-    gizmos.circle_2d(
-        Vec2::new(rig.camera_position.x, rig.camera_position.y),
-          4.0,
-          Color::GREEN,
-      );
-    gizmos.rect(
-        Vec3::new(rig.target.x, rig.target.y, 0.),
-        Quat::from_rotation_y(0.0),
-        Vec2::splat(3.),
-        Color::RED,
-    );
-    
-
-}
-
-
 
 /// Camera updates the camera position to smoothly interpolate to the
 /// rig location. also applies camera shake, and limits camera within the level boundaries
