@@ -1,8 +1,10 @@
 //! Everything to do with the in-game camera(s)
-
 use std::f32::consts::PI;
+<<<<<<< HEAD
+=======
 use std::ops;
 
+>>>>>>> aj377/117-dash-cam-debug
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
@@ -11,10 +13,13 @@ use ran::ran_f64_range;
 use rapier2d::math::Translation;
 use theseeker_engine::time;
 
+<<<<<<< HEAD
+use crate::game::player::{Dashing, Player};
+=======
 use crate::game::player::{self, CanDash, Dashing, Falling, Grounded, Player, PlayerConfig};
 use theseeker_engine::physics::LinearVelocity;
+>>>>>>> aj377/117-dash-cam-debug
 use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
-// use crate::graphics::post_processing::darkness::DarknessSettings;
 use crate::graphics::post_processing::vignette::VignetteSettings;
 use crate::level::MainBackround;
 use crate::prelude::*;
@@ -35,6 +40,17 @@ impl Plugin for CameraPlugin {
         );
         app.register_clicommand_args("camera_limits", cli_camera_limits_args);
         app.add_systems(
+<<<<<<< HEAD
+            OnEnter(AppState::InGame),
+                setup_main_camera,
+        );
+        // app.add_systems(Update, (manage_camera_projection,));
+
+        app.insert_resource(CameraRig {
+            target: Vec2::new(300.0, 629.9531),
+            camera_position: Vec2::new(300.0, 629.9531),
+            move_speed: 1.9,
+=======
             OnEnter(AppState::InGame),(setup_main_camera));
         // app.add_systems(Update, (manage_camera_projection,));
 
@@ -42,31 +58,50 @@ impl Plugin for CameraPlugin {
             target: Vec2::new(300.0, 582.0),
             camera_position: Vec2::new(300.0, 582.0),
             //move_speed: 1.9,
+>>>>>>> aj377/117-dash-cam-debug
             lead_direction: LeadDirection::Forward,
             lead_amount: 20.0,
             lead_buffer: 10.0,
             displacement: Vec2::new(1.0, 1.0),
+<<<<<<< HEAD
+        });
+        app.insert_resource(RigSpring::default());
+        app.insert_resource(PlayerTracker::default());
+=======
             equilibrium_y: f32::default(),
         });
         app.insert_resource(CameraSpring::default());
         app.insert_resource(PlayerTracker{after_dash_timer: 1.0, ..Default::default()});
+>>>>>>> aj377/117-dash-cam-debug
         app.add_systems(
             GameTickUpdate,
             (
                 update_screen_shake.run_if(resource_exists::<CameraShake>),
             ),
         );
+<<<<<<< HEAD
+=======
 
+>>>>>>> aj377/117-dash-cam-debug
         app.add_systems(
             Update, 
             (
                 camera_rig_follow_player,
+<<<<<<< HEAD
+=======
                 draw_debug_gizmos,
                 update_fall_factor,
+>>>>>>> aj377/117-dash-cam-debug
                 track_player,
                 track_player_dashed,
                 track_player_ground_distance,
                 track_player_velocity,
+<<<<<<< HEAD
+                snap_after_dash,
+                update_camera.after(camera_rig_follow_player),
+            ),
+        );
+=======
                 update_dash_timer,
                 // snap_after_dash,
                 update_camera.after(camera_rig_follow_player),
@@ -80,6 +115,7 @@ impl Plugin for CameraPlugin {
                 draw_debug_gizmos,
             ),
         );*/
+>>>>>>> aj377/117-dash-cam-debug
     }
 }
 
@@ -114,6 +150,10 @@ pub struct CameraRig {
     lead_buffer: f32,
     /// The rig's target minus the actual camera position
     displacement: Vec2,
+<<<<<<< HEAD
+}
+
+=======
     /// The rig's target minus the actual camera position
     equilibrium_y: f32,
 }
@@ -153,6 +193,7 @@ impl CameraRig {
     }
 }
 
+>>>>>>> aj377/117-dash-cam-debug
 
 
 enum LeadDirection {
@@ -236,10 +277,13 @@ fn _manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wi
     // TODO
 }
 
-/// Updates the Camera rig (ie, the camera target) based on where the player is going.
 fn camera_rig_follow_player(
     mut rig: ResMut<CameraRig>,
+<<<<<<< HEAD
+    mut spring: ResMut<RigSpring>,
+=======
     mut spring: ResMut<CameraSpring>,
+>>>>>>> aj377/117-dash-cam-debug
     player_query: Query<&Transform, (With<Player>, Without<Dashing>)>,
     player_tracker: Res<PlayerTracker>,
     time: Res<Time>,
@@ -249,6 +293,75 @@ fn camera_rig_follow_player(
     } else {
         return;
     };
+<<<<<<< HEAD
+    calculate_rig_lead(&mut rig, player.x);
+
+    rig.target.y = player.y;
+    
+    rig.displacement = rig.target - rig.camera_position;
+
+    spring.update_vertical_phase(rig.displacement.y);
+    spring.update_horizontal_phase(rig.displacement.x);
+    spring.update_follow_strategy(&player_tracker);
+    if let FollowStrategy::FallFollow | FollowStrategy::DashFollow = spring.follow_strategy  {
+        spring.k = spring.k_fast;
+    } else if matches!(spring.x_phase, SpringPhase::Resetting) || matches!(spring.y_phase, SpringPhase::Resetting) {
+        spring.k = spring.k_reg;
+    }
+    match spring.y_phase {
+        SpringPhase::Active => {
+            rig.camera_position.y = spring.follow_strategy.follow(&*spring, &*rig, &player_tracker,time.delta_seconds(), true);
+        }
+        SpringPhase::Snapping => {
+            spring.snap_vertical(&mut rig, &player);
+        }
+        SpringPhase::Snapped => {
+            
+        }
+        _ => {
+            rig.camera_position.y = spring.follow_strategy.follow(&*spring, &*rig, &player_tracker, time.delta_seconds(), true);
+        } 
+    }
+    
+    match spring.x_phase {
+        SpringPhase::Resetting => {
+            rig.camera_position.x = spring.follow_strategy.follow(&*spring, &*rig, &player_tracker, time.delta_seconds(), false);
+        }
+        SpringPhase::Snapping => {
+            spring.snap_horizontal(&mut rig, &player, false);
+        }
+        SpringPhase::Snapped => {
+            
+        }
+        _ => {
+            rig.camera_position.x = spring.follow_strategy.follow(&*spring, &*rig, &player_tracker,time.delta_seconds(), false);
+        }
+    }
+}
+
+fn calculate_rig_lead(rig: &mut ResMut<CameraRig>, player_x: f32) -> () {
+    // Default state is to predict the player goes forward, ie "right"
+    let delta_x = player_x - rig.target.x;
+    match rig.lead_direction {
+        LeadDirection::Backward => {
+            if delta_x < rig.lead_amount {
+                rig.target.x = player_x - rig.lead_amount
+            } else if delta_x > rig.lead_amount + rig.lead_buffer {
+                rig.lead_direction = LeadDirection::Forward
+            }
+        },
+        LeadDirection::Forward => {
+            if delta_x > -rig.lead_amount {
+                rig.target.x = player_x + rig.lead_amount
+            } else if delta_x < -rig.lead_amount - rig.lead_buffer {
+                rig.lead_direction = LeadDirection::Backward
+            }
+        },
+    }
+}
+
+/// Updates the Camera rig (ie, the camera target) based on where the player is going.
+=======
     rig.calculate_rig_lead(player.x);
     rig.target.y = player.y; // poi
     rig.calculate_displacement();
@@ -297,7 +410,6 @@ fn camera_rig_follow_player(
     }*/
 }
 
-   
 
 
 fn draw_debug_gizmos(
@@ -319,6 +431,7 @@ fn draw_debug_gizmos(
 
 }
 
+>>>>>>> aj377/117-dash-cam-debug
 
 
 /// Camera updates the camera position to smoothly interpolate to the
