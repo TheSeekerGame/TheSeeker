@@ -59,7 +59,7 @@ impl Plugin for CameraPlugin {
             Update, 
             (
                 camera_rig_follow_player,
-                //draw_debug_gizmos,
+                draw_debug_gizmos,
                 update_fall_factor,
                 track_player,
                 track_player_dashed,
