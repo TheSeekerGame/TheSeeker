@@ -16,8 +16,6 @@ pub enum SpringPhase {
     Active,
     Snapped,
     Resetting,
-    Snapping,
-    Reset,
 }
 
 impl SpringPhase {
@@ -38,11 +36,8 @@ impl SpringPhase {
         } else { }
 
         if spring.is_in_reset_zone(displacement) && spring.is_in_snap_zone(displacement) {
-            if player_tracker.is_grounded && player_tracker.grounded_y == player_tracker.previous_grounded_y {
-                phase = &SpringPhase::Snapping
-            } else {
-                phase = &SpringPhase::Reset
-            }
+                phase = &SpringPhase::Snapped
+            
         } 
         phase.clone()
     }
@@ -69,19 +64,20 @@ impl FollowStrategy {
     }
 
     pub fn update(mut spring: &mut CameraSpring, player_tracker: &Res<PlayerTracker>) -> FollowStrategy {
-        dbg!(player_tracker.just_dashed);
-        if (player_tracker.ground_distance <= spring.floor) {
+        if (player_tracker.ground_distance <= spring.floor) 
+        && (player_tracker.grounded_y - player_tracker.previous_grounded_y).abs() <=
+        (player_tracker.previous_grounded_y + spring.fall_buffer) {
             return FollowStrategy::GroundFollow;
-        } else if (player_tracker.ground_distance > spring.floor 
-        && player_tracker.ground_distance < (spring.floor + spring.fall_buffer)) {
+        } else if (player_tracker.position.y - player_tracker.grounded_y) > spring.floor {
             return FollowStrategy::JumpFollow;
         }
-        else if (player_tracker.ground_distance > (spring.floor + spring.fall_buffer)) {
+        else if (player_tracker.ground_distance > (spring.floor + spring.fall_buffer))
+         && (player_tracker.position.y < (player_tracker.grounded_y + spring.fall_buffer)){
             return FollowStrategy::FallFollow;
         }
          else {
         /// TODO: add Init logic here and return FollowStrategy::Init
-            return FollowStrategy::default();
+            return spring.follow_strategy.clone();
         }
        
     }
@@ -122,6 +118,10 @@ pub struct CameraSpring {
     /// distance from target when snapping will take effect
     pub(super) snap_threshold: f32,
     /// The horizontal "phase" of the spring.
+    pub(super) equalize_threshold: f32,
+    /// Used when calculating the fall
+    pub(super) fall_factor: f32,
+    /// The horizontal "phase" of the spring.
     pub (super) x_phase: SpringPhase,
     /// The vertical "phase" of the spring.
     pub (super) y_phase: SpringPhase, 
@@ -132,7 +132,7 @@ pub struct CameraSpring {
 impl CameraSpring {
     pub fn debug_print(&self) {
         println!("---------------------------------");
-        println!("RigSpring Debug:");
+        println!("CameraSpring Debug:");
         println!("---------------------------------");
         println!("  Floor: {}", self.floor);
         println!("  Ceiling: {}", self.ceiling);
@@ -148,6 +148,8 @@ impl CameraSpring {
         println!("  Vertical Snapped: {}", self.vertical_snapped);
         println!("  Reset Threshold: {}", self.reset_threshold);
         println!("  Snap Threshold: {}", self.snap_threshold);
+        println!("  Equalize Threshold: {}", self.equalize_threshold);
+        println!("  Displacement Factor: {}", self.fall_factor);
         println!("  Horizontal Phase: {}", self.x_phase);
         println!("  Vertical Phase: {}", self.y_phase);
         println!("  Follow Strategy: {}", self.follow_strategy);
@@ -157,7 +159,7 @@ impl CameraSpring {
         CameraSpring {
             floor: 37.5,
             ceiling: 500.0,
-            fall_buffer: 30.0,
+            fall_buffer: 10.0,
             limit_override: false,
             k_reg: 3.553,
             k_fast: 7.106,
@@ -169,6 +171,10 @@ impl CameraSpring {
             vertical_snapped: false,
             reset_threshold: 1.0,
             snap_threshold: 0.25,
+            // equalizing threshold should be the floor value
+            equalize_threshold: 25.0,
+            // used for increasing camera speed when calculating fall
+            fall_factor: 0.0,
             x_phase: default(), 
             y_phase: default(),
             follow_strategy: default(),
@@ -182,36 +188,42 @@ impl CameraSpring {
         delta_seconds: f32,
      ) -> () {
         match self.follow_strategy {
+            FollowStrategy::InitFollow => {
+                rig.camera_position.x = self.calculate(&self, rig, delta_seconds, false);
+                rig.camera_position.y = self.calculate(&self, rig, delta_seconds, true);
+            }
             FollowStrategy::GroundFollow => {
                 self.k = if player_tracker.just_dashed {self.k_fast} else {self.k_reg};
                 // vertical spring phases
                 rig.camera_position.y = 
                 match self.y_phase {
                     SpringPhase::Active => {
-                        let displacement = rig.target.y - rig.camera_position.y;
-                        self.reset(displacement, self, rig, delta_seconds, true)
+                        //rig.target.y = rig.equilibrium_y;
+                        if player_tracker.previous_grounded_y < (player_tracker.grounded_y + self.fall_buffer)
+                        && (rig.target.y - rig.equilibrium_y).abs() < self.floor {
+                            self.equalize_y(&self, rig, delta_seconds)
+                        } else {
+                            self.calculate(&self, rig, delta_seconds, true)
+                        }
+                        
                     }
-                    SpringPhase::Resetting => {self.calculate(&self, rig, delta_seconds, true)}
-                    SpringPhase::Reset => {self.calculate(&self, rig, delta_seconds, true)}
-                    SpringPhase::Snapping => {
-                        if player_tracker.is_grounded {
-                           // rig.target.y = player_tracker.position.y;
-                            self.y_phase = SpringPhase::Snapped;
-                            rig.target.y
+                    SpringPhase::Resetting => {
+                        //rig.target.y = rig.equilibrium_y;
+                        if player_tracker.previous_grounded_y < (player_tracker.grounded_y + self.fall_buffer) {
+                            self.equalize_y(&self, rig, delta_seconds)
                         } else {
                             self.calculate(&self, rig, delta_seconds, true)
                         }
                     }
                     SpringPhase::Snapped => {
-                        if player_tracker.grounded_y != player_tracker.previous_grounded_y {
-                            self.y_phase = SpringPhase::Reset;
+                        //rig.target.y = rig.equilibrium_y;
+                        if player_tracker.previous_grounded_y < (player_tracker.grounded_y + self.fall_buffer) {
+                            self.equalize_y(&self, rig, delta_seconds)
+                        } else {
                             self.calculate(&self, rig, delta_seconds, true)
                         }
-                        else {
-                            //rig.target.y = player_tracker.position.y;
-                            rig.target.y
-                        }
                     }
+                    
                 };
                 // horizontal spring phases
                 rig.camera_position.x = 
@@ -220,18 +232,9 @@ impl CameraSpring {
                         self.calculate(&self, rig, delta_seconds, false)
                     }
                     SpringPhase::Resetting => { self.calculate(&self, rig, delta_seconds, false) }
-                    SpringPhase::Reset => {self.calculate(&self, rig, delta_seconds, false)}
-                    SpringPhase::Snapping => {
-                        if player_tracker.is_grounded {
-                            // rig.target.x = player_tracker.position.x;
-                            self.x_phase = SpringPhase::Snapped;
-                            rig.target.x
-                        } else {
-                            self.calculate(&self, rig, delta_seconds, false)
-                        }
-                    }
                     SpringPhase::Snapped => {
                         self.x_phase = SpringPhase::Snapped;
+                        self.vertical_snapped = true;
                         println!("Snapped on X");
                         rig.target.x
                             
@@ -251,13 +254,16 @@ impl CameraSpring {
             }
             FollowStrategy::JumpFollow => {
                 self.k = if player_tracker.just_dashed {self.k_fast} else {self.k_reg};
+                self.y_phase = SpringPhase::Resetting; 
                 rig.camera_position.x = self.calculate(self, rig, delta_seconds, false);
                 rig.camera_position.y = self.calculate(self, rig, delta_seconds, true);
             }
             FollowStrategy::FallFollow => {
-                self.k = if player_tracker.just_dashed {self.k_fast} else {self.k_reg};
-                rig.camera_position.x = self.calculate(self, rig, delta_seconds, false);
-                rig.camera_position.y = self.calculate(self, rig, delta_seconds, true);
+                self.k = self.k_reg;
+                rig.camera_position.y = self.calculate_fall(self, rig, delta_seconds, true);
+                let displacement = rig.target.x - (rig.camera_position.x);
+                rig.camera_position.x = self.reset(displacement, rig,  delta_seconds, false);
+                
                 
             }
             FollowStrategy::DashFollow => {
@@ -281,7 +287,7 @@ impl CameraSpring {
         spring: &CameraSpring, 
         rig: &CameraRig,
         delta_seconds: f32,
-        vertical: bool,
+        vertical: bool, 
     ) -> f32 {
         let displacement = if vertical { rig.displacement.y } else { rig.displacement.x };
         let position = if vertical { rig.camera_position.y } else { rig.camera_position.x };
@@ -292,18 +298,48 @@ impl CameraSpring {
         position + camera_acceleration * delta_seconds
     }
 
+    fn calculate_fall(
+        &self,
+        spring: &CameraSpring, 
+        rig: &CameraRig,
+        delta_seconds: f32,
+        vertical: bool, 
+    ) -> f32 {
+        let displacement = if vertical { rig.displacement.y - spring.fall_factor } else { rig.displacement.x };
+        let position = if vertical { rig.camera_position.y } else { rig.camera_position.x };
+        let velocity = if vertical { spring.velocity.abs() } else { 0.0 };
+        let spring_force = spring.k * displacement;
+        let damping_force = spring.damping_ratio * spring.velocity;
+        let camera_acceleration = spring_force - damping_force;
+        position + camera_acceleration * delta_seconds
+    }
+
+    fn equalize_y(
+        &self,
+        spring: &CameraSpring, 
+        rig: &CameraRig,
+        delta_seconds: f32,
+    ) -> f32 {
+        let displacement = rig.equilibrium_y - rig.camera_position.y;
+        let position = rig.camera_position.y;
+        let velocity = spring.velocity.abs();
+        let spring_force = spring.k * displacement;
+        let damping_force = spring.damping_ratio * spring.velocity;
+        let camera_acceleration = spring_force - damping_force;
+        position + camera_acceleration * delta_seconds
+    }
+
     fn reset(
         &self,
         displacement: f32, 
-        spring: &CameraSpring, 
         rig: &CameraRig,
         delta_seconds: f32,
         vertical: bool,
     ) -> f32 {
         let position = if vertical { rig.camera_position.y } else { rig.camera_position.x };
-        let velocity = if vertical { spring.velocity.abs() } else { 0.0 };
-        let spring_force = spring.k * displacement;
-        let damping_force = spring.damping_ratio * spring.velocity;
+        let velocity = if vertical { self.velocity.abs() } else { 0.0 };
+        let spring_force = self.k * displacement;
+        let damping_force = self.damping_ratio * self.velocity;
         let camera_acceleration = spring_force - damping_force;
         position + camera_acceleration * delta_seconds
     }
@@ -354,12 +390,14 @@ pub(super) fn track_player(
     mut dashing_added: Query<Entity, (With<Player>, Added<Dashing>)>,
     spring: Res<CameraSpring>,
     player_config: Res<PlayerConfig>, 
+    mut rig: ResMut<CameraRig>,
 ) {
     for transform in transform_query.iter() {
         player_tracker.position = transform.translation.xy();
     }
     for (_, t, _) in grounded_query.iter() {
         player_tracker.previous_grounded_y = player_tracker.grounded_y;
+        rig.equilibrium_y = rig.target.y;
         player_tracker.grounded_y = t.translation.y;
         player_tracker.is_grounded = true;
     }
@@ -385,6 +423,17 @@ pub(super) fn track_player(
     }*/
 }
 
+pub(super) fn update_fall_factor(
+    mut spring: ResMut<CameraSpring>,
+    player_tracker: Res<PlayerTracker>,
+) {
+    // spring.fall_factor = (player_tracker.ground_distance / 3.0).powf(1.5);
+    let steepness = 4.0;
+    let normalized_distance = player_tracker.ground_distance / 100.0; // Scale to a range of 0 to 1
+    let divisor = 12.0 * (1.0 - (-normalized_distance * steepness).exp());
+    spring.fall_factor =  player_tracker.ground_distance / divisor;
+    
+}
 
 pub(super) fn update_dash_timer(
     mut player_tracker: ResMut<PlayerTracker>, 

@@ -37,13 +37,14 @@ impl Plugin for CameraPlugin {
         // app.add_systems(Update, (manage_camera_projection,));
 
         app.insert_resource(CameraRig {
-            target: Vec2::new(300.0, 629.9531),
-            camera_position: Vec2::new(300.0, 629.9531),
+            target: Vec2::new(300.0, 582.0),
+            camera_position: Vec2::new(300.0, 582.0),
             //move_speed: 1.9,
             lead_direction: LeadDirection::Forward,
             lead_amount: 20.0,
             lead_buffer: 10.0,
             displacement: Vec2::new(1.0, 1.0),
+            equilibrium_y: f32::default(),
         });
         app.insert_resource(CameraSpring::default());
         app.insert_resource(PlayerTracker{after_dash_timer: 1.0, ..Default::default()});
@@ -58,7 +59,8 @@ impl Plugin for CameraPlugin {
             Update, 
             (
                 camera_rig_follow_player,
-                draw_debug_gizmos,
+                //draw_debug_gizmos,
+                update_fall_factor,
                 track_player,
                 track_player_dashed,
                 track_player_ground_distance,
@@ -110,6 +112,8 @@ pub struct CameraRig {
     lead_buffer: f32,
     /// The rig's target minus the actual camera position
     displacement: Vec2,
+    /// The rig's target minus the actual camera position
+    equilibrium_y: f32,
 }
 
 impl CameraRig {
@@ -118,6 +122,7 @@ impl CameraRig {
         println!("  Target: {}", self.target);
         println!("  Camera Position: {}", self.camera_position);
         println!("  Displacement: {}", self.displacement);
+        println!("  Equilibrium_y: {}", self.equilibrium_y);
     }
 
     pub fn calculate_displacement(&mut self) {
