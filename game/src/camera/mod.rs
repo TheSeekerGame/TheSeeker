@@ -1,5 +1,4 @@
 //! Everything to do with the in-game camera(s)
-
 use std::f32::consts::PI;
 
 use bevy::core_pipeline::bloom::BloomSettings;
@@ -8,12 +7,14 @@ use bevy::core_pipeline::tonemapping::Tonemapping;
 use iyes_perf_ui::PerfUiCompleteBundle;
 use ran::ran_f64_range;
 
-use crate::game::player::Player;
+use crate::game::player::{Dashing, Player};
 use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
-// use crate::graphics::post_processing::darkness::DarknessSettings;
 use crate::graphics::post_processing::vignette::VignetteSettings;
 use crate::level::MainBackround;
 use crate::prelude::*;
+
+mod camera_spring;
+use camera_spring::*; 
 
 const PROJECTION_SCALE: f32 = 1.0 / 5.0;
 
@@ -28,25 +29,37 @@ impl Plugin for CameraPlugin {
         );
         app.register_clicommand_args("camera_limits", cli_camera_limits_args);
         app.add_systems(
-            OnEnter(AppState::InGame),
-            setup_main_camera,
-        );
-        // app.add_systems(Update, (manage_camera_projection,));
+            OnEnter(AppState::InGame),setup_main_camera);
 
         app.insert_resource(CameraRig {
-            target: Default::default(),
-            camera_position: Default::default(),
-            move_speed: 1.9,
+            target: Vec2::new(300.0, 582.0),
+            camera_position: Vec2::new(300.0, 582.0),
             lead_direction: LeadDirection::Forward,
             lead_amount: 20.0,
             lead_buffer: 10.0,
+            displacement: Vec2::new(1.0, 1.0),
+            equilibrium_y: 1.0,
         });
+        app.insert_resource(CameraSpring::default());
+        app.insert_resource(PlayerTracker{after_dash_timer: 1.0, ..Default::default()});
         app.add_systems(
             GameTickUpdate,
             (
-                camera_rig_follow_player,
-                update_camera.after(camera_rig_follow_player),
                 update_screen_shake.run_if(resource_exists::<CameraShake>),
+            ),
+        );
+
+        app.add_systems(
+            Update, 
+            (
+                camera_rig_follow_player,
+                update_fall_factor,
+                track_player,
+                track_player_dashed,
+                track_player_ground_distance,
+                track_player_velocity,
+                update_dash_timer,
+                update_camera.after(camera_rig_follow_player),
             ),
         );
     }
@@ -72,8 +85,6 @@ pub struct CameraRig {
     target: Vec2,
     /// the "base" position of the camera before screen shake is applied.
     camera_position: Vec2,
-    /// The factor used in lerping to move the rig.
-    move_speed: f32,
     /// Keeps track if the camera is leading ahead, or behind the player.
     lead_direction: LeadDirection,
     /// Defines how far ahead the camera will lead the player by.
@@ -81,7 +92,40 @@ pub struct CameraRig {
     /// Defines how far away the player can get going in the unanticipated direction
     /// before the camera switches to track that direction.
     lead_buffer: f32,
+    /// The rig's target minus the actual camera position
+    displacement: Vec2,
+    /// The rig's target minus the actual camera position
+    equilibrium_y: f32,
 }
+
+impl CameraRig {
+    pub fn calculate_displacement(&mut self) {
+        self.displacement = self.target - self.camera_position;
+    }
+
+    pub fn calculate_rig_lead(&mut self, player_x: f32) -> () {
+        // Default state is to predict the player goes forward, ie "right"
+        let delta_x = player_x - self.target.x;
+        match self.lead_direction {
+            LeadDirection::Backward => {
+                if delta_x < self.lead_amount {
+                    self.target.x = player_x - self.lead_amount
+                } else if delta_x > self.lead_amount + self.lead_buffer {
+                    self.lead_direction = LeadDirection::Forward
+                }
+            },
+            LeadDirection::Forward => {
+                if delta_x > -self.lead_amount {
+                    self.target.x = player_x + self.lead_amount
+                } else if delta_x < -self.lead_amount - self.lead_buffer {
+                    self.lead_direction = LeadDirection::Backward
+                }
+            },
+        }
+    }
+}
+
+
 
 enum LeadDirection {
     Backward,
@@ -106,6 +150,7 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         },
         tonemapping: Tonemapping::None,
         ..default()
+
     };
     camera.projection.scale = PROJECTION_SCALE;
 
@@ -166,43 +211,26 @@ fn _manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wi
 /// Updates the Camera rig (ie, the camera target) based on where the player is going.
 fn camera_rig_follow_player(
     mut rig: ResMut<CameraRig>,
-    player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
+    mut spring: ResMut<CameraSpring>,
+    player_query: Query<&Transform, (With<Player>, Without<Dashing>)>,
+    player_tracker: Res<PlayerTracker>,
     time: Res<Time>,
 ) {
-    let Ok(player_transform) = player_query.get_single() else {
+    let player = if let Ok(transform) = player_query.get_single() {
+        transform.translation
+    } else {
         return;
     };
-    // Default state is to predict the player goes forward, ie "right"
-    let delta_x = player_transform.translation.x - rig.target.x;
+    rig.calculate_rig_lead(player.x);
+    rig.target.y = player.y; // poi
+    rig.calculate_displacement();
 
-    match rig.lead_direction {
-        LeadDirection::Backward => {
-            if delta_x < rig.lead_amount {
-                rig.target.x = player_transform.translation.x - rig.lead_amount
-            } else if delta_x > rig.lead_amount + rig.lead_buffer {
-                rig.lead_direction = LeadDirection::Forward
-            }
-        },
-        LeadDirection::Forward => {
-            if delta_x > -rig.lead_amount {
-                rig.target.x = player_transform.translation.x + rig.lead_amount
-            } else if delta_x < -rig.lead_amount - rig.lead_buffer {
-                rig.lead_direction = LeadDirection::Backward
-            }
-        },
-    }
+    spring.y_phase = SpringPhase::update(&mut spring, &player_tracker, rig.displacement.y, true);
+    spring.x_phase = SpringPhase::update(&mut spring, &player_tracker, rig.displacement.x,  false);
+    spring.follow_strategy = FollowStrategy::update(&mut *spring, &player_tracker);
 
-    rig.target.y = player_transform.translation.y;
+    spring.follow(&mut rig, &player_tracker, time.delta_seconds());
 
-    if (rig.camera_position - rig.target).length() < PROJECTION_SCALE {
-        // Stop lerping if already at the target
-        rig.camera_position = rig.target;
-    } else {
-        rig.camera_position = rig.camera_position.lerp(
-            rig.target,
-            time.delta_seconds() * rig.move_speed,
-        );
-    }
 }
 
 /// Camera updates the camera position to smoothly interpolate to the
@@ -403,3 +431,4 @@ fn cli_camera_limits_args(
         }
     }
 }
+
