@@ -121,6 +121,18 @@
         rows: 1,
         columns: 20,
     ),
+    "anim.player.HammerBasicIdle": File (
+        path: "animations/player/hammer/BasicIdle.anim.toml",
+    ),
+    "anim.player.HammerBasicIdle.image": File (
+        path: "animations/player/hammer/BasicIdleSheet.png",
+    ),
+    "anim.player.HammerBasicIdle.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 29,
+    ),
     "anim.player.SwordBasicRun": File (
         path: "animations/player/sword/BasicRun.anim.toml",
     ),
@@ -145,6 +157,18 @@
         rows: 1,
         columns: 20,
     ),
+    "anim.player.HammerBasicAir": File (
+        path: "animations/player/hammer/BasicAir.anim.toml",
+    ),
+    "anim.player.HammerBasicAir.image": File (
+        path: "animations/player/hammer/BasicAirSheet.png",
+    ),
+    "anim.player.HammerBasicAir.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 18,
+    ),
     "anim.player.SwordWhirling": File (
         path: "animations/player/sword/Whirling.anim.toml",
     ),
@@ -157,6 +181,18 @@
         rows: 1,
         columns: 6,
     ),
+    "anim.player.HammerWhirling": File (
+        path: "animations/player/hammer/Whirling.anim.toml",
+    ),
+    "anim.player.HammerWhirling.image": File (
+        path: "animations/player/hammer/WhirlingSheet.png",
+    ),
+    "anim.player.HammerWhirling.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 10,
+    ),
     "anim.player.SwordDashDown": File (
         path: "animations/player/sword/DashDown.anim.toml",
     ),
@@ -168,6 +204,18 @@
         tile_size_y: 48.,
         rows: 1,
         columns: 6,
+    ),
+    "anim.player.HammerDashDown": File (
+        path: "animations/player/hammer/DashDown.anim.toml",
+    ),
+    "anim.player.HammerDashDown.image": File (
+        path: "animations/player/hammer/DashDownSheet.png",
+    ),
+    "anim.player.HammerDashDown.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 12,
     ),
     "anim.player.BowBasicIdle": File (
         path: "animations/player/bow/BasicIdle.anim.toml",
