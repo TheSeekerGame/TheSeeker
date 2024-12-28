@@ -45,13 +45,18 @@ impl Projectile {
     }
 }
 
+/// Marker that identifies arrows shot by the Player.
+#[derive(Component)]
+pub struct Arrow;
+
 /// Applies gravity to the projectile
+/// It will not add gravity to Arrows shot by the Player.
 pub fn arc_projectile(
     mut query: Query<
         (
             &mut Transform,
-            &Collider,
             &mut Projectile,
+            Has<Arrow>,
         ),
         With<Attack>,
     >,
@@ -59,8 +64,10 @@ pub fn arc_projectile(
     time: Res<GameTime>,
 ) {
     let fall_accel = config.fall_accel;
-    for (mut transform, collider, mut projectile) in query.iter_mut() {
-        projectile.vel.0.y -= fall_accel;
+    for (mut transform, mut projectile, arrow) in query.iter_mut() {
+        if !arrow {
+            projectile.vel.0.y -= fall_accel;
+        }
         let z = transform.translation.z;
         transform.translation = (transform.translation.xy()
             + *projectile.vel * (1.0 / time.hz as f32))

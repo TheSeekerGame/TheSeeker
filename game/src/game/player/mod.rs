@@ -1,5 +1,6 @@
 mod player_anim;
 mod player_behaviour;
+mod player_weapon;
 use bevy::utils::hashbrown::HashMap;
 use leafwing_input_manager::action_state::ActionState;
 use leafwing_input_manager::axislike::VirtualAxis;
@@ -7,6 +8,7 @@ use leafwing_input_manager::input_map::InputMap;
 use leafwing_input_manager::{Actionlike, InputManagerBundle};
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
+use player_weapon::PlayerWeaponPlugin;
 use rapier2d::geometry::{Group, InteractionGroups};
 use rapier2d::na::Vector3;
 use strum::IntoEnumIterator;
@@ -60,6 +62,7 @@ impl Plugin for PlayerPlugin {
             PlayerBehaviorPlugin,
             PlayerTransitionPlugin,
             PlayerAnimationPlugin,
+            PlayerWeaponPlugin,
         ));
 
         #[cfg(feature = "dev")]
@@ -123,6 +126,9 @@ pub enum PlayerAction {
     Whirl,
     Stealth,
     Fall,
+    SwapWeapon,
+    Interact,
+    ToggleControlOverlay,
 }
 
 #[derive(Component, Debug, Deref, DerefMut)]
@@ -344,13 +350,29 @@ fn setup_player(
                             KeyCode::ArrowRight,
                         ),
                     )
-                    .with(PlayerAction::Attack, KeyCode::Enter)
+                    .with(PlayerAction::Attack, KeyCode::Digit1)
                     .with(PlayerAction::Attack, KeyCode::KeyJ)
                     .with(PlayerAction::Dash, KeyCode::KeyK)
+                    .with(PlayerAction::Dash, KeyCode::Digit2)
                     .with(PlayerAction::Whirl, KeyCode::KeyL)
-                    .with(PlayerAction::Stealth, KeyCode::KeyI),
+                    .with(PlayerAction::Whirl, KeyCode::Digit3)
+                    .with(
+                        PlayerAction::Stealth,
+                        KeyCode::Semicolon,
+                    )
+                    .with(PlayerAction::Stealth, KeyCode::Digit4)
+                    .with(PlayerAction::SwapWeapon, KeyCode::KeyH)
+                    .with(
+                        PlayerAction::SwapWeapon,
+                        KeyCode::Backquote,
+                    )
+                    .with(PlayerAction::Interact, KeyCode::KeyF)
+                    .with(
+                        PlayerAction::ToggleControlOverlay,
+                        KeyCode::KeyC,
+                    ),
             },
-            // bundling things up becuase we reached max tuple
+            // bundling things up because we reached max tuple
             (
                 Falling,
                 CanDash {
@@ -689,6 +711,13 @@ impl WallSlideTime {
     fn strict_sliding(&self, cfg: &PlayerConfig) -> bool {
         self.0 <= cfg.max_coyote_time * 1.0
     }
+
+    /// Checks that player is actually against the wall, rather then it being close
+    /// enough time from the player having left the wall to still jump
+    /// (ie: not wall_jump_coyote_time)
+    fn is_pressed_against_wall(&self, time: &Res<GameTime>) -> bool {
+        self.0 <= 1.0 / time.hz as f32
+    }
 }
 
 /// Tracks the cooldown for the available energy for the players whirl
@@ -739,7 +768,7 @@ pub struct PlayerConfig {
     /// How many seconds does our characters innate hover boots work?
     max_coyote_time: f32,
 
-    /// Onlly applies in the downward y direction while the player is falling
+    /// Only applies in the downward y direction while the player is falling
     /// and trying to walk into the wall
     sliding_friction: f32,
 
@@ -801,6 +830,24 @@ pub struct PlayerConfig {
 
     /// Ticks for melee knockback velocity; determines how long movement is locked for
     melee_pushback_ticks: u32,
+
+    /// Base bow attack damage
+    bow_attack_damage: u32,
+
+    /// Pushback velocity on basic bow shots
+    bow_self_pushback: f32,
+
+    /// Ticks for bow pushback velocity; determines how long movement is locked for
+    bow_self_pushback_ticks: u32,
+
+    /// Knockback velocity applied to enemy on basic bow hit
+    bow_pushback: f32,
+
+    /// Ticks for melee knockback velocity; determines how long movement is locked for
+    bow_pushback_ticks: u32,
+
+    /// Velocity of the projectiles fired by the Bow weapon
+    arrow_velocity: f32,
 
     /// How many kills to trigger a passive gain
     passive_gain_rate: u32,
@@ -877,7 +924,13 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "melee_self_pushback_ticks", |val| config.melee_self_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
     update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "bow_attack_damage", |val| config.bow_attack_damage = val as u32);
+    update_field(&mut errors, &cfg.0, "bow_self_pushback", |val| config.bow_self_pushback = val);
+    update_field(&mut errors, &cfg.0, "bow_self_pushback_ticks", |val| config.bow_self_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "bow_pushback", |val| config.bow_pushback = val);
+    update_field(&mut errors, &cfg.0, "bow_pushback_ticks", |val| config.bow_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "passive_gain_rate", |val| config.passive_gain_rate = val as u32);
+    update_field(&mut errors, &cfg.0, "arrow_velocity", |val| config.arrow_velocity = val);
 
     for error in errors{
        warn!("failed to load player cfg value: {}", error);
@@ -910,7 +963,7 @@ pub struct StatusModifier {
 
     /// Multiplying Factor on Stat, e.g. 102.0 * 0.5 = 51.0
     scalar: Vec<f32>,
-    /// Offseting Value on Stat, e.g. 100.0 - 10.0 = 90.0
+    /// Offsetting Value on Stat, e.g. 100.0 - 10.0 = 90.0
     delta: Vec<f32>,
 
     effect_col: Color,

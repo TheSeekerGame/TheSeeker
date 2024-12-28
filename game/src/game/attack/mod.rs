@@ -3,9 +3,11 @@ pub mod particles;
 
 use std::mem;
 
+use arc_attack::Arrow;
+use rapier2d::prelude::InteractionGroups;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
-    update_sprite_colliders, Collider, PhysicsWorld, GROUND,
+    update_sprite_colliders, Collider, PhysicsWorld, GROUND, PLAYER_ATTACK,
 };
 
 use super::enemy::{Defense, EnemyGfx, EnemyStateSet, JustGotHitMarker};
@@ -38,7 +40,7 @@ impl Plugin for AttackPlugin {
                 (
                     determine_attack_targets,
                     apply_attack_modifications,
-                    // DamageInfo event emited here
+                    // DamageInfo event emitted here
                     apply_attack_damage,
                     // OnAttackFirstHitSet
                     track_crits,
@@ -60,6 +62,7 @@ impl Plugin for AttackPlugin {
                 // cleanup
                 attack_tick,
                 despawn_projectile,
+                despawn_player_arrows,
                 attack_cleanup,
             )
                 .chain()
@@ -133,6 +136,16 @@ impl Attack {
 
     pub fn set_stat_mod(mut self, modif: StatusModifier) -> Self {
         self.status_mod = Some(modif);
+        self
+    }
+
+    pub fn with_damage(mut self, damage: u32) -> Self {
+        self.damage = damage;
+        self
+    }
+
+    pub fn with_max_targets(mut self, max_targets: u32) -> Self {
+        self.max_targets = max_targets;
         self
     }
 }
@@ -405,6 +418,32 @@ pub fn despawn_projectile(
 ) {
     for (entity, attack) in query.iter() {
         if attack.damaged_set.len() == attack.max_targets as usize {
+            // Note: purposefully does not despawn child entities, nor remove the
+            // reference, so that child particle systems have the option of lingering
+            commands.entity(entity).despawn();
+        }
+    }
+}
+
+pub fn despawn_player_arrows(
+    query: Query<(Entity, &Transform, &Collider), With<Arrow>>,
+    spatial_query: Res<PhysicsWorld>,
+    mut commands: Commands,
+) {
+    for (entity, transform, collider) in query.iter() {
+        let is_arrow_intersecting_with_ground = !spatial_query
+            .intersect(
+                transform.translation.xy(),
+                collider.0.shape(),
+                InteractionGroups {
+                    memberships: PLAYER_ATTACK,
+                    filter: GROUND,
+                },
+                None,
+            )
+            .is_empty();
+
+        if is_arrow_intersecting_with_ground {
             // Note: purposefully does not despawn child entities, nor remove the
             // reference, so that child particle systems have the option of lingering
             commands.entity(entity).despawn();

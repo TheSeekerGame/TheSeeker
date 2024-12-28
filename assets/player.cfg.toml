@@ -33,7 +33,7 @@ fall_accel = 4.5
 # How many seconds does our characters innate hover boots work?
 max_coyote_time = 0.1
 
-# Onlly applies in the downward y direction while the player is falling
+# Only applies in the downward y direction while the player is falling
 # and trying to walk into the wall
 sliding_friction = 0.25
 
@@ -96,5 +96,23 @@ melee_pushback = 60.0
 # Ticks for melee knockback velocity; determines how long movement is locked for
 melee_pushback_ticks = 12.0
 
+# Base bow attack damage
+bow_attack_damage = 20.0
+
+# Pushback velocity on basic bow shots
+bow_self_pushback = 60.0
+
+# Ticks for bow pushback velocity; determines how long movement is locked for
+bow_self_pushback_ticks = 3.0
+
+# Knockback velocity applied to enemy on basic bow hit
+bow_pushback = 60.0
+
+# Ticks for melee knockback velocity; determines how long movement is locked for
+bow_pushback_ticks = 12.0
+
 # Number of kills to trigger passive gain
 passive_gain_rate = 3.0
+
+# Velocity of the projectiles fired by the Bow weapon
+arrow_velocity = 1000.0
