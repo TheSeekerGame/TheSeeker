@@ -48,10 +48,12 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                (gain_passives.run_if(resource_changed::<KillCount>)),
+                (
+                    gain_passives.run_if(resource_changed::<KillCount>),
+                    player_new_stats_mod,
+                ),
                 (
                     player_idle.run_if(any_with_component::<Idle>),
-                    player_new_stats_mod,
                     add_attack,
                     player_stealth,
                     player_whirl_charge.before(player_whirl),
