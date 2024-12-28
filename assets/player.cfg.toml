@@ -43,6 +43,9 @@ hitfreeze_ticks = 45.0
 # How many seconds does our character dash for?
 dash_duration = 0.06
 
+# How many seconds does our character dash for?
+dash_down_duration = 0.1
+
 # How many seconds does our character stealth for?
 stealth_duration = 2.0
 
@@ -52,8 +55,17 @@ stealth_cooldown = 5.0
 # How many pixels/s do they dash with?
 dash_velocity = 400.0
 
+# How many pixels/s do they dash down with, horizontally?
+dash_down_horizontal_velocity = 250.0
+
+# How many pixels/s do they dash down with, vertically?
+dash_down_vertical_velocity = 250.0
+
 # How long before the player can dash again?
 dash_cooldown_duration = 1.0
+
+# How long before the player can dash again?
+dash_down_cooldown_duration = 1.5
 
 max_whirl_energy = 5.0
 

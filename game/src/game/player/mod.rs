@@ -10,6 +10,7 @@ use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
 use player_weapon::PlayerWeaponPlugin;
 use rapier2d::geometry::{Group, InteractionGroups};
+use rapier2d::na::Vector3;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use theseeker_engine::animation::SpriteAnimationBundle;
@@ -124,6 +125,7 @@ pub enum PlayerAction {
     Dash,
     Whirl,
     Stealth,
+    Fall,
     SwapWeapon,
     Interact,
     ToggleControlOverlay,
@@ -187,6 +189,7 @@ fn debug_player_states(
             Ref<Jumping>,
             Ref<Grounded>,
             Ref<Dashing>,
+            Ref<DashStrike>,
             Ref<CanDash>,
         )>,
         With<Player>,
@@ -194,8 +197,16 @@ fn debug_player_states(
 ) {
     for states in query.iter() {
         // println!("{:?}", states);
-        let (running, idle, falling, jumping, grounded, dashing, can_dash) =
-            states;
+        let (
+            running,
+            idle,
+            falling,
+            jumping,
+            grounded,
+            dashing,
+            dash_strike,
+            can_dash,
+        ) = states;
         let mut states_string: String = String::new();
         if let Some(running) = running {
             if running.is_added() {
@@ -224,7 +235,16 @@ fn debug_player_states(
         }
         if let Some(dashing) = dashing {
             if dashing.is_added() {
-                states_string.push_str("added dashing, ");
+                if dashing.is_down_dash() {
+                    states_string.push_str("added down dashing, ");
+                } else {
+                    states_string.push_str("added dashing, ");
+                }
+            }
+        }
+        if let Some(dash_strike) = dash_strike {
+            if dash_strike.is_added() {
+                states_string.push_str("added dashing strike ");
             }
         }
         if let Some(can_dash) = can_dash {
@@ -317,6 +337,8 @@ fn setup_player(
                     .with(PlayerAction::Jump, KeyCode::Space)
                     .with(PlayerAction::Jump, KeyCode::KeyW)
                     .with(PlayerAction::Jump, KeyCode::ArrowUp)
+                    .with(PlayerAction::Fall, KeyCode::ArrowDown)
+                    .with(PlayerAction::Fall, KeyCode::KeyS)
                     .with(
                         PlayerAction::Move,
                         VirtualAxis::from_keys(KeyCode::KeyA, KeyCode::KeyD),
@@ -355,6 +377,7 @@ fn setup_player(
                 Falling,
                 CanDash {
                     remaining_cooldown: 0.0,
+                    total_cooldown: 0.0,
                 },
                 CanStealth {
                     remaining_cooldown: 0.0,
@@ -502,10 +525,77 @@ impl Whirling {
     const MIN_TICKS: u32 = 48;
 }
 
+/// Differentiates between different types of dashing
+//#[allow(clippy::enum_variant_names)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+pub enum DashType {
+    Horizontal,
+    Downward,
+}
+impl Default for DashType {
+    fn default() -> Self {
+        return DashType::Horizontal;
+    }
+}
+
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
 pub struct Dashing {
     duration: f32,
+    hit: bool,
+    hit_ground: bool,
+    dash_type: DashType,
+}
+impl Dashing {
+    pub fn from_action_state(action_state: &ActionState<PlayerAction>) -> Self {
+        if action_state.pressed(&PlayerAction::Fall) {
+            println!("dashing down!");
+            return Self {
+                dash_type: DashType::Downward,
+                ..default()
+            };
+        } else {
+            println!("dashing horizontally!");
+            return Self {
+                dash_type: DashType::Horizontal,
+                ..default()
+            };
+        }
+    }
+
+    pub fn dash_duration(&self, config: &PlayerConfig) -> f32 {
+        return match self.dash_type {
+            DashType::Horizontal => config.dash_duration,
+            DashType::Downward => config.dash_down_duration,
+        };
+    }
+
+    pub fn is_down_dash(&self) -> bool {
+        return self.dash_type == DashType::Downward;
+    }
+
+    pub fn is_horizontal_dash(&self) -> bool {
+        return self.dash_type == DashType::Horizontal;
+    }
+
+    pub fn set_player_velocity(
+        &self,
+        velocity: &mut LinearVelocity,
+        facing: &Facing,
+        config: &PlayerConfig,
+    ) {
+        match self.dash_type {
+            DashType::Horizontal => {
+                velocity.x = config.dash_velocity * facing.direction();
+                velocity.y = 0.0;
+            },
+            DashType::Downward => {
+                velocity.x =
+                    config.dash_down_horizontal_velocity * facing.direction();
+                velocity.y = -config.dash_down_vertical_velocity;
+            },
+        };
+    }
 }
 
 impl GentState for Dashing {}
@@ -513,15 +603,41 @@ impl Transitionable<CanDash> for Dashing {
     type Removals = (Dashing, Whirling);
 }
 
+impl Transitionable<DashStrike> for Dashing {
+    type Removals = (Dashing, Whirling);
+}
+
+#[derive(Component, Debug, Default)]
+#[component(storage = "SparseSet")]
+pub struct DashStrike {
+    ticks: u32,
+}
+
+impl DashStrike {
+    pub const MAX: u32 = 2;
+}
+
+impl GentState for DashStrike {}
+impl Transitionable<CanDash> for DashStrike {
+    type Removals = (DashStrike, Whirling, Dashing);
+}
+
 #[derive(Component, Debug)]
 #[component(storage = "SparseSet")]
 pub struct CanDash {
     pub remaining_cooldown: f32,
+    pub total_cooldown: f32,
 }
 impl CanDash {
-    pub fn new(config: &PlayerConfig) -> Self {
+    pub fn new(config: &PlayerConfig, dash_type: &DashType) -> Self {
+        let cooldown = match dash_type {
+            DashType::Horizontal => config.dash_cooldown_duration,
+            DashType::Downward => config.dash_down_cooldown_duration,
+        };
+
         Self {
-            remaining_cooldown: config.dash_cooldown_duration,
+            remaining_cooldown: cooldown,
+            total_cooldown: cooldown,
         }
     }
 }
@@ -662,6 +778,9 @@ pub struct PlayerConfig {
     /// How many seconds does our character dash for?
     dash_duration: f32,
 
+    /// How many seconds does our character dash for?
+    dash_down_duration: f32,
+
     /// How many seconds does our character stealth for?
     stealth_duration: f32,
 
@@ -671,8 +790,17 @@ pub struct PlayerConfig {
     /// How many pixels/s do they dash with?
     dash_velocity: f32,
 
+    /// How many pixels/s (horizontally) do they dash with when doing a downward dash?
+    dash_down_horizontal_velocity: f32,
+
+    /// How many pixels/s (vertically) do they dash with when doing a downward dash?
+    dash_down_vertical_velocity: f32,
+
     /// How long before the player can dash again?
     pub dash_cooldown_duration: f32,
+
+    /// How long before the player can dash again?
+    pub dash_down_cooldown_duration: f32,
 
     pub max_whirl_energy: f32,
 
@@ -767,7 +895,6 @@ fn load_player_config(
 #[rustfmt::skip]
 fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     let mut errors = Vec::new();
-
     update_field(&mut errors, &cfg.0, "max_move_vel", |val| config.max_move_vel = val);
     update_field(&mut errors, &cfg.0, "max_fall_vel", |val| config.max_fall_vel = val);
     update_field(&mut errors, &cfg.0, "move_accel_init", |val| config.move_accel_init = val);
@@ -779,8 +906,12 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "sliding_friction", |val| config.sliding_friction = val);
     update_field(&mut errors, &cfg.0, "hitfreeze_ticks", |val| config.hitfreeze_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "dash_duration", |val| config.dash_duration = val);
+    update_field(&mut errors, &cfg.0, "dash_down_duration", |val| config.dash_down_duration = val);
     update_field(&mut errors, &cfg.0, "dash_velocity", |val| config.dash_velocity = val);
+    update_field(&mut errors, &cfg.0, "dash_down_horizontal_velocity", |val| config.dash_down_horizontal_velocity = val);
+    update_field(&mut errors, &cfg.0, "dash_down_vertical_velocity", |val| config.dash_down_vertical_velocity = val);
     update_field(&mut errors, &cfg.0, "dash_cooldown_duration", |val| config.dash_cooldown_duration = val);
+    update_field(&mut errors, &cfg.0, "dash_down_cooldown_duration", |val| config.dash_down_cooldown_duration = val);
     update_field(&mut errors, &cfg.0, "stealth_duration", |val| config.stealth_duration = val);
     update_field(&mut errors, &cfg.0, "stealth_cooldown", |val| config.stealth_cooldown = val);
     update_field(&mut errors, &cfg.0, "max_whirl_energy", |val| config.max_whirl_energy = val);
@@ -955,15 +1086,52 @@ fn player_new_stats_mod(
 pub struct DashIcon {
     time: f32,
     init_a: f32,
+    dash_duration: f32,
 }
 
 #[derive(Resource)]
-pub struct DashIconAssetHandle(Handle<Image>);
+pub struct DashIconAssetHandle {
+    tex: Handle<Image>,
+    atlas: TextureAtlas,
+}
+#[derive(Resource)]
+pub struct DashDownIconAssetHandle {
+    tex: Handle<Image>,
+    atlas: TextureAtlas,
+}
 
-pub fn load_dash_asset(assets: Res<AssetServer>, mut commands: Commands) {
-    let tex: Handle<Image> = assets.load("animations/player/movement/Dash.png");
+pub fn load_dash_asset(
+    assets: Res<AssetServer>,
+    mut texture_atlas_layouts: ResMut<Assets<TextureAtlasLayout>>,
+    mut commands: Commands,
+) {
+    let dash_tex: Handle<Image> =
+        assets.load("animations/player/movement/Dash.png");
+    let dash_layout =
+        TextureAtlasLayout::from_grid(Vec2::new(96.0, 96.0), 1, 1, None, None);
+    let dash_layout_handle = texture_atlas_layouts.add(dash_layout);
 
-    commands.insert_resource(DashIconAssetHandle(tex));
+    let dash_down_tex: Handle<Image> =
+        assets.load("animations/player/sword/DashDownSheet.png");
+    let dash_down_layout =
+        TextureAtlasLayout::from_grid(Vec2::new(48.0, 48.0), 6, 1, None, None);
+    let dash_down_layout_handle = texture_atlas_layouts.add(dash_down_layout);
+
+    commands.insert_resource(DashIconAssetHandle {
+        tex: dash_tex,
+        atlas: TextureAtlas {
+            layout: dash_layout_handle,
+            index: 0,
+        },
+    });
+
+    commands.insert_resource(DashDownIconAssetHandle {
+        tex: dash_down_tex,
+        atlas: TextureAtlas {
+            layout: dash_down_layout_handle,
+            index: 1,
+        },
+    });
 }
 
 pub fn player_dash_fx(
@@ -972,7 +1140,7 @@ pub fn player_dash_fx(
             &GlobalTransform,
             &Facing,
             //            &LinearVelocity,
-            Ref<Dashing>,
+            &Dashing,
             Option<&Stealthing>,
         ),
         With<Player>,
@@ -980,49 +1148,48 @@ pub fn player_dash_fx(
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
     mut commands: Commands,
-    asset: Res<DashIconAssetHandle>,
+    dash_asset: Res<DashIconAssetHandle>,
+    dash_down_asset: Res<DashDownIconAssetHandle>,
 ) {
-    for (global_tr, facing, _dashing, stealthing_maybe) in query.iter() {
+    for (global_tr, facing, dashing, stealthing_maybe) in query.iter() {
         let pos = global_tr.translation();
 
-        // Code for potentially interpolating position
-        // Not deemed necessary due to sufficient sprite overlap
-        // let dir = Vec3::new(
-        //    config.dash_velocity * facing.direction(),
-        //    0.0,
-        //    0.0,
-        //);
-        // let lpos = pos + dir * 0.5;
-        // if dashing.is_added() {
-        //
-        //} else
-        {
-            // let dir = Vec2::new(
-            //    config.dash_velocity * facing.direction(),
-            //    0.0,
-            //);
+        let t = time.time_in_seconds() as f32 + dashing.dash_duration(&config);
 
-            let tex: Handle<Image> = asset.0.clone();
-            let t = time.time_in_seconds() as f32 + config.dash_duration;
+        let init_a = match stealthing_maybe {
+            Some(_) => 0.2,
+            None => 0.5,
+        };
 
-            let init_a = match stealthing_maybe {
-                Some(_) => 0.2,
-                None => 0.5,
-            };
+        let (tex, atlas) = if dashing.is_down_dash() {
+            (
+                dash_down_asset.tex.clone(),
+                dash_down_asset.atlas.clone(),
+            )
+        } else {
+            (
+                dash_asset.tex.clone(),
+                dash_asset.atlas.clone(),
+            )
+        };
 
-            commands.spawn((
-                SpriteBundle {
-                    sprite: Sprite {
-                        flip_x: facing.direction() < 0.,
-                        ..default()
-                    },
-                    transform: Transform::from_translation(pos),
-                    texture: tex.clone(),
+        commands.spawn((
+            SpriteSheetBundle {
+                sprite: Sprite {
+                    flip_x: facing.direction() < 0.,
                     ..default()
                 },
-                DashIcon { time: t, init_a },
-            ));
-        }
+                transform: Transform::from_translation(pos),
+                texture: tex.clone(),
+                atlas,
+                ..default()
+            },
+            DashIcon {
+                time: t,
+                init_a,
+                dash_duration: dashing.dash_duration(&config),
+            },
+        ));
     }
 }
 
@@ -1035,7 +1202,7 @@ pub fn dash_icon_fx(
     for (entity, icon, mut sprite) in query.iter_mut() {
         let d = time.time_in_seconds() as f32 - icon.time;
 
-        let r = d / config.dash_duration;
+        let r = d / icon.dash_duration;
 
         if r >= 1.0 {
             commands.entity(entity).despawn();

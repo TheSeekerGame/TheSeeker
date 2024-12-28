@@ -1,10 +1,11 @@
-use bevy::prelude::{DetectChanges, Ref};
+use bevy::prelude::{DetectChanges, Ref, RemovedComponents};
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::LinearVelocity;
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
 
+use super::DashStrike;
 use crate::appstate::AppState;
 use crate::game::gentstate::Facing;
 use crate::game::player::{
@@ -33,6 +34,7 @@ impl Plugin for PlayerAnimationPlugin {
                 player_attacking_animation,
                 player_whirling_animation,
                 player_dashing_animation,
+                player_dashing_strike_animation,
                 sprite_flip.after(player_dashing_animation),
             )
                 .in_set(PlayerStateSet::Animation)
@@ -213,12 +215,27 @@ fn player_whirling_animation(
 }
 
 fn player_dashing_animation(
-    query: Query<&Gent, Added<Dashing>>,
+    query: Query<(&Gent, &Dashing), Added<Dashing>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
-    for gent in query.iter() {
+    for (gent, dashing) in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key("anim.player.Dash")
+            if dashing.is_down_dash() {
+                player.play_key("anim.player.SwordDashDown")
+            } else {
+                player.play_key("anim.player.Dash")
+            }
+        }
+    }
+}
+
+fn player_dashing_strike_animation(
+    query: Query<(&Gent, &DashStrike), Added<DashStrike>>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+) {
+    for (gent, _dash_strike) in query.iter() {
+        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            player.play_key("anim.player.SwordDashDownStrike")
         }
     }
 }
