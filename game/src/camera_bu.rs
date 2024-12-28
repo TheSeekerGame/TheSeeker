@@ -162,6 +162,10 @@ fn _manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wi
 ) {
     // TODO
 }
+use std::time::Instant;
+    
+    // Your function code here
+    
 
 /// Updates the Camera rig (ie, the camera target) based on where the player is going.
 fn camera_rig_follow_player(
@@ -169,6 +173,7 @@ fn camera_rig_follow_player(
     player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
     time: Res<Time>,
 ) {
+    let start = Instant::now();
     let Ok(player_transform) = player_query.get_single() else {
         return;
     };
@@ -203,6 +208,8 @@ fn camera_rig_follow_player(
             time.delta_seconds() * rig.move_speed,
         );
     }
+    let duration = start.elapsed();
+    println!("Baseline Function took: {:?}", duration);
 }
 
 /// Camera updates the camera position to smoothly interpolate to the
