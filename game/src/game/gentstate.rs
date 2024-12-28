@@ -81,6 +81,14 @@ impl Facing {
             Facing::Left => -1.,
         }
     }
+
+    /// Returns the opposite of a given [`Facing`] variant.
+    pub fn invert(&self) -> Self {
+        match self {
+            Facing::Right => Facing::Left,
+            Facing::Left => Facing::Right,
+        }
+    }
 }
 
 /// States
@@ -92,7 +100,7 @@ impl Facing {
 pub trait GentState: Component<Storage = SparseStorage> {}
 
 /// A GenericState has a blanket Transitionable impl for any GentState,
-/// it will remove itsself on transition
+/// it will remove itself on transition
 pub trait GenericState: Component<Storage = SparseStorage> {}
 
 impl<T: GentState, N: GentState + GenericState> Transitionable<T> for N {

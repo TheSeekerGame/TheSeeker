@@ -228,7 +228,7 @@ fn setup_enemy(
         if !bp.is_added() {
             continue;
         }
-        // TODO: ensure propper z order
+        // TODO: ensure proper z order
         xf_gent.translation.z = 14.0 * 0.000001;
         xf_gent.translation.y += 2.0; // Sprite offset so it looks like it is standing on the ground
         let e_gfx = commands.spawn(()).id();
@@ -547,7 +547,7 @@ struct Decay;
 
 // Check how far the player is, set our range, set our target if applicable, turn to face player if
 // in range
-// TODO: check x and y distance independantly?
+// TODO: check x and y distance independently?
 fn check_player_range(
     mut query: Query<
         (
@@ -795,11 +795,9 @@ fn aggro(
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if matches!(range, Range::Melee) {
                 match role {
-                    Role::Melee => {
-                        transitions.push(Waiting::new_transition(
-                            MeleeAttack::default(),
-                        ))
-                    },
+                    Role::Melee => transitions.push(Waiting::new_transition(
+                        MeleeAttack::default(),
+                    )),
                     Role::Ranged => {
                         velocity.x = 0.;
                         transitions.push(Waiting::new_transition(
@@ -865,7 +863,7 @@ fn ranged_attack(
             ));
             add_q.add(Idle);
         }
-        // if player isnt alive, do nothing, we will transiton back once animation finishes
+        // if player isnt alive, do nothing, we will transition back once animation finishes
         let Ok(transform) = player_query.get(attack.target) else {
             continue;
         };
