@@ -1,26 +1,36 @@
+use theseeker_engine::prelude::Component;
+use glam::Vec2;
+use theseeker_engine::prelude::Resource;
+
+pub const LEAD_BUFFER: f32 = 10.0;
+pub const LEAD_AMOUNT: f32 = 20.0;
+
+    
 #[derive(Resource)]
 /// Tracks the target location of the camera, as well as internal state for interpolation.
-pub struct CameraRig {
+pub struct RigData {
     /// The camera is moved towards this position smoothly.
-    target: Vec2,
+    pub target: Vec2,
     /// the "base" position of the camera before screen shake is applied.
-    camera_position: Vec2,
+    pub camera_next_pos: Vec2,
     /// The factor used in lerping to move the rig.
     //move_speed: f32,
     /// Keeps track if the camera is leading ahead, or behind the player.
-    lead_direction: LeadDirection,
+    
     /// Defines how far ahead the camera will lead the player by.
-    lead_amount: f32,
-    /// Defines how far away the player can get going in the unanticipated direction
-    /// before the camera switches to track that direction.
-    lead_buffer: f32,
+    
     /// The rig's target minus the actual camera position
-    displacement: Vec2,
+    pub displacement: Vec2,
     /// The rig's target minus the actual camera position
-    equilibrium_y: f32,
+    pub equilibrium_y: f32,
 }
 
-enum LeadDirection {
+#[derive(Component)]
+pub struct Rig{
+    pub lead_direction: LeadDirection,
+}
+
+pub enum LeadDirection {
     Backward,
     Forward,
 }

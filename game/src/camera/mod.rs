@@ -19,6 +19,12 @@ use crate::prelude::*;
 
 mod spring_data;
 use spring_data::*; 
+mod spring_behavior;
+use spring_behavior::*; 
+mod rig_data;
+use rig_data::*; 
+mod rig_behavior;
+use rig_behavior::*; 
 
 const PROJECTION_SCALE: f32 = 1.0 / 5.0;
 
@@ -38,17 +44,16 @@ impl Plugin for CameraPlugin {
             OnEnter(AppState::InGame),(setup_main_camera));
         // app.add_systems(Update, (manage_camera_projection,));
 
-        app.insert_resource(CameraRig {
+        app.insert_resource(RigData {
             target: Vec2::new(300.0, 582.0),
-            camera_position: Vec2::new(300.0, 582.0),
+            camera_next_pos: Vec2::new(300.0, 582.0),
             //move_speed: 1.9,
-            lead_direction: LeadDirection::Forward,
-            lead_amount: 20.0,
-            lead_buffer: 10.0,
+            //lead_amount: 20.0,
+            //lead_buffer: 10.0,
             displacement: Vec2::new(1.0, 1.0),
             equilibrium_y: f32::default(),
         });
-        app.insert_resource(CameraSpring::default());
+        app.insert_resource(SpringData::default());
         app.add_systems(
             GameTickUpdate,
             (
@@ -59,7 +64,7 @@ impl Plugin for CameraPlugin {
         app.add_systems(
             Update, 
             (
-                calculate_rig_lead,
+                update_rig_lead,
                 update_spring_phases, 
                 camera_rig_follow_player,
                 // draw_debug_gizmos,
@@ -99,18 +104,12 @@ struct MainCameraBundle {
 pub struct MainCamera;
 
 
-pub fn calculate_displacement(rig_target: Vec2, camera_position: Vec2) -> Vec2 {
-    //self.displacement = self.target - self.camera_position;
-    rig_target - camera_position
-}
 
 
 
 
-enum LeadDirection {
-    Backward,
-    Forward,
-}
+
+
 
 /// Limits to the viewable gameplay area.
 ///
@@ -188,60 +187,11 @@ fn _manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wi
 ) {
     // TODO
 }
-use std::time::Instant;
-fn camera_rig_follow_player(
-    mut rig: ResMut<CameraRig>,
-    mut spring: ResMut<CameraSpring>,
-    player_query: Query<&Transform, (With<Player>, Without<Dashing>)>,
-    player_tracker: Res<PlayerTracker>,
-    time: Res<Time>,
-) {
-    
-
-
-    let start = Instant::now();
-    // Your function code here
-    
-
-    let player = if let Ok(transform) = player_query.get_single() {
-        transform.translation
-    } else {
-        return;
-    };
-    //rig.calculate_rig_lead(player.x);
-    //rig.calculate_displacement();
-    rig.target.y = player.y; // poi
-    rig.displacement = calculate_displacement(rig.target, rig.camera_position);
-
-    spring.y_phase = SpringPhase::update(&mut spring, &player_tracker, rig.displacement.y, true);
-    spring.x_phase = SpringPhase::update(&mut spring, &player_tracker, rig.displacement.x,  false);
-    dbg!(player_tracker.just_dashed);
-    spring.follow_strategy = FollowStrategy::update(&mut *spring, &player_tracker);
-    spring.follow(&mut rig, &player_tracker, time.delta_seconds());
-    let duration = start.elapsed();
-    println!("Function took: {:?}", duration);
-}
 
 
 
-fn draw_debug_gizmos(
-    rig: Res<CameraRig>,
-    mut gizmos: Gizmos,
-) {
-    gizmos.circle_2d(
-        Vec2::new(rig.camera_position.x, rig.camera_position.y),
-          4.0,
-          Color::GREEN,
-      );
-    gizmos.rect(
-        Vec3::new(rig.target.x, rig.target.y, 0.),
-        Quat::from_rotation_y(0.0),
-        Vec2::splat(3.),
-        Color::RED,
-    );
-    
 
-}
+
 
 
 
@@ -249,7 +199,7 @@ fn draw_debug_gizmos(
 /// rig location. also applies camera shake, and limits camera within the level boundaries
 pub(crate) fn update_camera(
     mut camera_query: Query<(&mut Transform, &Projection), With<MainCamera>>,
-    rig: Res<CameraRig>,
+    rig: Res<RigData>,
     backround_query: Query<
         (&LayerMetadata, &Transform),
         (With<MainBackround>, Without<MainCamera>),
@@ -265,8 +215,8 @@ pub(crate) fn update_camera(
         return;
     };
 
-    camera_transform.translation.x = rig.camera_position.x;
-    camera_transform.translation.y = rig.camera_position.y;
+    camera_transform.translation.x = rig.camera_next_pos.x;
+    camera_transform.translation.y = rig.camera_next_pos.y;
 
     if let Ok((bg_layer, bg_transform)) = backround_query.get_single() {
         let camera_rect = ortho_projection.area;

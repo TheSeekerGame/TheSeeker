@@ -6,22 +6,7 @@ use theseeker_engine::physics::{LinearVelocity, PhysicsWorld, ShapeCaster};
 use crate::game::player::{self, CanDash, Dashing, Falling, Grounded, Player, PlayerConfig};
 use super::{CameraRig, DashCamTimer, MainCamera};
 
-// TODO: Should depend on bevy Window Resolution
-const CENTER_SCREEN: Vec2 = Vec2::new(1280./2., 720./2.);
-const INITIAL_POSITION: Vec2 = Vec2::new(300.0, 605.6115);
-/// "faster" restoring force for "tighter" spring follows for spring constant (k) 
-const K_FAST: f32 = 7.106;
-/// holds "normal" k-value so we can change current k back at any time
-const K_REG: f32 = 3.553;
-const FLOOR: f32 = 37.5;
-const CEILING: f32 = 500.0;
-const DAMPING_RATIO: f32 = 1.131;
-/// point at which the spring will be reset
-const RESET_THRESHOLD: f32 = 1.0;
-/// distance from target when snapping will take effect
-const SNAP_THRESHOLD: f32 = 0.25;
-/// The horizontal "phase" of the spring.
-const EQUALIZE_THRESHOLD: f32 = 25.0;
+
 
 #[derive(Component, Default, Display, Debug,)]
 pub enum SpringPhase {
