@@ -17,15 +17,16 @@ pub const RESET_THRESHOLD: f32 = 1.0;
 pub const SNAP_THRESHOLD: f32 = 0.25;
 /// The horizontal "phase" of the spring.
 pub const EQUALIZE_THRESHOLD: f32 = 25.0;
+pub const FALL_BUFFER: f32 = 10.0;
 
 #[derive(Resource, Default, Clone)]
 pub struct SpringData {
+    // TODO: fall buffer TO constant
     pub(super) fall_buffer: f32,
     pub(super) k: f32,
     pub(super) velocity: f32,
     pub(super) vertical_snapped: bool,
     pub(super) fall_factor: f32,
-    pub (super) follow_strategy: FollowStrategy, 
 }
 
 #[derive(Component, Default, Clone)]
@@ -58,6 +59,13 @@ pub enum SpringPhaseY {
 pub struct DashCamTimer{
     pub remaining: f32, 
     pub just_dashed: bool,
+}
+
+#[derive(Component, Default)]
+pub struct PlayerInfo {
+    pub(super) grounded_y: f32, 
+    pub(super) previous_grounded_y: f32, 
+    pub(super) is_grounded: bool,
 }
 
 // impl Default for DashCamTimer {

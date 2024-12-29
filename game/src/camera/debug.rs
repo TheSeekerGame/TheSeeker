@@ -1,3 +1,9 @@
+// Timing diagnostic
+#[derive(Resource)]
+struct SystemProfiler {
+    total_duration: f32,
+}
+
 pub fn camera_rig_debug_print(&self) {
     println!("CameraRig Debug:");
     println!("  Target: {}", self.target);
@@ -12,7 +18,7 @@ pub fn camera_spring_debug_print(&self) {
     println!("---------------------------------");
     println!("  Floor: {}", FLOOR);
     println!("  Ceiling: {}", CEILING);
-    println!("  Fall Buffer: {}", self.fall_buffer);
+    println!("  Fall Buffer: {}", FALL_BUFFER);
     //println!("  Limit Override: {}", self.limit_override);
     println!("  Spring Constant (k): {}", self.k);
     println!("  Fast Spring Constant (k_fast): {}", K_FAST);

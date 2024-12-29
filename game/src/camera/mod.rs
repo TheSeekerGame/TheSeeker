@@ -46,7 +46,7 @@ impl Plugin for CameraPlugin {
 
         app.insert_resource(RigData {
             target: Vec2::new(300.0, 582.0),
-            camera_next_pos: Vec2::new(300.0, 582.0),
+            //camera_next_pos: Vec2::new(300.0, 582.0),
             //move_speed: 1.9,
             //lead_amount: 20.0,
             //lead_buffer: 10.0,
@@ -69,11 +69,11 @@ impl Plugin for CameraPlugin {
                 camera_rig_follow_player,
                 // draw_debug_gizmos,
                 //update_fall_factor,
-                track_player,
-                track_player_dashed,
-                track_player_ground_distance,
-                track_player_velocity,
-                update_dash_timer,
+                // track_player,
+                // track_player_dashed,
+                // track_player_ground_distance,
+                // track_player_velocity,
+                //update_dash_timer,
                 // snap_after_dash,
                 update_camera.after(camera_rig_follow_player),
                 //debug_update.after(update_camera),
@@ -199,13 +199,18 @@ fn _manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wi
 /// rig location. also applies camera shake, and limits camera within the level boundaries
 pub(crate) fn update_camera(
     mut camera_query: Query<(&mut Transform, &Projection), With<MainCamera>>,
-    rig: Res<RigData>,
+    rig_query: Query<&Rig, With<MainCamera>>,
     backround_query: Query<
         (&LayerMetadata, &Transform),
         (With<MainBackround>, Without<MainCamera>),
     >,
     camera_shake: Option<Res<CameraShake>>,
 ) {
+    let rig = match rig_query.get_single() {
+        Ok(rig) => rig, 
+        Err(_) => return,
+    };
+    
     let Ok((mut camera_transform, projection)) = camera_query.get_single_mut()
     else {
         return;
@@ -215,8 +220,8 @@ pub(crate) fn update_camera(
         return;
     };
 
-    camera_transform.translation.x = rig.camera_next_pos.x;
-    camera_transform.translation.y = rig.camera_next_pos.y;
+    camera_transform.translation.x = rig.next_position.x;
+    camera_transform.translation.y = rig.next_position.y;
 
     if let Ok((bg_layer, bg_transform)) = backround_query.get_single() {
         let camera_rect = ortho_projection.area;

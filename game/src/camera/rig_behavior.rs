@@ -6,9 +6,10 @@ use crate::game::player::Player;
 use super::rig_data::*;
 use super::spring_data;
 use super::MainCamera;
+
 pub fn camera_rig_follow_player(
     mut rig_data: ResMut<RigData>,
-    mut rig_query: Query<&mut Rig, With<MainCamera>>,
+    rig_query: Query<&Rig, With<MainCamera>>,
     player_query: Query<&Transform, (With<Player>, Without<Dashing>)>,
     time: Res<Time>,
 ) {
@@ -19,11 +20,16 @@ pub fn camera_rig_follow_player(
     } else {
         return;
     };
+
+    let rig = match rig_query.get_single() {
+        Ok(rig) => rig, 
+        Err(_) => return,
+    };
     //rig.calculate_rig_lead(player.x);
     
     //rig.calculate_displacement();
     rig_data.target.y = player.y; 
-    rig_data.displacement = calculate_displacement(rig_data.target, rig_data.camera_next_pos);
+    rig_data.displacement = calculate_displacement(rig_data.target, rig.next_position);
     
     // for phases in phase query update phase
     let duration = start.elapsed();

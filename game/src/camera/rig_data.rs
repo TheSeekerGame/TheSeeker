@@ -12,7 +12,7 @@ pub struct RigData {
     /// The camera is moved towards this position smoothly.
     pub target: Vec2,
     /// the "base" position of the camera before screen shake is applied.
-    pub camera_next_pos: Vec2,
+    //pub camera_next_pos: Vec2,
     /// The factor used in lerping to move the rig.
     //move_speed: f32,
     /// Keeps track if the camera is leading ahead, or behind the player.
@@ -28,6 +28,8 @@ pub struct RigData {
 #[derive(Component)]
 pub struct Rig{
     pub lead_direction: LeadDirection,
+    /// The next position to move the camera to
+    pub next_position: Vec2,
 }
 
 pub enum LeadDirection {

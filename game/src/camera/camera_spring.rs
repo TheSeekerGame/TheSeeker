@@ -412,6 +412,7 @@ pub(super) fn update_fall_factor(
             spring.fall_factor =  ground_distance / divisor;
 
     }
+    
     // spring.fall_factor = (player_tracker.ground_distance / 3.0).powf(1.5);
     
     
