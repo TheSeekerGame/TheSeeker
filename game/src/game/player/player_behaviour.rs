@@ -3,7 +3,6 @@ use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
 use rapier2d::geometry::{Group, InteractionGroups};
-use rapier2d::na::ComplexField;
 use rapier2d::parry::query::TOIStatus;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
@@ -83,6 +82,7 @@ impl Plugin for PlayerBehaviorPlugin {
                         .before(player_jump)
                         .run_if(any_with_component::<Falling>),
                     bow_auto_aim
+                        .after(player_move)
                         .before(player_attack)
                         .run_if(is_player_using_bow),
                 )
