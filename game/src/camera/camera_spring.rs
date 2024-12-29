@@ -4,7 +4,7 @@ use bevy::prelude::*;
 use strum_macros::Display;
 use theseeker_engine::physics::{LinearVelocity, PhysicsWorld, ShapeCaster};
 use crate::game::player::{self, CanDash, Dashing, Falling, Grounded, Player, PlayerConfig};
-use super::CameraRig;
+use super::{CameraRig, DashCamTimer, MainCamera};
 
 // TODO: Should depend on bevy Window Resolution
 const CENTER_SCREEN: Vec2 = Vec2::new(1280./2., 720./2.);
@@ -23,15 +23,21 @@ const SNAP_THRESHOLD: f32 = 0.25;
 /// The horizontal "phase" of the spring.
 const EQUALIZE_THRESHOLD: f32 = 25.0;
 
-
-
-#[derive(Default, Display, Debug, Clone)]
+#[derive(Component, Default, Display, Debug,)]
 pub enum SpringPhase {
     #[default]
     Active,
     Snapped,
     Resetting,
 }
+
+/*#[derive(Default, Display, Debug, Clone)]
+pub enum SpringPhase {
+    #[default]
+    Active,
+    Snapped,
+    Resetting,
+}*/
 
 impl SpringPhase {
     pub fn debug_print(&self) {
@@ -58,6 +64,13 @@ impl SpringPhase {
     }
 
 }
+
+pub(super) fn update_spring_phases(
+    mut query: Query<&mut SpringPhase>, 
+) { 
+
+}
+
 
 #[derive(Default, Display, Clone)]
 pub enum FollowStrategy {
@@ -110,7 +123,7 @@ pub struct CameraSpring {
     pub(super) fall_buffer: f32,
     /// Used to override any limits placed on the spring 
     // TODO: Likely unnecessary for logic in final form, take out if possible
-    pub(super) limit_override: bool,
+    //pub(super) limit_override: bool,
     /// spring constant (k) is the constant used to calculate "restoring force"
     pub(super) k: f32,
     /// Damping ratio (damping coefficient or oscillation decay). Controls how quickly the system settles to equilibrium  
@@ -118,9 +131,6 @@ pub struct CameraSpring {
     /// Current velocity of the spring
     pub(super) velocity: f32,
     /// determine if spring is reset or not
-    pub(super) vertical_reset: bool,
-    /// is the spring snapped to the horizontal target?
-    pub(super) horizontal_snapped: bool,
     /// is the spring snapped to the vertical target?
     pub(super) vertical_snapped: bool,
     
@@ -143,14 +153,14 @@ impl CameraSpring {
         println!("  Floor: {}", FLOOR);
         println!("  Ceiling: {}", CEILING);
         println!("  Fall Buffer: {}", self.fall_buffer);
-        println!("  Limit Override: {}", self.limit_override);
+        //println!("  Limit Override: {}", self.limit_override);
         println!("  Spring Constant (k): {}", self.k);
         println!("  Fast Spring Constant (k_fast): {}", K_FAST);
         println!("  Regular Spring Constant (k_reg): {}", K_REG);
         println!("  Damping Coefficient: {}", DAMPING_RATIO);
         println!("  Velocity: {}", self.velocity);
-        println!("  Vertical Reset: {}", self.vertical_reset);
-        println!("  Horizontal Snapped: {}", self.horizontal_snapped);
+        // println!("  Vertical Reset: {}", self.vertical_reset);
+        // println!("  Horizontal Snapped: {}", self.horizontal_snapped);
         println!("  Vertical Snapped: {}", self.vertical_snapped);
         println!("  Reset Threshold: {}", RESET_THRESHOLD);
         println!("  Snap Threshold: {}", SNAP_THRESHOLD);
@@ -165,13 +175,11 @@ impl CameraSpring {
         CameraSpring {
             
             fall_buffer: 10.0,
-            limit_override: false,
+            //limit_override: false,
             
             k: 3.553,
             
             velocity: 0.0,
-            vertical_reset: false,
-            horizontal_snapped: false,
             vertical_snapped: false,
             
             // used for increasing camera speed when calculating fall
@@ -371,7 +379,7 @@ pub(super) fn track_player(
     player_query: Query<Entity, With<Player>>,
     transform_query: Query<&Transform, With<Player>>,
     mut removed_grounded: RemovedComponents<Grounded>,
-    mut dashing_added: Query<Entity, (With<Player>, Added<Dashing>)>,
+    dashing_added: Query<Entity, (With<Player>, Added<Dashing>)>,
     mut rig: ResMut<CameraRig>,
 ) {
     for transform in transform_query.iter() {
@@ -425,27 +433,46 @@ pub(super) fn update_fall_factor(
 }
 
 pub(super) fn update_dash_timer(
-    mut player_tracker: ResMut<PlayerTracker>, 
+    mut query: Query<&mut DashCamTimer, With<MainCamera>>,
     time: Res<Time>,
+    mut player_tracker: ResMut<PlayerTracker>,
+    dashing_added: Query<Entity, (With<Player>, Added<Dashing>)>,
 ) { 
-    if player_tracker.after_dash_timer > 0.0 && player_tracker.just_dashed == true {
-        player_tracker.after_dash_timer -= time.delta_seconds();
-    } else if player_tracker.after_dash_timer <= 0.0 {
-        player_tracker.just_dashed = false;
-        player_tracker.after_dash_timer = 1.0;
-    }
+    
+    
+    if let Ok(mut timer) = query.get_single_mut() {
+        // Use the timer as needed
+        if let Ok(_) = dashing_added.get_single() {
+            timer.just_dashed = false;
+        } else { println!("Not hitting")}
+        
+        if timer.remaining > 0.0 && timer.just_dashed == true {
+            timer.remaining -= time.delta_seconds();
+        } else if timer.remaining <= 0.0 {
+            timer.remaining = 1.0;
+        }
+        } else {
+            warn!("Expected exactly one Dash Cam Timer component, but found none or multiple.");
+        }
+    
 }
 
 pub(super) fn track_player_dashed(
     mut dashing_removed: RemovedComponents<Dashing>,
     can_dash_query: Query<&Transform, (With<Player>, With<CanDash>)>,
     mut player_tracker: ResMut<super::PlayerTracker>,
+    mut dash_cam_timer: Query<&mut DashCamTimer, With<MainCamera>>,
 ) {
-    for entity in dashing_removed.read() {
-        if let Ok(_player) = can_dash_query.get(entity) {
-            player_tracker.just_dashed = true;
+    if let Ok (mut timer) = dash_cam_timer.get_single_mut() {
+        for entity in dashing_removed.read() {
+            if let Ok(_player) = can_dash_query.get(entity) {
+                player_tracker.just_dashed = true;
+                timer.just_dashed = true;
+            }
         }
-    }
+        dbg!(timer.just_dashed);
+    } else {};
+    
 }
 
 pub(super) fn track_player_ground_distance(
@@ -500,7 +527,7 @@ pub(super) struct PlayerTracker {
     pub(super) velocity: Vec2, 
     pub(super) position: Vec2,
     pub(super) just_dashed: bool,
-    pub(super) after_dash_timer: f32,
+    //pub(super) after_dash_timer: f32,
 }
 
 impl PlayerTracker {
@@ -513,7 +540,7 @@ impl PlayerTracker {
         println!("  Velocity: {}", self.velocity);
         println!("  Position: {}", self.position);
         println!("  Just Dashed: {}", self.just_dashed);
-        println!("  Dash Timer: {}", self.after_dash_timer);
+        //println!("  Dash Timer: {}", self.after_dash_timer);
     }
 }
 

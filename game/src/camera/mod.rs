@@ -17,10 +17,12 @@ use crate::graphics::post_processing::vignette::VignetteSettings;
 use crate::level::MainBackround;
 use crate::prelude::*;
 
-mod camera_spring;
-use camera_spring::*; 
+mod spring_data;
+use spring_data::*; 
 
 const PROJECTION_SCALE: f32 = 1.0 / 5.0;
+
+
 
 pub struct CameraPlugin;
 
@@ -47,7 +49,6 @@ impl Plugin for CameraPlugin {
             equilibrium_y: f32::default(),
         });
         app.insert_resource(CameraSpring::default());
-        app.insert_resource(PlayerTracker{after_dash_timer: 1.0, ..Default::default()});
         app.add_systems(
             GameTickUpdate,
             (
@@ -59,6 +60,7 @@ impl Plugin for CameraPlugin {
             Update, 
             (
                 calculate_rig_lead,
+                update_spring_phases, 
                 camera_rig_follow_player,
                 // draw_debug_gizmos,
                 //update_fall_factor,
@@ -89,81 +91,20 @@ struct MainCameraBundle {
     limits: GameViewLimits,
     marker: MainCamera,
     despawn: StateDespawnMarker,
+    dash_cam_timer: DashCamTimer,
 }
 
 /// Marker component for the main gameplay camera
 #[derive(Component)]
 pub struct MainCamera;
 
-#[derive(Resource)]
-/// Tracks the target location of the camera, as well as internal state for interpolation.
-pub struct CameraRig {
-    /// The camera is moved towards this position smoothly.
-    target: Vec2,
-    /// the "base" position of the camera before screen shake is applied.
-    camera_position: Vec2,
-    /// The factor used in lerping to move the rig.
-    //move_speed: f32,
-    /// Keeps track if the camera is leading ahead, or behind the player.
-    lead_direction: LeadDirection,
-    /// Defines how far ahead the camera will lead the player by.
-    lead_amount: f32,
-    /// Defines how far away the player can get going in the unanticipated direction
-    /// before the camera switches to track that direction.
-    lead_buffer: f32,
-    /// The rig's target minus the actual camera position
-    displacement: Vec2,
-    /// The rig's target minus the actual camera position
-    equilibrium_y: f32,
-}
-
-impl CameraRig {
-    pub fn debug_print(&self) {
-        println!("CameraRig Debug:");
-        println!("  Target: {}", self.target);
-        println!("  Camera Position: {}", self.camera_position);
-        println!("  Displacement: {}", self.displacement);
-        println!("  Equilibrium_y: {}", self.equilibrium_y);
-    }
-
-    
-
-    
-}
 
 pub fn calculate_displacement(rig_target: Vec2, camera_position: Vec2) -> Vec2 {
     //self.displacement = self.target - self.camera_position;
     rig_target - camera_position
 }
 
-pub fn calculate_rig_lead(
-    mut rig: ResMut<CameraRig>, 
-    player_query: Query<&Transform, With<Player>>,
-) -> () {
-    let player = if let Ok(transform) = player_query.get_single() {
-        transform.translation
-    } else {
-        return;
-    };
-    // Default state is to predict the player goes forward, ie "right"
-    let delta_x = player.x - rig.target.x;
-    match rig.lead_direction {
-        LeadDirection::Backward => {
-            if delta_x < rig.lead_amount {
-                rig.target.x = player.x - rig.lead_amount
-            } else if delta_x > rig.lead_amount + rig.lead_buffer {
-                rig.lead_direction = LeadDirection::Forward
-            }
-        },
-        LeadDirection::Forward => {
-            if delta_x > -rig.lead_amount {
-                rig.target.x = player.x + rig.lead_amount
-            } else if delta_x < -rig.lead_amount - rig.lead_buffer {
-                rig.lead_direction = LeadDirection::Backward
-            }
-        },
-    }
-}
+
 
 
 enum LeadDirection {
@@ -217,6 +158,7 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
             despawn: StateDespawnMarker,
             // TODO: manage this from somewhere
             limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
+            dash_cam_timer: DashCamTimer{remaining: 1.0, just_dashed: false}, 
         },
         // Needed so that depth buffers are stored so depth of field works
         DepthPrepass,
