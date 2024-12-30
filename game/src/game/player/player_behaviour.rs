@@ -15,7 +15,7 @@ use theseeker_engine::physics::{
 use theseeker_engine::script::ScriptPlayer;
 
 use super::arc_attack::{Arrow, Projectile};
-use super::player_weapon::PlayerCombatStyle;
+use super::player_weapon::{PlayerCombatStyle, PlayerMeleeWeapon};
 use super::{
     dash_icon_fx, player_dash_fx, player_new_stats_mod, AttackBundle,
     CanStealth, DashIcon, DashStrike, DashType, JumpCount, KillCount,
@@ -1179,6 +1179,7 @@ fn player_attack(
     mut commands: Commands,
     config: Res<PlayerConfig>,
     combat_style: Res<PlayerCombatStyle>,
+    melee_weapon: Res<PlayerMeleeWeapon>,
     time: Res<GameTime>,
 ) {
     for (
@@ -1254,6 +1255,13 @@ fn player_attack(
                         .id()
                 },
                 PlayerCombatStyle::Melee => {
+                    let damage = match *melee_weapon {
+                        PlayerMeleeWeapon::Hammer => {
+                            config.hammer_attack_damage
+                        },
+                        PlayerMeleeWeapon::Sword => config.sword_attack_damage,
+                    };
+
                     commands
                         .spawn((
                             TransformBundle::from_transform(
@@ -1265,7 +1273,7 @@ fn player_attack(
                                 PLAYER_ATTACK,
                                 ENEMY_HURT,
                             )),
-                            Attack::new(16, entity),
+                            Attack::new(16, entity).with_damage(damage),
                             SelfPushback(Knockback::new(
                                 Vec2::new(
                                     config.melee_self_pushback

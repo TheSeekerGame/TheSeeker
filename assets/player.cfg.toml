@@ -96,6 +96,12 @@ melee_pushback = 60.0
 # Ticks for melee knockback velocity; determines how long movement is locked for
 melee_pushback_ticks = 12.0
 
+# Base sword attack damage
+sword_attack_damage = 20.0
+
+# Base hammer attack damage
+hammer_attack_damage = 20.0
+
 # Base bow attack damage
 bow_attack_damage = 15.0
 
