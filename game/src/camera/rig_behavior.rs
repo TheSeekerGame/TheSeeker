@@ -15,8 +15,6 @@ pub fn camera_rig_follow_player(
     player_query: Query<&Transform, (With<Player>, Without<Dashing>)>,
     time: Res<Time>,
 ) {
-    let start = Instant::now();
-
     let player = if let Ok(transform) = player_query.get_single() {
         transform.translation
     } else {
@@ -27,17 +25,12 @@ pub fn camera_rig_follow_player(
         Ok(rig) => rig, 
         Err(_) => return,
     };
-    //rig.calculate_rig_lead(player.x);
     
-    //rig.calculate_displacement();
     rig_data.target.y = player.y; 
     rig_data.displacement = calculate_displacement(rig_data.target, rig.next_position);
-    
-    // for phases in phase query update phase
-    let duration = start.elapsed();
-    println!("Camera rig follow player took: {:?}", duration);
 }
 
+// Default state is to predict the player goes forward, ie "right"
 pub fn update_rig_lead(
     mut rig_data: ResMut<RigData>, 
     player_query: Query<&Transform, With<Player>>,
@@ -67,7 +60,6 @@ pub fn update_rig_lead(
             },
         }
     }
-    // Default state is to predict the player goes forward, ie "right"
     
 }
 
@@ -87,6 +79,5 @@ pub(super)fn update_rig_equilibrium(
 }
 
 pub fn calculate_displacement(rig_target: Vec2, next_position: Vec2) -> Vec2 {
-    //self.displacement = self.target - self.next_position;
     Vec2::new(rig_target.x - next_position.x, rig_target.y - next_position.y)
 }

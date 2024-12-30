@@ -25,8 +25,6 @@ mod rig_data;
 use rig_data::*; 
 mod rig_behavior;
 use rig_behavior::*; 
-mod debug;
-use debug::*;
 
 const PROJECTION_SCALE: f32 = 1.0 / 5.0;
 
@@ -36,7 +34,6 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default());
         app.register_clicommand_args("camera_at", cli_camera_at);
         app.register_clicommand_noargs(
             "camera_limits",
@@ -45,14 +42,9 @@ impl Plugin for CameraPlugin {
         app.register_clicommand_args("camera_limits", cli_camera_limits_args);
         app.add_systems(
             OnEnter(AppState::InGame),(setup_main_camera));
-        // app.add_systems(Update, (manage_camera_projection,));
 
         app.insert_resource(RigData {
             target: Vec2::new(300.0, 582.0),
-            //camera_next_pos: Vec2::new(300.0, 582.0),
-            //move_speed: 1.9,
-            //lead_amount: 20.0,
-            //lead_buffer: 10.0,
             displacement: Vec2::new(1.0, 1.0),
             equilibrium_y: 1.0,
         });
@@ -67,9 +59,6 @@ impl Plugin for CameraPlugin {
         app.add_systems(
             Update, 
             (
-                //update_camera_rig_debug_print.after(update_player_grounded),
-                //update_camera_spring_debug_print.after(update_camera_rig_debug_print),
-                //update_player_info_debug_print.after(update_camera_spring_debug_print),
                 update_rig_lead,
                 update_rig_equilibrium.after(update_rig_lead),
                 update_spring_phases, 
@@ -79,16 +68,7 @@ impl Plugin for CameraPlugin {
                 update_follow_strategy,
                 update_player_grounded,
                 follow.after(update_follow_strategy), 
-                //draw_debug_gizmos,
-                //update_fall_factor,
-                // track_player,
-                // track_player_dashed,
-                // track_player_ground_distance,
-                // track_player_velocity,
-                //update_dash_timer,
-                // snap_after_dash,
                 update_camera.after(camera_rig_follow_player),
-                //debug_update.after(update_camera),
             ),
         );
         

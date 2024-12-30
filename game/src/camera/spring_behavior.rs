@@ -11,7 +11,6 @@ pub fn update_spring_phases(
     mut phase_query: Query<(&mut SpringPhaseX, &mut SpringPhaseY), With<MainCamera>>,
     rig_data: Res<RigData>,
 ) {
-    let start = Instant::now();
     let (displacement_x, displacement_y) = (rig_data.displacement.x, rig_data.displacement.y);
     
     if let Ok((mut phase_x, mut phase_y)) = phase_query.get_single_mut() {
@@ -37,8 +36,6 @@ pub fn update_spring_phases(
         }
 
     };
-    let duration = start.elapsed();
-    println!("Update Spring Phases took: {:?}", duration);
 }
 
 pub fn update_follow_strategy(
@@ -48,7 +45,6 @@ pub fn update_follow_strategy(
     ground_query: Query<(Entity, &ShapeCaster, &Transform), With<Player>>,
     player_query: Query<&Transform, With<Player>>,
 ) {
-    let start = Instant::now();
     //spring.follow_strategy = FollowStrategy::update(&mut *spring, &player_tracker);
     //spring_data.follow_strategy = 
     let mut player_info = if let Ok (mut player_info) = player_info_query.get_single_mut(){
@@ -99,11 +95,7 @@ pub fn update_follow_strategy(
                 //return spring.follow_strategy.clone();
 
             }
-    }
-
-    let duration = start.elapsed();
-    println!("Update Follow Strategy took: {:?}", duration);
-    
+    }   
 
 }
 
@@ -118,8 +110,6 @@ pub fn follow(
     rig_data: Res<RigData>,
     dash_timer_query: Query<&DashTimer, With<MainCamera>>,
 ) {
-    let start = Instant::now();
-    //spring.follow(&mut rig, &player_tracker, time.delta_seconds());
     let follow_strategy = match follow_query.get_single() {
         Ok(follow) => follow, 
         Err(_) => return,
@@ -133,11 +123,6 @@ pub fn follow(
         Ok(dash_timer) => dash_timer, 
         Err(_) => return,
     };
-    // let just_dashed = match dashed_query.get_single() {
-    //     Ok(_) => true,
-    //     Err(_) => false,
-    // };
-    //println!(" Just Dashed: {:?}", just_dashed);
 
     let player_info = if let Ok (player_info) = player_info_query.get_single(){
         player_info
@@ -231,8 +216,6 @@ pub fn follow(
         }
 
     }
-    let duration = start.elapsed();
-    println!("Follow took: {:?}", duration);
 }
 
 pub(super) fn update_player_grounded (
@@ -242,7 +225,6 @@ pub(super) fn update_player_grounded (
 
     //mut removed_grounded: RemovedComponents<Grounded>,
 ) {
-    let start = Instant::now();
     let mut player_info = if let Ok (mut player_info) = player_info_query.get_single_mut(){
         player_info
     }else {return;};
@@ -257,21 +239,7 @@ pub(super) fn update_player_grounded (
     } else {
         return;
     }
-    /*for t in grounded_query.iter() {
-        player_info.previous_grounded_y = player_info.grounded_y;
-        player_info.is_grounded = true;
-        player_info.grounded_y = t.translation.y;
-        
-    }
-    for t in airborne_query.iter() {
-        
-        player_info.is_grounded = false;
-        
-    }*/
-    
-    let duration = start.elapsed();
-    println!("Update Player Grounded took: {:?}", duration);
-    
+       
 }
 
 
