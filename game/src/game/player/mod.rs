@@ -581,15 +581,11 @@ impl Whirling {
 
 /// Differentiates between different types of dashing
 //#[allow(clippy::enum_variant_names)]
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default)]
 pub enum DashType {
+    #[default]
     Horizontal,
     Downward,
-}
-impl Default for DashType {
-    fn default() -> Self {
-        return DashType::Horizontal;
-    }
 }
 
 #[derive(Component, Debug, Default)]
@@ -604,32 +600,32 @@ impl Dashing {
     pub fn from_action_state(action_state: &ActionState<PlayerAction>) -> Self {
         if action_state.pressed(&PlayerAction::Fall) {
             println!("dashing down!");
-            return Self {
+            Self {
                 dash_type: DashType::Downward,
                 ..default()
-            };
+            }
         } else {
             println!("dashing horizontally!");
-            return Self {
+            Self {
                 dash_type: DashType::Horizontal,
                 ..default()
-            };
+            }
         }
     }
 
     pub fn dash_duration(&self, config: &PlayerConfig) -> f32 {
-        return match self.dash_type {
+        match self.dash_type {
             DashType::Horizontal => config.dash_duration,
             DashType::Downward => config.dash_down_duration,
-        };
+        }
     }
 
     pub fn is_down_dash(&self) -> bool {
-        return self.dash_type == DashType::Downward;
+        self.dash_type == DashType::Downward
     }
 
     pub fn is_horizontal_dash(&self) -> bool {
-        return self.dash_type == DashType::Horizontal;
+        self.dash_type == DashType::Horizontal
     }
 
     pub fn set_player_velocity(
@@ -1333,7 +1329,6 @@ pub fn dash_icon_fx(
     mut commands: Commands,
     mut query: Query<(Entity, &DashIcon, &mut Sprite)>,
     time: Res<GameTime>,
-    config: Res<PlayerConfig>,
 ) {
     for (entity, icon, mut sprite) in query.iter_mut() {
         let d = time.time_in_seconds() as f32 - icon.time;
