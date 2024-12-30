@@ -888,6 +888,9 @@ pub struct PlayerConfig {
     /// Base sword attack damage
     sword_attack_damage: f32,
 
+    /// Base hammer attack damage
+    hammer_attack_damage: f32,
+
     /// Base bow attack damage
     bow_attack_damage: f32,
 
@@ -982,6 +985,7 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
     update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "sword_attack_damage", |val| config.sword_attack_damage = val);
+    update_field(&mut errors, &cfg.0, "hammer_attack_damage", |val| config.hammer_attack_damage = val);
     update_field(&mut errors, &cfg.0, "bow_attack_damage", |val| config.bow_attack_damage = val);
     update_field(&mut errors, &cfg.0, "bow_self_pushback", |val| config.bow_self_pushback = val);
     update_field(&mut errors, &cfg.0, "bow_self_pushback_ticks", |val| config.bow_self_pushback_ticks = val as u32);
