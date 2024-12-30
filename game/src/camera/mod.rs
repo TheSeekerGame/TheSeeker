@@ -36,6 +36,7 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
+        app.add_plugins(bevy::diagnostic::FrameTimeDiagnosticsPlugin::default());
         app.register_clicommand_args("camera_at", cli_camera_at);
         app.register_clicommand_noargs(
             "camera_limits",
