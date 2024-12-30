@@ -1,5 +1,4 @@
 #![allow(unused_mut)]
-
 /// Custom prelude, for stuff we'd like to access all over the codebase
 /// Use in every file. :)
 mod prelude {
