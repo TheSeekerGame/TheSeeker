@@ -1,3 +1,4 @@
+use bevy::prelude::resource_equals;
 use bevy::sprite::{Sprite, SpriteSheetBundle};
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
@@ -14,7 +15,7 @@ use theseeker_engine::physics::{
 use theseeker_engine::script::ScriptPlayer;
 
 use super::arc_attack::{Arrow, Projectile};
-use super::player_weapon::{is_player_using_bow, PlayerWeapon};
+use super::player_weapon::PlayerCombatStyle;
 use super::{
     dash_icon_fx, player_dash_fx, player_new_stats_mod, AttackBundle,
     CanStealth, DashIcon, DashStrike, DashType, JumpCount, KillCount,
@@ -84,7 +85,9 @@ impl Plugin for PlayerBehaviorPlugin {
                     bow_auto_aim
                         .after(player_move)
                         .before(player_attack)
-                        .run_if(is_player_using_bow),
+                        .run_if(resource_equals(
+                            PlayerCombatStyle::Ranged,
+                        )),
                 )
                     .in_set(PlayerStateSet::Behavior)
                     .before(update_sprite_colliders),
@@ -1175,7 +1178,7 @@ fn player_attack(
     >,
     mut commands: Commands,
     config: Res<PlayerConfig>,
-    weapon: Res<PlayerWeapon>,
+    combat_style: Res<PlayerCombatStyle>,
     time: Res<GameTime>,
 ) {
     for (
@@ -1191,8 +1194,8 @@ fn player_attack(
     ) in query.iter_mut()
     {
         if attacking.ticks == 0 {
-            let attack = match *weapon {
-                PlayerWeapon::Bow => {
+            let attack = match *combat_style {
+                PlayerCombatStyle::Ranged => {
                     let mut animation: ScriptPlayer<SpriteAnimation> =
                         ScriptPlayer::default();
                     animation.play_key("anim.player.BowBasicArrow");
@@ -1250,7 +1253,7 @@ fn player_attack(
                         ))
                         .id()
                 },
-                PlayerWeapon::Sword => {
+                PlayerCombatStyle::Melee => {
                     commands
                         .spawn((
                             TransformBundle::from_transform(

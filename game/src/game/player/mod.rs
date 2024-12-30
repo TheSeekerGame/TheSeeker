@@ -126,7 +126,8 @@ pub enum PlayerAction {
     Whirl,
     Stealth,
     Fall,
-    SwapWeapon,
+    SwapCombatStyle,
+    SwapMeleeWeapon,
     Interact,
     ToggleControlOverlay,
 }
@@ -361,10 +362,17 @@ fn setup_player(
                         KeyCode::Semicolon,
                     )
                     .with(PlayerAction::Stealth, KeyCode::Digit4)
-                    .with(PlayerAction::SwapWeapon, KeyCode::KeyH)
                     .with(
-                        PlayerAction::SwapWeapon,
+                        PlayerAction::SwapCombatStyle,
+                        KeyCode::KeyH,
+                    )
+                    .with(
+                        PlayerAction::SwapCombatStyle,
                         KeyCode::Backquote,
+                    )
+                    .with(
+                        PlayerAction::SwapMeleeWeapon,
+                        KeyCode::KeyG,
                     )
                     .with(PlayerAction::Interact, KeyCode::KeyF)
                     .with(
