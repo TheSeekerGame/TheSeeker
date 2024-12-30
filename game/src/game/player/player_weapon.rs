@@ -58,6 +58,12 @@ impl CurrentWeapon<'_> {
         let weapon_str = self.to_string();
         format!("anim.player.{weapon_str}{action}")
     }
+
+    /// Retrieves the Whirling skill animation key for the currently equipped melee weapon.
+    pub fn whirling_anim_key(&self) -> String {
+        let weapon_str = self.melee_weapon.to_string();
+        format!("anim.player.{weapon_str}Whirling")
+    }
 }
 
 impl std::fmt::Display for CurrentWeapon<'_> {
