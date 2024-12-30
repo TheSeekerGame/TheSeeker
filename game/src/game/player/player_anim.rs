@@ -89,20 +89,15 @@ fn player_falling_animation(
                     {
                         player.play_key("anim.player.WallSlide");
                     }
-                } else {
-                    if velocity.y < 0.
-                        && player.current_key().unwrap_or("")
-                            != "anim.player.Fall"
-                    {
-                        player.play_key("anim.player.Fall");
-                    }
-                }
-            } else {
-                if velocity.y < 0.
+                } else if velocity.y < 0.
                     && player.current_key().unwrap_or("") != "anim.player.Fall"
                 {
                     player.play_key("anim.player.Fall");
                 }
+            } else if velocity.y < 0.
+                && player.current_key().unwrap_or("") != "anim.player.Fall"
+            {
+                player.play_key("anim.player.Fall");
             }
         }
     }
@@ -190,12 +185,10 @@ fn player_attacking_animation(
                         player.set_slot("AttackTransition", true);
                     }
                 }
-            } else {
-                if player.current_key() != Some(basic_idle_anim_key_str) {
-                    player.play_key(basic_idle_anim_key_str);
-                    if !attacking.is_added() {
-                        player.set_slot("AttackTransition", true);
-                    }
+            } else if player.current_key() != Some(basic_idle_anim_key_str) {
+                player.play_key(basic_idle_anim_key_str);
+                if !attacking.is_added() {
+                    player.set_slot("AttackTransition", true);
                 }
             }
         }
