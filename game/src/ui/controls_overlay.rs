@@ -100,10 +100,14 @@ fn spawn_control_overlay(mut commands: Commands) {
                 row.control_icon("4");
             });
             container.row().with_children(|row| {
-                row.text("Swap Weapon: ");
+                row.text("Swap Melee/Ranged: ");
                 row.control_icon("H");
                 row.text(" or ");
                 row.control_icon("`");
+            });
+            container.row().with_children(|row| {
+                row.text("Swap Melee Weapon: ");
+                row.control_icon("G");
             });
             container.spacer();
             container.row().with_children(|row| {
