@@ -205,10 +205,11 @@ fn player_attacking_animation(
 fn player_whirling_animation(
     query: Query<&Gent, Added<Whirling>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    weapon: CurrentWeapon,
 ) {
     for gent in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key("anim.player.SwordWhirling")
+            player.play_key(&weapon.whirling_anim_key());
         }
     }
 }
