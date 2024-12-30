@@ -1,5 +1,6 @@
 use bevy::app::Update;
-use bevy::prelude::Res;
+use bevy::ecs::system::SystemParam;
+use bevy::prelude::{resource_equals, IntoSystemConfigs, Res};
 use leafwing_input_manager::prelude::ActionState;
 use strum_macros::Display;
 
@@ -10,40 +11,89 @@ pub(crate) struct PlayerWeaponPlugin;
 
 impl Plugin for PlayerWeaponPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(PlayerWeapon::default());
-        app.add_systems(Update, swap_weapon);
+        app.insert_resource(PlayerMeleeWeapon::default());
+        app.insert_resource(PlayerRangedWeapon::default());
+        app.insert_resource(PlayerCombatStyle::default());
+        app.add_systems(
+            Update,
+            (
+                swap_combat_style,
+                swap_melee_weapon.run_if(resource_equals(
+                    PlayerCombatStyle::Melee,
+                )),
+            ),
+        );
     }
 }
 
 #[derive(Resource, Default, PartialEq, Eq, Display)]
-pub enum PlayerWeapon {
-    Bow,
+pub enum PlayerCombatStyle {
+    Ranged,
+    #[default]
+    Melee,
+}
+
+#[derive(Resource, Default, PartialEq, Eq, Display)]
+pub enum PlayerMeleeWeapon {
+    Hammer,
     #[default]
     Sword,
 }
 
-impl PlayerWeapon {
+#[derive(Resource, Default, PartialEq, Eq, Display)]
+pub enum PlayerRangedWeapon {
+    #[default]
+    Bow,
+}
+
+#[derive(SystemParam)]
+pub struct CurrentWeapon<'w> {
+    combat_style: Res<'w, PlayerCombatStyle>,
+    melee_weapon: Res<'w, PlayerMeleeWeapon>,
+    ranged_weapon: Res<'w, PlayerRangedWeapon>,
+}
+
+impl CurrentWeapon<'_> {
     pub fn get_anim_key(&self, action: &str) -> String {
         let weapon_str = self.to_string();
         format!("anim.player.{weapon_str}{action}")
     }
 }
 
-fn swap_weapon(
-    mut weapon: ResMut<PlayerWeapon>,
+impl std::fmt::Display for CurrentWeapon<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let weapon = match *self.combat_style {
+            PlayerCombatStyle::Ranged => self.ranged_weapon.to_string(),
+            PlayerCombatStyle::Melee => self.melee_weapon.to_string(),
+        };
+        write!(f, "{weapon}")
+    }
+}
+
+fn swap_combat_style(
+    mut combat_style: ResMut<PlayerCombatStyle>,
     query: Query<&ActionState<PlayerAction>, With<Player>>,
 ) {
     for action_state in &query {
-        if action_state.just_pressed(&PlayerAction::SwapWeapon) {
-            *weapon = match *weapon {
-                PlayerWeapon::Bow => PlayerWeapon::Sword,
-                PlayerWeapon::Sword => PlayerWeapon::Bow,
+        if action_state.just_pressed(&PlayerAction::SwapCombatStyle) {
+            *combat_style = match *combat_style {
+                PlayerCombatStyle::Ranged => PlayerCombatStyle::Melee,
+                PlayerCombatStyle::Melee => PlayerCombatStyle::Ranged,
             };
         }
     }
 }
 
-/// Run condition that checks if the Player is using the Bow
-pub fn is_player_using_bow(weapon: Res<PlayerWeapon>) -> bool {
-    weapon.eq(&PlayerWeapon::Bow)
+fn swap_melee_weapon(
+    mut weapon: ResMut<PlayerMeleeWeapon>,
+    query: Query<&ActionState<PlayerAction>, With<Player>>,
+) {
+    for action_state in &query {
+        if action_state.just_pressed(&PlayerAction::SwapMeleeWeapon) {
+            *weapon = match *weapon {
+                PlayerMeleeWeapon::Sword => PlayerMeleeWeapon::Hammer,
+                PlayerMeleeWeapon::Hammer => PlayerMeleeWeapon::Sword,
+            };
+        }
+    }
 }
