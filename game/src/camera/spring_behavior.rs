@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-
+use std::time::Instant;
 use theseeker_engine::physics::{PhysicsWorld, ShapeCaster};
 use theseeker_engine::prelude::*;
 use crate::game::player::{CanDash, Dashing, Grounded, Player};
@@ -11,6 +11,7 @@ pub fn update_spring_phases(
     mut phase_query: Query<(&mut SpringPhaseX, &mut SpringPhaseY), With<MainCamera>>,
     rig_data: Res<RigData>,
 ) {
+    let start = Instant::now();
     let (displacement_x, displacement_y) = (rig_data.displacement.x, rig_data.displacement.y);
     
     if let Ok((mut phase_x, mut phase_y)) = phase_query.get_single_mut() {
@@ -36,15 +37,18 @@ pub fn update_spring_phases(
         }
 
     };
+    let duration = start.elapsed();
+    println!("Update Spring Phases took: {:?}", duration);
 }
 
 pub fn update_follow_strategy(
-    spatial_query: Res<PhysicsWorld>,
-    ground_query: Query<(Entity, &ShapeCaster, &Transform), With<Player>>,
     mut follow_query: Query<&mut FollowStrategy, With<MainCamera>>,
     mut player_info_query: Query<&mut PlayerInfo, With<MainCamera>>, 
+    spatial_query: Res<PhysicsWorld>,
+    ground_query: Query<(Entity, &ShapeCaster, &Transform), With<Player>>,
     player_query: Query<&Transform, With<Player>>,
 ) {
+    let start = Instant::now();
     //spring.follow_strategy = FollowStrategy::update(&mut *spring, &player_tracker);
     //spring_data.follow_strategy = 
     let mut player_info = if let Ok (mut player_info) = player_info_query.get_single_mut(){
@@ -97,22 +101,24 @@ pub fn update_follow_strategy(
             }
     }
 
-    
+    let duration = start.elapsed();
+    println!("Update Follow Strategy took: {:?}", duration);
     
 
 }
 
 pub fn follow(
-    follow_query: Query<&FollowStrategy, With<MainCamera>>,
     mut spring_data: ResMut<SpringData>,
+    mut phase_query: Query<(&mut SpringPhaseX, &mut SpringPhaseY), With<MainCamera>>,
+    mut rig_query: Query<&mut Rig, With<MainCamera>>,
+    follow_query: Query<&FollowStrategy, With<MainCamera>>,
     time: Res<Time>,
     dashed_query: Query<Entity, (With<Player>, Added<CanDash>)>,
-    mut phase_query: Query<(&mut SpringPhaseX, &mut SpringPhaseY), With<MainCamera>>,
     player_info_query: Query<&PlayerInfo, With<MainCamera>>, 
     rig_data: Res<RigData>,
-    mut rig_query: Query<&mut Rig, With<MainCamera>>,
     dash_timer_query: Query<&DashTimer, With<MainCamera>>,
 ) {
+    let start = Instant::now();
     //spring.follow(&mut rig, &player_tracker, time.delta_seconds());
     let follow_strategy = match follow_query.get_single() {
         Ok(follow) => follow, 
@@ -225,41 +231,46 @@ pub fn follow(
         }
 
     }
+    let duration = start.elapsed();
+    println!("Follow took: {:?}", duration);
 }
 
 pub(super) fn update_player_grounded (
+    mut player_info_query: Query<&mut PlayerInfo, With<MainCamera>>,
     grounded_query: Query<&Transform, (Added<Grounded>, With<Player>)>,
     airborne_query: Query<&Transform, (With<Player>, Without<Grounded>)>,
-    mut player_info_query: Query<&mut PlayerInfo, With<MainCamera>>,
 
     //mut removed_grounded: RemovedComponents<Grounded>,
 ) {
+    let start = Instant::now();
     let mut player_info = if let Ok (mut player_info) = player_info_query.get_single_mut(){
         player_info
     }else {return;};
     // when ground is added, player is grounded
-    for t in grounded_query.iter() {
+
+    if let Ok(t) = grounded_query.get_single() {
         player_info.previous_grounded_y = player_info.grounded_y;
         player_info.is_grounded = true;
         player_info.grounded_y = t.translation.y;
-        println!("FULL");
+    } else if let Ok(_) = airborne_query.get_single() {
+        player_info.is_grounded = false;
+    } else {
+        return;
+    }
+    /*for t in grounded_query.iter() {
+        player_info.previous_grounded_y = player_info.grounded_y;
+        player_info.is_grounded = true;
+        player_info.grounded_y = t.translation.y;
         
     }
     for t in airborne_query.iter() {
         
         player_info.is_grounded = false;
-        println!("FULL");
         
-    }
+    }*/
     
-
-    // when ground is removed, player is not grounded
-    // very non-performant but works: 
-    // for entity in removed_grounded.read() {
-    //     if let Ok(_player) = player_query.get(entity) {
-    //         player_info.is_grounded = false;
-    //     }
-    // }
+    let duration = start.elapsed();
+    println!("Update Player Grounded took: {:?}", duration);
     
 }
 

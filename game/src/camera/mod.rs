@@ -66,9 +66,9 @@ impl Plugin for CameraPlugin {
         app.add_systems(
             Update, 
             (
-                update_camera_rig_debug_print.after(update_player_grounded),
-                update_camera_spring_debug_print.after(update_camera_rig_debug_print),
-                update_player_info_debug_print.after(update_camera_spring_debug_print),
+                //update_camera_rig_debug_print.after(update_player_grounded),
+                //update_camera_spring_debug_print.after(update_camera_rig_debug_print),
+                //update_player_info_debug_print.after(update_camera_spring_debug_print),
                 update_rig_lead,
                 update_rig_equilibrium.after(update_rig_lead),
                 update_spring_phases, 
@@ -78,7 +78,7 @@ impl Plugin for CameraPlugin {
                 update_follow_strategy,
                 update_player_grounded,
                 follow.after(update_follow_strategy), 
-                draw_debug_gizmos,
+                //draw_debug_gizmos,
                 //update_fall_factor,
                 // track_player,
                 // track_player_dashed,

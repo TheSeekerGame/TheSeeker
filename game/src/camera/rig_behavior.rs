@@ -35,7 +35,7 @@ pub fn camera_rig_follow_player(
     
     // for phases in phase query update phase
     let duration = start.elapsed();
-    println!("Function took: {:?}", duration);
+    println!("Camera rig follow player took: {:?}", duration);
 }
 
 pub fn update_rig_lead(
