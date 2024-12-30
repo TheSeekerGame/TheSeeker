@@ -29,7 +29,7 @@ pub struct SpringData {
     pub(super) fall_factor: f32,
 }
 
-#[derive(Component, Default, Clone)]
+#[derive(Component, Default, Clone, Debug)]
 pub enum FollowStrategy {
     InitFollow, 
     #[default]
@@ -39,7 +39,7 @@ pub enum FollowStrategy {
     DashFollow,
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Debug)]
 pub enum SpringPhaseX {
     #[default]
     Active,
@@ -47,7 +47,7 @@ pub enum SpringPhaseX {
     Resetting,
 }
 
-#[derive(Component, Default)]
+#[derive(Component, Default, Debug)]
 pub enum SpringPhaseY {
     #[default]
     Active,
@@ -56,7 +56,7 @@ pub enum SpringPhaseY {
 }
 
 #[derive(Component)]
-pub struct DashCamTimer{
+pub struct DashTimer{
     pub remaining: f32, 
     pub just_dashed: bool,
 }

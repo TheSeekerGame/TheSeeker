@@ -25,14 +25,16 @@ pub struct RigData {
     pub equilibrium_y: f32,
 }
 
-#[derive(Component)]
+#[derive(Component, Default)]
 pub struct Rig{
     pub lead_direction: LeadDirection,
     /// The next position to move the camera to
     pub next_position: Vec2,
 }
 
+#[derive(Default)]
 pub enum LeadDirection {
     Backward,
+    #[default]
     Forward,
 }

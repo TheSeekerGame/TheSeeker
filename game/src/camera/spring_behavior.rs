@@ -2,7 +2,7 @@ use std::cmp::Ordering;
 
 use theseeker_engine::physics::{PhysicsWorld, ShapeCaster};
 use theseeker_engine::prelude::*;
-use crate::game::player::{Dashing, Player};
+use crate::game::player::{CanDash, Dashing, Grounded, Player};
 
 use super::{Rig, RigData};
 use super::{spring_data::*, MainCamera};
@@ -12,7 +12,7 @@ pub fn update_spring_phases(
     rig_data: Res<RigData>,
 ) {
     let (displacement_x, displacement_y) = (rig_data.displacement.x, rig_data.displacement.y);
-
+    
     if let Ok((mut phase_x, mut phase_y)) = phase_query.get_single_mut() {
         // X phase
         if is_in_active_range(displacement_x) {
@@ -66,21 +66,22 @@ pub fn update_follow_strategy(
             })
             .min_by(|a, b| a.partial_cmp(b).unwrap_or(Ordering::Equal))
             .unwrap_or_else(|| {
-                eprintln!("Warning: No ground distance found for entity {:?}", entity);
+                println!("Warning: No ground distance found for entity {:?}", entity);
                 f32::INFINITY 
             });
-           
-            player_info.previous_grounded_y = player_info.grounded_y;
+            
             // mutable res. NEEDS TO MOVE
             //TODO: rig.equilibrium_y = rig.target.y;
-            player_info.grounded_y = position.translation.y;
-            player_info.is_grounded = true;
+           
+            //player_info.is_grounded = true;
+            //rig_data.equilibrium
             
             if (ground_distance <= FLOOR) 
             && (player_info.grounded_y - player_info.previous_grounded_y).abs() <=
             (player_info.previous_grounded_y + FALL_BUFFER) {
                 *follow_strategy = FollowStrategy::GroundFollow;
             } else if (player.y - player_info.grounded_y) > FLOOR {
+                
                 *follow_strategy = FollowStrategy::JumpFollow;
             }
             else if (ground_distance > (FLOOR + FALL_BUFFER))
@@ -88,6 +89,7 @@ pub fn update_follow_strategy(
                 *follow_strategy = FollowStrategy::FallFollow;
             }
                 else {
+                    
                     // keep same strategy
             // TODO: add Init logic here and return FollowStrategy::Init
                 //return spring.follow_strategy.clone();
@@ -104,11 +106,12 @@ pub fn follow(
     follow_query: Query<&FollowStrategy, With<MainCamera>>,
     mut spring_data: ResMut<SpringData>,
     time: Res<Time>,
-    dashed_query: Query<Entity, (With<Player>, Added<Dashing>)>,
+    dashed_query: Query<Entity, (With<Player>, Added<CanDash>)>,
     mut phase_query: Query<(&mut SpringPhaseX, &mut SpringPhaseY), With<MainCamera>>,
     player_info_query: Query<&PlayerInfo, With<MainCamera>>, 
     rig_data: Res<RigData>,
     mut rig_query: Query<&mut Rig, With<MainCamera>>,
+    dash_timer_query: Query<&DashTimer, With<MainCamera>>,
 ) {
     //spring.follow(&mut rig, &player_tracker, time.delta_seconds());
     let follow_strategy = match follow_query.get_single() {
@@ -120,11 +123,15 @@ pub fn follow(
         Ok(rig) => rig, 
         Err(_) => return,
     };
-
-    let just_dashed = match dashed_query.get_single() {
-        Ok(_) => true,
-        Err(_) => false,
+    let dash_timer = match dash_timer_query.get_single() {
+        Ok(dash_timer) => dash_timer, 
+        Err(_) => return,
     };
+    // let just_dashed = match dashed_query.get_single() {
+    //     Ok(_) => true,
+    //     Err(_) => false,
+    // };
+    //println!(" Just Dashed: {:?}", just_dashed);
 
     let player_info = if let Ok (player_info) = player_info_query.get_single(){
         player_info
@@ -136,8 +143,10 @@ pub fn follow(
     };
     let delta_seconds = time.delta_seconds();
     let (displacement_x, displacement_y) = (rig_data.displacement.x, rig_data.displacement.y);
+    let equilibrium_y = rig_data.equilibrium_y;
+    let equalized_displacement_y = equilibrium_y - rig.next_position.y;
 
-    
+    let just_dashed = dash_timer.just_dashed;
 
     match follow_strategy {
         FollowStrategy::InitFollow => {
@@ -155,7 +164,7 @@ pub fn follow(
                     //rig.target.y = rig.equilibrium_y;
                     if player_info.previous_grounded_y < (player_info.grounded_y + FALL_BUFFER)
                     && (rig_data.target.y - rig_data.equilibrium_y).abs() < FLOOR {
-                        equalize_y(displacement_y, rig.next_position.y, spring_data.k, delta_seconds)
+                        equalize_y(equalized_displacement_y, spring_data.k, rig.next_position.y, delta_seconds)
                     } else {
                         calculate_spring(displacement_y, spring_data.k, rig.next_position.y,  delta_seconds)
                     }
@@ -164,7 +173,7 @@ pub fn follow(
                 SpringPhaseY::Resetting => {
                     //rig.target.y = rig.equilibrium_y;
                     if player_info.previous_grounded_y < (player_info.grounded_y + FALL_BUFFER) {
-                        equalize_y(displacement_y, rig.next_position.y, spring_data.k, delta_seconds)
+                        equalize_y(equalized_displacement_y, spring_data.k, rig.next_position.y, delta_seconds)
                     } else {
                         calculate_spring(displacement_y, spring_data.k, rig.next_position.y,  delta_seconds)
                     }
@@ -172,7 +181,7 @@ pub fn follow(
                 SpringPhaseY::Snapped => {
                     //rig.target.y = rig.equilibrium_y;
                     if player_info.previous_grounded_y < (player_info.grounded_y + FALL_BUFFER) {
-                        equalize_y(displacement_y, rig.next_position.y, spring_data.k, delta_seconds)
+                        equalize_y(equalized_displacement_y, spring_data.k, rig.next_position.y, delta_seconds)
                     } else {
                         calculate_spring(displacement_y, spring_data.k, rig.next_position.y,  delta_seconds)
                     }
@@ -206,7 +215,7 @@ pub fn follow(
         }
         FollowStrategy::JumpFollow => {
             spring_data.k = if just_dashed {K_FAST} else {K_REG};
-            *phase_y = SpringPhaseY::Resetting; 
+            //*phase_y = SpringPhaseY::Resetting; 
             // TODO: make return or set, keep consistent
             rig.next_position.x = calculate_spring(displacement_x, spring_data.k, rig.next_position.x,  delta_seconds);
             rig.next_position.y = calculate_spring(displacement_y, spring_data.k, rig.next_position.y,  delta_seconds);
@@ -214,9 +223,11 @@ pub fn follow(
         FollowStrategy::FallFollow => {
             // TODO: 
             spring_data.k = K_REG;
-            rig.next_position.y = calculate_fall(displacement_y, spring_data.k, rig.next_position.y,  delta_seconds);
-            let displacement_x = rig_data.target.x - (rig.next_position.x);
-            rig.next_position.x = reset_spring(displacement_y, spring_data.k, rig.next_position.y,  delta_seconds);
+            rig.next_position.y = calculate_fall(displacement_y, K_REG, rig.next_position.y,  delta_seconds);
+             rig.next_position.x = reset_spring(displacement_x, spring_data.k, rig.next_position.x,  delta_seconds);
+            //test
+            //rig.next_position.x = calculate_spring(displacement_x, K_REG, rig.next_position.x,  delta_seconds);
+            //rig.next_position.y = calculate_spring(displacement_y, spring_data.k, rig.next_position.y,  delta_seconds);
         }
         FollowStrategy::DashFollow => {
             spring_data.k = if just_dashed {K_FAST} else {K_REG};
@@ -233,28 +244,63 @@ pub fn follow(
     }
 }
 
-fn calculate_spring(
-    displacement: f32,
-    k: f32, 
-    next_position: f32,
-    delta_seconds: f32,
-    //vertical: bool, 
-) -> f32 {
-    //let displacement = if vertical { rig.displacement.y } else { rig.displacement.x };
-    //let position = if vertical { rig.camera_position.y } else { rig.camera_position.x };
-    //let velocity = if vertical { spring.velocity.abs() } else { 0.0 };
-    // TODO: take velocity out of system if it's still intended to have no effect
-    let velocity = 0.0;
+pub(super) fn update_player_grounded (
+    grounded_query: Query<&Transform, (Added<Grounded>, With<Player>)>,
+    airborne_query: Query<&Transform, (With<Player>, Without<Grounded>)>,
+    mut player_info_query: Query<&mut PlayerInfo, With<MainCamera>>,
+
+    //mut removed_grounded: RemovedComponents<Grounded>,
+) {
+    let mut player_info = if let Ok (mut player_info) = player_info_query.get_single_mut(){
+        player_info
+    }else {return;};
+    // when ground is added, player is grounded
+    for t in grounded_query.iter() {
+        player_info.previous_grounded_y = player_info.grounded_y;
+        player_info.is_grounded = true;
+        player_info.grounded_y = t.translation.y;
+        println!("FULL");
+        
+    }
+    for t in airborne_query.iter() {
+        
+        player_info.is_grounded = false;
+        println!("FULL");
+        
+    }
+    
+
+    // when ground is removed, player is not grounded
+    // very non-performant but works: 
+    // for entity in removed_grounded.read() {
+    //     if let Ok(_player) = player_query.get(entity) {
+    //         player_info.is_grounded = false;
+    //     }
+    // }
+    
+}
+
+
+
+fn calculate_spring(displacement: f32, k: f32, next_position: f32, delta_seconds: f32) -> f32 {
     let spring_force = k * displacement;
-    let damping_force = DAMPING_RATIO * velocity; 
+    let damping_force = DAMPING_RATIO * 0.0; // Velocity is intentionally zero
     let camera_acceleration = spring_force - damping_force;
     next_position + camera_acceleration * delta_seconds
+}
+
+fn equalize_y(displacement: f32, k: f32, next_position: f32, delta_seconds: f32) -> f32 {
+    calculate_spring(displacement, k, next_position, delta_seconds)
+}
+
+fn reset_spring(displacement: f32, k: f32, next_position: f32, delta_seconds: f32) -> f32 {
+    calculate_spring(displacement, k, next_position, delta_seconds)
 }
 
 fn calculate_fall(
     displacement: f32, 
-    next_position: f32,
     k: f32,
+    next_position: f32,
     delta_seconds: f32,
 ) -> f32 {
     //let velocity = if vertical { spring.velocity.abs() } else { 0.0 };
@@ -265,62 +311,34 @@ fn calculate_fall(
     next_position + camera_acceleration * delta_seconds
 }
 
-// pub(super) fn update_dash_timer(
-//     mut query: Query<&mut DashCamTimer, With<MainCamera>>,
-//     time: Res<Time>,
-//     mut player_tracker: ResMut<PlayerTracker>,
-//     dashing_added: Query<Entity, (With<Player>, Added<Dashing>)>,
-// ) { 
-//     if let Ok(mut timer) = query.get_single_mut() {
-//         // Use the timer as needed
-//         if let Ok(_) = dashing_added.get_single() {
-//             timer.just_dashed = false;
-//         } else { println!("Not hitting")}
-        
-//         if timer.remaining > 0.0 && timer.just_dashed == true {
-//             timer.remaining -= time.delta_seconds();
-//         } else if timer.remaining <= 0.0 {
-//             timer.remaining = 1.0;
-//         }
-//         } else {
-//             warn!("Expected exactly one Dash Cam Timer component, but found none or multiple.");
-//         }
+pub(super) fn update_dash_timer(
+    mut query: Query<&mut DashTimer, With<MainCamera>>,
+    time: Res<Time>,
+    //mut player_tracker: ResMut<PlayerTracker>,
+    dashed_query: Query<Entity, (With<Player>, Added<CanDash>)>,
+) { 
     
-// }
+    let mut timer = match query.get_single_mut() {
+        Ok(timer) => timer,
+        Err(_) => return,
+    };
+    let dash_triggered = match dashed_query.get_single() {
+        Ok(_) => { true }
+        Err(_) => { false }
+    };
+    if dash_triggered && timer.remaining == 1.0 {
+        timer.just_dashed = dash_triggered;
+    }
 
-// pub fn track_player_grounded(
-//     grounded_query: Query<(Entity, &Transform, &ShapeCaster), (Added<Grounded>, With<Player>)>,
-// ) {
-//     for (_, t, _) in grounded_query.iter() {
-//         player_tracker.previous_grounded_y = player_tracker.grounded_y;
-//         rig.equilibrium_y = rig.target.y;
-//         player_tracker.grounded_y = t.translation.y;
-//         player_tracker.is_grounded = true;
-//     }
-// }
-
-
-fn equalize_y(
-    displacement: f32,
-    next_position: f32, 
-    k: f32,
-    delta_seconds: f32,
-) -> f32 {
-    // TODO: Remove Velocity from system
-    //let velocity = spring.velocity.abs();
-    let spring_force = k * displacement;
-    // Velocity is having zero effect currently
-    let damping_force = DAMPING_RATIO * 0.0;//spring.velocity;
-    let camera_acceleration = spring_force - damping_force;
-    next_position + camera_acceleration * delta_seconds
-}
-
-pub fn reset_spring(displacement: f32, next_position: f32, k: f32, delta_seconds: f32) -> f32{
-    let velocity = 0.0;
-    let spring_force = k * displacement;
-    let damping_force = DAMPING_RATIO * velocity;
-    let camera_acceleration = spring_force - damping_force;
-    next_position + camera_acceleration * delta_seconds
+    
+        if timer.remaining > 0.0 && timer.just_dashed {
+            timer.remaining -= time.delta_seconds();
+        } else if timer.remaining <= 0.0  {
+            timer.remaining = 1.0;
+            timer.just_dashed = false;
+        }
+       
+    
 }
 
 // should ONLY be in the active range, no other range
@@ -337,4 +355,88 @@ pub fn is_in_snap_zone(value: f32) -> bool {
 
 pub fn is_in_reset_zone(value: f32) -> bool {
     value.abs() < RESET_THRESHOLD || value.abs() > CEILING
+}
+
+#[cfg(test)]
+mod spring_tests {
+    use super::*;
+
+    #[test]
+    fn test_is_in_active_range() {
+        assert!(is_in_active_range(100.0)); // Within active range
+        assert!(!is_in_active_range(20.0)); // Below floor
+        assert!(!is_in_active_range(600.0)); // Above ceiling
+        assert!(!is_in_active_range(0.1)); // In snap zone
+        assert!(!is_in_active_range(0.5)); // In reset zone
+    }
+
+    #[test]
+    fn test_is_in_snap_zone() {
+        assert!(is_in_snap_zone(0.1)); // Below snap threshold
+        assert!(is_in_snap_zone(600.0)); // Above ceiling
+        assert!(!is_in_snap_zone(100.0)); // Outside snap zone
+    }
+
+    #[test]
+    fn test_is_in_reset_zone() {
+        assert!(is_in_reset_zone(0.5)); // Below reset threshold
+        assert!(is_in_reset_zone(600.0)); // Above ceiling
+        assert!(!is_in_reset_zone(100.0)); // Outside reset zone
+    }
+
+    #[test]
+    fn test_equalize_y() {
+        let displacement = 10.0;
+        let next_position = 20.0;
+        let k = 1.0;
+        let delta_seconds = 0.5;
+
+        // Assert expected result
+        let result = equalize_y(displacement, next_position, k, delta_seconds);
+        assert!((result - 25.0).abs() < f32::EPSILON, "Equalize Y failed for positive displacement");
+
+        // Test with zero displacement
+        let result = equalize_y(0.0, next_position, k, delta_seconds);
+        assert!((result - 20.0).abs() < f32::EPSILON, "Equalize Y failed for zero displacement");
+
+        // Test with negative displacement
+        let result = equalize_y(-10.0, next_position, k, delta_seconds);
+        assert!((result - 15.0).abs() < f32::EPSILON, "Equalize Y failed for negative displacement");
+
+        // #[should_panic] Test with invalid delta_seconds (negative value)
+        
+        
+    }
+    // TODO: Make this test fail, and by fail i mean pass
+    #[test]
+    #[should_panic]
+    fn test_reset_spring_panic() {
+        let displacement = 10.0;
+        let next_position = 20.0;
+        let k = 1.0;
+
+
+        let _ = equalize_y(displacement, next_position, k, -1.0);
+    }
+
+    #[test]
+    #[should_panic]
+    fn test_reset_spring() {
+        let displacement = 5.0;
+        let next_position = 10.0;
+        let k = 2.0;
+        let delta_seconds = 0.1;
+
+        // Assert expected result
+        let result = reset_spring(displacement, next_position, k, delta_seconds);
+        assert!((result - 11.0).abs() < f32::EPSILON, "Reset Spring failed for positive displacement");
+
+        // Test with zero displacement
+        let result = reset_spring(0.0, next_position, k, delta_seconds);
+        assert!((result - 10.0).abs() < f32::EPSILON, "Reset Spring failed for zero displacement");
+
+        // Test with negative displacement
+        let result = reset_spring(-5.0, next_position, k, delta_seconds);
+        assert!((result - 9.0).abs() < f32::EPSILON, "Reset Spring failed for negative displacement");
+    }
 }

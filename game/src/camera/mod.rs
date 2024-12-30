@@ -25,6 +25,8 @@ mod rig_data;
 use rig_data::*; 
 mod rig_behavior;
 use rig_behavior::*; 
+mod debug;
+use debug::*;
 
 const PROJECTION_SCALE: f32 = 1.0 / 5.0;
 
@@ -51,7 +53,7 @@ impl Plugin for CameraPlugin {
             //lead_amount: 20.0,
             //lead_buffer: 10.0,
             displacement: Vec2::new(1.0, 1.0),
-            equilibrium_y: f32::default(),
+            equilibrium_y: 1.0,
         });
         app.insert_resource(SpringData::default());
         app.add_systems(
@@ -64,10 +66,19 @@ impl Plugin for CameraPlugin {
         app.add_systems(
             Update, 
             (
+                update_camera_rig_debug_print.after(update_player_grounded),
+                update_camera_spring_debug_print.after(update_camera_rig_debug_print),
+                update_player_info_debug_print.after(update_camera_spring_debug_print),
                 update_rig_lead,
+                update_rig_equilibrium.after(update_rig_lead),
                 update_spring_phases, 
-                camera_rig_follow_player,
-                // draw_debug_gizmos,
+                update_dash_timer,
+                camera_rig_follow_player.after(update_rig_equilibrium),
+                update_spring_phases,
+                update_follow_strategy,
+                update_player_grounded,
+                follow.after(update_follow_strategy), 
+                draw_debug_gizmos,
                 //update_fall_factor,
                 // track_player,
                 // track_player_dashed,
@@ -79,13 +90,7 @@ impl Plugin for CameraPlugin {
                 //debug_update.after(update_camera),
             ),
         );
-        // Debugging systems
-       /*  app.add_systems(
-            Update, 
-            (
-                draw_debug_gizmos,
-            ),
-        );*/
+        
     }
 }
 
@@ -93,10 +98,15 @@ impl Plugin for CameraPlugin {
 #[derive(Bundle)]
 struct MainCameraBundle {
     camera: Camera3dBundle,
+    rig: Rig, 
+    follow_strategy: FollowStrategy,
     limits: GameViewLimits,
     marker: MainCamera,
     despawn: StateDespawnMarker,
-    dash_cam_timer: DashCamTimer,
+    phase_x: SpringPhaseX,
+    phase_y: SpringPhaseY,
+    dash_timer: DashTimer,
+    player_info: PlayerInfo, 
 }
 
 /// Marker component for the main gameplay camera
@@ -154,10 +164,15 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         MainCameraBundle {
             camera: camera3d,
             marker: MainCamera,
+            rig: Rig::default(), 
+            follow_strategy: FollowStrategy::default(),
             despawn: StateDespawnMarker,
             // TODO: manage this from somewhere
             limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
-            dash_cam_timer: DashCamTimer{remaining: 1.0, just_dashed: false}, 
+            phase_x: SpringPhaseX::default(), 
+            phase_y: SpringPhaseY::default(),
+            dash_timer: DashTimer{remaining: 1.0, just_dashed: false}, 
+            player_info: PlayerInfo::default(), 
         },
         // Needed so that depth buffers are stored so depth of field works
         DepthPrepass,

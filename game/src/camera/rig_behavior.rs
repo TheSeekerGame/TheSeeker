@@ -1,4 +1,5 @@
 use std::time::Instant;
+use theseeker_engine::physics::ShapeCaster;
 use theseeker_engine::prelude::*;
 use crate::game::player::Dashing;
 use crate::game::player::Player;
@@ -6,6 +7,7 @@ use crate::game::player::Player;
 use super::rig_data::*;
 use super::spring_data;
 use super::MainCamera;
+use super::PlayerInfo;
 
 pub fn camera_rig_follow_player(
     mut rig_data: ResMut<RigData>,
@@ -69,7 +71,22 @@ pub fn update_rig_lead(
     
 }
 
-pub fn calculate_displacement(rig_target: Vec2, camera_position: Vec2) -> Vec2 {
-    //self.displacement = self.target - self.camera_position;
-    rig_target - camera_position
+pub(super)fn update_rig_equilibrium(
+    mut rig_data: ResMut<RigData>,
+    //ground_query: Query<(Entity, &ShapeCaster, &Transform), With<Player>>,
+    player_info_query: Query<&PlayerInfo, With<MainCamera>>, 
+) {
+    let player_info = match player_info_query.get_single() {
+        Ok(player_info) => player_info, 
+        Err(_) => return, 
+    };
+
+    if player_info.is_grounded {
+        rig_data.equilibrium_y = rig_data.target.y;
+    }
+}
+
+pub fn calculate_displacement(rig_target: Vec2, next_position: Vec2) -> Vec2 {
+    //self.displacement = self.target - self.next_position;
+    Vec2::new(rig_target.x - next_position.x, rig_target.y - next_position.y)
 }
