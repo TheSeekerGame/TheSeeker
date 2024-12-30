@@ -163,7 +163,7 @@ pub fn follow(
                 SpringPhaseY::Active => {
                     //rig.target.y = rig.equilibrium_y;
                     if player_info.previous_grounded_y < (player_info.grounded_y + FALL_BUFFER)
-                    && (rig_data.target.y - rig_data.equilibrium_y).abs() < FLOOR {
+                    && equilibrium_y.abs() < FLOOR {
                         equalize_y(equalized_displacement_y, spring_data.k, rig.next_position.y, delta_seconds)
                     } else {
                         calculate_spring(displacement_y, spring_data.k, rig.next_position.y,  delta_seconds)
@@ -198,36 +198,19 @@ pub fn follow(
                 SpringPhaseX::Snapped => {
                     *phase_x = SpringPhaseX::Snapped;
                     spring_data.vertical_snapped = true;
-                    rig_data.target.x  
+                    reset_spring(displacement_x, K_REG, rig.next_position.x, delta_seconds)
                 }
             };
-            /* 
-            if !vertical {
-                self.calculate(&self, rig, delta_seconds, false)
-            } else {
-                    if !matches!(self.y_phase, SpringPhase::Snapping)   {
-                        let displacement = rig.target.y - rig.next_position.y;
-                        self.reset(displacement, self, rig, delta_seconds, vertical)
-                    } else {
-                            rig.next_position.y
-                    } 
-            }*/
         }
         FollowStrategy::JumpFollow => {
             spring_data.k = if just_dashed {K_FAST} else {K_REG};
-            //*phase_y = SpringPhaseY::Resetting; 
             // TODO: make return or set, keep consistent
             rig.next_position.x = calculate_spring(displacement_x, spring_data.k, rig.next_position.x,  delta_seconds);
             rig.next_position.y = calculate_spring(displacement_y, spring_data.k, rig.next_position.y,  delta_seconds);
         }
         FollowStrategy::FallFollow => {
-            // TODO: 
-            spring_data.k = K_REG;
-            rig.next_position.y = calculate_fall(displacement_y, K_REG, rig.next_position.y,  delta_seconds);
+            rig.next_position.y = calculate_fall(displacement_y, K_FAST*2.0, rig.next_position.y,  delta_seconds);
              rig.next_position.x = reset_spring(displacement_x, spring_data.k, rig.next_position.x,  delta_seconds);
-            //test
-            //rig.next_position.x = calculate_spring(displacement_x, K_REG, rig.next_position.x,  delta_seconds);
-            //rig.next_position.y = calculate_spring(displacement_y, spring_data.k, rig.next_position.y,  delta_seconds);
         }
         FollowStrategy::DashFollow => {
             spring_data.k = if just_dashed {K_FAST} else {K_REG};
@@ -297,18 +280,8 @@ fn reset_spring(displacement: f32, k: f32, next_position: f32, delta_seconds: f3
     calculate_spring(displacement, k, next_position, delta_seconds)
 }
 
-fn calculate_fall(
-    displacement: f32, 
-    k: f32,
-    next_position: f32,
-    delta_seconds: f32,
-) -> f32 {
-    //let velocity = if vertical { spring.velocity.abs() } else { 0.0 };
-    let velocity = 0.0;
-    let spring_force = k * displacement;
-    let damping_force = DAMPING_RATIO * velocity;
-    let camera_acceleration = spring_force - damping_force;
-    next_position + camera_acceleration * delta_seconds
+fn calculate_fall(displacement: f32, k: f32, next_position: f32, delta_seconds: f32 ) -> f32 {
+    calculate_spring(displacement, k, next_position, delta_seconds)
 }
 
 pub(super) fn update_dash_timer(
@@ -439,4 +412,49 @@ mod spring_tests {
         let result = reset_spring(-5.0, next_position, k, delta_seconds);
         assert!((result - 9.0).abs() < f32::EPSILON, "Reset Spring failed for negative displacement");
     }
+
+    #[test]
+    fn test_calculate_spring() {
+        let displacement = 15.0;
+        let k = 1.5;
+        let next_position = 10.0;
+        let delta_seconds = 0.2;
+
+        // Assert expected result
+        let result = calculate_spring(displacement, k, next_position, delta_seconds);
+        assert!((result - 13.0).abs() < f32::EPSILON, "Calculate Spring failed for positive displacement");
+
+        // Test with zero displacement
+        let result = calculate_spring(0.0, k, next_position, delta_seconds);
+        assert!((result - 10.0).abs() < f32::EPSILON, "Calculate Spring failed for zero displacement");
+
+        // Test with negative displacement
+        let result = calculate_spring(-15.0, k, next_position, delta_seconds);
+        assert!((result - 7.0).abs() < f32::EPSILON, "Calculate Spring failed for negative displacement");
+
+        
+    }
+
+    // #[should_panic] Test with invalid spring constant (zero value)
+    #[test]
+    #[should_panic]
+    fn test_calculate_spring_invalid_constant() {
+        let displacement = 15.0;
+        let next_position = 10.0;
+        let delta_seconds = 0.2;
+
+        let _ = calculate_spring(displacement, 0.0, next_position, delta_seconds);
+    }
+
+    // #[should_panic] Test with invalid delta_seconds (negative value)
+    #[test]
+    #[should_panic]
+    fn test_calculate_spring_invalid_delta_seconds() {
+        let displacement = 15.0;
+        let k = 1.5;
+        let next_position = 10.0;
+
+        let _ = calculate_spring(displacement, k, next_position, -0.1);
+    }
+    
 }
