@@ -983,7 +983,7 @@ impl StatusModifier {
             scalar: vec![0.5],
             delta: vec![],
             //            effect_col: Color::hex("C2C9C9").unwrap(),
-            effect_col: Color::hex("0099CC").unwrap(), /* For More Visible Effect */
+            effect_col: Color::hex("7aa7ff").unwrap(), /* For More Visible Effect */
             time_remaining: 2.0,
         }
     }
