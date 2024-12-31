@@ -5,3 +5,9 @@ ticks_per_frame = 64
 frame_min = 1
 frame_max = 12
 frame_start = 1
+
+# LOOP
+[[script]]
+run_at_frame = 12
+action = "SetFrameNext"
+frame_index = 1
