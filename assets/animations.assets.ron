@@ -485,11 +485,11 @@
         path: "animations/puzzles/switch.anim.toml",
     ),
     "anim.switch.flip.image": File (
-        path: "animations/puzzles/SwitchPlaceholder.png",
+        path: "animations/puzzles/SwitchBig.png",
     ),
     "anim.switch.flip.atlas": TextureAtlasLayout (
-        tile_size_x: 12.,
-        tile_size_y: 12.,
+        tile_size_x: 32.,
+        tile_size_y: 32.,
         rows: 1,
         columns: 2, 
     ),
