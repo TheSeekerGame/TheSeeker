@@ -481,4 +481,160 @@
         rows: 1,
         columns: 32,
     ),
+    "anim.switch.flip": File (
+        path: "animations/puzzles/switch.anim.toml",
+    ),
+    "anim.switch.flip.image": File (
+        path: "animations/puzzles/SwitchPlaceholder.png",
+    ),
+    "anim.switch.flip.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 2, 
+    ),
+    "anim.puzzle.01": File (
+        path: "animations/puzzles/puzzle01.anim.toml",
+    ),
+    "anim.puzzle.01.image": File (
+        path: "animations/puzzles/Puzzle01Placeholder.png",
+    ),
+    "anim.puzzle.01.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 12, 
+    ),
+    "anim.puzzle.02": File (
+        path: "animations/puzzles/puzzle02.anim.toml",
+    ),
+    "anim.puzzle.02.image": File (
+        path: "animations/puzzles/Puzzle02Placeholder.png",
+    ),
+    "anim.puzzle.02.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 12, 
+    ),
+    "anim.puzzle.03": File (
+        path: "animations/puzzles/puzzle03.anim.toml",
+    ),
+    "anim.puzzle.03.image": File (
+        path: "animations/puzzles/Puzzle03Placeholder.png",
+    ),
+    "anim.puzzle.03.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 12, 
+    ),
+    "anim.puzzle.04": File (
+        path: "animations/puzzles/puzzle04.anim.toml",
+    ),
+    "anim.puzzle.04.image": File (
+        path: "animations/puzzles/Puzzle04Placeholder.png",
+    ),
+    "anim.puzzle.04.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 12, 
+    ),
+    "anim.puzzle.05": File (
+        path: "animations/puzzles/puzzle05.anim.toml",
+    ),
+    "anim.puzzle.05.image": File (
+        path: "animations/puzzles/Puzzle05Placeholder.png",
+    ),
+    "anim.puzzle.05.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 12, 
+    ),
+    "anim.puzzle.06": File (
+        path: "animations/puzzles/puzzle06.anim.toml",
+    ),
+    "anim.puzzle.06.image": File (
+        path: "animations/puzzles/Puzzle06Placeholder.png",
+    ),
+    "anim.puzzle.06.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 12, 
+    ),
+    "anim.puzzle.07": File (
+        path: "animations/puzzles/puzzle07.anim.toml",
+    ),
+    "anim.puzzle.07.image": File (
+        path: "animations/puzzles/Puzzle07Placeholder.png",
+    ),
+    "anim.puzzle.07.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 12, 
+    ),
+    "anim.puzzle.08": File (
+        path: "animations/puzzles/puzzle08.anim.toml",
+    ),
+    "anim.puzzle.08.image": File (
+        path: "animations/puzzles/Puzzle08Placeholder.png",
+    ),
+    "anim.puzzle.08.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 12, 
+    ),
+    "anim.puzzle.09": File (
+        path: "animations/puzzles/puzzle09.anim.toml",
+    ),
+    "anim.puzzle.09.image": File (
+        path: "animations/puzzles/Puzzle09Placeholder.png",
+    ),
+    "anim.puzzle.09.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 12, 
+    ),
+    "anim.puzzle.10": File (
+        path: "animations/puzzles/puzzle10.anim.toml",
+    ),
+    "anim.puzzle.10.image": File (
+        path: "animations/puzzles/Puzzle10Placeholder.png",
+    ),
+    "anim.puzzle.10.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 12, 
+    ),
+    "anim.puzzle.11": File (
+        path: "animations/puzzles/puzzle11.anim.toml",
+    ),
+    "anim.puzzle.11.image": File (
+        path: "animations/puzzles/Puzzle11Placeholder.png",
+    ),
+    "anim.puzzle.11.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 12, 
+    ),
+    "anim.puzzle.12": File (
+        path: "animations/puzzles/puzzle12.anim.toml",
+    ),
+    "anim.puzzle.12.image": File (
+        path: "animations/puzzles/Puzzle12Placeholder.png",
+    ),
+    "anim.puzzle.12.atlas": TextureAtlasLayout (
+        tile_size_x: 12.,
+        tile_size_y: 12.,
+        rows: 1,
+        columns: 12, 
+    ),
 })
