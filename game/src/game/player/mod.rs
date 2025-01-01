@@ -1077,6 +1077,18 @@ impl PlayerStats {
         self.effective_stats[&stat]
     }
 
+    pub fn set(&mut self, stat: StatType, value: f32) {
+        if let Some(effective_stat) = self.effective_stats.get_mut(&stat) {
+            *effective_stat = value;
+        }
+    }
+
+    pub fn reset_stat(&mut self, stat: StatType) {
+        if let Some(effective_stat) = self.effective_stats.get_mut(&stat) {
+            *effective_stat = self.base_stats[&stat];
+        }
+    }
+
     pub fn reset_stats(&mut self) {
         self.effective_stats = self.base_stats.clone();
     }
