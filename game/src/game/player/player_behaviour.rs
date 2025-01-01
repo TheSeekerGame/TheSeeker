@@ -1172,6 +1172,7 @@ fn player_attack(
             &Facing,
             &Transform,
             Option<&WallSlideTime>,
+            &mut PlayerStats,
             &mut Attacking,
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
@@ -1192,6 +1193,7 @@ fn player_attack(
         facing,
         transform,
         wall_slide_time,
+        mut player_stats,
         mut attacking,
         mut transitions,
         action_state,
@@ -1270,6 +1272,14 @@ fn player_attack(
                         PlayerMeleeWeapon::Sword => config.sword_attack_damage,
                     };
 
+                    // Slow the player down when they attack with the Hammer
+                    if let PlayerMeleeWeapon::Hammer = *melee_weapon {
+                        player_stats.set(
+                            StatType::MoveVelMax,
+                            config.max_move_vel / 2.0,
+                        );
+                    }
+
                     commands
                         .spawn((
                             TransformBundle::from_transform(
@@ -1323,6 +1333,9 @@ fn player_attack(
 
         // leave attacking state
         if attacking.ticks >= maximum_ticks {
+            // Restore the player movement velocity after attacking.
+            player_stats.reset_stat(StatType::MoveVelMax);
+
             if attacking.followup {
                 transitions.push(Attacking::new_transition(CanAttack {
                     immediate: true,
@@ -1356,6 +1369,7 @@ pub fn player_whirl(
             &mut TransitionQueue,
             &mut Whirling,
             &mut WhirlAbility,
+            &mut PlayerStats,
             &PlayerStatMod,
             Has<Stealthing>,
             &Gent,
@@ -1376,6 +1390,7 @@ pub fn player_whirl(
         ),
     >,
     mut commands: Commands,
+    melee_weapon: Res<PlayerMeleeWeapon>,
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
@@ -1385,6 +1400,7 @@ pub fn player_whirl(
         mut transitions,
         mut whirling,
         mut whirl_ability,
+        mut player_stats,
         stat_mod,
         is_stealthing,
         gent,
@@ -1395,6 +1411,14 @@ pub fn player_whirl(
         if action_state.pressed(&PlayerAction::Whirl)
             || whirling.ticks < Whirling::MIN_TICKS
         {
+            // Slow the player down when they attack with the Hammer
+            if let PlayerMeleeWeapon::Hammer = *melee_weapon {
+                player_stats.set(
+                    StatType::MoveVelMax,
+                    config.max_move_vel / 2.0,
+                );
+            }
+
             if let Some(attack_entity) = whirling.attack_entity {
                 // if the attack entities collider was changed, set the attack to none
                 if attack_query.get(attack_entity).is_err() {
@@ -1431,12 +1455,18 @@ pub fn player_whirl(
         } else {
             // leave whirling state if button is not pressed and we are past min ticks
             if whirling.ticks >= Whirling::MIN_TICKS {
+                // Restore the player movement velocity after attacking.
+                player_stats.reset_stat(StatType::MoveVelMax);
+
                 transitions.push(Whirling::new_transition(
                     CanAttack::default(),
                 ));
             }
         }
         if whirl_ability.energy < 0. {
+            // Restore the player movement velocity after attacking.
+            player_stats.reset_stat(StatType::MoveVelMax);
+
             transitions.push(Whirling::new_transition(
                 CanAttack::default(),
             ));
