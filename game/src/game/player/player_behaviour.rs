@@ -1,3 +1,4 @@
+use bevy::prelude::resource_equals;
 use bevy::sprite::{Sprite, SpriteSheetBundle};
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
@@ -14,7 +15,7 @@ use theseeker_engine::physics::{
 use theseeker_engine::script::ScriptPlayer;
 
 use super::arc_attack::{Arrow, Projectile};
-use super::player_weapon::{is_player_using_bow, PlayerWeapon};
+use super::player_weapon::{PlayerCombatStyle, PlayerMeleeWeapon};
 use super::{
     dash_icon_fx, player_dash_fx, player_new_stats_mod, AttackBundle,
     CanStealth, DashIcon, DashStrike, DashType, JumpCount, KillCount,
@@ -84,7 +85,9 @@ impl Plugin for PlayerBehaviorPlugin {
                     bow_auto_aim
                         .after(player_move)
                         .before(player_attack)
-                        .run_if(is_player_using_bow),
+                        .run_if(resource_equals(
+                            PlayerCombatStyle::Ranged,
+                        )),
                 )
                     .in_set(PlayerStateSet::Behavior)
                     .before(update_sprite_colliders),
@@ -1166,6 +1169,7 @@ fn player_attack(
             &Facing,
             &Transform,
             Option<&WallSlideTime>,
+            &mut PlayerStats,
             &mut Attacking,
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
@@ -1175,7 +1179,8 @@ fn player_attack(
     >,
     mut commands: Commands,
     config: Res<PlayerConfig>,
-    weapon: Res<PlayerWeapon>,
+    combat_style: Res<PlayerCombatStyle>,
+    melee_weapon: Res<PlayerMeleeWeapon>,
     time: Res<GameTime>,
 ) {
     for (
@@ -1184,6 +1189,7 @@ fn player_attack(
         facing,
         transform,
         wall_slide_time,
+        mut player_stats,
         mut attacking,
         mut transitions,
         action_state,
@@ -1191,8 +1197,8 @@ fn player_attack(
     ) in query.iter_mut()
     {
         if attacking.ticks == 0 {
-            let attack = match *weapon {
-                PlayerWeapon::Bow => {
+            let attack = match *combat_style {
+                PlayerCombatStyle::Ranged => {
                     let mut animation: ScriptPlayer<SpriteAnimation> =
                         ScriptPlayer::default();
                     animation.play_key("anim.player.BowBasicArrow");
@@ -1250,7 +1256,22 @@ fn player_attack(
                         ))
                         .id()
                 },
-                PlayerWeapon::Sword => {
+                PlayerCombatStyle::Melee => {
+                    let damage = match *melee_weapon {
+                        PlayerMeleeWeapon::Hammer => {
+                            config.hammer_attack_damage
+                        },
+                        PlayerMeleeWeapon::Sword => config.sword_attack_damage,
+                    };
+
+                    // Slow the player down when they attack with the Hammer
+                    if let PlayerMeleeWeapon::Hammer = *melee_weapon {
+                        player_stats.set(
+                            StatType::MoveVelMax,
+                            config.max_move_vel / 2.0,
+                        );
+                    }
+
                     commands
                         .spawn((
                             TransformBundle::from_transform(
@@ -1262,7 +1283,7 @@ fn player_attack(
                                 PLAYER_ATTACK,
                                 ENEMY_HURT,
                             )),
-                            Attack::new(16, entity),
+                            Attack::new(16, entity).with_damage(damage),
                             SelfPushback(Knockback::new(
                                 Vec2::new(
                                     config.melee_self_pushback
@@ -1300,6 +1321,9 @@ fn player_attack(
 
         // leave attacking state
         if attacking.ticks == Attacking::MAX * 8 {
+            // Restore the player movement velocity after attacking.
+            player_stats.reset_stat(StatType::MoveVelMax);
+
             if attacking.followup {
                 transitions.push(Attacking::new_transition(CanAttack {
                     immediate: true,
@@ -1332,6 +1356,7 @@ pub fn player_whirl(
             &mut TransitionQueue,
             &mut Whirling,
             &mut WhirlAbility,
+            &mut PlayerStats,
             Has<Stealthing>,
             &Gent,
         ),
@@ -1351,6 +1376,7 @@ pub fn player_whirl(
         ),
     >,
     mut commands: Commands,
+    melee_weapon: Res<PlayerMeleeWeapon>,
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
@@ -1360,6 +1386,7 @@ pub fn player_whirl(
         mut transitions,
         mut whirling,
         mut whirl_ability,
+        mut player_stats,
         is_stealthing,
         gent,
     ) in gent_query.iter_mut()
@@ -1369,6 +1396,14 @@ pub fn player_whirl(
         if action_state.pressed(&PlayerAction::Whirl)
             || whirling.ticks < Whirling::MIN_TICKS
         {
+            // Slow the player down when they attack with the Hammer
+            if let PlayerMeleeWeapon::Hammer = *melee_weapon {
+                player_stats.set(
+                    StatType::MoveVelMax,
+                    config.max_move_vel / 2.0,
+                );
+            }
+
             if let Some(attack_entity) = whirling.attack_entity {
                 // if the attack entities collider was changed, set the attack to none
                 if attack_query.get(attack_entity).is_err() {
@@ -1401,12 +1436,18 @@ pub fn player_whirl(
         } else {
             // leave whirling state if button is not pressed and we are past min ticks
             if whirling.ticks >= Whirling::MIN_TICKS {
+                // Restore the player movement velocity after attacking.
+                player_stats.reset_stat(StatType::MoveVelMax);
+
                 transitions.push(Whirling::new_transition(
                     CanAttack::default(),
                 ));
             }
         }
         if whirl_ability.energy < 0. {
+            // Restore the player movement velocity after attacking.
+            player_stats.reset_stat(StatType::MoveVelMax);
+
             transitions.push(Whirling::new_transition(
                 CanAttack::default(),
             ));

@@ -1,4 +1,4 @@
-use bevy::prelude::{DetectChanges, Ref, RemovedComponents};
+use bevy::prelude::{DetectChanges, Ref};
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::LinearVelocity;
@@ -17,7 +17,7 @@ use crate::prelude::{
     Res, With, Without,
 };
 
-use super::player_weapon::PlayerWeapon;
+use super::player_weapon::CurrentWeapon;
 
 /// play animations here, run after transitions
 pub struct PlayerAnimationPlugin;
@@ -89,20 +89,15 @@ fn player_falling_animation(
                     {
                         player.play_key("anim.player.WallSlide");
                     }
-                } else {
-                    if velocity.y < 0.
-                        && player.current_key().unwrap_or("")
-                            != "anim.player.Fall"
-                    {
-                        player.play_key("anim.player.Fall");
-                    }
-                }
-            } else {
-                if velocity.y < 0.
+                } else if velocity.y < 0.
                     && player.current_key().unwrap_or("") != "anim.player.Fall"
                 {
                     player.play_key("anim.player.Fall");
                 }
+            } else if velocity.y < 0.
+                && player.current_key().unwrap_or("") != "anim.player.Fall"
+            {
+                player.play_key("anim.player.Fall");
             }
         }
     }
@@ -160,7 +155,7 @@ fn player_attacking_animation(
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
-    weapon: Res<PlayerWeapon>,
+    weapon: CurrentWeapon,
 ) {
     for (gent, is_falling, is_jumping, is_running, hitfrozen, attacking) in
         query.iter()
@@ -169,7 +164,6 @@ fn player_attacking_animation(
             let hitfrozen = hitfrozen
                 .map(|f| f.0 < config.hitfreeze_ticks)
                 .unwrap_or(false);
-            // let current = player.current_key().unwrap_or("").clone();
             player.set_slot("AttackTransition", false);
             let basic_air_anim_key_str = &weapon.get_anim_key("BasicAir");
             let basic_run_anim_key_str = &weapon.get_anim_key("BasicRun");
@@ -191,12 +185,10 @@ fn player_attacking_animation(
                         player.set_slot("AttackTransition", true);
                     }
                 }
-            } else {
-                if player.current_key() != Some(basic_idle_anim_key_str) {
-                    player.play_key(basic_idle_anim_key_str);
-                    if !attacking.is_added() {
-                        player.set_slot("AttackTransition", true);
-                    }
+            } else if player.current_key() != Some(basic_idle_anim_key_str) {
+                player.play_key(basic_idle_anim_key_str);
+                if !attacking.is_added() {
+                    player.set_slot("AttackTransition", true);
                 }
             }
         }
@@ -206,10 +198,11 @@ fn player_attacking_animation(
 fn player_whirling_animation(
     query: Query<&Gent, Added<Whirling>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    weapon: CurrentWeapon,
 ) {
     for gent in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key("anim.player.SwordWhirling")
+            player.play_key(&weapon.whirling_anim_key());
         }
     }
 }
@@ -246,7 +239,7 @@ fn sprite_flip(
     mut current_direction: Local<bool>,
     mut old_direction: Local<bool>,
     time: Res<GameTime>,
-    weapon: Res<PlayerWeapon>,
+    weapon: CurrentWeapon,
 ) {
     for (facing, gent, wall_slide_time) in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {

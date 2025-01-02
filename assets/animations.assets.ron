@@ -145,6 +145,18 @@
         rows: 1,
         columns: 12,
     ),
+    "anim.player.HammerBasicRun": File (
+        path: "animations/player/hammer/BasicIdle.anim.toml",
+    ),
+    "anim.player.HammerBasicRun.image": File (
+        path: "animations/player/hammer/BasicIdleSheet.png",
+    ),
+    "anim.player.HammerBasicRun.atlas": TextureAtlasLayout (
+        tile_size_x: 48.,
+        tile_size_y: 48.,
+        rows: 1,
+        columns: 29,
+    ),
     "anim.player.SwordBasicAir": File (
         path: "animations/player/sword/BasicAir.anim.toml",
     ),

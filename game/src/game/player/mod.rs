@@ -10,7 +10,6 @@ use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
 use player_weapon::PlayerWeaponPlugin;
 use rapier2d::geometry::{Group, InteractionGroups};
-use rapier2d::na::Vector3;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use theseeker_engine::animation::SpriteAnimationBundle;
@@ -126,7 +125,8 @@ pub enum PlayerAction {
     Whirl,
     Stealth,
     Fall,
-    SwapWeapon,
+    SwapCombatStyle,
+    SwapMeleeWeapon,
     Interact,
     ToggleControlOverlay,
 }
@@ -361,10 +361,17 @@ fn setup_player(
                         KeyCode::Semicolon,
                     )
                     .with(PlayerAction::Stealth, KeyCode::Digit4)
-                    .with(PlayerAction::SwapWeapon, KeyCode::KeyH)
                     .with(
-                        PlayerAction::SwapWeapon,
+                        PlayerAction::SwapCombatStyle,
+                        KeyCode::KeyH,
+                    )
+                    .with(
+                        PlayerAction::SwapCombatStyle,
                         KeyCode::Backquote,
+                    )
+                    .with(
+                        PlayerAction::SwapMeleeWeapon,
+                        KeyCode::KeyG,
                     )
                     .with(PlayerAction::Interact, KeyCode::KeyF)
                     .with(
@@ -527,15 +534,11 @@ impl Whirling {
 
 /// Differentiates between different types of dashing
 //#[allow(clippy::enum_variant_names)]
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default)]
 pub enum DashType {
+    #[default]
     Horizontal,
     Downward,
-}
-impl Default for DashType {
-    fn default() -> Self {
-        return DashType::Horizontal;
-    }
 }
 
 #[derive(Component, Debug, Default)]
@@ -550,32 +553,32 @@ impl Dashing {
     pub fn from_action_state(action_state: &ActionState<PlayerAction>) -> Self {
         if action_state.pressed(&PlayerAction::Fall) {
             println!("dashing down!");
-            return Self {
+            Self {
                 dash_type: DashType::Downward,
                 ..default()
-            };
+            }
         } else {
             println!("dashing horizontally!");
-            return Self {
+            Self {
                 dash_type: DashType::Horizontal,
                 ..default()
-            };
+            }
         }
     }
 
     pub fn dash_duration(&self, config: &PlayerConfig) -> f32 {
-        return match self.dash_type {
+        match self.dash_type {
             DashType::Horizontal => config.dash_duration,
             DashType::Downward => config.dash_down_duration,
-        };
+        }
     }
 
     pub fn is_down_dash(&self) -> bool {
-        return self.dash_type == DashType::Downward;
+        self.dash_type == DashType::Downward
     }
 
     pub fn is_horizontal_dash(&self) -> bool {
-        return self.dash_type == DashType::Horizontal;
+        self.dash_type == DashType::Horizontal
     }
 
     pub fn set_player_velocity(
@@ -831,6 +834,12 @@ pub struct PlayerConfig {
     /// Ticks for melee knockback velocity; determines how long movement is locked for
     melee_pushback_ticks: u32,
 
+    /// Base sword attack damage
+    sword_attack_damage: u32,
+
+    /// Base hammer attack damage
+    hammer_attack_damage: u32,
+
     /// Base bow attack damage
     bow_attack_damage: u32,
 
@@ -924,6 +933,8 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "melee_self_pushback_ticks", |val| config.melee_self_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
     update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "sword_attack_damage", |val| config.sword_attack_damage = val as u32);
+    update_field(&mut errors, &cfg.0, "hammer_attack_damage", |val| config.hammer_attack_damage = val as u32);
     update_field(&mut errors, &cfg.0, "bow_attack_damage", |val| config.bow_attack_damage = val as u32);
     update_field(&mut errors, &cfg.0, "bow_self_pushback", |val| config.bow_self_pushback = val);
     update_field(&mut errors, &cfg.0, "bow_self_pushback_ticks", |val| config.bow_self_pushback_ticks = val as u32);
@@ -1017,6 +1028,18 @@ impl PlayerStats {
 
     pub fn get(&self, stat: StatType) -> f32 {
         self.effective_stats[&stat]
+    }
+
+    pub fn set(&mut self, stat: StatType, value: f32) {
+        if let Some(effective_stat) = self.effective_stats.get_mut(&stat) {
+            *effective_stat = value;
+        }
+    }
+
+    pub fn reset_stat(&mut self, stat: StatType) {
+        if let Some(effective_stat) = self.effective_stats.get_mut(&stat) {
+            *effective_stat = self.base_stats[&stat];
+        }
     }
 
     pub fn reset_stats(&mut self) {
@@ -1197,7 +1220,6 @@ pub fn dash_icon_fx(
     mut commands: Commands,
     mut query: Query<(Entity, &DashIcon, &mut Sprite)>,
     time: Res<GameTime>,
-    config: Res<PlayerConfig>,
 ) {
     for (entity, icon, mut sprite) in query.iter_mut() {
         let d = time.time_in_seconds() as f32 - icon.time;
