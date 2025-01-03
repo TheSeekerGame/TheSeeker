@@ -52,7 +52,7 @@ path = "game/src/main.rs"
 
 [features]
 dev = ["bevy/file_watcher"]
-inspector = []
+inspector = ["dep:bevy-inspector-egui"]
 
 # dev: Enable max optimizations for dependencies, but not for our code
 [profile.dev.package."*"]
@@ -91,20 +91,21 @@ strum = "0.26"
 strum_macros = "0.26"
 
 bevy_egui = "0.27"
-bevy-inspector-egui = "0.24"
 bevy_fluent = "0.9.0"
 
 # This specific rev was working main on may 28th.
 # needed for moveble forcefields not availible in 0.10
 # (also has some wgsl fixes)
-bevy_hanabi = { git = "https://github.com/djeedai/bevy_hanabi", rev = "cabb3cb", default-features = false, features = [
-  "3d",
-] }
+bevy_hanabi = { git = "https://github.com/djeedai/bevy_hanabi", rev = "cabb3cb", default-features = false, features = ["2d" ] }
 smallvec = "1.13.2"
 
-bevy_sprite3d = "2.8"
 iyes_perf_ui = "0.2.3"
 num_cpus = "1.16.0"
+
+[dependencies.bevy-inspector-egui]
+version = "0.24"
+default-features = false
+optional = true
 
 [dependencies.serde]
 version = "1.0.196"
@@ -112,8 +113,31 @@ features = ["derive"]
 
 [dependencies.bevy]
 version = "0.13"
-default-features = true
-features = ["flac", "jpeg", "wayland"]
+default-features = false
+features = [
+  # defaults, somewhat stripped down
+  "animation",
+  "bevy_asset",
+  "bevy_audio",
+  "bevy_core_pipeline",
+  "bevy_gilrs",
+  "bevy_gizmos",
+  "bevy_render",
+  "bevy_scene",
+  "bevy_sprite",
+  "bevy_text",
+  "bevy_ui",
+  "bevy_winit",
+  "default_font",
+  "multi-threaded",
+  "png",
+  "tonemapping_luts",
+  "x11",
+  # extras
+  "flac",
+  "jpeg",
+  "wayland",
+]
 
 [dependencies.bevy_asset_loader]
 version = "0.20"
