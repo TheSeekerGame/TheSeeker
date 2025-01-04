@@ -15,10 +15,10 @@ use super::player::{
     on_hit_exit_stealthing, on_hit_stealth_reset, Passive, Passives, Player,
     PlayerGfx, PlayerStateSet, StatusModifier,
 };
-use crate::camera::CameraShake;
 use crate::game::attack::arc_attack::{arc_projectile, Projectile};
 use crate::game::attack::particles::AttackParticlesPlugin;
 use crate::prelude::*;
+use crate::{camera::CameraShake, game::player::PlayerStatMod};
 
 pub struct AttackPlugin;
 
@@ -103,7 +103,7 @@ pub struct AttackBundle {
 pub struct Attack {
     pub current_lifetime: u32,
     pub max_lifetime: u32,
-    pub damage: u32,
+    pub damage: f32,
     /// Maximum number of targets that can be hit by this attack at once.
     pub max_targets: u32,
     pub attacker: Entity,
@@ -118,11 +118,11 @@ pub struct Attack {
 }
 impl Attack {
     /// Lifetime is in game ticks
-    pub fn new(lifetime: u32, attacker: Entity) -> Self {
+    pub fn new(lifetime: u32, attacker: Entity, damage: f32) -> Self {
         Attack {
             current_lifetime: 0,
             max_lifetime: lifetime,
-            damage: 20,
+            damage,
             max_targets: 3,
             attacker,
             damaged_set: Default::default(),
@@ -138,7 +138,7 @@ impl Attack {
 }
 
 /// Event sent when damage is applied
-#[derive(Event, Clone, Copy, Hash, Eq, PartialEq)]
+#[derive(Event, Clone, Copy, PartialEq)]
 pub struct DamageInfo {
     /// Entity that attacked
     pub attacker: Entity,
@@ -147,7 +147,7 @@ pub struct DamageInfo {
     /// Entity that got damaged
     pub target: Entity,
     /// Amount of damage that was actually applied
-    pub amount: u32,
+    pub amount: f32,
     pub crit: bool,
     pub stealthed: bool,
 }
@@ -271,9 +271,8 @@ pub fn apply_attack_modifications(
             if let Some(mut crit) = maybe_crits {
                 if crit.next_hit_is_critical && !is_crit {
                     commands.entity(entity).insert(Crit);
-                    attack.damage = (attack.damage as f32
-                        * crit.crit_damage_multiplier)
-                        as u32;
+                    attack.damage =
+                        (attack.damage * crit.crit_damage_multiplier);
                     crit.next_hit_is_critical = false;
                 }
 
@@ -318,6 +317,7 @@ pub fn apply_attack_damage(
             &mut Health,
             &GlobalTransform,
             &Facing,
+            Option<&PlayerStatMod>,
             Has<Defense>,
         ),
         With<Gent>,
@@ -345,6 +345,7 @@ pub fn apply_attack_damage(
                 mut health,
                 t_transform,
                 t_facing,
+                maybe_player_statmod,
                 is_defending,
             )) = target_query.get_mut(*target)
             {
@@ -363,12 +364,12 @@ pub fn apply_attack_damage(
                         },
                     };
                     if is_backstab {
-                        damage *= 3;
+                        damage *= 3.;
                     }
                 }
                 if is_defending {
                     //TODO: switch to defense modifiers
-                    damage /= 4;
+                    damage /= 4.;
                 }
 
                 // TODO:
@@ -377,8 +378,13 @@ pub fn apply_attack_damage(
                     commands.entity(t_entity).insert(stat_modifier.clone());
                 }
 
+                // apply player defense modifier if it exists
+                if let Some(statmod) = maybe_player_statmod {
+                    damage *= statmod.defense;
+                }
+
                 // apply damage to the targets health
-                health.current = health.current.saturating_sub(damage);
+                health.current = health.current.saturating_sub(damage as u32);
                 let damage_info = DamageInfo {
                     attacker: attack.attacker,
                     source: a_entity,

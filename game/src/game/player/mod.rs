@@ -19,8 +19,8 @@ use theseeker_engine::physics::{
 };
 
 use super::physics::Knockback;
-use crate::game::attack::*;
 use crate::game::gentstate::*;
+use crate::game::{attack::*, xp_orbs::XpOrbPickup};
 use crate::prelude::*;
 
 pub struct PlayerPlugin;
@@ -33,12 +33,17 @@ impl Plugin for PlayerPlugin {
             (
                 load_player_config,
                 load_player_stats.run_if(resource_changed::<PlayerConfig>),
+                track_hits,
                 player_update_stats_mod,
                 gain_passives.run_if(resource_changed::<KillCount>),
                 player_update_passive_buffs,
             )
                 .chain()
                 .before(PlayerStateSet::Behavior),
+        );
+        app.add_systems(
+            GameTickUpdate,
+            on_xp_heal.after(PlayerStateSet::Behavior),
         );
         app.add_systems(Startup, load_dash_asset);
         app.add_systems(
@@ -143,12 +148,12 @@ impl Default for Passives {
 }
 
 impl Passives {
-    // TODO: pass in slice of passives, filter the locked passives on it
+    // // TODO: pass in slice of passives, filter the locked passives on it
     // fn new_with(passive: Passive) -> Self {
     //     Passives::default()
     // }
 
-    fn gain(&mut self) {
+    fn gain_random(&mut self) {
         // TODO: add checks for no passives remaining
         // TODO add limit on gaining past max passive slots?
         // does nothing if there are no more passives to gain
@@ -156,6 +161,13 @@ impl Passives {
         if !self.locked.is_empty() {
             let i = rng.gen_range(0..self.locked.len());
             let passive = self.locked.swap_remove(i);
+            self.current.insert(passive);
+        }
+    }
+
+    fn gain(&mut self, passive: Passive) {
+        if !self.current.contains(&passive) {
+            self.locked.retain(|p| *p != passive);
             self.current.insert(passive);
         }
     }
@@ -171,7 +183,7 @@ pub enum Passive {
     /// Deal extra damage when backstabbing
     IceDagger,
     // TODO: skill switch damage boost
-    WhiteGlove,
+    // WhiteGlove,
     // TODO: damage scaling based on number of enemies nearby
     GlowingShard,
     // TODO: crits lower cooldown of all abilities by 0.5 sec
@@ -180,6 +192,8 @@ pub enum Passive {
     HeavyBoots,
     // TODO: move faster, get cdr, take double damage
     SerpentRing,
+    // Increase attack speed/cdr for every consecutive hit within 3 seconds
+    FrenziedAttack,
 }
 
 fn gain_passives(
@@ -189,7 +203,7 @@ fn gain_passives(
 ) {
     for mut passives in query.iter_mut() {
         if **kills % player_config.passive_gain_rate == 0 {
-            passives.gain();
+            passives.gain_random();
             println!("{:?}", passives);
         }
     }
@@ -283,6 +297,8 @@ fn setup_player(
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn(()).id();
+        let mut passives = Passives::default();
+        passives.gain(Passive::FrenziedAttack);
         commands.entity(e_gent).insert((
             Name::new("Player"),
             PlayerGentBundle {
@@ -366,6 +382,7 @@ fn setup_player(
                 PlayerStats::init_from_config(&config),
                 //maybe consolidate with PlayerStats
                 PlayerStatMod::new(),
+                EnemiesNearby(0),
             ),
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
@@ -374,7 +391,7 @@ fn setup_player(
             Crits::new(2.0),
             TransitionQueue::default(),
             StateDespawnMarker,
-            Passives::default(),
+            (passives, BuffTick::default()),
         ));
         // unparent from the level
         if let Ok(parent) = parent_query.get(parent.get()) {
@@ -472,6 +489,9 @@ pub struct Attacking {
 }
 impl Attacking {
     pub const MAX: u32 = 4;
+    // pub const MAX: u32 = 4;
+    //minimum amount of frames that should be played from attack animation
+    pub const MIN: u32 = 2;
 }
 impl GentState for Attacking {}
 
@@ -895,12 +915,15 @@ impl PlayerStats {
     }
 }
 
-#[derive(Component)]
+#[derive(Component, Deref, DerefMut)]
+pub struct EnemiesNearby(u32);
+
+#[derive(Component, Debug)]
 pub struct PlayerStatMod {
-    attack: f32,
-    defense: f32,
-    speed: f32,
-    cdr: f32,
+    pub attack: f32,
+    pub defense: f32,
+    pub speed: f32,
+    pub cdr: f32,
 }
 
 impl PlayerStatMod {
@@ -920,25 +943,33 @@ fn player_update_passive_buffs(
     mut query: Query<(
         &Passives,
         &LinearVelocity,
+        &EnemiesNearby,
+        &BuffTick,
         &mut PlayerStats,
         &mut PlayerStatMod,
         Has<Stealthing>,
     )>,
 ) {
-    for (passives, vel, mut stats, mut stat_mod, is_stealth) in query.iter_mut()
+    for (
+        passives,
+        vel,
+        enemies_nearby,
+        buff_tick,
+        mut stats,
+        mut stat_mod,
+        is_stealth,
+    ) in query.iter_mut()
     {
         let mut attack = 1.;
         let mut defense = 1.;
         let mut speed = 1.;
         let mut cdr = 1.;
-        let num = 1.;
         if passives.contains(&Passive::GlowingShard) {
-            //TODO: need spatial index check, +10% for every enemy nearby
-            attack *= (1. + 0.1 * num);
+            attack *= (1. + 0.1 * enemies_nearby.0 as f32);
         }
         if passives.contains(&Passive::SerpentRing) {
-            speed += 0.2;
-            cdr += 0.33;
+            speed *= 1.2;
+            cdr *= 1.33;
             defense *= 0.5;
         }
         if passives.contains(&Passive::HeavyBoots) {
@@ -952,7 +983,11 @@ fn player_update_passive_buffs(
                 defense *= 2.;
             };
         }
+        if passives.contains(&Passive::FrenziedAttack) {
+            cdr *= 1. + (0.1 * buff_tick.stacks as f32).min(1.);
+        }
         if is_stealth {
+            println!("is_stealth");
             attack *= 2.;
         }
         *stat_mod = PlayerStatMod {
@@ -960,7 +995,7 @@ fn player_update_passive_buffs(
             defense,
             speed,
             cdr,
-        }
+        };
     }
 }
 
@@ -1139,6 +1174,46 @@ pub fn on_hit_exit_stealthing(
             transitions.push(Stealthing::new_transition(
                 CanStealth::new(&config),
             ));
+        }
+    }
+}
+
+pub fn on_xp_heal(
+    mut query: Query<(&Passives, &mut Health), With<Player>>,
+    mut xp_event: EventReader<XpOrbPickup>,
+) {
+    if let Ok((passives, mut health)) = query.get_single_mut() {
+        if passives.contains(&Passive::Bloodstone) {
+            for event in xp_event.read() {
+                health.current = (health.current + 2).min(health.max);
+            }
+        }
+    }
+}
+
+#[derive(Default, Component)]
+pub struct BuffTick {
+    pub falloff: u32,
+    pub stacks: u32,
+}
+
+fn track_hits(
+    mut query: Query<(Entity, &Passives, &mut BuffTick), With<Player>>,
+    mut damage_events: EventReader<DamageInfo>,
+) {
+    if let Ok((player_e, passives, mut buff)) = query.get_single_mut() {
+        //tick falloff
+        buff.falloff = buff.falloff.saturating_sub(1);
+        if passives.contains(&Passive::FrenziedAttack) {
+            for damage_info in damage_events.read() {
+                if damage_info.attacker == player_e {
+                    buff.falloff = 288;
+                    buff.stacks += 1;
+                }
+            }
+        }
+        if buff.falloff == 0 {
+            buff.stacks = 0
         }
     }
 }
