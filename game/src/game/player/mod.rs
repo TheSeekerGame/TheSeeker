@@ -10,7 +10,6 @@ use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
 use player_weapon::PlayerWeaponPlugin;
 use rapier2d::geometry::{Group, InteractionGroups};
-use rapier2d::na::Vector3;
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use theseeker_engine::animation::SpriteAnimationBundle;
@@ -22,8 +21,8 @@ use theseeker_engine::physics::{
 };
 
 use super::physics::Knockback;
-use crate::game::attack::*;
 use crate::game::gentstate::*;
+use crate::game::{attack::*, xp_orbs::XpOrbPickup};
 use crate::prelude::*;
 
 pub struct PlayerPlugin;
@@ -35,11 +34,18 @@ impl Plugin for PlayerPlugin {
             GameTickUpdate,
             (
                 load_player_config,
-                load_player_stats
-                    .before(PlayerStateSet::Behavior)
-                    .after(load_player_config)
-                    .run_if(resource_changed::<PlayerConfig>),
-            ),
+                load_player_stats.run_if(resource_changed::<PlayerConfig>),
+                track_hits,
+                player_update_stats_mod,
+                gain_passives.run_if(resource_changed::<KillCount>),
+                player_update_passive_buffs,
+            )
+                .chain()
+                .before(PlayerStateSet::Behavior),
+        );
+        app.add_systems(
+            GameTickUpdate,
+            on_xp_heal.after(PlayerStateSet::Behavior),
         );
         app.add_systems(Startup, load_dash_asset);
         app.add_systems(
@@ -149,12 +155,12 @@ impl Default for Passives {
 }
 
 impl Passives {
-    // TODO: pass in slice of passives, filter the locked passives on it
+    // // TODO: pass in slice of passives, filter the locked passives on it
     // fn new_with(passive: Passive) -> Self {
     //     Passives::default()
     // }
 
-    fn gain(&mut self) {
+    fn gain_random(&mut self) {
         // TODO: add checks for no passives remaining
         // TODO add limit on gaining past max passive slots?
         // does nothing if there are no more passives to gain
@@ -165,18 +171,47 @@ impl Passives {
             self.current.insert(passive);
         }
     }
+
+    fn gain(&mut self, passive: Passive) {
+        if !self.current.contains(&passive) {
+            self.locked.retain(|p| *p != passive);
+            self.current.insert(passive);
+        }
+    }
 }
 
+//they could also be components...limit only by the pickup/gain function instead of sized hashmap
 #[derive(Debug, Eq, PartialEq, Hash, EnumIter)]
 pub enum Passive {
     /// Heal when killing an enemy
-    Absorption,
+    Bloodstone,
     /// Crit every 3rd and 5th hit when low health
-    CritResolve,
-    Backstab,
-    CrowdCtrl,
-    Unmoving,
-    Speedy,
+    FlamingHeart,
+    /// Deal extra damage when backstabbing
+    IceDagger,
+    /// Damage scaling based on number of enemies nearby
+    GlowingShard,
+    /// Crits lower cooldown of all abilities by 0.5 sec
+    ObsidionNecklace,
+    /// Increased damage while standing still, decreased while moving
+    HeavyBoots,
+    /// Move faster, get cdr, take double damage
+    SerpentRing,
+    /// Increase cdr for every consecutive hit within 3 seconds
+    FrenziedAttack,
+}
+
+fn gain_passives(
+    mut query: Query<&mut Passives, With<Player>>,
+    kills: Res<KillCount>,
+    player_config: Res<PlayerConfig>,
+) {
+    for mut passives in query.iter_mut() {
+        if **kills % player_config.passive_gain_rate == 0 {
+            passives.gain_random();
+            // println!("{:?}", passives);
+        }
+    }
 }
 
 #[cfg(feature = "dev")]
@@ -383,7 +418,12 @@ fn setup_player(
                     remaining_cooldown: 0.0,
                 },
             ),
-            PlayerStats::init_from_config(&config),
+            (
+                PlayerStats::init_from_config(&config),
+                //maybe consolidate with PlayerStats
+                PlayerStatMod::new(),
+                EnemiesNearby(0),
+            ),
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
             JumpCount(0),
@@ -391,7 +431,7 @@ fn setup_player(
             Crits::new(2.0),
             TransitionQueue::default(),
             StateDespawnMarker,
-            Passives::default(),
+            (Passives::default(), BuffTick::default()),
         ));
         // unparent from the level
         if let Ok(parent) = parent_query.get(parent.get()) {
@@ -489,6 +529,9 @@ pub struct Attacking {
 }
 impl Attacking {
     pub const MAX: u32 = 4;
+    // pub const MAX: u32 = 4;
+    //minimum amount of frames that should be played from attack animation
+    pub const MIN: u32 = 2;
 }
 impl GentState for Attacking {}
 
@@ -832,7 +875,7 @@ pub struct PlayerConfig {
     melee_pushback_ticks: u32,
 
     /// Base bow attack damage
-    bow_attack_damage: u32,
+    bow_attack_damage: f32,
 
     /// Pushback velocity on basic bow shots
     bow_self_pushback: f32,
@@ -924,7 +967,7 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "melee_self_pushback_ticks", |val| config.melee_self_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
     update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
-    update_field(&mut errors, &cfg.0, "bow_attack_damage", |val| config.bow_attack_damage = val as u32);
+    update_field(&mut errors, &cfg.0, "bow_attack_damage", |val| config.bow_attack_damage = val);
     update_field(&mut errors, &cfg.0, "bow_self_pushback", |val| config.bow_self_pushback = val);
     update_field(&mut errors, &cfg.0, "bow_self_pushback_ticks", |val| config.bow_self_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "bow_pushback", |val| config.bow_pushback = val);
@@ -953,6 +996,8 @@ pub enum StatType {
     MoveVelMax,
     MoveAccelInit,
     MoveAccel,
+    AttackMulti,
+    DefenseMulti,
 }
 /// For now, Status Modifier is implemented so that only one Status Modifier is active at a time.
 /// However, a single Status Modifier can modify multiple Stats.
@@ -1049,13 +1094,87 @@ impl PlayerStats {
     }
 }
 
-fn player_new_stats_mod(
+#[derive(Component, Deref, DerefMut)]
+pub struct EnemiesNearby(u32);
+
+#[derive(Component, Debug)]
+pub struct PlayerStatMod {
+    pub attack: f32,
+    pub defense: f32,
+    pub speed: f32,
+    pub cdr: f32,
+}
+
+impl PlayerStatMod {
+    fn new() -> PlayerStatMod {
+        PlayerStatMod {
+            attack: 1.,
+            defense: 1.,
+            speed: 1.,
+            cdr: 1.,
+        }
+    }
+}
+
+fn player_update_passive_buffs(
+    mut query: Query<(
+        &Passives,
+        &LinearVelocity,
+        &EnemiesNearby,
+        &BuffTick,
+        &mut PlayerStatMod,
+        Has<Stealthing>,
+    )>,
+) {
+    for (passives, vel, enemies_nearby, buff_tick, mut stat_mod, is_stealth) in
+        query.iter_mut()
+    {
+        let mut attack = 1.;
+        let mut defense = 1.;
+        let mut speed = 1.;
+        let mut cdr = 1.;
+        if passives.contains(&Passive::GlowingShard) {
+            attack *= (1. + 0.1 * enemies_nearby.0 as f32);
+        }
+        if passives.contains(&Passive::SerpentRing) {
+            speed *= 1.2;
+            cdr *= 1.33;
+            defense *= 0.5;
+        }
+        if passives.contains(&Passive::HeavyBoots) {
+            //if we are moving
+            if vel.length() > 0.0001 {
+                attack *= 0.5;
+                defense *= 0.5;
+            } else {
+                //should they be additive or multi?
+                attack *= 2.;
+                defense *= 2.;
+            };
+        }
+        if passives.contains(&Passive::FrenziedAttack) {
+            cdr *= 1. + (0.1 * buff_tick.stacks as f32).min(1.);
+        }
+        if is_stealth {
+            attack *= 2.;
+        }
+        *stat_mod = PlayerStatMod {
+            attack,
+            defense,
+            speed,
+            cdr,
+        };
+    }
+}
+
+fn player_update_stats_mod(
     mut query: Query<(
         Entity,
         &mut StatusModifier,
         &mut PlayerStats,
     )>,
     mut gfx_query: Query<(&PlayerGfx, &mut Sprite)>,
+    //TODO: switch to ticks
     time: Res<Time<Virtual>>,
     mut commands: Commands,
 ) {
@@ -1072,6 +1191,7 @@ fn player_new_stats_mod(
 
         sprite.color = modifier.effect_col;
 
+        //TODO: switch to ticks
         modifier.time_remaining -= time.delta_seconds();
 
         if modifier.time_remaining < 0. {
@@ -1212,8 +1332,40 @@ pub fn dash_icon_fx(
     }
 }
 
+pub fn on_crit_cooldown_reduce(
+    attack_query: Query<&Attack, (With<Crit>, Added<Hit>)>,
+    mut attacker_query: Query<(
+        &Passives,
+        Option<&mut CanDash>,
+        Option<&mut WhirlAbility>,
+        Option<&mut CanStealth>,
+    )>,
+) {
+    for attack in attack_query.iter() {
+        if let Ok((
+            passives,
+            mut maybe_can_dash,
+            mut maybe_whirl_ability,
+            mut maybe_can_stealth,
+        )) = attacker_query.get_mut(attack.attacker)
+        {
+            if passives.contains(&Passive::ObsidionNecklace) {
+                if let Some(ref mut can_dash) = maybe_can_dash {
+                    can_dash.remaining_cooldown -= 0.5;
+                }
+                if let Some(ref mut whirl_ability) = maybe_whirl_ability {
+                    whirl_ability.energy += 0.5;
+                }
+                if let Some(ref mut can_stealth) = maybe_can_stealth {
+                    can_stealth.remaining_cooldown -= 0.5;
+                }
+            }
+        }
+    }
+}
+
 /// Resets the players cooldowns/energy on hit of a stealthed critical hit
-pub fn on_hit_stealth_reset(
+pub fn on_stealth_hit_cooldown_reset(
     query: Query<&Attack, (Added<Hit>, With<Crit>, With<Stealthed>)>,
     mut attacker_skills: Query<(
         Option<&mut CanDash>,
@@ -1258,6 +1410,46 @@ pub fn on_hit_exit_stealthing(
             transitions.push(Stealthing::new_transition(
                 CanStealth::new(&config),
             ));
+        }
+    }
+}
+
+pub fn on_xp_heal(
+    mut query: Query<(&Passives, &mut Health), With<Player>>,
+    mut xp_event: EventReader<XpOrbPickup>,
+) {
+    if let Ok((passives, mut health)) = query.get_single_mut() {
+        if passives.contains(&Passive::Bloodstone) {
+            for event in xp_event.read() {
+                health.current = (health.current + 2).min(health.max);
+            }
+        }
+    }
+}
+
+#[derive(Default, Component)]
+pub struct BuffTick {
+    pub falloff: u32,
+    pub stacks: u32,
+}
+
+fn track_hits(
+    mut query: Query<(Entity, &Passives, &mut BuffTick), With<Player>>,
+    mut damage_events: EventReader<DamageInfo>,
+) {
+    if let Ok((player_e, passives, mut buff)) = query.get_single_mut() {
+        //tick falloff
+        buff.falloff = buff.falloff.saturating_sub(1);
+        if passives.contains(&Passive::FrenziedAttack) {
+            for damage_info in damage_events.read() {
+                if damage_info.attacker == player_e {
+                    buff.falloff = 288;
+                    buff.stacks += 1;
+                }
+            }
+        }
+        if buff.falloff == 0 {
+            buff.stacks = 0
         }
     }
 }

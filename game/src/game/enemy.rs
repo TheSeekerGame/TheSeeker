@@ -17,10 +17,10 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::physics::Knockback;
 use super::player::{Player, PlayerConfig, StatusModifier, Stealthing};
-use crate::game::attack::arc_attack::Projectile;
 use crate::game::attack::particles::ArcParticleEffectHandle;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
+use crate::game::{attack::arc_attack::Projectile, player::EnemiesNearby};
 use crate::graphics::particles_util::BuildParticles;
 use crate::prelude::*;
 
@@ -476,9 +476,6 @@ impl Waiting {
 impl GentState for Waiting {}
 impl GenericState for Waiting {}
 
-#[derive(Component)]
-pub struct JustGotHitMarker;
-
 #[derive(Component, Reflect)]
 enum Navigation {
     Grounded,
@@ -562,29 +559,34 @@ fn check_player_range(
         ),
         With<Enemy>,
     >,
-    player_query: Query<
+    mut player_query: Query<
         (
             Entity,
             &GlobalTransform,
             Option<&Stealthing>,
+            &mut EnemiesNearby,
         ),
         (Without<Enemy>, With<Player>),
     >,
 ) {
-    for (
-        mut range,
-        mut target,
-        mut facing,
-        role,
-        trans,
-        is_aggroed,
-        is_meleeing,
-        is_defending,
-    ) in query.iter_mut()
+    if let Ok((player_e, player_trans, player_stealth, mut enemies_nearby)) =
+        player_query.get_single_mut()
     {
-        if let Ok((player_e, player_trans, player_stealth)) =
-            player_query.get_single()
+        //reset every tick
+        **enemies_nearby = 0;
+
+        for (
+            mut range,
+            mut target,
+            mut facing,
+            role,
+            trans,
+            is_aggroed,
+            is_meleeing,
+            is_defending,
+        ) in query.iter_mut()
         {
+            //TODO: still update enemies nearby in stealth?
             if player_stealth.is_some() {
                 *range = Range::Deaggro;
                 target.0 = None;
@@ -613,6 +615,7 @@ fn check_player_range(
             } else if distance <= Range::AGGRO {
                 *range = Range::Aggro;
                 target.0 = Some(player_e);
+                **enemies_nearby += 1;
             } else if matches!(role, Role::Ranged) && distance <= Range::RANGED
             {
                 *range = Range::Ranged;
@@ -626,12 +629,13 @@ fn check_player_range(
                 *range = Range::Far;
                 target.0 = None;
             }
-        // if there is no player
-        } else {
+        }
+    // if there is no player
+    } else {
+        for (mut range, mut target, _, _, _, _, _, _) in query.iter_mut() {
             *range = Range::None;
             target.0 = None;
         }
-        // dbg!(range);
     }
 }
 
@@ -969,7 +973,7 @@ fn ranged_attack(
             // spawn in the new projectile:
             commands
                 .spawn((
-                    Attack::new(1000, entity)
+                    Attack::new(1000, entity, 20.)
                         .set_stat_mod(StatusModifier::basic_ice_spider()),
                     final_solution,
                     Collider::cuboid(
@@ -1016,7 +1020,7 @@ fn melee_attack(
                     }),
                     TransformBundle::from_transform(Transform::default()),
                     AnimationCollider(gent.e_gfx),
-                    Attack::new(8, entity),
+                    Attack::new(8, entity, 20.),
                 ))
                 .set_parent(entity)
                 .id();
@@ -1420,37 +1424,38 @@ impl Plugin for EnemyAnimationPlugin {
 }
 
 fn enemy_sparks_on_hit_animation(
-    i_query: Query<(Entity, &Gent), (Added<JustGotHitMarker>, With<Enemy>)>,
+    i_query: Query<&Gent, With<Enemy>>,
+    mut damage_events: EventReader<DamageInfo>,
     mut gfx_query: Query<
         &mut ScriptPlayer<SpriteAnimation>,
         With<EnemyEffectGfx>,
     >,
-    mut commands: Commands,
     player_facing_dir: Query<&Facing, With<Player>>,
 ) {
-    for (e, gent) in i_query.iter() {
-        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_effects_gfx) {
-            let mut rng = thread_rng();
-            let picked_spark = rng.gen_range(1..=6);
-            enemy.play_key("anim.spider.Sparks");
-            enemy.clear_slots();
-            enemy.set_slot(
-                format!("Spark{picked_spark}").as_str(),
-                true,
-            );
-            if let Ok(direction) = player_facing_dir.get_single() {
-                match direction {
-                    Facing::Right => {
-                        enemy.set_slot("DirectionRight", true);
-                        enemy.set_slot("DirectionLeft", false);
-                    },
-                    Facing::Left => {
-                        enemy.set_slot("DirectionRight", false);
-                        enemy.set_slot("DirectionLeft", true);
-                    },
-                };
+    for damage_info in damage_events.read() {
+        if let Ok(enemy) = i_query.get(damage_info.target) {
+            if let Ok(mut hit_gfx) = gfx_query.get_mut(enemy.e_effects_gfx) {
+                let mut rng = thread_rng();
+                let picked_spark = rng.gen_range(1..=6);
+                hit_gfx.play_key("anim.spider.Sparks");
+                hit_gfx.clear_slots();
+                hit_gfx.set_slot(
+                    format!("Spark{picked_spark}").as_str(),
+                    true,
+                );
+                if let Ok(direction) = player_facing_dir.get_single() {
+                    match direction {
+                        Facing::Right => {
+                            hit_gfx.set_slot("DirectionRight", true);
+                            hit_gfx.set_slot("DirectionLeft", false);
+                        },
+                        Facing::Left => {
+                            hit_gfx.set_slot("DirectionRight", false);
+                            hit_gfx.set_slot("DirectionLeft", true);
+                        },
+                    };
+                }
             }
-            commands.entity(e).remove::<JustGotHitMarker>();
         }
     }
 }

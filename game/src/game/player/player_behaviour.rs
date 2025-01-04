@@ -16,11 +16,10 @@ use theseeker_engine::script::ScriptPlayer;
 use super::arc_attack::{Arrow, Projectile};
 use super::player_weapon::{is_player_using_bow, PlayerWeapon};
 use super::{
-    dash_icon_fx, player_dash_fx, player_new_stats_mod, AttackBundle,
-    CanStealth, DashIcon, DashStrike, DashType, JumpCount, KillCount,
-    Knockback, Passives, PlayerStats, Pushback, StatType, Stealthing, Whirling,
+    dash_icon_fx, player_dash_fx, AttackBundle, CanStealth, DashIcon,
+    DashStrike, DashType, JumpCount, Knockback, PlayerStats, Pushback,
+    StatType, Stealthing, Whirling,
 };
-use crate::camera::CameraShake;
 use crate::game::attack::{Attack, SelfPushback, Stealthed};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
@@ -30,12 +29,12 @@ use crate::game::player::{
     PlayerGfx, PlayerStateSet, Running, WallSlideTime, WhirlAbility,
 };
 use crate::prelude::{
-    any_with_component, resource_changed, App, BuildChildren, Commands,
-    DetectChanges, Direction2d, Entity, GameTickUpdate, GameTime, Has,
-    IntoSystemConfigs, Plugin, Query, Res, Transform, TransformBundle, With,
-    Without,
+    any_with_component, App, BuildChildren, Commands, DetectChanges,
+    Direction2d, Entity, GameTickUpdate, GameTime, Has, IntoSystemConfigs,
+    Plugin, Query, Res, Transform, TransformBundle, With, Without,
 };
 use crate::StateDespawnMarker;
+use crate::{camera::CameraShake, game::player::PlayerStatMod};
 
 /// Player behavior systems.
 /// Do stuff here in states and add transitions to other states by pushing
@@ -47,10 +46,6 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                (
-                    gain_passives.run_if(resource_changed::<KillCount>),
-                    player_new_stats_mod,
-                ),
                 (
                     player_idle.run_if(any_with_component::<Idle>),
                     add_attack,
@@ -74,7 +69,6 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_grounded.run_if(any_with_component::<Grounded>),
                     player_falling.run_if(any_with_component::<Falling>),
                     crate::game::physics::knockback
-                        // player_pushback
                         .run_if(any_with_component::<Knockback>)
                         .before(player_jump)
                         .after(player_sliding),
@@ -101,19 +95,6 @@ impl Plugin for PlayerBehaviorPlugin {
             )
                 .chain(),
         );
-    }
-}
-
-fn gain_passives(
-    mut query: Query<&mut Passives, With<Player>>,
-    kills: Res<KillCount>,
-    player_config: Res<PlayerConfig>,
-) {
-    for mut passives in query.iter_mut() {
-        if **kills % player_config.passive_gain_rate == 0 {
-            passives.gain();
-            println!("{:?}", passives);
-        }
     }
 }
 
@@ -154,6 +135,7 @@ pub fn player_can_stealth(
             &ActionState<PlayerAction>,
             &mut CanStealth,
             &mut TransitionQueue,
+            &PlayerStatMod,
             &Gent,
         ),
         (With<Player>, With<Gent>),
@@ -162,10 +144,10 @@ pub fn player_can_stealth(
     time: Res<GameTime>,
     mut commands: Commands,
 ) {
-    for (action_state, mut can_stealth, mut transition_queue, gent) in
+    for (action_state, mut can_stealth, mut transition_queue, statmod, gent) in
         q_gent.iter_mut()
     {
-        can_stealth.remaining_cooldown -= 1.0 / time.hz as f32;
+        can_stealth.remaining_cooldown -= statmod.cdr / time.hz as f32;
         // Return to base sprite color when exiting stealth
         if can_stealth.is_added() {
             let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
@@ -252,6 +234,7 @@ fn player_move(
     mut q_gent: Query<
         (
             &PlayerStats,
+            &PlayerStatMod,
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
             &mut Facing,
@@ -265,6 +248,7 @@ fn player_move(
 ) {
     for (
         stats,
+        stat_mod,
         mut velocity,
         action_state,
         mut facing,
@@ -289,13 +273,16 @@ fn player_move(
             && action_state.value(&PlayerAction::Move) != 0.0
             && controllable
         {
-            (velocity.x + accel * direction * ground_friction) * stealth_boost
+            (velocity.x + accel * direction * ground_friction)
+                * stealth_boost
+                * stat_mod.speed
         } else if action_state.pressed(&PlayerAction::Move)
             && action_state.value(&PlayerAction::Move) != 0.0
             && controllable
         {
             (velocity.x + initial_accel * direction * ground_friction)
                 * stealth_boost
+                * stat_mod.speed
         } else {
             // de-acceleration profile
             if is_grounded {
@@ -317,8 +304,12 @@ fn player_move(
 
         if !is_dashing {
             velocity.x = new_vel.clamp(
-                -stats.get(StatType::MoveVelMax) * stealth_boost,
-                stats.get(StatType::MoveVelMax) * stealth_boost,
+                -stats.get(StatType::MoveVelMax)
+                    * stealth_boost
+                    * stat_mod.speed,
+                stats.get(StatType::MoveVelMax)
+                    * stealth_boost
+                    * stat_mod.speed,
             );
         }
         if direction > 0.0 {
@@ -440,6 +431,7 @@ pub fn player_can_dash(
     mut q_gent: Query<
         (
             &ActionState<PlayerAction>,
+            &PlayerStatMod,
             &Facing,
             &mut CanDash,
             &mut LinearVelocity,
@@ -454,6 +446,7 @@ pub fn player_can_dash(
 ) {
     for (
         action_state,
+        statmod,
         facing,
         mut can_dash,
         mut velocity,
@@ -461,7 +454,7 @@ pub fn player_can_dash(
         hitfreeze,
     ) in q_gent.iter_mut()
     {
-        can_dash.remaining_cooldown -= 1.0 / time.hz as f32;
+        can_dash.remaining_cooldown -= statmod.cdr / time.hz as f32;
         if action_state.just_pressed(&PlayerAction::Dash) {
             if can_dash.remaining_cooldown <= 0.0 {
                 let dash_action = Dashing::from_action_state(action_state);
@@ -488,6 +481,7 @@ pub fn player_dash_strike(
             &mut TransitionQueue,
             Has<Grounded>,
             Has<Stealthing>,
+            &PlayerStatMod,
         ),
         With<Player>,
     >,
@@ -502,6 +496,7 @@ pub fn player_dash_strike(
         mut transitions,
         is_grounded,
         is_stealthed,
+        player_stat_mod,
     ) in query.iter_mut()
     {
         if strike.ticks == 10 {
@@ -512,6 +507,7 @@ pub fn player_dash_strike(
                 gent,
                 facing,
                 is_stealthed,
+                player_stat_mod.attack,
             );
         }
         strike.ticks += 1;
@@ -621,6 +617,7 @@ fn add_dash_strike_collider(
     gent: &Gent,
     facing: &Facing,
     stealthed: bool,
+    attack_mod: f32,
 ) {
     let attack = commands
         .spawn((
@@ -631,7 +628,7 @@ fn add_dash_strike_collider(
                 PLAYER_ATTACK,
                 ENEMY_HURT,
             )),
-            Attack::new(16, entity),
+            Attack::new(16, entity, 20. * attack_mod),
             SelfPushback(Knockback::new(
                 Vec2::new(
                     config.melee_self_pushback * -facing.direction(),
@@ -1169,6 +1166,7 @@ fn player_attack(
             &mut Attacking,
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
+            &PlayerStatMod,
             Has<Stealthing>,
         ),
         (With<Player>, Without<Whirling>),
@@ -1187,6 +1185,7 @@ fn player_attack(
         mut attacking,
         mut transitions,
         action_state,
+        stat_mod,
         stealthed,
     ) in query.iter_mut()
     {
@@ -1235,7 +1234,7 @@ fn player_attack(
                                     ENEMY_HURT | GROUND,
                                 ),
                             ),
-                            Attack::new(192, entity)
+                            Attack::new(192, entity, 20. * stat_mod.attack)
                                 .with_damage(config.bow_attack_damage)
                                 .with_max_targets(1),
                             Pushback(Knockback::new(
@@ -1262,7 +1261,7 @@ fn player_attack(
                                 PLAYER_ATTACK,
                                 ENEMY_HURT,
                             )),
-                            Attack::new(16, entity),
+                            Attack::new(16, entity, 20. * stat_mod.attack),
                             SelfPushback(Knockback::new(
                                 Vec2::new(
                                     config.melee_self_pushback
@@ -1290,16 +1289,20 @@ fn player_attack(
         }
 
         attacking.ticks += 1;
+        let maximum_ticks = (((Attacking::MAX * 8) as f32 / stat_mod.cdr)
+            as u32)
+            .clamp(Attacking::MIN * 8, Attacking::MAX * 8);
+
         // if we are in the later half of attacking and another attack input was pressed,
         // indicate an immediate follow up on animation end
-        if attacking.ticks >= Attacking::MAX * 8 - 8
+        if attacking.ticks >= maximum_ticks - 8
             && action_state.just_pressed(&PlayerAction::Attack)
         {
             attacking.followup = true;
         }
 
         // leave attacking state
-        if attacking.ticks == Attacking::MAX * 8 {
+        if attacking.ticks >= maximum_ticks {
             if attacking.followup {
                 transitions.push(Attacking::new_transition(CanAttack {
                     immediate: true,
@@ -1314,12 +1317,13 @@ fn player_attack(
 }
 
 pub fn player_whirl_charge(
-    mut query: Query<&mut WhirlAbility, Without<Whirling>>,
+    mut query: Query<(&mut WhirlAbility, &PlayerStatMod), Without<Whirling>>,
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
-    for mut whirl in query.iter_mut() {
-        whirl.energy = (whirl.energy + config.whirl_regen / time.hz as f32)
+    for (mut whirl, statmod) in query.iter_mut() {
+        whirl.energy = (whirl.energy
+            + (config.whirl_regen * statmod.cdr) / time.hz as f32)
             .clamp(0.0, config.max_whirl_energy);
     }
 }
@@ -1332,6 +1336,7 @@ pub fn player_whirl(
             &mut TransitionQueue,
             &mut Whirling,
             &mut WhirlAbility,
+            &PlayerStatMod,
             Has<Stealthing>,
             &Gent,
         ),
@@ -1360,6 +1365,7 @@ pub fn player_whirl(
         mut transitions,
         mut whirling,
         mut whirl_ability,
+        stat_mod,
         is_stealthing,
         gent,
     ) in gent_query.iter_mut()
@@ -1380,7 +1386,11 @@ pub fn player_whirl(
                     .spawn((
                         AttackBundle {
                             // lifetime of two frames...
-                            attack: Attack::new(24, entity),
+                            attack: Attack::new(
+                                24,
+                                entity,
+                                20. * stat_mod.attack,
+                            ),
                             collider: Collider::empty(InteractionGroups::new(
                                 PLAYER_ATTACK,
                                 ENEMY_HURT,
