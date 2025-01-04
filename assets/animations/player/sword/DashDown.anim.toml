@@ -11,6 +11,3 @@ frame_start = 1
 run_at_frame = 4
 action = "SetFrameNext"
 frame_index = 2
-
-# TODO: HIT (when player collides with enemy or ground)
-#frame_index has to be set at '5' here

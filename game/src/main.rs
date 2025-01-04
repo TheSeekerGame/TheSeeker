@@ -9,6 +9,8 @@ mod prelude {
     pub use crate::gamestate::GameState;
 }
 
+use bevy::core::TaskPoolThreadAssignmentPolicy;
+use bevy::ecs::schedule::ExecutorKind;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use iyes_perf_ui::PerfUiPlugin;
@@ -52,7 +54,7 @@ fn main() {
     let bevy_plugins = bevy_plugins.set(WindowPlugin {
         primary_window: Some(Window {
             title: "The Seeker (PRE-ALPHA)".into(),
-            present_mode: bevy::window::PresentMode::Fifo,
+            present_mode: bevy::window::PresentMode::AutoNoVsync,
             resizable: true,
             ..Default::default()
         }),
@@ -63,6 +65,31 @@ fn main() {
     let bevy_plugins = bevy_plugins.set(RenderPlugin {
         render_creation: wgpu_settings.into(),
         synchronous_pipeline_compilation: false,
+    });
+
+    let cpus = num_cpus::get_physical();
+    let cpus_io = (cpus * 3 / 4).max(2);
+    let cpus_async_compute = (cpus / 4).max(2);
+    let bevy_plugins = bevy_plugins.set(TaskPoolPlugin {
+        task_pool_options: TaskPoolOptions {
+            min_total_threads: 1,
+            max_total_threads: usize::MAX,
+            io: TaskPoolThreadAssignmentPolicy {
+                min_threads: cpus_io,
+                max_threads: cpus_io,
+                percent: 1.0,
+            },
+            async_compute: TaskPoolThreadAssignmentPolicy {
+                min_threads: cpus_async_compute,
+                max_threads: cpus_async_compute,
+                percent: 1.0,
+            },
+            compute: TaskPoolThreadAssignmentPolicy {
+                min_threads: cpus,
+                max_threads: cpus,
+                percent: 1.0,
+            },
+        },
     });
 
     #[cfg(feature = "dev")]
@@ -91,7 +118,6 @@ fn main() {
     // external plugins
     app.add_plugins((
         LdtkPlugin,
-        bevy_tweening::TweeningPlugin,
         bevy_fluent::FluentPlugin,
         iyes_bevy_extras::d2::WorldCursorPlugin,
         ProgressPlugin::new(AppState::AssetsLoading)
@@ -119,8 +145,12 @@ fn main() {
         crate::graphics::GraphicsFxPlugin,
     ));
 
-    //#[cfg(feature = "dev")]
+    #[cfg(feature = "dev")]
     app.add_plugins(crate::dev::DevPlugin);
+
+    app.edit_schedule(Update, |s| {
+        s.set_executor_kind(ExecutorKind::SingleThreaded);
+    });
 
     app.run();
 }
