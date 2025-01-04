@@ -1030,14 +1030,11 @@ fn player_attack(
             };
         }
 
-        //TODO: cooldown reduction from PlayerStatMod
         attacking.ticks += 1;
         let maximum_ticks = (((Attacking::MAX * 8) as f32 / stat_mod.cdr)
             as u32)
             .clamp(Attacking::MIN * 8, Attacking::MAX * 8);
 
-        println!("{:?} cdr", stat_mod.cdr);
-        println!("{:?} max_ticks", maximum_ticks);
         // if we are in the later half of attacking and another attack input was pressed,
         // indicate an immediate follow up on animation end
         if attacking.ticks >= maximum_ticks - 8

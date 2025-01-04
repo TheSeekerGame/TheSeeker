@@ -12,8 +12,9 @@ use super::enemy::{Defense, EnemyGfx, EnemyStateSet};
 use super::gentstate::{Dead, Facing};
 use super::physics::Knockback;
 use super::player::{
-    on_hit_exit_stealthing, on_hit_stealth_reset, Passive, Passives, Player,
-    PlayerGfx, PlayerStateSet, StatusModifier,
+    on_crit_cooldown_reduce, on_hit_exit_stealthing,
+    on_stealth_hit_cooldown_reset, Passive, Passives, Player, PlayerGfx,
+    PlayerStateSet, StatusModifier,
 };
 use crate::game::attack::arc_attack::{arc_projectile, Projectile};
 use crate::game::attack::particles::AttackParticlesPlugin;
@@ -45,7 +46,8 @@ impl Plugin for AttackPlugin {
                     on_hit_cam_shake,
                     on_hit_self_pushback,
                     on_hit_lifesteal,
-                    on_hit_stealth_reset,
+                    on_crit_cooldown_reduce,
+                    on_stealth_hit_cooldown_reset,
                     on_hit_exit_stealthing,
                 )
                     .chain(),
@@ -265,14 +267,26 @@ pub fn apply_attack_modifications(
         if let Ok((maybe_crits, maybe_passives)) =
             attacker_query.get_mut(attack.attacker)
         {
+            // passives
+            if let Some(passives) = maybe_passives {
+                // backstab
+                // check this later on application of damage for each enemy
+                if passives.contains(&Passive::IceDagger) {
+                    commands.entity(entity).insert(Backstab);
+                }
+                if passives.contains(&Passive::ObsidionNecklace) {
+                    if let Some(crit) = &maybe_crits {
+                        if crit.next_hit_is_critical && !is_crit {}
+                    }
+                }
+            }
             // TODO: attack should keep its original damage and modify only the multipliers
             // crit multiplier
             //
             if let Some(mut crit) = maybe_crits {
                 if crit.next_hit_is_critical && !is_crit {
                     commands.entity(entity).insert(Crit);
-                    attack.damage =
-                        (attack.damage * crit.crit_damage_multiplier);
+                    attack.damage *= crit.crit_damage_multiplier;
                     crit.next_hit_is_critical = false;
                 }
 
@@ -281,18 +295,6 @@ pub fn apply_attack_modifications(
                     crit.hit_count += 1;
                 }
             }
-
-            // passives
-            if let Some(passives) = maybe_passives {
-                // backstab
-                // check this later on application of damage for each enemy
-                if passives.contains(&Passive::IceDagger) {
-                    commands.entity(entity).insert(Backstab);
-                }
-            }
-
-            //damage multiplier?
-            //for crits and closeness and whatnot
         }
         if !has_hit {
             commands.entity(entity).insert(Hit);
@@ -434,9 +436,6 @@ pub fn kill_on_damage(
     }
 }
 
-///
-// on_kill_lifesteal
-
 /// Applies camera shaker on first hit if attacker is player
 fn on_hit_cam_shake(
     query: Query<&Attack, Added<Hit>>,
@@ -462,13 +461,10 @@ fn on_hit_self_pushback(
 
 /// Heals attacker on first hit of a Stealthed attack
 fn on_hit_lifesteal(
-    query: Query<
-        (&Attack, Has<Crit>, Has<Stealthed>),
-        (Added<Hit>, With<Stealthed>),
-    >,
+    query: Query<(&Attack, Has<Crit>), (Added<Hit>, With<Stealthed>)>,
     mut health_query: Query<&mut Health, Without<Attack>>,
 ) {
-    for (attack, is_crit, is_stealthed) in query.iter() {
+    for (attack, is_crit) in query.iter() {
         if let Ok(mut health) = health_query.get_mut(attack.attacker) {
             // heal by 100 percent or 20 percent max health
             let stealth_lifesteal = if is_crit { 1. } else { 0.2 };
@@ -541,14 +537,20 @@ fn attack_cleanup(query: Query<(Entity, &Attack)>, mut commands: Commands) {
 #[derive(Resource, Debug, Default, Deref, DerefMut)]
 pub struct KillCount(pub u32);
 
-// TODO:
-// add crit passive
-fn track_crits(mut query: Query<&mut Crits>) {
-    for mut crits in query.iter_mut() {
+fn track_crits(mut query: Query<(&mut Crits, Option<&Passives>, &Health)>) {
+    for (mut crits, maybe_passives, health) in query.iter_mut() {
         if crits.hit_count != 0
             && (crits.hit_count % 17 == 0 || crits.hit_count % 19 == 0)
         {
             crits.next_hit_is_critical = true;
+        }
+        if let Some(passives) = maybe_passives {
+            if passives.contains(&Passive::FlamingHeart)
+                && health.current < health.max / 5
+                && (crits.hit_count % 3 == 0 || crits.hit_count % 5 == 0)
+            {
+                crits.next_hit_is_critical = true;
+            }
         }
     }
 }

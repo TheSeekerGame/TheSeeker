@@ -182,15 +182,15 @@ pub enum Passive {
     FlamingHeart,
     /// Deal extra damage when backstabbing
     IceDagger,
-    /// damage scaling based on number of enemies nearby
+    /// Damage scaling based on number of enemies nearby
     GlowingShard,
-    /// crits lower cooldown of all abilities by 0.5 sec
+    /// Crits lower cooldown of all abilities by 0.5 sec
     ObsidionNecklace,
-    /// increased damage while standing still, decreased while moving
+    /// Increased damage while standing still, decreased while moving
     HeavyBoots,
-    /// move faster, get cdr, take double damage
+    /// Move faster, get cdr, take double damage
     SerpentRing,
-    /// Increase attack speed/cdr for every consecutive hit within 3 seconds
+    /// Increase cdr for every consecutive hit within 3 seconds
     FrenziedAttack,
 }
 
@@ -296,7 +296,9 @@ fn setup_player(
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn(()).id();
         let mut passives = Passives::default();
-        passives.gain(Passive::FrenziedAttack);
+        passives.gain(Passive::ObsidionNecklace);
+        // passives.gain(Passive::FlamingHeart);
+        // passives.gain(Passive::FrenziedAttack);
         commands.entity(e_gent).insert((
             Name::new("Player"),
             PlayerGentBundle {
@@ -935,28 +937,18 @@ impl PlayerStatMod {
     }
 }
 
-//TODO: stealth??
-//TODO: only for SerpentRing and GlowingShard currently
 fn player_update_passive_buffs(
     mut query: Query<(
         &Passives,
         &LinearVelocity,
         &EnemiesNearby,
         &BuffTick,
-        &mut PlayerStats,
         &mut PlayerStatMod,
         Has<Stealthing>,
     )>,
 ) {
-    for (
-        passives,
-        vel,
-        enemies_nearby,
-        buff_tick,
-        mut stats,
-        mut stat_mod,
-        is_stealth,
-    ) in query.iter_mut()
+    for (passives, vel, enemies_nearby, buff_tick, mut stat_mod, is_stealth) in
+        query.iter_mut()
     {
         let mut attack = 1.;
         let mut defense = 1.;
@@ -1125,8 +1117,40 @@ pub fn dash_icon_fx(
     }
 }
 
+pub fn on_crit_cooldown_reduce(
+    attack_query: Query<&Attack, (With<Crit>, Added<Hit>)>,
+    mut attacker_query: Query<(
+        &Passives,
+        Option<&mut CanDash>,
+        Option<&mut WhirlAbility>,
+        Option<&mut CanStealth>,
+    )>,
+) {
+    for attack in attack_query.iter() {
+        if let Ok((
+            passives,
+            mut maybe_can_dash,
+            mut maybe_whirl_ability,
+            mut maybe_can_stealth,
+        )) = attacker_query.get_mut(attack.attacker)
+        {
+            if passives.contains(&Passive::ObsidionNecklace) {
+                if let Some(ref mut can_dash) = maybe_can_dash {
+                    can_dash.remaining_cooldown -= 0.5;
+                }
+                if let Some(ref mut whirl_ability) = maybe_whirl_ability {
+                    whirl_ability.energy += 0.5;
+                }
+                if let Some(ref mut can_stealth) = maybe_can_stealth {
+                    can_stealth.remaining_cooldown -= 0.5;
+                }
+            }
+        }
+    }
+}
+
 /// Resets the players cooldowns/energy on hit of a stealthed critical hit
-pub fn on_hit_stealth_reset(
+pub fn on_stealth_hit_cooldown_reset(
     query: Query<&Attack, (Added<Hit>, With<Crit>, With<Stealthed>)>,
     mut attacker_skills: Query<(
         Option<&mut CanDash>,
