@@ -380,7 +380,7 @@ pub fn apply_attack_damage(
 
                 // apply player defense modifier if it exists
                 if let Some(statmod) = maybe_player_statmod {
-                    damage *= statmod.defense;
+                    damage /= statmod.defense;
                 }
 
                 // apply damage to the targets health

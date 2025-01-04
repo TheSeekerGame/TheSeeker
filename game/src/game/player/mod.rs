@@ -182,17 +182,15 @@ pub enum Passive {
     FlamingHeart,
     /// Deal extra damage when backstabbing
     IceDagger,
-    // TODO: skill switch damage boost
-    // WhiteGlove,
-    // TODO: damage scaling based on number of enemies nearby
+    /// damage scaling based on number of enemies nearby
     GlowingShard,
-    // TODO: crits lower cooldown of all abilities by 0.5 sec
+    /// crits lower cooldown of all abilities by 0.5 sec
     ObsidionNecklace,
-    // TODO: increased damage while standing still, decreased while moving
+    /// increased damage while standing still, decreased while moving
     HeavyBoots,
-    // TODO: move faster, get cdr, take double damage
+    /// move faster, get cdr, take double damage
     SerpentRing,
-    // Increase attack speed/cdr for every consecutive hit within 3 seconds
+    /// Increase attack speed/cdr for every consecutive hit within 3 seconds
     FrenziedAttack,
 }
 
@@ -204,7 +202,7 @@ fn gain_passives(
     for mut passives in query.iter_mut() {
         if **kills % player_config.passive_gain_rate == 0 {
             passives.gain_random();
-            println!("{:?}", passives);
+            // println!("{:?}", passives);
         }
     }
 }
@@ -987,7 +985,6 @@ fn player_update_passive_buffs(
             cdr *= 1. + (0.1 * buff_tick.stacks as f32).min(1.);
         }
         if is_stealth {
-            println!("is_stealth");
             attack *= 2.;
         }
         *stat_mod = PlayerStatMod {
