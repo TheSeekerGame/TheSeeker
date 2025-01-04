@@ -320,10 +320,6 @@ fn setup_player(
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn(()).id();
-        let mut passives = Passives::default();
-        passives.gain(Passive::ObsidionNecklace);
-        // passives.gain(Passive::FlamingHeart);
-        // passives.gain(Passive::FrenziedAttack);
         commands.entity(e_gent).insert((
             Name::new("Player"),
             PlayerGentBundle {
@@ -435,7 +431,7 @@ fn setup_player(
             Crits::new(2.0),
             TransitionQueue::default(),
             StateDespawnMarker,
-            (passives, BuffTick::default()),
+            (Passives::default(), BuffTick::default()),
         ));
         // unparent from the level
         if let Ok(parent) = parent_query.get(parent.get()) {

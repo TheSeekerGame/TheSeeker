@@ -17,8 +17,8 @@ use super::arc_attack::{Arrow, Projectile};
 use super::player_weapon::{is_player_using_bow, PlayerWeapon};
 use super::{
     dash_icon_fx, player_dash_fx, AttackBundle, CanStealth, DashIcon,
-    DashStrike, DashType, JumpCount, KillCount, Knockback, Passives,
-    PlayerStats, Pushback, StatType, Stealthing, Whirling,
+    DashStrike, DashType, JumpCount, Knockback, PlayerStats, Pushback,
+    StatType, Stealthing, Whirling,
 };
 use crate::game::attack::{Attack, SelfPushback, Stealthed};
 use crate::game::enemy::Enemy;
@@ -69,7 +69,6 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_grounded.run_if(any_with_component::<Grounded>),
                     player_falling.run_if(any_with_component::<Falling>),
                     crate::game::physics::knockback
-                        // player_pushback
                         .run_if(any_with_component::<Knockback>)
                         .before(player_jump)
                         .after(player_sliding),

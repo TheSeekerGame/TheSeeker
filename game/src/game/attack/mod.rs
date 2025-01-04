@@ -287,11 +287,6 @@ pub fn apply_attack_modifications(
                 if passives.contains(&Passive::IceDagger) {
                     commands.entity(entity).insert(Backstab);
                 }
-                if passives.contains(&Passive::ObsidionNecklace) {
-                    if let Some(crit) = &maybe_crits {
-                        if crit.next_hit_is_critical && !is_crit {}
-                    }
-                }
             }
             // TODO: attack should keep its original damage and modify only the multipliers
             // crit multiplier
