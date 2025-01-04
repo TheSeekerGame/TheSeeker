@@ -1175,7 +1175,7 @@ fn player_update_passive_buffs(
         let mut speed = 1.;
         let mut cdr = 1.;
         if passives.contains(&Passive::GlowingShard) {
-            attack *= (1. + 0.1 * enemies_nearby.0 as f32);
+            attack *= 1. + 0.1 * enemies_nearby.0 as f32;
         }
         if passives.contains(&Passive::SerpentRing) {
             speed *= 1.2;
@@ -1459,7 +1459,7 @@ pub fn on_xp_heal(
 ) {
     if let Ok((passives, mut health)) = query.get_single_mut() {
         if passives.contains(&Passive::Bloodstone) {
-            for event in xp_event.read() {
+            for _event in xp_event.read() {
                 health.current = (health.current + 2).min(health.max);
             }
         }
