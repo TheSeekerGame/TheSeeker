@@ -15,7 +15,9 @@ use theseeker_engine::physics::{
 use theseeker_engine::script::ScriptPlayer;
 
 use super::arc_attack::{Arrow, Projectile};
-use super::player_weapon::{PlayerCombatStyle, PlayerMeleeWeapon};
+use super::player_weapon::{
+    PlayerCombatStyle, PlayerMeleeWeapon, PushbackValues,
+};
 use super::{
     dash_icon_fx, player_dash_fx, AttackBundle, CanStealth, DashIcon,
     DashStrike, DashType, JumpCount, Knockback, PlayerStats, Pushback,
@@ -496,6 +498,7 @@ pub fn player_dash_strike(
     >,
     mut commands: Commands,
     config: Res<PlayerConfig>,
+    melee_weapon: Res<PlayerMeleeWeapon>,
 ) {
     for (
         entity,
@@ -511,12 +514,12 @@ pub fn player_dash_strike(
         if strike.ticks == 10 {
             add_dash_strike_collider(
                 &mut commands,
-                &config,
                 entity,
                 gent,
                 facing,
                 is_stealthed,
                 player_stat_mod.attack,
+                melee_weapon.pushback_values(&config),
             );
         }
         strike.ticks += 1;
@@ -621,13 +624,20 @@ fn trigger_dash_strike(
 
 fn add_dash_strike_collider(
     mut commands: &mut Commands,
-    config: &PlayerConfig,
     entity: Entity,
     gent: &Gent,
     facing: &Facing,
     stealthed: bool,
     attack_mod: f32,
+    pushback_values: PushbackValues,
 ) {
+    let PushbackValues {
+        self_pushback,
+        self_pushback_ticks,
+        pushback,
+        pushback_ticks,
+    } = pushback_values;
+
     let attack = commands
         .spawn((
             TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
@@ -639,18 +649,12 @@ fn add_dash_strike_collider(
             )),
             Attack::new(16, entity, 20. * attack_mod),
             SelfPushback(Knockback::new(
-                Vec2::new(
-                    config.melee_self_pushback * -facing.direction(),
-                    0.,
-                ),
-                config.melee_self_pushback_ticks,
+                Vec2::new(self_pushback * -facing.direction(), 0.),
+                self_pushback_ticks,
             )),
             Pushback(Knockback::new(
-                Vec2::new(
-                    facing.direction() * config.melee_pushback,
-                    0.,
-                ),
-                config.melee_pushback_ticks,
+                Vec2::new(facing.direction() * pushback, 0.),
+                pushback_ticks,
             )),
         ))
         .set_parent(entity)
@@ -1265,11 +1269,27 @@ fn player_attack(
                         .id()
                 },
                 PlayerCombatStyle::Melee => {
-                    let damage = match *melee_weapon {
-                        PlayerMeleeWeapon::Hammer => {
-                            config.hammer_attack_damage
-                        },
-                        PlayerMeleeWeapon::Sword => config.sword_attack_damage,
+                    let (
+                        damage,
+                        self_pushback,
+                        self_pushback_ticks,
+                        pushback,
+                        pushback_ticks,
+                    ) = match *melee_weapon {
+                        PlayerMeleeWeapon::Hammer => (
+                            config.hammer_attack_damage,
+                            config.hammer_self_pushback,
+                            config.hammer_self_pushback_ticks,
+                            config.hammer_pushback,
+                            config.hammer_pushback_ticks,
+                        ),
+                        PlayerMeleeWeapon::Sword => (
+                            config.sword_attack_damage,
+                            config.sword_self_pushback,
+                            config.sword_self_pushback_ticks,
+                            config.sword_pushback,
+                            config.sword_pushback_ticks,
+                        ),
                     };
 
                     // Slow the player down when they attack with the Hammer
@@ -1294,18 +1314,14 @@ fn player_attack(
                             Attack::new(16, entity, damage * stat_mod.attack),
                             SelfPushback(Knockback::new(
                                 Vec2::new(
-                                    config.melee_self_pushback
-                                        * -facing.direction(),
+                                    self_pushback * -facing.direction(),
                                     0.,
                                 ),
-                                config.melee_self_pushback_ticks,
+                                self_pushback_ticks,
                             )),
                             Pushback(Knockback::new(
-                                Vec2::new(
-                                    facing.direction() * config.melee_pushback,
-                                    0.,
-                                ),
-                                config.melee_pushback_ticks,
+                                Vec2::new(facing.direction() * pushback, 0.),
+                                pushback_ticks,
                             )),
                         ))
                         .set_parent(entity)

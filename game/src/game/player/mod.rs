@@ -869,26 +869,29 @@ pub struct PlayerConfig {
     /// Ticks for wall pushback velocity; determines how long movement is locked for
     wall_pushback_ticks: u32,
 
-    /// Self pushback velocity on basic melee hits
-    melee_self_pushback: f32,
+    /// Self pushback velocity on basic sword hits
+    sword_self_pushback: f32,
 
-    /// Ticks for melee self pushback velocity; determines how long movement is locked for
-    melee_self_pushback_ticks: u32,
+    /// Ticks for sword self pushback velocity; determines how long movement is locked for
+    sword_self_pushback_ticks: u32,
 
-    /// Knockback velocity applied to enemy on basic melee hit
-    melee_pushback: f32,
+    /// Knockback velocity applied to enemy on basic sword hit
+    sword_pushback: f32,
 
-    /// Ticks for melee knockback velocity; determines how long movement is locked for
-    melee_pushback_ticks: u32,
+    /// Ticks for sword knockback velocity; determines how long movement is locked for
+    sword_pushback_ticks: u32,
 
-    /// Base sword attack damage
-    sword_attack_damage: f32,
+    /// Self pushback velocity on basic hammer hits
+    hammer_self_pushback: f32,
 
-    /// Base hammer attack damage
-    hammer_attack_damage: f32,
+    /// Ticks for hammer self pushback velocity; determines how long movement is locked for
+    hammer_self_pushback_ticks: u32,
 
-    /// Base bow attack damage
-    bow_attack_damage: f32,
+    /// Knockback velocity applied to enemy on basic hammer hit
+    hammer_pushback: f32,
+
+    /// Ticks for hammer knockback velocity; determines how long movement is locked for
+    hammer_pushback_ticks: u32,
 
     /// Pushback velocity on basic bow shots
     bow_self_pushback: f32,
@@ -901,6 +904,15 @@ pub struct PlayerConfig {
 
     /// Ticks for melee knockback velocity; determines how long movement is locked for
     bow_pushback_ticks: u32,
+
+    /// Base sword attack damage
+    sword_attack_damage: f32,
+
+    /// Base hammer attack damage
+    hammer_attack_damage: f32,
+
+    /// Base bow attack damage
+    bow_attack_damage: f32,
 
     /// Velocity of the projectiles fired by the Bow weapon
     arrow_velocity: f32,
@@ -976,10 +988,14 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "max_health", |val| config.max_health = val as u32);
     update_field(&mut errors, &cfg.0, "wall_pushback", |val| config.wall_pushback = val);
     update_field(&mut errors, &cfg.0, "wall_pushback_ticks", |val| config.wall_pushback_ticks = val as u32);
-    update_field(&mut errors, &cfg.0, "melee_self_pushback", |val| config.melee_self_pushback = val);
-    update_field(&mut errors, &cfg.0, "melee_self_pushback_ticks", |val| config.melee_self_pushback_ticks = val as u32);
-    update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
-    update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "sword_self_pushback", |val| config.sword_self_pushback = val);
+    update_field(&mut errors, &cfg.0, "sword_self_pushback_ticks", |val| config.sword_self_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "sword_pushback", |val| config.sword_pushback = val);
+    update_field(&mut errors, &cfg.0, "sword_pushback_ticks", |val| config.sword_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "hammer_self_pushback", |val| config.hammer_self_pushback = val);
+    update_field(&mut errors, &cfg.0, "hammer_self_pushback_ticks", |val| config.hammer_self_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "hammer_pushback", |val| config.hammer_pushback = val);
+    update_field(&mut errors, &cfg.0, "hammer_pushback_ticks", |val| config.hammer_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "sword_attack_damage", |val| config.sword_attack_damage = val);
     update_field(&mut errors, &cfg.0, "hammer_attack_damage", |val| config.hammer_attack_damage = val);
     update_field(&mut errors, &cfg.0, "bow_attack_damage", |val| config.bow_attack_damage = val);

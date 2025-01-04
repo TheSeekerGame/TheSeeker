@@ -84,26 +84,29 @@ wall_pushback = 50.0
 # Ticks for wall pushback velocity; determines how long movement is locked for
 wall_pushback_ticks = 5.0
 
-# Pushback velocity on basic melee hits
-melee_self_pushback = 60.0
+# Pushback velocity on basic sword hits
+sword_self_pushback = 60.0
 
-# Ticks for melee pushback velocity; determines how long movement is locked for
-melee_self_pushback_ticks = 3.0
+# Ticks for sword pushback velocity; determines how long movement is locked for
+sword_self_pushback_ticks = 3.0
 
-# Knockback velocity applied to enemy on basic melee hit
-melee_pushback = 60.0
+# Knockback velocity applied to enemy on basic sword hit
+sword_pushback = 60.0
 
-# Ticks for melee knockback velocity; determines how long movement is locked for
-melee_pushback_ticks = 12.0
+# Ticks for sword knockback velocity; determines how long movement is locked for
+sword_pushback_ticks = 12.0
 
-# Base sword attack damage
-sword_attack_damage = 20.0
+# Pushback velocity on basic hammer hits
+hammer_self_pushback = 60.0
 
-# Base hammer attack damage
-hammer_attack_damage = 20.0
+# Ticks for hammer pushback velocity; determines how long movement is locked for
+hammer_self_pushback_ticks = 3.0
 
-# Base bow attack damage
-bow_attack_damage = 10.0
+# Knockback velocity applied to enemy on basic hammer hit
+hammer_pushback = 60.0
+
+# Ticks for hammer knockback velocity; determines how long movement is locked for
+hammer_pushback_ticks = 12.0
 
 # Pushback velocity on basic bow shots
 bow_self_pushback = 0.0
@@ -116,6 +119,15 @@ bow_pushback = 60.0
 
 # Ticks for melee knockback velocity; determines how long movement is locked for
 bow_pushback_ticks = 5.0
+
+# Base sword attack damage
+sword_attack_damage = 20.0
+
+# Base hammer attack damage
+hammer_attack_damage = 20.0
+
+# Base bow attack damage
+bow_attack_damage = 10.0
 
 # Number of kills to trigger passive gain
 passive_gain_rate = 3.0

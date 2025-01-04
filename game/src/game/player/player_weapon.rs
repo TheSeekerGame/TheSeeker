@@ -7,6 +7,8 @@ use strum_macros::Display;
 use crate::game::player::{Player, PlayerAction};
 use crate::prelude::{App, Plugin, Query, ResMut, Resource, With};
 
+use super::PlayerConfig;
+
 pub(crate) struct PlayerWeaponPlugin;
 
 impl Plugin for PlayerWeaponPlugin {
@@ -26,6 +28,13 @@ impl Plugin for PlayerWeaponPlugin {
     }
 }
 
+pub struct PushbackValues {
+    pub pushback: f32,
+    pub pushback_ticks: u32,
+    pub self_pushback: f32,
+    pub self_pushback_ticks: u32,
+}
+
 #[derive(Resource, Default, PartialEq, Eq, Display)]
 pub enum PlayerCombatStyle {
     Ranged,
@@ -38,6 +47,33 @@ pub enum PlayerMeleeWeapon {
     Hammer,
     #[default]
     Sword,
+}
+
+impl PlayerMeleeWeapon {
+    pub fn pushback_values(&self, config: &PlayerConfig) -> PushbackValues {
+        let (pushback, pushback_ticks, self_pushback, self_pushback_ticks) =
+            match self {
+                Self::Hammer => (
+                    config.hammer_pushback,
+                    config.hammer_pushback_ticks,
+                    config.hammer_self_pushback,
+                    config.hammer_self_pushback_ticks,
+                ),
+                Self::Sword => (
+                    config.sword_pushback,
+                    config.sword_pushback_ticks,
+                    config.sword_self_pushback,
+                    config.sword_self_pushback_ticks,
+                ),
+            };
+
+        PushbackValues {
+            pushback,
+            pushback_ticks,
+            self_pushback,
+            self_pushback_ticks,
+        }
+    }
 }
 
 #[derive(Resource, Default, PartialEq, Eq, Display)]
