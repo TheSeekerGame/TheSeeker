@@ -109,7 +109,7 @@ bow_self_pushback_ticks = 0.0
 bow_pushback = 60.0
 
 # Ticks for melee knockback velocity; determines how long movement is locked for
-bow_pushback_ticks = 10.0
+bow_pushback_ticks = 5.0
 
 # Number of kills to trigger passive gain
 passive_gain_rate = 3.0

@@ -1,13 +1,13 @@
-atlas_asset_key = "anim.smallspider.Jump.sprite"
+atlas_asset_key = "anim.smallspider3.Death.sprite"
+
 
 [settings]
 time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
 frame_min = 1
-frame_max = 13
+frame_max = 6
 frame_start = 1
-
 
 # Support left/right flipping
 [[script]]

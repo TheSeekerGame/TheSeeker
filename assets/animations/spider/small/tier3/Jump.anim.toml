@@ -1,4 +1,4 @@
-atlas_asset_key = "anim.smallspider.Jump.sprite"
+atlas_asset_key = "anim.smallspider3.Jump.sprite"
 
 [settings]
 time_base = "Relative"

@@ -1,13 +1,16 @@
-atlas_asset_key = "anim.smallspider.Jump.sprite"
-
 [settings]
 time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
 frame_min = 1
-frame_max = 13
+frame_max = 5
 frame_start = 1
 
+# keep looping final frame
+[[script]]
+run_at_frame = 5
+action = "SetFrameNext"
+frame_index = 5
 
 # Support left/right flipping
 [[script]]

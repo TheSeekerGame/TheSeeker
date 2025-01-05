@@ -1,13 +1,18 @@
-atlas_asset_key = "anim.smallspider.Jump.sprite"
+atlas_asset_key = "anim.spider2.RangedAttack.sprite"
 
 [settings]
 time_base = "Relative"
+frame_start = 1
 tick_quant = "8"
 ticks_per_frame = 8
+frame_max = 15
 frame_min = 1
-frame_max = 13
-frame_start = 1
 
+# LOOP
+[[script]]
+action = "SetFrameNext"
+frame_index = 1
+run_at_frame = 15
 
 # Support left/right flipping
 [[script]]
