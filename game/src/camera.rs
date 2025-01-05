@@ -10,6 +10,7 @@ use ran::ran_f64_range;
 
 use crate::game::player::Player;
 use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
+use crate::graphics::post_processing::floaters::FloaterSettings;
 // use crate::graphics::post_processing::darkness::DarknessSettings;
 use crate::graphics::post_processing::vignette::VignetteSettings;
 use crate::level::MainBackround;
@@ -153,6 +154,7 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         //     bg_light_color: Vec3::new(0.761, 0.773, 0.8),
         // },
         VignetteSettings::default(),
+        FloaterSettings::default(),
         Name::new("MainCamera"),
     ));
 }
