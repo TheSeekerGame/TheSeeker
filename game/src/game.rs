@@ -18,7 +18,7 @@ pub mod player;
 mod wall;
 mod xp_orbs;
 mod yak;
-
+mod pickups;
 pub struct GameplayPlugin;
 
 impl Plugin for GameplayPlugin {
@@ -46,6 +46,7 @@ impl Plugin for GameplayPlugin {
             wall::WallPlugin,
             game_over::GameOverPlugin,
             xp_orbs::XpPlugin,
+            pickups::PickupPlugin,
         ));
     }
 }

@@ -22,6 +22,8 @@ use crate::prelude::{
 };
 use crate::ui::button;
 
+use super::pickups::DropTracker;
+
 /// A plugin that handles when the player has a game over
 pub struct GameOverPlugin;
 
@@ -183,4 +185,5 @@ pub fn on_game_over(
         });
     });
     kill_count.0 = 0;
+    commands.init_resource::<DropTracker>();
 }
