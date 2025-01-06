@@ -232,7 +232,7 @@ impl DropTracker {
 
     fn reset(passive_count: usize) -> Self {
 
-        const SPAN: u32 = 3;
+        const SPAN: u32 = 10;
 
         let mut rng = rand::thread_rng();
 

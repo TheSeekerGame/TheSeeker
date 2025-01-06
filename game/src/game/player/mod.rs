@@ -1498,7 +1498,7 @@ fn player_pickup_interact(
             //Get Pickups in Range
             //Pick up a single one
 
-            const PICKUP_RANGE_SQUARED: f32 = 48.0;
+            const PICKUP_RANGE_SQUARED: f32 = 100.0;
 
             let p_pos = p_transform.translation.truncate();
 
