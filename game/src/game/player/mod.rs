@@ -21,7 +21,9 @@ use theseeker_engine::physics::{
 };
 
 use super::physics::Knockback;
+use super::pickups::PickupDrop;
 use crate::game::gentstate::*;
+use crate::game::pickups::{DropTracker, PickupType};
 use crate::game::{attack::*, xp_orbs::XpOrbPickup};
 use crate::prelude::*;
 
@@ -178,10 +180,27 @@ impl Passives {
             self.current.insert(passive);
         }
     }
+
+    pub fn drop_random(&mut self) -> Option<Passive> {
+
+        let mut rng = rand::thread_rng();
+
+        if !self.locked.is_empty() {
+            let i = rng.gen_range(0..self.locked.len());
+            let passive = self.locked.swap_remove(i);
+
+            return Some(passive)
+        }
+        None
+    }
+
+    pub fn add_passive(&mut self, passive: Passive) {
+        self.current.insert(passive);
+    }
 }
 
 //they could also be components...limit only by the pickup/gain function instead of sized hashmap
-#[derive(Debug, Eq, PartialEq, Hash, EnumIter)]
+#[derive(Debug, Eq, PartialEq, Hash, EnumIter, Clone)]
 pub enum Passive {
     /// Heal when killing an enemy
     Bloodstone,
@@ -449,6 +468,9 @@ fn setup_player(
             },
             animation: Default::default(),
         },));
+
+        commands.init_resource::<DropTracker>();
+
     }
 }
 
@@ -1452,4 +1474,60 @@ fn track_hits(
             buff.stacks = 0
         }
     }
+}
+
+
+
+fn player_pickup_interact(
+    mut query: Query<
+        (
+            &Transform,
+            &ActionState<PlayerAction>,
+            &mut Passives
+        ),
+        With<Player>,
+    >,
+    mut pickup_query: Query<(Entity, &PickupDrop, &Transform)>,
+    mut commands: Commands
+) {
+
+    for (p_transform, action_state, mut passives) in query.iter_mut() {
+
+        if action_state.just_pressed(&PlayerAction::Interact) {
+
+            //Get Pickups in Range
+            //Pick up a single one
+
+            const PICKUP_RANGE_SQUARED: f32 = 48.0;
+
+            let p_pos = p_transform.translation.truncate();
+
+            for (entity, pickup, transform) in pickup_query.iter() {
+
+                let dist = p_pos.distance_squared(transform.translation.truncate());
+
+                println!("dist: {}", dist);
+
+                if dist <= PICKUP_RANGE_SQUARED {
+
+                    match &pickup.p_type {
+                        PickupType::None => {},
+                        PickupType::PassiveDrop(passive) => {
+                            println!("passive pickup!!!");
+                            passives.add_passive(passive.clone());
+                            commands.entity(entity).despawn();
+                            break;
+                        },
+                        PickupType::PlanetarySeed => {
+
+                        },
+                    }
+
+
+                }
+
+            }
+        }
+    }
+
 }

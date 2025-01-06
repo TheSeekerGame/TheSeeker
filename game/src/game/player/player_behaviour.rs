@@ -17,6 +17,7 @@ use super::arc_attack::{Arrow, Projectile};
 use super::player_weapon::{is_player_using_bow, PlayerWeapon};
 use super::{
     dash_icon_fx, player_dash_fx, AttackBundle, CanStealth, DashIcon,
+    player_pickup_interact,
     DashStrike, DashType, JumpCount, Knockback, PlayerStats, Pushback,
     StatType, Stealthing, Whirling,
 };
@@ -46,6 +47,7 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
+                player_pickup_interact,
                 (
                     player_idle.run_if(any_with_component::<Idle>),
                     add_attack,
