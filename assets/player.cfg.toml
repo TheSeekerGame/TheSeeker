@@ -97,7 +97,7 @@ melee_pushback = 60.0
 melee_pushback_ticks = 12.0
 
 # Base bow attack damage
-bow_attack_damage = 15.0
+bow_attack_damage = 10.0
 
 # Pushback velocity on basic bow shots
 bow_self_pushback = 0.0
