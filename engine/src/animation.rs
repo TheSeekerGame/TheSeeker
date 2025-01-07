@@ -297,12 +297,23 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 let index = frame_index.unwrap_or_default() + bm_offset;
                 atlas.index = index.as_sprite_index();
                 tracker.set_auto_next_frame(index);
+                if tracker.ticks_remain == 0 {
+                    tracker.ticks_remain = tracker.ticks_per_frame;
+                }
                 if let Some(actions) = tracker.frame_actions.get(&index) {
                     tracker.q_extra.extend(
                         actions
                             .iter()
                             .map(|&action| QueuedAction { timing, action }),
                     );
+                }
+                for (quant, action_id) in &tracker.framequant_actions {
+                    if quant.check(index.as_sprite_index() as i64) {
+                        tracker.q_extra.push(QueuedAction {
+                            timing,
+                            action: *action_id,
+                        });
+                    }
                 }
                 ScriptUpdateResult::NormalRun
             },
