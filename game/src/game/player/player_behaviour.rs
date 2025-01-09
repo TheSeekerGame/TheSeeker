@@ -1247,7 +1247,6 @@ fn player_attack(
                                 entity,
                                 config.bow_attack_damage * stat_mod.attack,
                             )
-                            // .with_damage(config.bow_attack_damage)
                             .with_max_targets(1),
                             Pushback(Knockback::new(
                                 Vec2::new(
