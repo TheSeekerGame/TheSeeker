@@ -364,11 +364,11 @@ pub fn apply_attack_damage(
                 // target defenses...
                 if can_backstab {
                     let is_backstab = match *t_facing {
-                        Facing::Right => {
+                        Facing::Left => {
                             t_transform.translation().x
                                 > transform.translation().x
                         },
-                        Facing::Left => {
+                        Facing::Right => {
                             t_transform.translation().x
                                 < transform.translation().x
                         },

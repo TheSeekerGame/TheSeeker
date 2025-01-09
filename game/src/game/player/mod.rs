@@ -320,6 +320,9 @@ fn setup_player(
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn(()).id();
+        let mut passives = Passives::default();
+        // uncomment for testing
+        // passives.gain(Passive::HeavyBoots);
         commands.entity(e_gent).insert((
             Name::new("Player"),
             PlayerGentBundle {
@@ -431,7 +434,7 @@ fn setup_player(
             Crits::new(2.0),
             TransitionQueue::default(),
             StateDespawnMarker,
-            (Passives::default(), BuffTick::default()),
+            (passives, BuffTick::default()),
         ));
         // unparent from the level
         if let Ok(parent) = parent_query.get(parent.get()) {
@@ -874,6 +877,9 @@ pub struct PlayerConfig {
     /// Ticks for melee knockback velocity; determines how long movement is locked for
     melee_pushback_ticks: u32,
 
+    /// Base sword attack damage
+    sword_attack_damage: f32,
+
     /// Base bow attack damage
     bow_attack_damage: f32,
 
@@ -967,6 +973,7 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "melee_self_pushback_ticks", |val| config.melee_self_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
     update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "sword_attack_damage", |val| config.sword_attack_damage = val);
     update_field(&mut errors, &cfg.0, "bow_attack_damage", |val| config.bow_attack_damage = val);
     update_field(&mut errors, &cfg.0, "bow_self_pushback", |val| config.bow_self_pushback = val);
     update_field(&mut errors, &cfg.0, "bow_self_pushback_ticks", |val| config.bow_self_pushback_ticks = val as u32);
@@ -996,8 +1003,6 @@ pub enum StatType {
     MoveVelMax,
     MoveAccelInit,
     MoveAccel,
-    AttackMulti,
-    DefenseMulti,
 }
 /// For now, Status Modifier is implemented so that only one Status Modifier is active at a time.
 /// However, a single Status Modifier can modify multiple Stats.
@@ -1147,7 +1152,6 @@ fn player_update_passive_buffs(
                 attack *= 0.5;
                 defense *= 0.5;
             } else {
-                //should they be additive or multi?
                 attack *= 2.;
                 defense *= 2.;
             };
