@@ -1196,8 +1196,6 @@ fn player_attack(
     ) in query.iter_mut()
     {
         if attacking.ticks == 0 {
-            println!("attack mod");
-            dbg!(stat_mod.attack);
             let attack = match *weapon {
                 PlayerWeapon::Bow => {
                     let mut animation: ScriptPlayer<SpriteAnimation> =
