@@ -13,10 +13,11 @@ use theseeker_engine::physics::{
 use super::enemy::{Defense, EnemyGfx, EnemyStateSet};
 use super::gentstate::{Dead, Facing};
 use super::physics::Knockback;
+use super::player::player_weapon::CurrentWeapon;
 use super::player::{
     on_crit_cooldown_reduce, on_hit_exit_stealthing,
-    on_stealth_hit_cooldown_reset, Passive, Passives, Player, PlayerGfx,
-    PlayerStateSet, StatusModifier,
+    on_stealth_hit_cooldown_reset, Passive, Passives, Player, PlayerConfig,
+    PlayerGfx, PlayerStateSet, StatusModifier,
 };
 use crate::game::attack::arc_attack::{arc_projectile, Projectile};
 use crate::game::attack::particles::AttackParticlesPlugin;
@@ -473,11 +474,27 @@ pub fn kill_on_damage(
 fn on_hit_cam_shake(
     query: Query<&Attack, Added<Hit>>,
     p_query: Query<Entity, With<Player>>,
+    config: Res<PlayerConfig>,
+    weapon: CurrentWeapon,
     mut commands: Commands,
 ) {
     for attack in query.iter() {
         if let Ok(_entity) = p_query.get(attack.attacker) {
-            commands.insert_resource(CameraShake::new(0.9, 0.1, 2.0));
+            let camera_shake = if weapon.is_wielding_hammer() {
+                CameraShake::new(
+                    config.hammer_on_hit_screenshake_strength,
+                    config.hammer_on_hit_screenshake_duration_secs,
+                    config.hammer_on_hit_screenshake_frequency,
+                )
+            } else {
+                CameraShake::new(
+                    config.default_on_hit_screenshake_strength,
+                    config.default_on_hit_screenshake_duration_secs,
+                    config.default_on_hit_screenshake_frequency,
+                )
+            };
+
+            commands.insert_resource(camera_shake);
         }
     }
 }
