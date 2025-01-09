@@ -1,6 +1,6 @@
 mod player_anim;
 mod player_behaviour;
-mod player_weapon;
+pub mod player_weapon;
 use bevy::utils::hashbrown::HashMap;
 use leafwing_input_manager::action_state::ActionState;
 use leafwing_input_manager::axislike::VirtualAxis;
@@ -917,6 +917,20 @@ pub struct PlayerConfig {
     /// Velocity of the projectiles fired by the Bow weapon
     arrow_velocity: f32,
 
+    /// Default strength for on hit camera screen shake
+    pub default_on_hit_screenshake_strength: f32,
+    /// Default duration (in seconds) for on hit camera screen shake
+    pub default_on_hit_screenshake_duration_secs: f32,
+    /// Default frequency for on hit camera screen shake
+    pub default_on_hit_screenshake_frequency: f32,
+
+    /// Hammer-specific strength for on hit camera screen shake
+    pub hammer_on_hit_screenshake_strength: f32,
+    /// Hammer-specific duration (in seconds) for on hit camera screen shake
+    pub hammer_on_hit_screenshake_duration_secs: f32,
+    /// Hammer-specific frequency for on hit camera screen shake
+    pub hammer_on_hit_screenshake_frequency: f32,
+
     /// How many kills to trigger a passive gain
     passive_gain_rate: u32,
 }
@@ -1003,8 +1017,14 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "bow_self_pushback_ticks", |val| config.bow_self_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "bow_pushback", |val| config.bow_pushback = val);
     update_field(&mut errors, &cfg.0, "bow_pushback_ticks", |val| config.bow_pushback_ticks = val as u32);
-    update_field(&mut errors, &cfg.0, "passive_gain_rate", |val| config.passive_gain_rate = val as u32);
     update_field(&mut errors, &cfg.0, "arrow_velocity", |val| config.arrow_velocity = val);
+    update_field(&mut errors, &cfg.0, "default_on_hit_screenshake_strength", |val| config.default_on_hit_screenshake_strength = val);
+    update_field(&mut errors, &cfg.0, "default_on_hit_screenshake_duration_secs", |val| config.default_on_hit_screenshake_duration_secs = val);
+    update_field(&mut errors, &cfg.0, "default_on_hit_screenshake_frequency", |val| config.default_on_hit_screenshake_frequency = val);
+    update_field(&mut errors, &cfg.0, "hammer_on_hit_screenshake_strength", |val| config.hammer_on_hit_screenshake_strength = val);
+    update_field(&mut errors, &cfg.0, "hammer_on_hit_screenshake_duration_secs", |val| config.hammer_on_hit_screenshake_duration_secs = val);
+    update_field(&mut errors, &cfg.0, "hammer_on_hit_screenshake_frequency", |val| config.hammer_on_hit_screenshake_frequency = val);
+    update_field(&mut errors, &cfg.0, "passive_gain_rate", |val| config.passive_gain_rate = val as u32);
 
     for error in errors{
        warn!("failed to load player cfg value: {}", error);

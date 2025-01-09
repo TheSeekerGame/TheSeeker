@@ -129,8 +129,18 @@ hammer_attack_damage = 20.0
 # Base bow attack damage
 bow_attack_damage = 10.0
 
-# Number of kills to trigger passive gain
-passive_gain_rate = 3.0
-
 # Velocity of the projectiles fired by the Bow weapon
 arrow_velocity = 1000.0
+
+# Default configuration values for on hit camera screen shake
+default_on_hit_screenshake_strength = 0.9
+default_on_hit_screenshake_duration_secs = 0.1
+default_on_hit_screenshake_frequency = 2.0
+
+# Hammer-specific configuration values for on hit camera screen shake
+hammer_on_hit_screenshake_strength = 1.35
+hammer_on_hit_screenshake_duration_secs = 0.2
+hammer_on_hit_screenshake_frequency = 2.5
+
+# Number of kills to trigger passive gain
+passive_gain_rate = 3.0
