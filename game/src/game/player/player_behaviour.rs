@@ -268,21 +268,27 @@ fn player_move(
         let ground_friction = 0.7;
         let stealth_boost = get_stealth_boost(is_stealth);
         let controllable = !is_dash_strike;
-        let mut direction = action_state.value(&PlayerAction::Move);
+        let direction = action_state.value(&PlayerAction::Move);
         let new_vel = if action_state.just_pressed(&PlayerAction::Move)
             && action_state.value(&PlayerAction::Move) != 0.0
             && controllable
         {
-            (velocity.x + accel * direction * ground_friction)
-                * stealth_boost
-                * stat_mod.speed
+            velocity.x
+                + initial_accel
+                    * direction
+                    * ground_friction
+                    * stealth_boost
+                    * stat_mod.speed
         } else if action_state.pressed(&PlayerAction::Move)
             && action_state.value(&PlayerAction::Move) != 0.0
             && controllable
         {
-            (velocity.x + initial_accel * direction * ground_friction)
-                * stealth_boost
-                * stat_mod.speed
+            velocity.x
+                + accel
+                    * direction
+                    * ground_friction
+                    * stealth_boost
+                    * stat_mod.speed
         } else {
             // de-acceleration profile
             if is_grounded {
@@ -1234,9 +1240,12 @@ fn player_attack(
                                     ENEMY_HURT | GROUND,
                                 ),
                             ),
-                            Attack::new(192, entity, 20. * stat_mod.attack)
-                                .with_damage(config.bow_attack_damage)
-                                .with_max_targets(1),
+                            Attack::new(
+                                192,
+                                entity,
+                                config.bow_attack_damage * stat_mod.attack,
+                            )
+                            .with_max_targets(1),
                             Pushback(Knockback::new(
                                 Vec2::new(
                                     facing.direction() * config.bow_pushback,
@@ -1261,7 +1270,11 @@ fn player_attack(
                                 PLAYER_ATTACK,
                                 ENEMY_HURT,
                             )),
-                            Attack::new(16, entity, 20. * stat_mod.attack),
+                            Attack::new(
+                                16,
+                                entity,
+                                config.sword_attack_damage * stat_mod.attack,
+                            ),
                             SelfPushback(Knockback::new(
                                 Vec2::new(
                                     config.melee_self_pushback
