@@ -100,6 +100,11 @@ impl CurrentWeapon<'_> {
         let weapon_str = self.melee_weapon.to_string();
         format!("anim.player.{weapon_str}Whirling")
     }
+
+    pub fn is_wielding_hammer(&self) -> bool {
+        *self.combat_style == PlayerCombatStyle::Melee
+            && *self.melee_weapon == PlayerMeleeWeapon::Hammer
+    }
 }
 
 impl std::fmt::Display for CurrentWeapon<'_> {
