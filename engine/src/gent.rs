@@ -21,7 +21,7 @@ pub struct GentPhysicsBundle {
     pub linear_velocity: LinearVelocity,
 }
 
-#[derive(Component)]
+#[derive(Component, Debug)]
 pub struct Gent {
     pub e_gfx: Entity,
     pub e_effects_gfx: Entity,
