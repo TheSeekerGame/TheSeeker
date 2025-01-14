@@ -1300,7 +1300,7 @@ fn player_attack(
                     if let PlayerMeleeWeapon::Hammer = *melee_weapon {
                         player_stats.set(
                             StatType::MoveVelMax,
-                            config.max_move_vel / 2.0,
+                            config.hammer_max_move_vel,
                         );
                     }
 
@@ -1441,7 +1441,7 @@ pub fn player_whirl(
             if let PlayerMeleeWeapon::Hammer = *melee_weapon {
                 player_stats.set(
                     StatType::MoveVelMax,
-                    config.max_move_vel / 2.0,
+                    config.hammer_max_move_vel,
                 );
             }
 

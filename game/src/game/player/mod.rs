@@ -783,6 +783,11 @@ pub struct PlayerConfig {
     /// (in pixels/second)
     max_move_vel: f32,
 
+    /// The maximum horizontal velocity the player can move at while using the Hammer weapon.
+    ///
+    /// (in pixels/second)
+    hammer_max_move_vel: f32,
+
     /// The maximum downward velocity the player can fall at.
     ///
     /// (in pixels/second)
@@ -978,6 +983,7 @@ fn load_player_config(
 fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     let mut errors = Vec::new();
     update_field(&mut errors, &cfg.0, "max_move_vel", |val| config.max_move_vel = val);
+    update_field(&mut errors, &cfg.0, "hammer_max_move_vel", |val| config.hammer_max_move_vel = val);
     update_field(&mut errors, &cfg.0, "max_fall_vel", |val| config.max_fall_vel = val);
     update_field(&mut errors, &cfg.0, "move_accel_init", |val| config.move_accel_init = val);
     update_field(&mut errors, &cfg.0, "move_accel", |val| config.move_accel = val);

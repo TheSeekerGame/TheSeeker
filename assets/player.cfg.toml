@@ -4,6 +4,10 @@
 # (in pixels/second)
 max_move_vel = 70.0
 
+# The maximum horizontal velocity the player can move at while using the Hammer weapon.
+# (in pixels/second)
+hammer_max_move_vel = 35.0
+
 # The maximum downward velocity the player can fall at.
 # (in pixels/second)
 max_fall_vel = 180.0
