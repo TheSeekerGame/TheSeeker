@@ -1,4 +1,4 @@
-use bevy::prelude::resource_equals;
+use bevy::prelude::{resource_equals, Added};
 use bevy::sprite::{Sprite, SpriteSheetBundle};
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
@@ -56,6 +56,9 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_whirl_charge.before(player_whirl),
                     player_whirl.before(player_attack),
                     player_attack.run_if(any_with_component::<Attacking>),
+                    player_restore_velocity
+                        .after(player_attack)
+                        .run_if(any_with_component::<CanAttack>),
                     player_move,
                     player_can_dash.run_if(any_with_component::<CanDash>),
                     player_can_stealth.run_if(any_with_component::<CanStealth>),
@@ -1349,9 +1352,6 @@ fn player_attack(
 
         // leave attacking state
         if attacking.ticks >= maximum_ticks {
-            // Restore the player movement velocity after attacking.
-            player_stats.reset_stat(StatType::MoveVelMax);
-
             if attacking.followup {
                 transitions.push(Attacking::new_transition(CanAttack {
                     immediate: true,
@@ -1362,6 +1362,15 @@ fn player_attack(
                 ));
             }
         }
+    }
+}
+
+/// Restores the player movement velocity after attacking.
+fn player_restore_velocity(
+    mut query: Query<&mut PlayerStats, (With<Player>, Added<CanAttack>)>,
+) {
+    for mut stats in query.iter_mut() {
+        stats.reset_stat(StatType::MoveVelMax);
     }
 }
 
@@ -1471,18 +1480,12 @@ pub fn player_whirl(
         } else {
             // leave whirling state if button is not pressed and we are past min ticks
             if whirling.ticks >= Whirling::MIN_TICKS {
-                // Restore the player movement velocity after attacking.
-                player_stats.reset_stat(StatType::MoveVelMax);
-
                 transitions.push(Whirling::new_transition(
                     CanAttack::default(),
                 ));
             }
         }
         if whirl_ability.energy < 0. {
-            // Restore the player movement velocity after attacking.
-            player_stats.reset_stat(StatType::MoveVelMax);
-
             transitions.push(Whirling::new_transition(
                 CanAttack::default(),
             ));
