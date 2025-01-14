@@ -65,9 +65,10 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_run.run_if(any_with_component::<Running>),
                     player_jump.run_if(any_with_component::<Jumping>),
                     player_dash_strike.run_if(any_with_component::<DashStrike>),
-                    player_dash.run_if(any_with_component::<Dashing>),
-                    player_dash_fx
-                        .after(player_dash)
+                    (
+                        player_dash,
+                        player_dash_fx.after(player_dash),
+                    )
                         .run_if(any_with_component::<Dashing>),
                     dash_icon_fx
                         .after(player_dash_fx)
