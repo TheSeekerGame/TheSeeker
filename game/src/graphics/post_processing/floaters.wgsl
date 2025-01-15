@@ -1,7 +1,7 @@
 #define_import_path game::preprocessing::floaters
 
-const FLOATER_SAMPLES_X: u32 = 64u;
-const FLOATER_SAMPLES_Y: u32 = 64u;
+const FLOATER_SAMPLES_X: u32 = 16u;
+const FLOATER_SAMPLES_Y: u32 = 16u;
 
 struct Floater {
     scale: f32,

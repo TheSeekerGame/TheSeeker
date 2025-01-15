@@ -1,3 +1,4 @@
+use bevy::asset::load_internal_asset;
 use bevy::core_pipeline::core_3d;
 use bevy::core_pipeline::core_3d::graph::Node3d;
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
@@ -30,6 +31,9 @@ use bevy::render::RenderApp;
 const FLOATER_BUFFER_SIZE: usize = 64 * 64;
 const FLOATER_BUFFER_LAYERS: usize = 4;
 
+const FLOATER_SHADER_HANDLE: Handle<Shader> =
+    Handle::weak_from_u128(134392054226504942300212274996024942407);
+
 pub(crate) struct FloaterPlugin;
 
 impl Plugin for FloaterPlugin {
@@ -38,6 +42,13 @@ impl Plugin for FloaterPlugin {
             ExtractComponentPlugin::<FloaterSettings>::default(),
             UniformComponentPlugin::<FloaterSettings>::default(),
         ));
+
+        load_internal_asset!(
+            app,
+            FLOATER_SHADER_HANDLE,
+            "floaters.wgsl",
+            Shader::from_wgsl
+        );
 
         app.register_type::<FloaterSettings>();
 
