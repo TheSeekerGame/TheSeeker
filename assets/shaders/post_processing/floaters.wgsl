@@ -1,19 +1,36 @@
-#import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
-#import bevy_pbr::view_transformations::depth_ndc_to_view_z
+#define_import_path game::preprocessing::floaters
 
-#ifdef MULTISAMPLED
-@group(0) @binding(1) var depth_texture: texture_depth_multisampled_2d;
-#else   // MULTISAMPLED
-@group(0) @binding(1) var depth_texture: texture_depth_2d;
-#endif  // MULTISAMPLED
+const FLOATER_SAMPLES_X: u32 = 64u;
+const FLOATER_SAMPLES_Y: u32 = 64u;
 
-@group(0) @binding(2) var screen_texture: texture_2d<f32>;
-@group(0) @binding(3) var texture_sampler: sampler;
+struct Floater {
+    scale: f32,
+    opacity: f32,
+    position: vec2<f32>,
+}
 
-@fragment
-fn floater_fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    let frag_coord = vec2<i32>(floor(in.position.xy));
-    let raw_depth = textureLoad(depth_texture, frag_coord, 0);
-    let depth = -depth_ndc_to_view_z(raw_depth);
-    return vec4<f32>(1.0, depth, depth, 1.0);
+struct FloaterBuffer {
+    floaters: array<array<Floater, (FLOATER_SAMPLES_X * FLOATER_SAMPLES_Y)>>,
+}
+
+struct FloaterSettings {
+    static_drift: vec2<f32>,
+    spawn_spacing: vec2<f32>, // Directly relates to compute workgroup size
+}
+
+// Fast 3d hash:
+// https://github.com/Cyan4973/xxHash
+// https://www.shadertoy.com/view/Xt3cDn
+fn xxhash32_3d(p: vec3<u32>) -> u32 {
+    let p2 = 2246822519u;
+    let p3 = 3266489917u;
+    let p4 = 668265263u;
+    let p5 = 374761393u;
+    var h32 =  p.z + p5 + p.x*p3;
+    h32 = p4 * ((h32 << 17) | (h32 >> (32 - 17)));
+    h32 += p.y * p3;
+    h32 = p4 * ((h32 << 17) | (h32 >> (32 - 17)));
+    h32 = p2 * (h32 ^ (h32 >> 15));
+    h32 = p3 * (h32 ^ (h32 >> 13));
+    return h32 ^ (h32 >> 16);
 }
