@@ -1,6 +1,6 @@
 use bevy::app::Update;
 use bevy::ecs::system::SystemParam;
-use bevy::prelude::{resource_equals, IntoSystemConfigs, Res};
+use bevy::prelude::Res;
 use leafwing_input_manager::prelude::ActionState;
 use strum_macros::Display;
 
@@ -18,12 +18,7 @@ impl Plugin for PlayerWeaponPlugin {
         app.insert_resource(PlayerCombatStyle::default());
         app.add_systems(
             Update,
-            (
-                swap_combat_style,
-                swap_melee_weapon.run_if(resource_equals(
-                    PlayerCombatStyle::Melee,
-                )),
-            ),
+            (swap_combat_style, swap_melee_weapon),
         );
     }
 }
