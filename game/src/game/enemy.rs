@@ -83,16 +83,28 @@ pub struct EnemySpawnerBundle {
 #[derive(Component, Default, Debug, Deref, DerefMut)]
 struct Killed(usize);
 
-/// Enemy spawner, each slot has its own spawn cooldown
+/// Enemy spawner, cooldown starts ticking once all spawned enemies have been killed
 #[derive(Component, Default, Debug)]
 pub struct EnemySpawner {
     pub slots: Vec<SpawnSlot>,
+    pub cooldown_ticks: u32,
+}
+
+impl EnemySpawner {
+    const MAX: usize = 5;
+
+    fn is_cleared(&self) -> bool {
+        //check if all slots are None
+        true
+    }
 }
 
 #[derive(Debug)]
 pub struct SpawnSlot {
     pub enemy: Option<Entity>,
-    pub cooldown_ticks: u32,
+    //get rid of cooldown_ticks per slot?
+    // pub cooldown_ticks: u32,
+    pub tier: Tier,
 }
 
 impl EnemySpawner {
@@ -142,12 +154,17 @@ pub struct EnemyEffectGfx {
     e_gent: Entity,
 }
 
+//TODO:only spawn when all from spawner have died, increase scaling, when 5 are cleared, up spider
+//tier one at a time
+//when ranged should be capped at 2 per spawner
+//only tick cooldown when spawner is cleared
 fn spawn_enemy(
     mut spawner_q: Query<(
         &Transform,
         &mut EnemySpawner,
         &mut Killed,
     )>,
+    //dead enemies to clear
     enemy_q: Query<
         Entity,
         (
@@ -161,19 +178,28 @@ fn spawn_enemy(
 ) {
     let p_transform = player_query.get_single();
     for (transform, mut spawner, mut killed) in spawner_q.iter_mut() {
+        //tier threshold is something like 15, then every 5?
+
         // if spawner is empty, add a slot with completed cooldown to spawn initial enemies
-        if spawner.slots.is_empty() {
+        if spawner.slots.len() <= **killed {
             spawner.slots.push(SpawnSlot {
                 enemy: None,
-                cooldown_ticks: EnemySpawner::COOLDOWN,
+                // cooldown_ticks: EnemySpawner::COOLDOWN,
             })
         }
-        // if we have killed enough enemies from this spawner, adds another slot
-        if spawner.slots.len() < **killed {
+
+        if spawner.is_cleared() {
+            //spawn_enemy
+        }
+        // if we have killed enough enemies from this spawner, and we havent reached max, adds another slot
+        if spawner.slots.len() < **killed
+            && spawner.slots.len() <= EnemySpawner::MAX
+        {
             spawner.slots.push(SpawnSlot {
                 enemy: None,
-                cooldown_ticks: 0,
+                // cooldown_ticks: 0,
             })
+        } else if **killed > EnemySpawner::MAX {
         }
         // check if enemies are dead and update
         for slot in spawner.slots.iter_mut() {
@@ -206,6 +232,7 @@ fn spawn_enemy(
                                 },
                             },
                             TransformBundle::from_transform(*transform),
+                            //Tier,
                         ))
                         .id();
                     slot.enemy = Some(id);
@@ -225,6 +252,7 @@ fn setup_enemy(
     mut commands: Commands,
 ) {
     for (mut xf_gent, e_gent, bp) in q.iter_mut() {
+        //TODO: change to a oneshot? or just fn
         if !bp.is_added() {
             continue;
         }
@@ -487,6 +515,15 @@ enum Navigation {
 enum Role {
     Melee,
     Ranged,
+}
+
+// Spider upgrade/scaling tier
+#[derive(Component, Default, Debug, Reflect)]
+enum Tier {
+    #[default]
+    Base,
+    One,
+    Two,
 }
 
 impl Role {
