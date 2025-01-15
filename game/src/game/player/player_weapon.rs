@@ -1,13 +1,13 @@
 use bevy::app::Update;
 use bevy::ecs::system::SystemParam;
-use bevy::prelude::Res;
+use bevy::prelude::{in_state, IntoSystemConfigs, Res};
 use leafwing_input_manager::prelude::ActionState;
 use strum_macros::Display;
 
 use crate::game::player::{Player, PlayerAction};
 use crate::prelude::{App, Plugin, Query, ResMut, Resource, With};
 
-use super::PlayerConfig;
+use super::{GameState, PlayerConfig};
 
 pub(crate) struct PlayerWeaponPlugin;
 
@@ -18,7 +18,8 @@ impl Plugin for PlayerWeaponPlugin {
         app.insert_resource(PlayerCombatStyle::default());
         app.add_systems(
             Update,
-            (swap_combat_style, swap_melee_weapon),
+            (swap_combat_style, swap_melee_weapon)
+                .run_if(in_state(GameState::Playing)),
         );
     }
 }
