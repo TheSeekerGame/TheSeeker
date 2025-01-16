@@ -10,7 +10,8 @@ frame_start = 1
 run_at_frame = [2, 7, 12]
 forbid_slots_all = ["AttackTransition"]
 action = "PlayAudio"
-asset_key = "audio.game.HammerImpact"
+volume = 0.5
+asset_key = "audio.game.SwordSlash"
 
 # play the last frame again if the animation hasnt ended so we dont roll over into next variant
 [[script]]

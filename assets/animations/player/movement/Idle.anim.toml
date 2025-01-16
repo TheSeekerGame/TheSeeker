@@ -6,6 +6,13 @@ frame_min = 1
 frame_max = 24
 frame_start = 1
 
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.Fall"
+action = "PlayAudio"
+volume = 0.2
+asset_key = "audio.game.FallImpact"
+
 # LOOP (left)
 [[script]]
 run_at_frame = 12

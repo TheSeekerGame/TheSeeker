@@ -6,6 +6,7 @@ frame_min = 1
 frame_max = 7
 frame_start = 1
 
+
 # Support left/right flipping
 [[script]]
 run_on_slot_enable = "DirectionLeft"

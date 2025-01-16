@@ -36,7 +36,8 @@ frame_index = 8
 run_at_frame = [2, 6, 10]
 forbid_slots_all = ["AttackTransition"]
 action = "PlayAudio"
-asset_key = "audio.game.HammerImpact"
+volume = 0.5
+asset_key = "audio.game.SwordSlash"
 
 # if coming from another attack, pick up where we left off
 # Idle
