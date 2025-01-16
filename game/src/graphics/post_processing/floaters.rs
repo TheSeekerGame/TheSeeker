@@ -19,10 +19,10 @@ use bevy::render::render_resource::{
     BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, Buffer,
     BufferDescriptor, BufferUsages, CachedComputePipelineId,
     CachedRenderPipelineId, ColorTargetState, ColorWrites,
-    ComputePassDescriptor, ComputePipelineDescriptor, FragmentState,
+    ComputePassDescriptor, ComputePipelineDescriptor, FragmentState, LoadOp,
     MultisampleState, Operations, PipelineCache, PrimitiveState,
     RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
-    ShaderSize, ShaderStages, ShaderType, TextureFormat, VertexState,
+    ShaderSize, ShaderStages, ShaderType, StoreOp, TextureFormat, VertexState,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice};
 use bevy::render::view::{
@@ -72,10 +72,8 @@ impl Plugin for FloaterPlugin {
                 core_3d::graph::Core3d,
                 (
                     FloaterPrepassLabel,
-                    Node3d::EndMainPass,
+                    Node3d::MainTransparentPass,
                     FloaterPostProcessLabel,
-                    // Might want to position it before dof
-                    Node3d::EndMainPassPostProcessing,
                 ),
             );
     }
@@ -159,8 +157,6 @@ impl ViewNode for FloaterPostProcessNode {
             return Ok(());
         };
 
-        let post_process = view_target.post_process_write();
-
         let view_bind_group = render_context.render_device().create_bind_group(
             "floater_post_process_view_bind_group",
             &postprocess_pipeline.layout,
@@ -175,9 +171,12 @@ impl ViewNode for FloaterPostProcessNode {
             render_context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("floater_post_process_pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    view: post_process.destination,
+                    view: view_target.main_texture_view(),
                     resolve_target: None,
-                    ops: Operations::default(),
+                    ops: Operations {
+                        load: LoadOp::Load,
+                        store: StoreOp::Store,
+                    },
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
