@@ -1,7 +1,6 @@
 use bevy::asset::load_internal_asset;
 use bevy::core_pipeline::core_3d;
 use bevy::core_pipeline::core_3d::graph::Node3d;
-use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 use bevy::ecs::query::QueryItem;
 use bevy::ecs::system::lifetimeless::Read;
 use bevy::prelude::*;
@@ -23,7 +22,7 @@ use bevy::render::render_resource::{
     ComputePassDescriptor, ComputePipelineDescriptor, FragmentState,
     MultisampleState, Operations, PipelineCache, PrimitiveState,
     RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
-    ShaderSize, ShaderStages, ShaderType, TextureFormat,
+    ShaderSize, ShaderStages, ShaderType, TextureFormat, VertexState,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice};
 use bevy::render::view::{
@@ -31,7 +30,7 @@ use bevy::render::view::{
 };
 use bevy::render::RenderApp;
 
-const FLOATER_BUFFER_SIZE: usize = 16 * 16;
+const FLOATER_BUFFER_SIZE: usize = 32 * 32;
 const FLOATER_BUFFER_LAYERS: usize = 4;
 
 const FLOATER_SHADER_HANDLE: Handle<Shader> =
@@ -176,8 +175,6 @@ impl ViewNode for FloaterPostProcessNode {
             render_context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("floater_post_process_pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
-                    // We need to specify the post process destination view here
-                    // to make sure we write to the appropriate texture.
                     view: post_process.destination,
                     resolve_target: None,
                     ops: Operations::default(),
@@ -259,7 +256,12 @@ impl FromWorld for FloaterPipeline {
             .queue_render_pipeline(RenderPipelineDescriptor {
                 label: Some("floater_post_process_pipeline".into()),
                 layout: vec![layout.clone()],
-                vertex: fullscreen_shader_vertex_state(),
+                vertex: VertexState {
+                    shader: render_shader.clone(),
+                    shader_defs: vec![],
+                    entry_point: "floater_vertex".into(),
+                    buffers: vec![],
+                },
                 fragment: Some(FragmentState {
                     shader: render_shader,
                     shader_defs: vec![],

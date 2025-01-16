@@ -7,11 +7,12 @@
 fn floater_prepass(@builtin(global_invocation_id) global_invocation_id: vec3<u32>,
                    @builtin(local_invocation_id) local_invocation_id: vec3<u32>) {
     let thread_index = global_invocation_id.x +
-                       global_invocation_id.y * FLOATER_SAMPLES_X +
-                       local_invocation_id.z * FLOATER_SAMPLES_X * FLOATER_SAMPLES_Y;
+                       global_invocation_id.y * FLOATER_SAMPLES_X;
 
     var floater = Floater();
     floater.scale = 0.1;
     floater.opacity = 0.5;
-    floater.position = floater_settings.static_drift + floater_settings.spawn_spacing * vec2<f32>(global_invocation_id.xy);
+    floater.position = vec2<f32>(global_invocation_id.xy);
+
+    floater_buffer.floaters[local_invocation_id.y][thread_index] = floater;
 }
