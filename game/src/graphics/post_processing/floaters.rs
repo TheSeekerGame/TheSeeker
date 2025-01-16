@@ -17,18 +17,21 @@ use bevy::render::render_resource::binding_types::{
     storage_buffer, uniform_buffer,
 };
 use bevy::render::render_resource::{
-    BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries,
-    CachedComputePipelineId, CachedRenderPipelineId, ColorTargetState,
-    ColorWrites, ComputePassDescriptor, ComputePipelineDescriptor,
-    FragmentState, MultisampleState, PipelineCache, PrimitiveState,
-    RenderPassDescriptor, RenderPipelineDescriptor, ShaderStages, ShaderType,
-    TextureFormat,
+    BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, Buffer,
+    BufferDescriptor, BufferUsages, CachedComputePipelineId,
+    CachedRenderPipelineId, ColorTargetState, ColorWrites,
+    ComputePassDescriptor, ComputePipelineDescriptor, FragmentState,
+    MultisampleState, Operations, PipelineCache, PrimitiveState,
+    RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
+    ShaderSize, ShaderStages, ShaderType, TextureFormat,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice};
-use bevy::render::view::{ViewUniform, ViewUniformOffset, ViewUniforms};
+use bevy::render::view::{
+    ViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms,
+};
 use bevy::render::RenderApp;
 
-const FLOATER_BUFFER_SIZE: usize = 64 * 64;
+const FLOATER_BUFFER_SIZE: usize = 16 * 16;
 const FLOATER_BUFFER_LAYERS: usize = 4;
 
 const FLOATER_SHADER_HANDLE: Handle<Shader> =
@@ -123,6 +126,7 @@ pub(crate) struct FloaterPostProcessLabel;
 
 impl ViewNode for FloaterPostProcessNode {
     type ViewQuery = (
+        Read<ViewTarget>,
         Read<ViewUniformOffset>,
         Read<DynamicUniformIndex<FloaterSettings>>,
     );
@@ -131,19 +135,19 @@ impl ViewNode for FloaterPostProcessNode {
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (view_uniform_offset, floater_settings_uniform_index): QueryItem<
+        (view_target, view_uniform_offset, floater_settings_uniform_index): QueryItem<
             Self::ViewQuery,
         >,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        let post_process_pipeline = world.resource::<FloaterPipeline>();
+        let postprocess_pipeline = world.resource::<FloaterPipeline>();
 
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_uniforms = world.resource::<ViewUniforms>();
 
         let (Some(pipeline), Some(view_uniforms_binding)) = (
             pipeline_cache
-                .get_render_pipeline(post_process_pipeline.render_pipeline_id),
+                .get_render_pipeline(postprocess_pipeline.render_pipeline_id),
             view_uniforms.uniforms.binding(),
         ) else {
             return Ok(());
@@ -156,19 +160,28 @@ impl ViewNode for FloaterPostProcessNode {
             return Ok(());
         };
 
+        let post_process = view_target.post_process_write();
+
         let view_bind_group = render_context.render_device().create_bind_group(
             "floater_post_process_view_bind_group",
-            &post_process_pipeline.layout,
+            &postprocess_pipeline.layout,
             &BindGroupEntries::sequential((
                 view_uniforms_binding,
                 settings_binding.clone(),
+                postprocess_pipeline.buffer.as_entire_binding(),
             )),
         );
 
         let mut render_pass =
             render_context.begin_tracked_render_pass(RenderPassDescriptor {
                 label: Some("floater_post_process_pass"),
-                color_attachments: &[],
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    // We need to specify the post process destination view here
+                    // to make sure we write to the appropriate texture.
+                    view: post_process.destination,
+                    resolve_target: None,
+                    ops: Operations::default(),
+                })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
@@ -183,7 +196,7 @@ impl ViewNode for FloaterPostProcessNode {
                 floater_settings_uniform_index.index(),
             ],
         );
-        // render_pass.draw(0..3, 0..1);
+        render_pass.draw(0..3, 0..1);
 
         Ok(())
     }
@@ -192,6 +205,7 @@ impl ViewNode for FloaterPostProcessNode {
 #[derive(Resource)]
 struct FloaterPipeline {
     layout: BindGroupLayout,
+    buffer: Buffer,
     prepass_pipeline_id: CachedComputePipelineId,
     render_pipeline_id: CachedRenderPipelineId,
 }
@@ -199,6 +213,14 @@ struct FloaterPipeline {
 impl FromWorld for FloaterPipeline {
     fn from_world(world: &mut World) -> Self {
         let render_device = world.resource::<RenderDevice>();
+
+        let buffer = render_device.create_buffer(&BufferDescriptor {
+            label: Some("floater_buffer"),
+            size: FloaterBuffer::SHADER_SIZE.into(),
+            usage: BufferUsages::STORAGE,
+            mapped_at_creation: false,
+        });
+
         let layout = render_device.create_bind_group_layout(
             "floater_postprocess_bind_group_layout",
             &BindGroupLayoutEntries::sequential(
@@ -256,6 +278,7 @@ impl FromWorld for FloaterPipeline {
 
         Self {
             layout,
+            buffer,
             prepass_pipeline_id,
             render_pipeline_id,
         }
@@ -283,14 +306,13 @@ impl ViewNode for FloaterPrepassNode {
         >,
         world: &World,
     ) -> Result<(), NodeRunError> {
-        let post_process_pipeline = world.resource::<FloaterPipeline>();
+        let postprocess_pipeline = world.resource::<FloaterPipeline>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_uniforms = world.resource::<ViewUniforms>();
 
         let (Some(pipeline), Some(view_uniforms_binding)) = (
-            pipeline_cache.get_compute_pipeline(
-                post_process_pipeline.prepass_pipeline_id,
-            ),
+            pipeline_cache
+                .get_compute_pipeline(postprocess_pipeline.prepass_pipeline_id),
             view_uniforms.uniforms.binding(),
         ) else {
             return Ok(());
@@ -305,10 +327,11 @@ impl ViewNode for FloaterPrepassNode {
 
         let view_bind_group = render_context.render_device().create_bind_group(
             "floater_prepass_view_bind_group",
-            &post_process_pipeline.layout,
+            &postprocess_pipeline.layout,
             &BindGroupEntries::sequential((
                 view_uniforms_binding,
                 settings_binding.clone(),
+                postprocess_pipeline.buffer.as_entire_binding(),
             )),
         );
 
