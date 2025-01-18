@@ -360,7 +360,7 @@ fn setup_enemy(
             Idle,
             Waiting::new(12),
             AddQueue::default(),
-            TransitionQueue::default(), // },
+            TransitionQueue::default(),
             StateDespawnMarker,
         ));
         commands.entity(e_gfx).insert((
@@ -902,7 +902,6 @@ fn aggro(
     for (role, range, target, mut velocity, mut transitions) in query.iter_mut()
     {
         if let Some(p_entity) = target.0 {
-            let mut rng = rand::thread_rng();
             // return to patrol if out of aggro range
             if matches!(range, Range::Far) {
                 transitions.push(Aggroed::new_transition(Patrolling));
@@ -913,9 +912,7 @@ fn aggro(
                     )),
                     Role::Ranged => {
                         velocity.x = 0.;
-                        transitions.push(Waiting::new_transition(
-                            Defense::default(),
-                        ));
+                        transitions.push(Waiting::new_transition(Defense));
                     },
                 }
             } else if matches!(role, Role::Melee) {
@@ -988,7 +985,7 @@ fn ranged_attack(
                 * 0.5;
             // how far is the ceiling above the mid point of the projectile trajectory?
             let mut ceiling = f32::MAX;
-            if let Some((hit_e, hit)) = spatial_query.ray_cast(
+            if let Some((_hit_e, hit)) = spatial_query.ray_cast(
                 mid_pt,
                 Vec2::new(0.0, 1.0),
                 f32::MAX,
@@ -1002,7 +999,7 @@ fn ranged_attack(
                         mid_pt.y + hit.toi - enemy_transform.translation().y;
                 } else {
                     // if it did start underground, fire another one to find how far underground, and then fire again from there + 0.1
-                    if let Some((hit_e, hit)) = spatial_query.ray_cast(
+                    if let Some((_hit_e, hit)) = spatial_query.ray_cast(
                         mid_pt,
                         Vec2::new(0.0, 1.0),
                         f32::MAX,
@@ -1010,7 +1007,7 @@ fn ranged_attack(
                         InteractionGroups::new(ENEMY, GROUND),
                         None,
                     ) {
-                        if let Some((hit_e, hit_2)) = spatial_query.ray_cast(
+                        if let Some((_hit_e, hit_2)) = spatial_query.ray_cast(
                             mid_pt + Vec2::new(0.0, hit.toi + 0.001),
                             Vec2::new(0.0, 1.0),
                             f32::MAX,
@@ -1073,12 +1070,10 @@ fn ranged_attack(
                     }
                     final_solution = projectile;
                     break;
+                } else if i == max_attempts - 1 {
+                    warn!("No solution for ballistic trajectory, even after increased speed to {speed}, using default trajectory!")
                 } else {
-                    if i == max_attempts - 1 {
-                        warn!("No solution for ballistic trajectory, even after increased speed to {speed}, using default trajectory!")
-                    } else {
-                        speed *= 1.15;
-                    }
+                    speed *= 1.15;
                 }
             }
             // spawn in the new projectile:
@@ -1099,9 +1094,7 @@ fn ranged_attack(
                 .with_lingering_particles(particle_effect.0.clone());
         }
         if matches!(range, Range::Melee) {
-            trans_q.push(RangedAttack::new_transition(
-                Defense::default(),
-            ));
+            trans_q.push(RangedAttack::new_transition(Defense));
         }
     }
 }
@@ -1112,7 +1105,6 @@ fn melee_attack(
             Entity,
             &mut MeleeAttack,
             &Tier,
-            &Facing,
             &mut TransitionQueue,
             &Gent,
         ),
@@ -1120,13 +1112,11 @@ fn melee_attack(
     >,
     mut commands: Commands,
 ) {
-    for (entity, mut attack, tier, facing, mut trans_q, gent) in
-        query.iter_mut()
-    {
+    for (entity, mut attack, tier, mut trans_q, gent) in query.iter_mut() {
         attack.ticks += 1;
         if attack.ticks == 8 * MeleeAttack::STARTUP {
             // spawn attack hitbox collider as child
-            let collider = commands
+            commands
                 .spawn((
                     Collider::empty(InteractionGroups {
                         memberships: SENSOR,
@@ -1136,8 +1126,7 @@ fn melee_attack(
                     AnimationCollider(gent.e_gfx),
                     Attack::new(8, entity, 17. * *tier as u32 as f32),
                 ))
-                .set_parent(entity)
-                .id();
+                .set_parent(entity);
         }
         if attack.ticks >= MeleeAttack::MAX * 8 {
             trans_q.push(MeleeAttack::new_transition(
@@ -1302,7 +1291,7 @@ fn chasing(
         if !matches!(role, Role::Melee) {
             continue;
         }
-        if let Some(p_entity) = target.0 {
+        if target.0.is_some() {
             // check if we need to transition
             match *range {
                 Range::Melee => {
@@ -1369,7 +1358,7 @@ fn move_collide(
         // If the enemy encounters a collision with the player, wall or edge of platform, it sets
         // the Navigation component to Navigation::Blocked
         while let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
-            if let Some((e, first_hit)) = spatial_query.shape_cast(
+            if let Some((_entity, first_hit)) = spatial_query.shape_cast(
                 transform.translation.xy(),
                 shape_dir,
                 &*shape,
@@ -1400,7 +1389,7 @@ fn move_collide(
 
         // Raycast from underground directly below the enemy in direction of movement, detecting the edges of a platform from
         // inside
-        if let Some((entity, first_hit)) = spatial_query.ray_cast(
+        if let Some((_entity, first_hit)) = spatial_query.ray_cast(
             // TODO: should be based on collider half extent y + a little
             Vec2::new(front, transform.translation.y - 10.),
             Vec2::new(dir, 0.),
@@ -1455,11 +1444,11 @@ fn remove_inside(
 /// Increments the global KillCount, removes most components from the Enemy
 /// after a set amount of ticks transitions to the Decay state
 pub fn dead(
-    mut query: Query<(Entity, &mut Dead, &Gent), With<Enemy>>,
+    mut query: Query<(Entity, &mut Dead), With<Enemy>>,
     mut kill_count: ResMut<KillCount>,
     mut commands: Commands,
 ) {
-    for (entity, mut dead, gent) in query.iter_mut() {
+    for (entity, mut dead) in query.iter_mut() {
         if dead.ticks == 0 {
             **kill_count += 1;
             commands.entity(entity).retain::<(
