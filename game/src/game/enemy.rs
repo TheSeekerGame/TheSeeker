@@ -378,10 +378,8 @@ fn setup_enemy(
             },
             StateDespawnMarker,
         ));
-        let mut animation: ScriptPlayer<SpriteAnimation> =
-            ScriptPlayer::default();
-        animation.play_key("anim.spider.Sparks");
-        animation.set_slot("Start", true);
+        let mut animation = ScriptPlayer::<SpriteAnimation>::default();
+
         commands.entity(e_effects_gfx).insert((
             EnemyEffectsGfxBundle {
                 marker: EnemyEffectGfx { e_gent },
