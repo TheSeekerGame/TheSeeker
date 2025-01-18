@@ -1,3 +1,4 @@
+use bevy::prelude::{resource_equals, Added};
 use bevy::sprite::{Sprite, SpriteSheetBundle};
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
@@ -14,7 +15,9 @@ use theseeker_engine::physics::{
 use theseeker_engine::script::ScriptPlayer;
 
 use super::arc_attack::{Arrow, Projectile};
-use super::player_weapon::{is_player_using_bow, PlayerWeapon};
+use super::player_weapon::{
+    PlayerCombatStyle, PlayerMeleeWeapon, PushbackValues,
+};
 use super::{
     dash_icon_fx, player_dash_fx, AttackBundle, CanStealth, DashIcon,
     DashStrike, DashType, JumpCount, Knockback, PlayerStats, Pushback,
@@ -53,15 +56,19 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_whirl_charge.before(player_whirl),
                     player_whirl.before(player_attack),
                     player_attack.run_if(any_with_component::<Attacking>),
+                    player_restore_velocity
+                        .after(player_attack)
+                        .run_if(any_with_component::<CanAttack>),
                     player_move,
                     player_can_dash.run_if(any_with_component::<CanDash>),
                     player_can_stealth.run_if(any_with_component::<CanStealth>),
                     player_run.run_if(any_with_component::<Running>),
                     player_jump.run_if(any_with_component::<Jumping>),
                     player_dash_strike.run_if(any_with_component::<DashStrike>),
-                    player_dash.run_if(any_with_component::<Dashing>),
-                    player_dash_fx
-                        .after(player_dash)
+                    (
+                        player_dash,
+                        player_dash_fx.after(player_dash),
+                    )
                         .run_if(any_with_component::<Dashing>),
                     dash_icon_fx
                         .after(player_dash_fx)
@@ -78,7 +85,9 @@ impl Plugin for PlayerBehaviorPlugin {
                     bow_auto_aim
                         .after(player_move)
                         .before(player_attack)
-                        .run_if(is_player_using_bow),
+                        .run_if(resource_equals(
+                            PlayerCombatStyle::Ranged,
+                        )),
                 )
                     .in_set(PlayerStateSet::Behavior)
                     .before(update_sprite_colliders),
@@ -493,6 +502,7 @@ pub fn player_dash_strike(
     >,
     mut commands: Commands,
     config: Res<PlayerConfig>,
+    melee_weapon: Res<PlayerMeleeWeapon>,
 ) {
     for (
         entity,
@@ -508,12 +518,12 @@ pub fn player_dash_strike(
         if strike.ticks == 10 {
             add_dash_strike_collider(
                 &mut commands,
-                &config,
                 entity,
                 gent,
                 facing,
                 is_stealthed,
                 player_stat_mod.attack,
+                melee_weapon.pushback_values(&config),
             );
         }
         strike.ticks += 1;
@@ -618,13 +628,20 @@ fn trigger_dash_strike(
 
 fn add_dash_strike_collider(
     mut commands: &mut Commands,
-    config: &PlayerConfig,
     entity: Entity,
     gent: &Gent,
     facing: &Facing,
     stealthed: bool,
     attack_mod: f32,
+    pushback_values: PushbackValues,
 ) {
+    let PushbackValues {
+        self_pushback,
+        self_pushback_ticks,
+        pushback,
+        pushback_ticks,
+    } = pushback_values;
+
     let attack = commands
         .spawn((
             TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
@@ -636,18 +653,12 @@ fn add_dash_strike_collider(
             )),
             Attack::new(16, entity, 20. * attack_mod),
             SelfPushback(Knockback::new(
-                Vec2::new(
-                    config.melee_self_pushback * -facing.direction(),
-                    0.,
-                ),
-                config.melee_self_pushback_ticks,
+                Vec2::new(self_pushback * -facing.direction(), 0.),
+                self_pushback_ticks,
             )),
             Pushback(Knockback::new(
-                Vec2::new(
-                    facing.direction() * config.melee_pushback,
-                    0.,
-                ),
-                config.melee_pushback_ticks,
+                Vec2::new(facing.direction() * pushback, 0.),
+                pushback_ticks,
             )),
         ))
         .set_parent(entity)
@@ -1169,6 +1180,7 @@ fn player_attack(
             &Facing,
             &Transform,
             Option<&WallSlideTime>,
+            &mut PlayerStats,
             &mut Attacking,
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
@@ -1179,7 +1191,8 @@ fn player_attack(
     >,
     mut commands: Commands,
     config: Res<PlayerConfig>,
-    weapon: Res<PlayerWeapon>,
+    combat_style: Res<PlayerCombatStyle>,
+    melee_weapon: Res<PlayerMeleeWeapon>,
     time: Res<GameTime>,
 ) {
     for (
@@ -1188,6 +1201,7 @@ fn player_attack(
         facing,
         transform,
         wall_slide_time,
+        mut player_stats,
         mut attacking,
         mut transitions,
         action_state,
@@ -1196,8 +1210,8 @@ fn player_attack(
     ) in query.iter_mut()
     {
         if attacking.ticks == 0 {
-            let attack = match *weapon {
-                PlayerWeapon::Bow => {
+            let attack = match *combat_style {
+                PlayerCombatStyle::Ranged => {
                     let mut animation: ScriptPlayer<SpriteAnimation> =
                         ScriptPlayer::default();
                     animation.play_key("anim.player.BowBasicArrow");
@@ -1258,7 +1272,38 @@ fn player_attack(
                         ))
                         .id()
                 },
-                PlayerWeapon::Sword => {
+                PlayerCombatStyle::Melee => {
+                    let (
+                        damage,
+                        self_pushback,
+                        self_pushback_ticks,
+                        pushback,
+                        pushback_ticks,
+                    ) = match *melee_weapon {
+                        PlayerMeleeWeapon::Hammer => (
+                            config.hammer_attack_damage,
+                            config.hammer_self_pushback,
+                            config.hammer_self_pushback_ticks,
+                            config.hammer_pushback,
+                            config.hammer_pushback_ticks,
+                        ),
+                        PlayerMeleeWeapon::Sword => (
+                            config.sword_attack_damage,
+                            config.sword_self_pushback,
+                            config.sword_self_pushback_ticks,
+                            config.sword_pushback,
+                            config.sword_pushback_ticks,
+                        ),
+                    };
+
+                    // Slow the player down when they attack with the Hammer
+                    if let PlayerMeleeWeapon::Hammer = *melee_weapon {
+                        player_stats.set(
+                            StatType::MoveVelMax,
+                            config.hammer_max_move_vel,
+                        );
+                    }
+
                     commands
                         .spawn((
                             TransformBundle::from_transform(
@@ -1270,25 +1315,17 @@ fn player_attack(
                                 PLAYER_ATTACK,
                                 ENEMY_HURT,
                             )),
-                            Attack::new(
-                                16,
-                                entity,
-                                config.sword_attack_damage * stat_mod.attack,
-                            ),
+                            Attack::new(16, entity, damage * stat_mod.attack),
                             SelfPushback(Knockback::new(
                                 Vec2::new(
-                                    config.melee_self_pushback
-                                        * -facing.direction(),
+                                    self_pushback * -facing.direction(),
                                     0.,
                                 ),
-                                config.melee_self_pushback_ticks,
+                                self_pushback_ticks,
                             )),
                             Pushback(Knockback::new(
-                                Vec2::new(
-                                    facing.direction() * config.melee_pushback,
-                                    0.,
-                                ),
-                                config.melee_pushback_ticks,
+                                Vec2::new(facing.direction() * pushback, 0.),
+                                pushback_ticks,
                             )),
                         ))
                         .set_parent(entity)
@@ -1329,6 +1366,15 @@ fn player_attack(
     }
 }
 
+/// Restores the player movement velocity after attacking.
+fn player_restore_velocity(
+    mut query: Query<&mut PlayerStats, (With<Player>, Added<CanAttack>)>,
+) {
+    for mut stats in query.iter_mut() {
+        stats.reset_stat(StatType::MoveVelMax);
+    }
+}
+
 pub fn player_whirl_charge(
     mut query: Query<(&mut WhirlAbility, &PlayerStatMod), Without<Whirling>>,
     config: Res<PlayerConfig>,
@@ -1349,6 +1395,7 @@ pub fn player_whirl(
             &mut TransitionQueue,
             &mut Whirling,
             &mut WhirlAbility,
+            &mut PlayerStats,
             &PlayerStatMod,
             Has<Stealthing>,
             &Gent,
@@ -1369,6 +1416,7 @@ pub fn player_whirl(
         ),
     >,
     mut commands: Commands,
+    melee_weapon: Res<PlayerMeleeWeapon>,
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
@@ -1378,6 +1426,7 @@ pub fn player_whirl(
         mut transitions,
         mut whirling,
         mut whirl_ability,
+        mut player_stats,
         stat_mod,
         is_stealthing,
         gent,
@@ -1388,6 +1437,14 @@ pub fn player_whirl(
         if action_state.pressed(&PlayerAction::Whirl)
             || whirling.ticks < Whirling::MIN_TICKS
         {
+            // Slow the player down when they attack with the Hammer
+            if let PlayerMeleeWeapon::Hammer = *melee_weapon {
+                player_stats.set(
+                    StatType::MoveVelMax,
+                    config.hammer_max_move_vel,
+                );
+            }
+
             if let Some(attack_entity) = whirling.attack_entity {
                 // if the attack entities collider was changed, set the attack to none
                 if attack_query.get(attack_entity).is_err() {
