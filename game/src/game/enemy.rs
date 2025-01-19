@@ -10,7 +10,7 @@ use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
     into_vec2, update_sprite_colliders, AnimationCollider, Collider,
-    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, ENEMY_HURT,
+    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK,
     ENEMY_INSIDE, GROUND, PLAYER, SENSOR,
 };
 use theseeker_engine::script::ScriptPlayer;
@@ -587,7 +587,6 @@ enum Tier {
     Three = 3,
 }
 
-// TODO: 60/40 distribution?
 impl Distribution<Role> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Role {
         let index: u8 = rng.gen_range(0..=1);
@@ -595,6 +594,34 @@ impl Distribution<Role> for Standard {
             0 => Role::Melee,
             1 => Role::Ranged,
             _ => unreachable!(),
+        }
+    }
+}
+impl Role {
+    pub fn check_range(&self, distance: f32) -> Range {
+        match self {
+            Role::Melee => {
+                if distance <= Range::MELEE_MELEE {
+                    Range::Melee
+                } else if distance <= Range::MELEE_AGGRO {
+                    Range::Aggro
+                } else if distance <= Range::MELEE_DEAGGRO {
+                    Range::Deaggro
+                } else {
+                    Range::Far
+                }
+            },
+            Role::Ranged => {
+                if distance <= Range::RANGED_MELEE {
+                    Range::Melee
+                } else if distance <= Range::RANGED_AGGRO {
+                    Range::Aggro
+                } else if distance <= Range::RANGED_RANGED {
+                    Range::Ranged
+                } else {
+                    Range::Far
+                }
+            },
         }
     }
 }
@@ -610,16 +637,21 @@ enum Range {
 }
 
 #[derive(Component, Debug, Deref)]
-// Target entity, distance
 struct Target(Option<Entity>);
 
 impl Range {
-    const AGGRO: f32 = 50.;
-    const DEAGGRO: f32 = 70.;
-    // const GROUPED: f32 = 100.;
-    const MELEE: f32 = 14.;
-    // const MELEE: f32 = 12.;
-    const RANGED: f32 = 60.;
+    const RANGED_AGGRO: f32 = 50.;
+    // const RANGED_DEAGGRO: f32 = 70.;
+    const RANGED_MELEE: f32 = 20.;
+    const RANGED_RANGED: f32 = 60.;
+
+    const MELEE_AGGRO: f32 = 50.;
+    const MELEE_DEAGGRO: f32 = 70.;
+    const MELEE_MELEE: f32 = 12.;
+    // const MELEE_RANGED: f32 = 60.;
+
+    // for players passive enemies nearby buff
+    const NEARBY: f32 = 20.;
 }
 
 /// Component that indicates that the player is inside of this enemy,
@@ -688,10 +720,8 @@ fn check_player_range(
                 .truncate()
                 .distance(player_trans.translation().truncate());
 
+            // face player
             if is_aggroed && !is_meleeing && !is_defending {
-                // }
-                // if we are in AGGRO range, face the player
-                // if distance <= Range::AGGRO {
                 if trans.translation().x > player_trans.translation().x {
                     *facing = Facing::Right;
                 } else if trans.translation().x < player_trans.translation().x {
@@ -699,27 +729,17 @@ fn check_player_range(
                 }
             }
 
-            // set range and target
-            if distance <= Range::MELEE {
-                *range = Range::Melee;
-                target.0 = Some(player_e);
-            } else if distance <= Range::AGGRO {
-                *range = Range::Aggro;
-                target.0 = Some(player_e);
+            // set range
+            *range = role.check_range(distance);
+            // set target
+            target.0 = match *range {
+                Range::Melee | Range::Aggro | Range::Ranged => Some(player_e),
+                Range::Deaggro | Range::Far | Range::None => None,
+            };
+            //set nearby enemies for passive buff
+            if distance < Range::NEARBY {
                 **enemies_nearby += 1;
-            } else if matches!(role, Role::Ranged) && distance <= Range::RANGED
-            {
-                *range = Range::Ranged;
-                target.0 = Some(player_e);
-            } else if matches!(role, Role::Melee) && distance <= Range::DEAGGRO
-            {
-                *range = Range::Deaggro;
-                target.0 = Some(player_e);
-                // target.0 = None;
-            } else {
-                *range = Range::Far;
-                target.0 = None;
-            }
+            };
         }
     // if there is no player
     } else {
@@ -1016,9 +1036,11 @@ fn ranged_attack(
                 transform.translation.x - enemy_transform.translation().x;
             let gravity = config.fall_accel * time.hz as f32;
             let rng_factor = 1.0;
-            let mut speed =
-                ballistic_speed(Range::RANGED, gravity, relative_height)
-                    * rng_factor as f32;
+            let mut speed = ballistic_speed(
+                Range::RANGED_RANGED,
+                gravity,
+                relative_height,
+            ) * rng_factor as f32;
             let max_attempts = 10;
             // Define default arc as 50ish degree shot with in the direction of the player
             let mut final_solution = Projectile {
@@ -1644,7 +1666,7 @@ fn enemy_defense_animation(
     i_query: Query<(&Gent, &Tier), (Added<Defense>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for ((gent, tier)) in i_query.iter() {
+    for (gent, tier) in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
             let key = match tier {
                 Tier::Base => "anim.spider.Defense",
