@@ -380,7 +380,7 @@ pub fn apply_attack_damage(
                 }
                 if is_defending {
                     //TODO: switch to defense modifiers
-                    damage /= 4.;
+                    damage = 0.;
                 }
 
                 // TODO:

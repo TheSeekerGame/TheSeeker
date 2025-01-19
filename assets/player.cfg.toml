@@ -125,13 +125,13 @@ bow_pushback = 60.0
 bow_pushback_ticks = 5.0
 
 # Base sword attack damage
-sword_attack_damage = 20.0
+sword_attack_damage = 37.0
 
 # Base hammer attack damage
-hammer_attack_damage = 20.0
+hammer_attack_damage = 31.0
 
 # Base bow attack damage
-bow_attack_damage = 10.0
+bow_attack_damage = 11.0
 
 # Velocity of the projectiles fired by the Bow weapon
 arrow_velocity = 1000.0
