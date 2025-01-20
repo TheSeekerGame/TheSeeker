@@ -1,7 +1,11 @@
+#import bevy_render::globals::Globals;
+#import bevy_render::view::View;
 #import game::preprocessing::floaters::{Floater, FloaterBuffer, FloaterSettings, FLOATER_SAMPLES_X, FLOATER_SAMPLES_Y}
 
-@group(0) @binding(1) var<uniform> floater_settings: FloaterSettings;
-@group(0) @binding(2) var<storage, read_write> floater_buffer: FloaterBuffer;
+@group(0) @binding(0) var<uniform> view: View;
+@group(0) @binding(1) var<uniform> globals: Globals;
+@group(0) @binding(2) var<uniform> floater_settings: FloaterSettings;
+@group(0) @binding(3) var<storage, read_write> floater_buffer: FloaterBuffer;
 
 @compute @workgroup_size(FLOATER_SAMPLES_X, FLOATER_SAMPLES_Y, 1)
 fn floater_prepass(@builtin(global_invocation_id) global_invocation_id: vec3<u32>,
@@ -10,9 +14,12 @@ fn floater_prepass(@builtin(global_invocation_id) global_invocation_id: vec3<u32
                        global_invocation_id.y * FLOATER_SAMPLES_X;
 
     var floater = Floater();
-    floater.scale = 0.1;
+    floater.scale = 2.0;
     floater.opacity = 0.5;
-    floater.position = vec2<f32>(global_invocation_id.xy);
+    floater.position = vec2<f32>(
+        floater_settings.spawn_spacing.x * f32(global_invocation_id.x),
+        floater_settings.spawn_spacing.y * f32(global_invocation_id.y)
+    );
 
-    floater_buffer.floaters[local_invocation_id.y][thread_index] = floater;
+    floater_buffer.floaters[local_invocation_id.z][thread_index] = floater;
 }

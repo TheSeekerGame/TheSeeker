@@ -8,6 +8,7 @@ use bevy::render::extract_component::{
     ComponentUniforms, DynamicUniformIndex, ExtractComponent,
     ExtractComponentPlugin, UniformComponentPlugin,
 };
+use bevy::render::globals::{GlobalsBuffer, GlobalsUniform};
 use bevy::render::render_graph::{
     NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode,
     ViewNodeRunner,
@@ -110,7 +111,7 @@ impl Default for FloaterSettings {
     fn default() -> Self {
         Self {
             static_drift: Vec2::ZERO,
-            spawn_spacing: Vec2::splat(1.0),
+            spawn_spacing: Vec2::splat(20.0),
         }
     }
 }
@@ -141,12 +142,19 @@ impl ViewNode for FloaterPostProcessNode {
 
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_uniforms = world.resource::<ViewUniforms>();
+        let globals_buffer = world.resource::<GlobalsBuffer>();
 
-        let (Some(pipeline), Some(view_uniforms_binding)) = (
+        let (
+            Some(pipeline),
+            Some(view_uniforms_binding),
+            Some(globals_buffer_binding),
+        ) = (
             pipeline_cache
                 .get_render_pipeline(postprocess_pipeline.render_pipeline_id),
             view_uniforms.uniforms.binding(),
-        ) else {
+            globals_buffer.buffer.binding(),
+        )
+        else {
             return Ok(());
         };
 
@@ -162,6 +170,7 @@ impl ViewNode for FloaterPostProcessNode {
             &postprocess_pipeline.layout,
             &BindGroupEntries::sequential((
                 view_uniforms_binding,
+                globals_buffer_binding,
                 settings_binding.clone(),
                 postprocess_pipeline.buffer.as_entire_binding(),
             )),
@@ -192,8 +201,10 @@ impl ViewNode for FloaterPostProcessNode {
                 floater_settings_uniform_index.index(),
             ],
         );
-        render_pass.draw(0..3, 0..1);
-
+        render_pass.draw(
+            0..6,
+            0..(FLOATER_BUFFER_SIZE * FLOATER_BUFFER_LAYERS) as u32,
+        );
         Ok(())
     }
 }
@@ -225,6 +236,7 @@ impl FromWorld for FloaterPipeline {
                     | ShaderStages::VERTEX,
                 (
                     uniform_buffer::<ViewUniform>(true),
+                    uniform_buffer::<GlobalsUniform>(false),
                     uniform_buffer::<FloaterSettings>(true),
                     storage_buffer::<FloaterBuffer>(false),
                 ),
@@ -310,12 +322,19 @@ impl ViewNode for FloaterPrepassNode {
         let postprocess_pipeline = world.resource::<FloaterPipeline>();
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_uniforms = world.resource::<ViewUniforms>();
+        let globals_buffer = world.resource::<GlobalsBuffer>();
 
-        let (Some(pipeline), Some(view_uniforms_binding)) = (
+        let (
+            Some(pipeline),
+            Some(view_uniforms_binding),
+            Some(globals_buffer_binding),
+        ) = (
             pipeline_cache
                 .get_compute_pipeline(postprocess_pipeline.prepass_pipeline_id),
             view_uniforms.uniforms.binding(),
-        ) else {
+            globals_buffer.buffer.binding(),
+        )
+        else {
             return Ok(());
         };
 
@@ -331,6 +350,7 @@ impl ViewNode for FloaterPrepassNode {
             &postprocess_pipeline.layout,
             &BindGroupEntries::sequential((
                 view_uniforms_binding,
+                globals_buffer_binding,
                 settings_binding.clone(),
                 postprocess_pipeline.buffer.as_entire_binding(),
             )),
