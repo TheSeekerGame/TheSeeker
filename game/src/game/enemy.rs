@@ -379,7 +379,7 @@ fn setup_enemy(
             StateDespawnMarker,
         ));
         let mut animation = ScriptPlayer::<SpriteAnimation>::default();
-
+        animation.play_key("anim.spider.Sparks");
         commands.entity(e_effects_gfx).insert((
             EnemyEffectsGfxBundle {
                 marker: EnemyEffectGfx { e_gent },
@@ -1551,6 +1551,7 @@ fn enemy_sparks_on_hit_animation(
                     format!("Spark{picked_spark}").as_str(),
                     true,
                 );
+                hit_gfx.set_slot("Hit", true);
                 if let Ok(direction) = player_facing_dir.get_single() {
                     match direction {
                         Facing::Right => {
