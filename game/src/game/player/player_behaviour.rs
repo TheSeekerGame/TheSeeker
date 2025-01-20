@@ -942,15 +942,16 @@ fn player_grounded(
         mut jump_count,
     ) in query.iter_mut()
     {
-        let mut time_of_impact = 0.0;
-        let is_falling = ray_cast_info
-            .cast(&spatial_query, &position, Some(entity))
+        let ray_cast =
+            ray_cast_info.cast(&spatial_query, &position, Some(entity));
+        let falling_toi = ray_cast
             .iter()
-            .any(|x| {
-                time_of_impact = x.1.toi;
-                x.1.toi > GROUNDED_THRESHOLD + 0.01
-            });
-        // Ensures player character lands at the expected x height every time.
+            .find(|x| x.1.toi > GROUNDED_THRESHOLD + 0.01);
+        let is_falling = falling_toi.is_some();
+        let time_of_impact = falling_toi.map_or(0.0, |x| x.1.toi);
+
+        // This condition might never be true, but in the rare case where the TOI goes above the threshold
+        // it will ensure that the player character lands at the expected y height every time.
         if !is_falling && time_of_impact != 0.0 {
             position.translation.y =
                 position.translation.y - time_of_impact + GROUNDED_THRESHOLD;
