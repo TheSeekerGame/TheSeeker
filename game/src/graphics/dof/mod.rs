@@ -295,7 +295,7 @@ impl Plugin for DepthOfFieldPlugin {
 pub struct DepthOfFieldNode;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-struct DepthOfFieldPostProcessLabel;
+pub(crate) struct DepthOfFieldPostProcessLabel;
 
 /// The layout for the bind group shared among all invocations of the depth of
 /// field shader.

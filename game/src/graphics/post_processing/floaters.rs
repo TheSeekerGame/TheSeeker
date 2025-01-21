@@ -1,6 +1,6 @@
 use bevy::asset::load_internal_asset;
-use bevy::core_pipeline::core_3d;
 use bevy::core_pipeline::core_3d::graph::Node3d;
+use bevy::core_pipeline::core_3d::{self, CORE_3D_DEPTH_FORMAT};
 use bevy::ecs::query::QueryItem;
 use bevy::ecs::system::lifetimeless::Read;
 use bevy::prelude::*;
@@ -19,17 +19,20 @@ use bevy::render::render_resource::binding_types::{
 use bevy::render::render_resource::{
     BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, Buffer,
     BufferDescriptor, BufferUsages, CachedComputePipelineId,
-    CachedRenderPipelineId, ColorTargetState, ColorWrites,
-    ComputePassDescriptor, ComputePipelineDescriptor, FragmentState, LoadOp,
-    MultisampleState, Operations, PipelineCache, PrimitiveState,
-    RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
-    ShaderSize, ShaderStages, ShaderType, StoreOp, TextureFormat, VertexState,
+    CachedRenderPipelineId, ColorTargetState, ColorWrites, CompareFunction,
+    ComputePassDescriptor, ComputePipelineDescriptor, DepthBiasState,
+    DepthStencilState, FragmentState, LoadOp, MultisampleState, Operations,
+    PipelineCache, PrimitiveState, RenderPassColorAttachment,
+    RenderPassDescriptor, RenderPipelineDescriptor, ShaderSize, ShaderStages,
+    ShaderType, StencilState, StoreOp, TextureFormat, VertexState,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice};
 use bevy::render::view::{
-    ViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms,
+    ViewDepthTexture, ViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms,
 };
 use bevy::render::RenderApp;
+
+use crate::graphics::dof::DepthOfFieldPostProcessLabel;
 
 const FLOATER_BUFFER_SIZE: usize = 32 * 32;
 const FLOATER_BUFFER_LAYERS: usize = 4;
@@ -72,9 +75,10 @@ impl Plugin for FloaterPlugin {
             .add_render_graph_edges(
                 core_3d::graph::Core3d,
                 (
+                    Node3d::MainOpaquePass,
                     FloaterPrepassLabel,
-                    Node3d::MainTransparentPass,
                     FloaterPostProcessLabel,
+                    DepthOfFieldPostProcessLabel,
                 ),
             );
     }
@@ -126,6 +130,7 @@ impl ViewNode for FloaterPostProcessNode {
     type ViewQuery = (
         Read<ViewTarget>,
         Read<ViewUniformOffset>,
+        Read<ViewDepthTexture>,
         Read<DynamicUniformIndex<FloaterSettings>>,
     );
 
@@ -133,9 +138,12 @@ impl ViewNode for FloaterPostProcessNode {
         &self,
         _graph: &mut RenderGraphContext,
         render_context: &mut RenderContext,
-        (view_target, view_uniform_offset, floater_settings_uniform_index): QueryItem<
-            Self::ViewQuery,
-        >,
+        (
+            view_target,
+            view_uniform_offset,
+            view_depth_texture,
+            floater_settings_uniform_index,
+        ): QueryItem<Self::ViewQuery>,
         world: &World,
     ) -> Result<(), NodeRunError> {
         let postprocess_pipeline = world.resource::<FloaterPipeline>();
@@ -165,6 +173,9 @@ impl ViewNode for FloaterPostProcessNode {
             return Ok(());
         };
 
+        let depth_stencil_attachment =
+            Some(view_depth_texture.get_attachment(StoreOp::Store));
+
         let view_bind_group = render_context.render_device().create_bind_group(
             "floater_post_process_view_bind_group",
             &postprocess_pipeline.layout,
@@ -187,7 +198,7 @@ impl ViewNode for FloaterPostProcessNode {
                         store: StoreOp::Store,
                     },
                 })],
-                depth_stencil_attachment: None,
+                depth_stencil_attachment,
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
@@ -284,7 +295,13 @@ impl FromWorld for FloaterPipeline {
                     })],
                 }),
                 primitive: PrimitiveState::default(),
-                depth_stencil: None,
+                depth_stencil: Some(DepthStencilState {
+                    format: CORE_3D_DEPTH_FORMAT,
+                    depth_write_enabled: false,
+                    depth_compare: CompareFunction::GreaterEqual,
+                    stencil: StencilState::default(),
+                    bias: DepthBiasState::default(),
+                }),
                 multisample: MultisampleState::default(),
                 push_constant_ranges: vec![],
             });
