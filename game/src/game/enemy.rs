@@ -97,8 +97,8 @@ pub struct EnemySpawner {
 
 impl EnemySpawner {
     const MAX: usize = 3;
-    const COOLDOWN: u32 = 1;
-    const RANGE: f32 = 550.;
+    const COOLDOWN: u32 = 4000;
+    const RANGE: f32 = 400.;
 
     fn is_cleared(&self) -> bool {
         self.slots
@@ -642,7 +642,7 @@ struct Target(Option<Entity>);
 impl Range {
     const RANGED_AGGRO: f32 = 100.;
     // const RANGED_DEAGGRO: f32 = 70.;
-    const RANGED_MELEE: f32 = 60.;
+    const RANGED_MELEE: f32 = 29.;
     const RANGED_RANGED: f32 = 100.;
 
     const MELEE_AGGRO: f32 = 100.;
@@ -1086,7 +1086,7 @@ fn ranged_attack(
             // spawn in the new projectile:
             commands
                 .spawn((
-                    Attack::new(1000, entity, 40. * *tier as u32 as f32)
+                    Attack::new(1000, entity, 31. * *tier as u32 as f32)
                         .set_stat_mod(StatusModifier::basic_ice_spider()),
                     final_solution,
                     Collider::cuboid(
