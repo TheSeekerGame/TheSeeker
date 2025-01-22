@@ -1,7 +1,8 @@
 #define_import_path game::preprocessing::floaters
 
-const FLOATER_SAMPLES_X: u32 = 32u;
-const FLOATER_SAMPLES_Y: u32 = 32u;
+// These constants are defined and filled in by the plugin
+const FLOATER_SAMPLES_X: u32 = {{FLOATER_SAMPLES_X}}u;
+const FLOATER_SAMPLES_Y: u32 = {{FLOATER_SAMPLES_Y}}u;
 
 struct Floater {
     scale: f32,

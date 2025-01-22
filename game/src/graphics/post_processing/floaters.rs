@@ -1,3 +1,5 @@
+use std::path::Path;
+
 use bevy::asset::load_internal_asset;
 use bevy::core_pipeline::core_3d::graph::Node3d;
 use bevy::core_pipeline::core_3d::{self, CORE_3D_DEPTH_FORMAT};
@@ -34,7 +36,10 @@ use bevy::render::RenderApp;
 
 use crate::graphics::dof::DepthOfFieldPostProcessLabel;
 
-const FLOATER_BUFFER_SIZE: usize = 32 * 32;
+const FLOATER_SAMPLES_X: usize = 32;
+const FLOATER_SAMPLES_Y: usize = FLOATER_SAMPLES_X;
+
+const FLOATER_BUFFER_SIZE: usize = FLOATER_SAMPLES_X * FLOATER_SAMPLES_Y;
 const FLOATER_BUFFER_LAYERS: usize = 4;
 
 const FLOATER_SHADER_HANDLE: Handle<Shader> =
@@ -49,11 +54,27 @@ impl Plugin for FloaterPlugin {
             UniformComponentPlugin::<FloaterSettings>::default(),
         ));
 
-        load_internal_asset!(
-            app,
+        let mut assets = app.world.resource_mut::<Assets<Shader>>();
+        let shader_str = include_str!("floaters.wgsl")
+            .replace(
+                "{{FLOATER_SAMPLES_X}}",
+                &FLOATER_SAMPLES_X.to_string(),
+            )
+            .replace(
+                "{{FLOATER_SAMPLES_Y}}",
+                &FLOATER_SAMPLES_Y.to_string(),
+            );
+
+        assets.insert(
             FLOATER_SHADER_HANDLE,
-            "floaters.wgsl",
-            Shader::from_wgsl
+            Shader::from_wgsl(
+                shader_str,
+                Path::new(file!())
+                    .parent()
+                    .unwrap()
+                    .join("floaters.wgsl")
+                    .to_string_lossy(),
+            ),
         );
 
         app.register_type::<FloaterSettings>();
@@ -92,14 +113,14 @@ impl Plugin for FloaterPlugin {
     }
 }
 
-#[derive(Debug, ShaderType)]
+#[derive(ShaderType)]
 struct Floater {
     scale: f32,
     opacity: f32,
     position: Vec2,
 }
 
-#[derive(Debug, ShaderType)]
+#[derive(ShaderType)]
 struct FloaterBuffer {
     pub floaters: [[Floater; FLOATER_BUFFER_SIZE]; FLOATER_BUFFER_LAYERS],
 }
