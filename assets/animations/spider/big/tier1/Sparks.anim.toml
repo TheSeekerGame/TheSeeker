@@ -7,13 +7,13 @@ frame_max = 18
 frame_start = 1
 
 [[script]]
-run_on_playback_control = "Start"
+run_on_slot_enable = "Hit"
 action = "PlayAudio"
 volume = 1.0
 asset_key = "audio.game.SpiderGetDamage"
 
 [[script]]
-run_on_playback_control = "Start"
+run_on_slot_enable = "Hit"
 action = "PlayAudio"
 volume = 0.15
 asset_key = "audio.game.ImpactBass"
@@ -100,5 +100,3 @@ frame_index = 16
 run_on_slot_enable = "Start"
 action = "SetFrameNext"
 frame_index = 3
-
-
