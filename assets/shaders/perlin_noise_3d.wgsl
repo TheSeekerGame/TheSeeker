@@ -1,3 +1,5 @@
+#define_import_path noise::perlin3
+
 // MIT License. © Stefan Gustavson, Munrocket
 //
 

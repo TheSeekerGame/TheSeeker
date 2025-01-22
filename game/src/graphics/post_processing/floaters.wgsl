@@ -1,5 +1,7 @@
 #define_import_path game::preprocessing::floaters
 
+#import noise::perlin3::perlinNoise3
+
 // These constants are defined and filled in by the plugin
 const FLOATER_SAMPLES_X: u32 = {{FLOATER_SAMPLES_X}}u;
 const FLOATER_SAMPLES_Y: u32 = {{FLOATER_SAMPLES_Y}}u;
@@ -37,8 +39,12 @@ fn compute_floater(grid_idx: vec2<i32>, layer: u32, time: f32, settings: Floater
     let offset = vec2<f32>(f32(offset_hash & 0xFFFFu), f32(offset_hash >> 16u)) / 65535.0 * settings.spawn_spacing;
     let root_pos = vec2<f32>(grid_idx) * settings.spawn_spacing;
     let drift_offset = settings.static_drift * time;
+    let movement_offset = vec2<f32>(
+        perlinNoise3(vec3<f32>(root_pos.x, f32(layer), time * 0.1)),
+        perlinNoise3(vec3<f32>(root_pos.y, f32(layer), time * 0.1)),
+    ) * settings.spawn_spacing * 0.5;
 
-    floater.position = root_pos + offset + drift_offset;
+    floater.position = root_pos + offset + drift_offset + movement_offset;
 
     return floater;
 }
