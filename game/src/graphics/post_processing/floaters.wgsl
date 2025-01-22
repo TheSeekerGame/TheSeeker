@@ -28,6 +28,21 @@ fn gid_to_floater_grid_index(camera_pos: vec2<f32>, gid: vec3<u32>, spacing: vec
     return relative_idx + camera_grid_pos;
 }
 
+fn compute_floater(grid_idx: vec2<i32>, layer: u32, time: f32, settings: FloaterSettings) -> Floater {
+    var floater = Floater();
+    floater.scale = 2.0;
+    floater.opacity = 0.5;
+
+    let offset_hash = xxhash32_3d(vec3<u32>(bitcast<vec2<u32>>(grid_idx), layer));
+    let offset = vec2<f32>(f32(offset_hash & 0xFFFFu), f32(offset_hash >> 16u)) / 65535.0 * settings.spawn_spacing;
+    let root_pos = vec2<f32>(grid_idx) * settings.spawn_spacing;
+    let drift_offset = settings.static_drift * time;
+
+    floater.position = root_pos + offset + drift_offset;
+
+    return floater;
+}
+
 // Fast 3d hash:
 // https://github.com/Cyan4973/xxHash
 // https://www.shadertoy.com/view/Xt3cDn

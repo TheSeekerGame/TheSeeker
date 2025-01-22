@@ -135,7 +135,7 @@ pub struct FloaterSettings {
 impl Default for FloaterSettings {
     fn default() -> Self {
         Self {
-            static_drift: Vec2::ZERO,
+            static_drift: Vec2::NEG_Y,
             spawn_spacing: Vec2::splat(20.0),
         }
     }
