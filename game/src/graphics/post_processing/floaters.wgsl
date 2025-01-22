@@ -16,7 +16,16 @@ struct FloaterBuffer {
 
 struct FloaterSettings {
     static_drift: vec2<f32>,
-    spawn_spacing: vec2<f32>, // Directly relates to compute workgroup size
+    spawn_spacing: vec2<f32>,
+}
+
+fn gid_to_floater_grid_index(camera_pos: vec2<f32>, gid: vec3<u32>, spacing: vec2<f32>) -> vec2<i32> {
+    let camera_grid_pos = vec2<i32>(floor(camera_pos / spacing));
+    let relative_idx = vec2<i32>(
+        i32(gid.x) - i32(FLOATER_SAMPLES_X / 2u),
+        i32(gid.y) - i32(FLOATER_SAMPLES_Y / 2u)
+    );
+    return relative_idx + camera_grid_pos;
 }
 
 // Fast 3d hash:
