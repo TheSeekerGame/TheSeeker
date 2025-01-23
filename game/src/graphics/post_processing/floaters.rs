@@ -1,6 +1,5 @@
 use std::path::Path;
 
-use bevy::asset::load_internal_asset;
 use bevy::core_pipeline::core_3d::graph::Node3d;
 use bevy::core_pipeline::core_3d::{self, CORE_3D_DEPTH_FORMAT};
 use bevy::ecs::query::QueryItem;
@@ -40,7 +39,7 @@ const FLOATER_SAMPLES_X: usize = 32;
 const FLOATER_SAMPLES_Y: usize = FLOATER_SAMPLES_X;
 
 const FLOATER_BUFFER_SIZE: usize = FLOATER_SAMPLES_X * FLOATER_SAMPLES_Y;
-const FLOATER_BUFFER_LAYERS: usize = 4;
+const FLOATER_BUFFER_LAYERS: usize = 5;
 
 const FLOATER_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(134392054226504942300212274996024942407);
@@ -89,17 +88,23 @@ impl Plugin for FloaterPlugin {
                 core_3d::graph::Core3d,
                 FloaterPrepassLabel,
             )
-            .add_render_graph_node::<ViewNodeRunner<FloaterPostProcessNode>>(
+            .add_render_graph_node::<ViewNodeRunner<FloaterPostProcessNode::<true>>>(
                 core_3d::graph::Core3d,
-                FloaterPostProcessLabel,
+                FloaterBgRenderLabel,
+            )
+            .add_render_graph_node::<ViewNodeRunner<FloaterPostProcessNode::<false>>>(
+                core_3d::graph::Core3d,
+                FloaterFgRenderLabel,
             )
             .add_render_graph_edges(
                 core_3d::graph::Core3d,
                 (
                     Node3d::MainOpaquePass,
                     FloaterPrepassLabel,
-                    FloaterPostProcessLabel,
+                    FloaterBgRenderLabel,
                     DepthOfFieldPostProcessLabel,
+                    Node3d::MainTransparentPass,
+                    FloaterFgRenderLabel,
                 ),
             );
     }
@@ -116,7 +121,6 @@ impl Plugin for FloaterPlugin {
 #[derive(ShaderType)]
 struct Floater {
     scale: f32,
-    opacity: f32,
     position: Vec2,
 }
 
@@ -142,12 +146,15 @@ impl Default for FloaterSettings {
 }
 
 #[derive(Default)]
-struct FloaterPostProcessNode;
+struct FloaterPostProcessNode<const BACKGROUND: bool>;
 
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
-pub(crate) struct FloaterPostProcessLabel;
+pub(crate) struct FloaterBgRenderLabel;
 
-impl ViewNode for FloaterPostProcessNode {
+#[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
+pub(crate) struct FloaterFgRenderLabel;
+
+impl<const BACKGROUND: bool> ViewNode for FloaterPostProcessNode<BACKGROUND> {
     type ViewQuery = (
         Read<ViewTarget>,
         Read<ViewUniformOffset>,
@@ -233,10 +240,17 @@ impl ViewNode for FloaterPostProcessNode {
                 floater_settings_uniform_index.index(),
             ],
         );
-        render_pass.draw(
-            0..6,
-            0..(FLOATER_BUFFER_SIZE * FLOATER_BUFFER_LAYERS) as u32,
-        );
+
+        if BACKGROUND {
+            render_pass.draw(
+                0..6,
+                FLOATER_BUFFER_SIZE as u32
+                    ..(FLOATER_BUFFER_SIZE * FLOATER_BUFFER_LAYERS) as u32,
+            )
+        } else {
+            render_pass.draw(0..6, 0..FLOATER_BUFFER_SIZE as u32);
+        }
+
         Ok(())
     }
 }
