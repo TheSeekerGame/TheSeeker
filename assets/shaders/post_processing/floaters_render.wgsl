@@ -19,7 +19,9 @@ fn floater_vertex(
         @builtin(instance_index) instance_index: u32
         ) -> VertexOutput {
     var output: VertexOutput;
-    let floater = floater_buffer.floaters[instance_index / (FLOATER_SAMPLES_X * FLOATER_SAMPLES_Y)][instance_index % (FLOATER_SAMPLES_X * FLOATER_SAMPLES_Y)];
+    let layer_size = FLOATER_SAMPLES_X * FLOATER_SAMPLES_Y;
+    let layer = instance_index / layer_size;
+    let floater = floater_buffer.floaters[layer][instance_index % layer_size];
 
     var model = mat4x4<f32>(
         1.0, 0.0, 0.0, 0.0,
@@ -34,11 +36,11 @@ fn floater_vertex(
     );
     model[3] = vec4<f32>(output.uv * floater.scale / 2, 0.0, 1.0);
     output.position = view.view_proj * model * vec4<f32>(floater.position, -0.2, 1.0);
-    output.color = vec4<f32>(0.0, 1.0, 0.0, 0.0);
+    output.color = vec4<f32>(f32(layer) / 4.0, 0.0, 0.3, 1.0);
     return output;
 }
 
 @fragment
 fn floater_fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    return vec4<f32>(0.8, 0.0, 0.3, 0.0);
+    return in.color;
 }

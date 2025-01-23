@@ -8,8 +8,7 @@
 @group(0) @binding(3) var<storage, read_write> floater_buffer: FloaterBuffer;
 
 @compute @workgroup_size(FLOATER_SAMPLES_X, FLOATER_SAMPLES_Y, 1)
-fn floater_prepass(@builtin(global_invocation_id) global_invocation_id: vec3<u32>,
-                   @builtin(local_invocation_id) local_invocation_id: vec3<u32>) {
+fn floater_prepass(@builtin(global_invocation_id) global_invocation_id: vec3<u32>) {
     let thread_index = global_invocation_id.x +
                        global_invocation_id.y * FLOATER_SAMPLES_X;
 
@@ -21,9 +20,9 @@ fn floater_prepass(@builtin(global_invocation_id) global_invocation_id: vec3<u32
         floater_settings.spawn_spacing
     );
 
-    floater_buffer.floaters[local_invocation_id.z][thread_index] = compute_floater(
+    floater_buffer.floaters[global_invocation_id.z][thread_index] = compute_floater(
         floater_idx,
-        local_invocation_id.z,
+        global_invocation_id.z,
         globals.time,
         floater_settings
     );
