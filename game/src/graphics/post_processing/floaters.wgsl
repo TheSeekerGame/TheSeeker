@@ -21,7 +21,8 @@ struct FloaterSettings {
 }
 
 fn gid_to_floater_grid_index(camera_pos: vec2<f32>, gid: vec3<u32>, spacing: vec2<f32>) -> vec2<i32> {
-    let camera_grid_pos = vec2<i32>(floor(camera_pos / spacing));
+    let scaled_spacing = spacing / (1 - get_layer_distance(gid.z));
+    let camera_grid_pos = vec2<i32>(floor(camera_pos / scaled_spacing));
     let relative_idx = vec2<i32>(
         i32(gid.x) - i32(FLOATER_SAMPLES_X / 2u),
         i32(gid.y) - i32(FLOATER_SAMPLES_Y / 2u)
@@ -31,20 +32,34 @@ fn gid_to_floater_grid_index(camera_pos: vec2<f32>, gid: vec3<u32>, spacing: vec
 
 fn compute_floater(grid_idx: vec2<i32>, layer: u32, time: f32, settings: FloaterSettings) -> Floater {
     var floater = Floater();
-    floater.scale = 2.0;
+    let layer_distance = get_layer_distance(layer);
+    let scaled_spacing = settings.spawn_spacing / (1 - layer_distance);
+    floater.scale = 1.0 / (1 - layer_distance);
 
     let offset_hash = xxhash32_3d(vec3<u32>(bitcast<vec2<u32>>(grid_idx), layer));
-    let offset = vec2<f32>(f32(offset_hash & 0xFFFFu), f32(offset_hash >> 16u)) / 65535.0 * settings.spawn_spacing;
-    let root_pos = vec2<f32>(grid_idx) * settings.spawn_spacing;
+    let offset = vec2<f32>(f32(offset_hash & 0xFFFFu), f32(offset_hash >> 16u)) / 65535.0 * scaled_spacing;
+    let root_pos = vec2<f32>(grid_idx) * scaled_spacing;
     let drift_offset = settings.static_drift * time;
     let movement_offset = vec2<f32>(
         perlinNoise3(vec3<f32>(root_pos.x, f32(layer), time * 0.1)),
         perlinNoise3(vec3<f32>(root_pos.y, f32(layer), time * 0.1)),
-    ) * settings.spawn_spacing * 0.5;
+    ) * scaled_spacing * 0.5;
 
     floater.position = root_pos + offset + drift_offset + movement_offset;
 
     return floater;
+}
+
+fn get_layer_distance(layer: u32) -> f32 {
+    var layer_distances: array<f32, 6> = array<f32, 6>(
+        0.1, -0.1, -0.2, -0.3, -0.4, -0.5
+    );
+
+    return layer_distances[layer];
+}
+
+fn apply_parallax(pos: vec2<f32>, cam_pos: vec2<f32>, layer_scale: f32) -> vec2<f32> {
+    return cam_pos + (pos - cam_pos) * layer_scale;
 }
 
 // Fast 3d hash:
