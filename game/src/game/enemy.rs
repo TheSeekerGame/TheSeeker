@@ -1,5 +1,9 @@
+use std::cell::RefMut;
+
+use bevy_hanabi::{EffectProperties, ParticleEffect, ParticleEffectBundle};
 #[cfg(feature = "dev")]
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
+use particles::{EllipticalMotion, StarParticleEffectHandle};
 use rand::distributions::Standard;
 use rapier2d::geometry::SharedShape;
 use rapier2d::parry::query::TOIStatus;
@@ -333,6 +337,7 @@ impl Plugin for EnemyBehaviorPlugin {
                         // assign_group,
                         check_player_range,
                         (
+                            stunned.run_if(any_with_component::<Stunned>),
                             patrolling.run_if(any_with_component::<Patrolling>),
                             aggro.run_if(any_with_component::<Aggroed>),
                             waiting.run_if(any_with_component::<Waiting>),
@@ -537,6 +542,14 @@ impl Range {
 #[derive(Component)]
 pub struct Inside;
 
+/// Component added to Stunned enemy
+/// not a GentState because it shouldnt transition to or from anything else
+#[derive(Component)]
+pub struct Stunned {
+    pub particles: Entity,
+    pub duration: Duration
+}
+
 /// Component added to Decaying enemy
 /// not a GentState because it shouldnt transition to or from anything else
 #[derive(Component)]
@@ -710,6 +723,33 @@ fn patrolling(
     }
 }
 
+fn stunned(
+    time: Res<Time>,
+    mut commands: Commands,
+    mut query: Query<
+        (
+            Entity,
+            &mut TransitionQueue,
+            &mut AddQueue,
+            &mut Stunned
+        ),
+        (With<Enemy>),
+    >,
+    mut effect: Query<(Entity, &mut EffectProperties, &EllipticalMotion)>
+) {
+    for (entity, mut transitions, mut additions, mut stunned) in query.iter_mut()
+    {
+        if stunned.duration > time.delta() {
+            stunned.duration -= time.delta();
+        } else {
+            commands.entity(stunned.particles).despawn();
+            commands.entity(entity).remove::<Stunned>();
+        }
+
+        additions.add(Idle);
+    }
+}
+
 fn waiting(mut query: Query<&mut Waiting, With<Enemy>>) {
     for mut waiting in query.iter_mut() {
         waiting.ticks += 1;
@@ -838,7 +878,7 @@ fn ranged_attack(
             &mut AddQueue,
             // Has<Grouped>,
         ),
-        (With<Enemy>, Without<Knockback>),
+        (With<Enemy>, Without<Knockback>, Without<Stunned>),
     >,
     player_query: Query<&Transform, With<Player>>,
     mut commands: Commands,
@@ -1048,6 +1088,7 @@ fn walking(
             With<Enemy>,
             // Without<Retreating>,
             Without<Knockback>,
+            Without<Stunned>
         ),
     >,
 ) {
@@ -1178,6 +1219,7 @@ fn chasing(
             With<Enemy>,
             With<Chasing>,
             Without<Knockback>,
+            Without<Stunned>
         ),
     >,
 ) {
@@ -1617,5 +1659,36 @@ fn sprite_flip(
                 },
             }
         }
+    }
+}
+
+pub fn stun(
+    mut commands: &mut Commands,
+    entity: Entity,
+    stunned: Option<Mut<'_, Stunned>>,
+    duration: Duration,
+    particle_effect: &Res<StarParticleEffectHandle>
+) {
+    if let Some(mut stunned) = stunned {
+        if duration > stunned.duration {
+            stunned.duration = duration;
+        }
+    } else {
+        let child = commands.spawn((
+            ParticleEffectBundle {
+                // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
+                effect: ParticleEffect::new(particle_effect.0.clone()),
+                ..default()
+            },
+            EllipticalMotion::new(3.0, 0.25, 1.0, Vec3::Y * 4.0)
+        )).id();
+        commands.entity(entity).add_child(child);
+
+        commands
+        .entity(entity)
+        .insert(crate::game::enemy::Stunned {
+            particles: child,
+            duration
+        });
     }
 }

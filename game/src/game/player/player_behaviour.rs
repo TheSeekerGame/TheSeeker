@@ -1,3 +1,6 @@
+use std::time::Duration;
+
+use bevy::log::warn;
 use bevy::sprite::{Sprite, SpriteSheetBundle};
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
@@ -14,6 +17,7 @@ use theseeker_engine::physics::{
 use theseeker_engine::script::ScriptPlayer;
 
 use super::arc_attack::{Arrow, Projectile};
+use super::particles::StarParticleEffectHandle;
 use super::player_weapon::{is_player_using_bow, PlayerWeapon};
 use super::{
     dash_icon_fx, player_dash_fx, AttackBundle, CanStealth, DashIcon,
@@ -21,7 +25,7 @@ use super::{
     StatType, Stealthing, Whirling,
 };
 use crate::game::attack::{Attack, SelfPushback, Stealthed};
-use crate::game::enemy::Enemy;
+use crate::game::enemy::{Enemy, Stunned};
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::player::{
     Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded,
@@ -667,10 +671,11 @@ pub fn player_collisions(
         ),
         With<Player>,
     >,
-    mut q_enemy: Query<(Entity, &mut Collider), (With<Enemy>, Without<Player>)>,
+    mut q_enemy: Query<(Entity, &mut Collider, Option<&mut Stunned>), (With<Enemy>, Without<Player>)>,
     mut commands: Commands,
     time: Res<GameTime>,
     config: Res<PlayerConfig>,
+    particle_effect: Res<StarParticleEffectHandle>,
 ) {
     for (
         entity,
@@ -711,7 +716,7 @@ pub fn player_collisions(
                 Some(entity),
             ) {
                 // If we are colliding with an enemy
-                if let Ok((enemy, mut collider)) = q_enemy.get_mut(e) {
+                if let Ok((enemy, mut collider, mut stunned)) = q_enemy.get_mut(e) {
                     // change collision groups to only include ground so on the next loop we can
                     // ignore enemies/check our ground collision
                     interaction = InteractionGroups {
@@ -733,6 +738,9 @@ pub fn player_collisions(
                                     //     dashing,
                                     //     false,
                                     // );
+
+                                    warn!("DASH DOWN HIT ENEMY");
+                                    crate::game::enemy::stun(&mut commands, enemy, stunned, Duration::from_secs(10), &particle_effect);
                                 }
                             }
 
