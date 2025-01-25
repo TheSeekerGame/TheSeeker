@@ -11,8 +11,7 @@
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
-    @location(0) color: vec4<f32>,
-    @location(1) uv: vec2<f32>,
+    @location(0) uv: vec2<f32>,
 }
 
 @vertex
@@ -48,7 +47,10 @@ fn floater_vertex(
 
 @fragment
 fn floater_fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    let value = textureSample(floater_texture, floater_sampler, in.uv);
+    let tile_uv_width = f32(floater_settings.sprite_width) / f32(floater_settings.spritesheet_width);
+    let uv = vec2<f32>(in.uv.x * tile_uv_width + f32(floater_settings.sprite_index) * tile_uv_width, in.uv.y);
+
+    let value = textureSample(floater_texture, floater_sampler, uv);
     if (value.a < 0.6) {
         discard;
     }

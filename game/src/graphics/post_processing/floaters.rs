@@ -1,3 +1,10 @@
+//! Post processing effect that adds randomly floating particles to the scene.
+//! It works by first calculating the particle positions on a set grid relative
+//! to the camera, then using that buffer directly in the vertex/fragment shader
+//! for rendering, avoiding passing the data through CPU side. The grid and layers
+//! are designed to correspond to the compute shader workgroup dimensions, which
+//! should reduce the performance impact of the effect.
+
 use std::path::Path;
 
 use bevy::core_pipeline::core_3d::graph::Node3d;
@@ -38,17 +45,25 @@ use bevy::render::RenderApp;
 
 use crate::graphics::dof::DepthOfFieldPostProcessLabel;
 
+/// Grid dimension for the camera-relative floater buffer; shader shared constant
 const FLOATER_SAMPLES_X: usize = 32;
+
+/// Grid dimension for the camera-relative floater buffer; shader shared constant
 const FLOATER_SAMPLES_Y: usize = FLOATER_SAMPLES_X;
 
+/// Total count of floater particles in the buffer
 const FLOATER_BUFFER_SIZE: usize = FLOATER_SAMPLES_X * FLOATER_SAMPLES_Y;
+
+/// Number of layers in the floater buffer and compute shader workgroup count (z)
 const FLOATER_BUFFER_LAYERS: usize = 5;
 
 const FLOATER_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(134392054226504942300212274996024942407);
 
+/// File path to the floater sprite strip (x-axis)
 const FLOATER_TEXTURE_FILE: &str = "fx/circle_05.png";
 
+/// Plugin that adds the floater post processing effect to the render graph
 pub(crate) struct FloaterPlugin;
 
 impl Plugin for FloaterPlugin {
@@ -58,6 +73,7 @@ impl Plugin for FloaterPlugin {
             UniformComponentPlugin::<FloaterSettings>::default(),
         ));
 
+        // Preprocess the floater shader to set the grid dimension constants
         let shader_str = include_str!("floaters.wgsl")
             .replace(
                 "{{FLOATER_SAMPLES_X}}",
@@ -87,6 +103,8 @@ impl Plugin for FloaterPlugin {
             return;
         };
 
+        // Render graph nodes are split into foreground and background passes so that
+        // DoF is consistent, as it doesn't apply to the foreground layer.
         render_app
             .add_render_graph_node::<ViewNodeRunner<FloaterPrepassNode>>(
                 core_3d::graph::Core3d,
@@ -123,25 +141,51 @@ impl Plugin for FloaterPlugin {
     }
 }
 
+/// Shader struct for the floater data - not used outside of shader definitions
 #[derive(ShaderType)]
 struct Floater {
     scale: f32,
     position: Vec2,
 }
 
+/// Shader struct for the floater buffer - not used outside of shader definitions
 #[derive(ShaderType)]
 struct FloaterBuffer {
     pub floaters: [[Floater; FLOATER_BUFFER_SIZE]; FLOATER_BUFFER_LAYERS],
 }
 
-/// Component that controls the vignette post processing effect
+/// Component that controls the floater post processing effect
 #[derive(Component, Clone, Copy, ExtractComponent, ShaderType, Reflect)]
 pub struct FloaterSettings {
+    /// constant drift movement for all floaters
     pub static_drift: Vec2,
+
+    /// Spacing between floaters in the camera relative grid.
+    /// Also controls how far the floaters will move from their spawn point.
     pub spawn_spacing: Vec2,
+
+    /// Scale of the floater particles. Since floater layers have different
+    /// distances from the camera, this is the base size used for perspective
+    /// scaling.
+    ///
+    /// Floater size is this value at gameplay layer (z camera distance of 1.0)
     pub particle_size: f32,
+
+    /// Controls the random movement speed
     pub movement_speed: f32,
+
+    /// Controls the random movement scale, AKA movement range relative to the
+    /// floater "cell" size or spawn spacing.
     pub movement_strength: f32,
+
+    /// Width of a single floater sprite in the spritesheet in pixels, used for UVs
+    pub sprite_width: u32,
+
+    /// Width of the whole spritesheet in pixels, used for UVs
+    pub spritesheet_width: u32,
+
+    /// Index of the floater sprite in the spritesheet
+    pub sprite_index: u32,
 }
 
 impl Default for FloaterSettings {
@@ -152,6 +196,9 @@ impl Default for FloaterSettings {
             particle_size: 6.0,
             movement_speed: 0.1,
             movement_strength: 0.5,
+            sprite_width: 512,
+            spritesheet_width: 512,
+            sprite_index: 0,
         }
     }
 }
@@ -159,9 +206,11 @@ impl Default for FloaterSettings {
 #[derive(Default)]
 struct FloaterPostProcessNode<const BACKGROUND: bool>;
 
+/// Render label for drawing background floater particles
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 pub(crate) struct FloaterBgRenderLabel;
 
+/// Render label for drawing foreground floater particles
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 pub(crate) struct FloaterFgRenderLabel;
 
@@ -261,6 +310,8 @@ impl<const BACKGROUND: bool> ViewNode for FloaterPostProcessNode<BACKGROUND> {
             ],
         );
 
+        // Selectively draw either foreground or background floaters, depending on which
+        // pass it is. Foreground is one layer, background is the rest.
         if BACKGROUND {
             render_pass.draw(
                 0..6,
@@ -298,6 +349,7 @@ impl FromWorld for FloaterPipeline {
         let floater_image =
             world.resource::<AssetServer>().load(FLOATER_TEXTURE_FILE);
 
+        // For simplicity's sake, using the same bind layout between all stages.
         let layout = render_device.create_bind_group_layout(
             "floater_postprocess_bind_group_layout",
             &BindGroupLayoutEntries::sequential(
@@ -309,8 +361,8 @@ impl FromWorld for FloaterPipeline {
                     uniform_buffer::<GlobalsUniform>(false),
                     uniform_buffer::<FloaterSettings>(true),
                     storage_buffer::<FloaterBuffer>(false),
-                    texture_2d(TextureSampleType::Float { filterable: true }),
-                    sampler(SamplerBindingType::Filtering),
+                    texture_2d(TextureSampleType::Float { filterable: false }),
+                    sampler(SamplerBindingType::NonFiltering),
                 ),
             ),
         );
@@ -380,6 +432,7 @@ impl FromWorld for FloaterPipeline {
 #[derive(Default)]
 struct FloaterPrepassNode;
 
+/// Render label for the floater prepass (compute)
 #[derive(Debug, Hash, PartialEq, Eq, Clone, RenderLabel)]
 pub(crate) struct FloaterPrepassLabel;
 
@@ -402,6 +455,7 @@ impl ViewNode for FloaterPrepassNode {
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_uniforms = world.resource::<ViewUniforms>();
         let globals_buffer = world.resource::<GlobalsBuffer>();
+        // We don't need to use the actual floater image here
         let fallback_image = world.resource::<FallbackImageZero>();
 
         let (
@@ -455,6 +509,8 @@ impl ViewNode for FloaterPrepassNode {
             ],
         );
 
+        // Workgroup size already matches the grid size on the shader side, we just
+        // dispatch the layer amount.
         command_encoder.dispatch_workgroups(1, 1, FLOATER_BUFFER_LAYERS as u32);
 
         Ok(())

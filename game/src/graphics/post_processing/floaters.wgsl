@@ -21,8 +21,12 @@ struct FloaterSettings {
     particle_size: f32,
     movement_speed: f32,
     movement_strength: f32,
+    sprite_width: u32,
+    spritesheet_width: u32,
+    sprite_index: u32,
 }
 
+// Gets the spacing-based grid index of a floater
 fn gid_to_floater_grid_index(camera_pos: vec2<f32>, gid: vec3<u32>, spacing: vec2<f32>) -> vec2<i32> {
     let scaled_spacing = spacing / (1 - get_layer_distance(gid.z));
     let camera_grid_pos = vec2<i32>(floor(camera_pos / scaled_spacing));
@@ -33,16 +37,24 @@ fn gid_to_floater_grid_index(camera_pos: vec2<f32>, gid: vec3<u32>, spacing: vec
     return relative_idx + camera_grid_pos;
 }
 
+// Computes the floater data
 fn compute_floater(grid_idx: vec2<i32>, layer: u32, time: f32, settings: FloaterSettings) -> Floater {
     var floater = Floater();
     let layer_distance = get_layer_distance(layer);
+
+    // Simulate perspective scaling
     let scaled_spacing = settings.spawn_spacing / (1 - layer_distance);
     floater.scale = settings.particle_size / (1 - layer_distance);
 
+    // Base offset is obtained by hashing the floater grid coords, deconstructing it into
+    // two clamped 0-1 values for xy and scaling it by the spacing to fit the grid
     let offset_hash = xxhash32_3d(vec3<u32>(bitcast<vec2<u32>>(grid_idx), layer));
     let offset = vec2<f32>(f32(offset_hash & 0xFFFFu), f32(offset_hash >> 16u)) / 65535.0 * scaled_spacing;
     let root_pos = vec2<f32>(grid_idx) * scaled_spacing;
+
     let drift_offset = settings.static_drift * time;
+
+    // Random floater movement is just a noise function
     let movement_offset = vec2<f32>(
         perlinNoise3(vec3<f32>(root_pos.x, f32(layer), time * settings.movement_speed)),
         perlinNoise3(vec3<f32>(root_pos.y, f32(layer), time * settings.movement_speed)),
