@@ -18,6 +18,9 @@ struct FloaterBuffer {
 struct FloaterSettings {
     static_drift: vec2<f32>,
     spawn_spacing: vec2<f32>,
+    particle_size: f32,
+    movement_speed: f32,
+    movement_strength: f32,
 }
 
 fn gid_to_floater_grid_index(camera_pos: vec2<f32>, gid: vec3<u32>, spacing: vec2<f32>) -> vec2<i32> {
@@ -34,16 +37,16 @@ fn compute_floater(grid_idx: vec2<i32>, layer: u32, time: f32, settings: Floater
     var floater = Floater();
     let layer_distance = get_layer_distance(layer);
     let scaled_spacing = settings.spawn_spacing / (1 - layer_distance);
-    floater.scale = 1.0 / (1 - layer_distance);
+    floater.scale = settings.particle_size / (1 - layer_distance);
 
     let offset_hash = xxhash32_3d(vec3<u32>(bitcast<vec2<u32>>(grid_idx), layer));
     let offset = vec2<f32>(f32(offset_hash & 0xFFFFu), f32(offset_hash >> 16u)) / 65535.0 * scaled_spacing;
     let root_pos = vec2<f32>(grid_idx) * scaled_spacing;
     let drift_offset = settings.static_drift * time;
     let movement_offset = vec2<f32>(
-        perlinNoise3(vec3<f32>(root_pos.x, f32(layer), time * 0.1)),
-        perlinNoise3(vec3<f32>(root_pos.y, f32(layer), time * 0.1)),
-    ) * scaled_spacing * 0.5;
+        perlinNoise3(vec3<f32>(root_pos.x, f32(layer), time * settings.movement_speed)),
+        perlinNoise3(vec3<f32>(root_pos.y, f32(layer), time * settings.movement_speed)),
+    ) * scaled_spacing * settings.movement_strength;
 
     floater.position = root_pos + offset + drift_offset + movement_offset;
 

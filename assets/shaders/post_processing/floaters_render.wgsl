@@ -6,6 +6,8 @@
 @group(0) @binding(1) var<uniform> globals: Globals;
 @group(0) @binding(2) var<uniform> floater_settings: FloaterSettings;
 @group(0) @binding(3) var<storage, read_write> floater_buffer: FloaterBuffer;
+@group(0) @binding(4) var floater_texture: texture_2d<f32>;
+@group(0) @binding(5) var floater_sampler: sampler;
 
 struct VertexOutput {
     @builtin(position) position: vec4<f32>,
@@ -35,17 +37,20 @@ fn floater_vertex(
     );
 
     output.uv = vec2<f32>(
-        select(-1.0, 1.0, vertex_index == 1u || vertex_index == 4u || vertex_index == 5u),
-        select(-1.0, 1.0, vertex_index == 2u || vertex_index == 3u || vertex_index == 5u)
+        select(0.0, 1.0, vertex_index == 1u || vertex_index == 4u || vertex_index == 5u),
+        select(0.0, 1.0, vertex_index == 2u || vertex_index == 3u || vertex_index == 5u)
     );
     model[3] = vec4<f32>(output.uv * floater.scale, 0.0, 1.0);
     let parallax_position = apply_parallax(floater.position, view.world_position.xy, layer_scale);
     output.position = view.view_proj * model * vec4<f32>(parallax_position, layer_distance, 1.0);
-    output.color = vec4<f32>(f32(layer) / 5.0, 0.0, 0.3, 1.0);
     return output;
 }
 
 @fragment
 fn floater_fragment(in: VertexOutput) -> @location(0) vec4<f32> {
-    return in.color;
+    let value = textureSample(floater_texture, floater_sampler, in.uv);
+    if (value.a < 0.6) {
+        discard;
+    }
+    return value;
 }

@@ -10,12 +10,13 @@ use bevy::render::extract_component::{
     ExtractComponentPlugin, UniformComponentPlugin,
 };
 use bevy::render::globals::{GlobalsBuffer, GlobalsUniform};
+use bevy::render::render_asset::RenderAssets;
 use bevy::render::render_graph::{
     NodeRunError, RenderGraphApp, RenderGraphContext, RenderLabel, ViewNode,
     ViewNodeRunner,
 };
 use bevy::render::render_resource::binding_types::{
-    storage_buffer, uniform_buffer,
+    sampler, storage_buffer, texture_2d, uniform_buffer,
 };
 use bevy::render::render_resource::{
     BindGroupEntries, BindGroupLayout, BindGroupLayoutEntries, Buffer,
@@ -24,10 +25,12 @@ use bevy::render::render_resource::{
     ComputePassDescriptor, ComputePipelineDescriptor, DepthBiasState,
     DepthStencilState, FragmentState, LoadOp, MultisampleState, Operations,
     PipelineCache, PrimitiveState, RenderPassColorAttachment,
-    RenderPassDescriptor, RenderPipelineDescriptor, ShaderSize, ShaderStages,
-    ShaderType, StencilState, StoreOp, TextureFormat, VertexState,
+    RenderPassDescriptor, RenderPipelineDescriptor, SamplerBindingType,
+    ShaderSize, ShaderStages, ShaderType, StencilState, StoreOp, TextureFormat,
+    TextureSampleType, VertexState,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice};
+use bevy::render::texture::FallbackImageZero;
 use bevy::render::view::{
     ViewDepthTexture, ViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms,
 };
@@ -44,6 +47,8 @@ const FLOATER_BUFFER_LAYERS: usize = 5;
 const FLOATER_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(134392054226504942300212274996024942407);
 
+const FLOATER_TEXTURE_FILE: &str = "fx/circle_05.png";
+
 pub(crate) struct FloaterPlugin;
 
 impl Plugin for FloaterPlugin {
@@ -53,7 +58,6 @@ impl Plugin for FloaterPlugin {
             UniformComponentPlugin::<FloaterSettings>::default(),
         ));
 
-        let mut assets = app.world.resource_mut::<Assets<Shader>>();
         let shader_str = include_str!("floaters.wgsl")
             .replace(
                 "{{FLOATER_SAMPLES_X}}",
@@ -64,7 +68,7 @@ impl Plugin for FloaterPlugin {
                 &FLOATER_SAMPLES_Y.to_string(),
             );
 
-        assets.insert(
+        app.world.resource_mut::<Assets<_>>().insert(
             FLOATER_SHADER_HANDLE,
             Shader::from_wgsl(
                 shader_str,
@@ -99,8 +103,9 @@ impl Plugin for FloaterPlugin {
             .add_render_graph_edges(
                 core_3d::graph::Core3d,
                 (
-                    Node3d::MainOpaquePass,
                     FloaterPrepassLabel,
+                    Node3d::EndPrepasses,
+                    Node3d::MainOpaquePass,
                     FloaterBgRenderLabel,
                     DepthOfFieldPostProcessLabel,
                     Node3d::MainTransparentPass,
@@ -134,6 +139,9 @@ struct FloaterBuffer {
 pub struct FloaterSettings {
     pub static_drift: Vec2,
     pub spawn_spacing: Vec2,
+    pub particle_size: f32,
+    pub movement_speed: f32,
+    pub movement_strength: f32,
 }
 
 impl Default for FloaterSettings {
@@ -141,6 +149,9 @@ impl Default for FloaterSettings {
         Self {
             static_drift: Vec2::new(0.4, -0.8),
             spawn_spacing: Vec2::splat(40.0),
+            particle_size: 6.0,
+            movement_speed: 0.1,
+            movement_strength: 0.5,
         }
     }
 }
@@ -179,6 +190,7 @@ impl<const BACKGROUND: bool> ViewNode for FloaterPostProcessNode<BACKGROUND> {
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_uniforms = world.resource::<ViewUniforms>();
         let globals_buffer = world.resource::<GlobalsBuffer>();
+        let render_assets = world.resource::<RenderAssets<Image>>();
 
         let (
             Some(pipeline),
@@ -201,6 +213,12 @@ impl<const BACKGROUND: bool> ViewNode for FloaterPostProcessNode<BACKGROUND> {
             return Ok(());
         };
 
+        let Some(gpu_image) =
+            render_assets.get(postprocess_pipeline.floater_image.id())
+        else {
+            return Ok(());
+        };
+
         let depth_stencil_attachment =
             Some(view_depth_texture.get_attachment(StoreOp::Store));
 
@@ -212,6 +230,8 @@ impl<const BACKGROUND: bool> ViewNode for FloaterPostProcessNode<BACKGROUND> {
                 globals_buffer_binding,
                 settings_binding.clone(),
                 postprocess_pipeline.buffer.as_entire_binding(),
+                &gpu_image.texture_view,
+                &gpu_image.sampler,
             )),
         );
 
@@ -259,6 +279,7 @@ impl<const BACKGROUND: bool> ViewNode for FloaterPostProcessNode<BACKGROUND> {
 struct FloaterPipeline {
     layout: BindGroupLayout,
     buffer: Buffer,
+    floater_image: Handle<Image>,
     prepass_pipeline_id: CachedComputePipelineId,
     render_pipeline_id: CachedRenderPipelineId,
 }
@@ -274,6 +295,9 @@ impl FromWorld for FloaterPipeline {
             mapped_at_creation: false,
         });
 
+        let floater_image =
+            world.resource::<AssetServer>().load(FLOATER_TEXTURE_FILE);
+
         let layout = render_device.create_bind_group_layout(
             "floater_postprocess_bind_group_layout",
             &BindGroupLayoutEntries::sequential(
@@ -285,6 +309,8 @@ impl FromWorld for FloaterPipeline {
                     uniform_buffer::<GlobalsUniform>(false),
                     uniform_buffer::<FloaterSettings>(true),
                     storage_buffer::<FloaterBuffer>(false),
+                    texture_2d(TextureSampleType::Float { filterable: true }),
+                    sampler(SamplerBindingType::Filtering),
                 ),
             ),
         );
@@ -344,6 +370,7 @@ impl FromWorld for FloaterPipeline {
         Self {
             layout,
             buffer,
+            floater_image,
             prepass_pipeline_id,
             render_pipeline_id,
         }
@@ -375,6 +402,7 @@ impl ViewNode for FloaterPrepassNode {
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_uniforms = world.resource::<ViewUniforms>();
         let globals_buffer = world.resource::<GlobalsBuffer>();
+        let fallback_image = world.resource::<FallbackImageZero>();
 
         let (
             Some(pipeline),
@@ -405,6 +433,8 @@ impl ViewNode for FloaterPrepassNode {
                 globals_buffer_binding,
                 settings_binding.clone(),
                 postprocess_pipeline.buffer.as_entire_binding(),
+                &fallback_image.texture_view,
+                &fallback_image.sampler,
             )),
         );
 
