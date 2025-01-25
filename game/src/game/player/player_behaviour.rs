@@ -1,4 +1,5 @@
-use bevy::sprite::Sprite;
+use bevy::prelude::{resource_equals, Added};
+use bevy::sprite::{Sprite, SpriteSheetBundle};
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
@@ -8,17 +9,20 @@ use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
     into_vec2, update_sprite_colliders, AnimationCollider, Collider,
-    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY_HURT, ENEMY_INSIDE,
+    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_HURT, ENEMY_INSIDE,
     GROUND, PLAYER, PLAYER_ATTACK,
 };
 use theseeker_engine::script::ScriptPlayer;
 
-use super::{
-    dash_icon_fx, player_dash_fx, player_new_stats_mod, AttackBundle,
-    CanStealth, DashIcon, JumpCount, KillCount, Knockback, Passives,
-    PlayerStats, Pushback, StatType, Stealthing, Whirling,
+use super::arc_attack::{Arrow, Projectile};
+use super::player_weapon::{
+    PlayerCombatStyle, PlayerMeleeWeapon, PushbackValues,
 };
-use crate::camera::CameraShake;
+use super::{
+    dash_icon_fx, player_dash_fx, AttackBundle, CanStealth, DashIcon,
+    DashStrike, DashType, JumpCount, Knockback, PlayerStats, Pushback,
+    StatType, Stealthing, Whirling,
+};
 use crate::game::attack::{Attack, SelfPushback, Stealthed};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
@@ -28,11 +32,12 @@ use crate::game::player::{
     PlayerGfx, PlayerStateSet, Running, WallSlideTime, WhirlAbility,
 };
 use crate::prelude::{
-    any_with_component, resource_changed, App, BuildChildren, Commands,
-    DetectChanges, Direction2d, Entity, GameTickUpdate, GameTime, Has,
-    IntoSystemConfigs, Plugin, Query, Res, Transform, TransformBundle, With,
-    Without,
+    any_with_component, App, BuildChildren, Commands, DetectChanges,
+    Direction2d, Entity, GameTickUpdate, GameTime, Has, IntoSystemConfigs,
+    Plugin, Query, Res, Transform, TransformBundle, With, Without,
 };
+use crate::StateDespawnMarker;
+use crate::{camera::CameraShake, game::player::PlayerStatMod};
 
 /// Player behavior systems.
 /// Do stuff here in states and add transitions to other states by pushing
@@ -44,23 +49,26 @@ impl Plugin for PlayerBehaviorPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                (gain_passives.run_if(resource_changed::<KillCount>)),
                 (
                     player_idle.run_if(any_with_component::<Idle>),
-                    player_new_stats_mod,
                     add_attack,
                     player_stealth,
                     player_whirl_charge.before(player_whirl),
                     player_whirl.before(player_attack),
                     player_attack.run_if(any_with_component::<Attacking>),
+                    player_restore_velocity
+                        .after(player_attack)
+                        .run_if(any_with_component::<CanAttack>),
                     player_move,
                     player_can_dash.run_if(any_with_component::<CanDash>),
                     player_can_stealth.run_if(any_with_component::<CanStealth>),
                     player_run.run_if(any_with_component::<Running>),
                     player_jump.run_if(any_with_component::<Jumping>),
-                    player_dash.run_if(any_with_component::<Dashing>),
-                    player_dash_fx
-                        .after(player_dash)
+                    player_dash_strike.run_if(any_with_component::<DashStrike>),
+                    (
+                        player_dash,
+                        player_dash_fx.after(player_dash),
+                    )
                         .run_if(any_with_component::<Dashing>),
                     dash_icon_fx
                         .after(player_dash_fx)
@@ -68,13 +76,18 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_grounded.run_if(any_with_component::<Grounded>),
                     player_falling.run_if(any_with_component::<Falling>),
                     crate::game::physics::knockback
-                        // player_pushback
                         .run_if(any_with_component::<Knockback>)
                         .before(player_jump)
                         .after(player_sliding),
                     player_sliding
                         .before(player_jump)
                         .run_if(any_with_component::<Falling>),
+                    bow_auto_aim
+                        .after(player_move)
+                        .before(player_attack)
+                        .run_if(resource_equals(
+                            PlayerCombatStyle::Ranged,
+                        )),
                 )
                     .in_set(PlayerStateSet::Behavior)
                     .before(update_sprite_colliders),
@@ -91,19 +104,6 @@ impl Plugin for PlayerBehaviorPlugin {
             )
                 .chain(),
         );
-    }
-}
-
-fn gain_passives(
-    mut query: Query<&mut Passives, With<Player>>,
-    kills: Res<KillCount>,
-    player_config: Res<PlayerConfig>,
-) {
-    for mut passives in query.iter_mut() {
-        if **kills % player_config.passive_gain_rate == 0 {
-            passives.gain();
-            println!("{:?}", passives);
-        }
     }
 }
 
@@ -144,6 +144,7 @@ pub fn player_can_stealth(
             &ActionState<PlayerAction>,
             &mut CanStealth,
             &mut TransitionQueue,
+            &PlayerStatMod,
             &Gent,
         ),
         (With<Player>, With<Gent>),
@@ -152,10 +153,10 @@ pub fn player_can_stealth(
     time: Res<GameTime>,
     mut commands: Commands,
 ) {
-    for (action_state, mut can_stealth, mut transition_queue, gent) in
+    for (action_state, mut can_stealth, mut transition_queue, statmod, gent) in
         q_gent.iter_mut()
     {
-        can_stealth.remaining_cooldown -= 1.0 / time.hz as f32;
+        can_stealth.remaining_cooldown -= statmod.cdr / time.hz as f32;
         // Return to base sprite color when exiting stealth
         if can_stealth.is_added() {
             let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
@@ -242,24 +243,28 @@ fn player_move(
     mut q_gent: Query<
         (
             &PlayerStats,
+            &PlayerStatMod,
             &mut LinearVelocity,
             &ActionState<PlayerAction>,
             &mut Facing,
-            Option<&Grounded>,
-            Option<&Stealthing>,
-            Option<&Dashing>,
+            Has<Grounded>,
+            Has<Stealthing>,
+            Has<Dashing>,
+            Has<DashStrike>,
         ),
         (Without<Knockback>, With<Player>),
     >,
 ) {
     for (
         stats,
+        stat_mod,
         mut velocity,
         action_state,
         mut facing,
-        grounded,
-        stealth,
-        dashing,
+        is_grounded,
+        is_stealth,
+        is_dashing,
+        is_dash_strike,
     ) in q_gent.iter_mut()
     {
         // Uses high starting acceleration, to emulate "shoving" off the ground/start
@@ -270,20 +275,32 @@ fn player_move(
         // What "%" does our character get slowed down per game tick.
         // Todo: Have this value be determined by tile type at some point?
         let ground_friction = 0.7;
-        let stealth_boost = if stealth.is_some() { 1.15 } else { 1.0 };
-        let mut direction = action_state.value(&PlayerAction::Move);
+        let stealth_boost = get_stealth_boost(is_stealth);
+        let controllable = !is_dash_strike;
+        let direction = action_state.value(&PlayerAction::Move);
         let new_vel = if action_state.just_pressed(&PlayerAction::Move)
             && action_state.value(&PlayerAction::Move) != 0.0
+            && controllable
         {
-            (velocity.x + accel * direction * ground_friction) * stealth_boost
+            velocity.x
+                + initial_accel
+                    * direction
+                    * ground_friction
+                    * stealth_boost
+                    * stat_mod.speed
         } else if action_state.pressed(&PlayerAction::Move)
             && action_state.value(&PlayerAction::Move) != 0.0
+            && controllable
         {
-            (velocity.x + initial_accel * direction * ground_friction)
-                * stealth_boost
+            velocity.x
+                + accel
+                    * direction
+                    * ground_friction
+                    * stealth_boost
+                    * stat_mod.speed
         } else {
             // de-acceleration profile
-            if grounded.is_some() {
+            if is_grounded {
                 velocity.x + ground_friction * -velocity.x
             } else {
                 // airtime de-acceleration profile
@@ -300,10 +317,14 @@ fn player_move(
             }
         };
 
-        if dashing.is_none() {
+        if !is_dashing {
             velocity.x = new_vel.clamp(
-                -stats.get(StatType::MoveVelMax) * stealth_boost,
-                stats.get(StatType::MoveVelMax) * stealth_boost,
+                -stats.get(StatType::MoveVelMax)
+                    * stealth_boost
+                    * stat_mod.speed,
+                stats.get(StatType::MoveVelMax)
+                    * stealth_boost
+                    * stat_mod.speed,
             );
         }
         if direction > 0.0 {
@@ -311,6 +332,14 @@ fn player_move(
         } else if direction < 0.0 {
             *facing = Facing::Left;
         }
+    }
+}
+
+fn get_stealth_boost(stealth: bool) -> f32 {
+    if stealth {
+        1.15
+    } else {
+        1.0
     }
 }
 
@@ -417,6 +446,7 @@ pub fn player_can_dash(
     mut q_gent: Query<
         (
             &ActionState<PlayerAction>,
+            &PlayerStatMod,
             &Facing,
             &mut CanDash,
             &mut LinearVelocity,
@@ -431,6 +461,7 @@ pub fn player_can_dash(
 ) {
     for (
         action_state,
+        statmod,
         facing,
         mut can_dash,
         mut velocity,
@@ -438,14 +469,13 @@ pub fn player_can_dash(
         hitfreeze,
     ) in q_gent.iter_mut()
     {
-        can_dash.remaining_cooldown -= 1.0 / time.hz as f32;
+        can_dash.remaining_cooldown -= statmod.cdr / time.hz as f32;
         if action_state.just_pressed(&PlayerAction::Dash) {
             if can_dash.remaining_cooldown <= 0.0 {
-                transition_queue.push(CanDash::new_transition(
-                    Dashing::default(),
-                ));
-                velocity.x = config.dash_velocity * facing.direction();
-                velocity.y = 0.0;
+                let dash_action = Dashing::from_action_state(action_state);
+                dash_action.set_player_velocity(&mut velocity, facing, &config);
+                transition_queue.push(CanDash::new_transition(dash_action));
+
                 if let Some(mut hitfreeze) = hitfreeze {
                     *hitfreeze = HitFreezeTime(u32::MAX, None)
                 }
@@ -456,14 +486,66 @@ pub fn player_can_dash(
     }
 }
 
+pub fn player_dash_strike(
+    mut query: Query<
+        (
+            Entity,
+            &Gent,
+            &Facing,
+            &mut DashStrike,
+            &mut TransitionQueue,
+            Has<Grounded>,
+            Has<Stealthing>,
+            &PlayerStatMod,
+        ),
+        With<Player>,
+    >,
+    mut commands: Commands,
+    config: Res<PlayerConfig>,
+    melee_weapon: Res<PlayerMeleeWeapon>,
+) {
+    for (
+        entity,
+        gent,
+        facing,
+        mut strike,
+        mut transitions,
+        is_grounded,
+        is_stealthed,
+        player_stat_mod,
+    ) in query.iter_mut()
+    {
+        if strike.ticks == 10 {
+            add_dash_strike_collider(
+                &mut commands,
+                entity,
+                gent,
+                facing,
+                is_stealthed,
+                player_stat_mod.attack,
+                melee_weapon.pushback_values(&config),
+            );
+        }
+        strike.ticks += 1;
+        if strike.ticks == DashStrike::MAX * 8 {
+            transitions.push(DashStrike::new_transition(
+                CanDash::new(&config, &DashType::Downward),
+            ));
+            exit_dash(&mut transitions, is_grounded);
+        }
+    }
+}
+
 pub fn player_dash(
     mut query: Query<
         (
+            &PlayerStats,
             &Facing,
             &mut LinearVelocity,
             &mut Dashing,
             &mut TransitionQueue,
             Has<Grounded>,
+            Has<Stealthing>,
             Option<&mut HitFreezeTime>,
         ),
         With<Player>,
@@ -472,38 +554,119 @@ pub fn player_dash(
     time: Res<GameTime>,
 ) {
     for (
+        stats,
         facing,
         mut velocity,
         mut dashing,
         mut transitions,
         is_grounded,
+        is_stealth,
         hitfreeze,
     ) in query.iter_mut()
     {
         if dashing.is_added() {
-            velocity.x = config.dash_velocity * facing.direction();
-            velocity.y = 0.0;
+            dashing.set_player_velocity(&mut velocity, facing, &config);
             if let Some(mut hitfreeze) = hitfreeze {
                 *hitfreeze = HitFreezeTime(u32::MAX, None)
             }
         } else {
             dashing.duration += 1.0 / time.hz as f32;
-            if dashing.duration > config.dash_duration {
+            if dashing.duration > dashing.dash_duration(&config) {
                 dashing.duration = 0.0;
-                transitions.push(Dashing::new_transition(CanDash::new(
-                    &config,
-                )));
-                if is_grounded {
-                    transitions.push(Running::new_transition(Idle));
-                } else {
-                    transitions.push(Running::new_transition(Falling));
+                // slow our velocity to the players normal max velocity, without adjusting our trajectory
+                let stealth_boost = get_stealth_boost(is_stealth);
+                let max_x_vel = stats.get(StatType::MoveVelMax) * stealth_boost;
+
+                if velocity.x.abs() > max_x_vel {
+                    let slowdown_factor = max_x_vel / velocity.x.abs();
+                    velocity.x *= slowdown_factor;
+                    velocity.y *= slowdown_factor;
                 }
-                transitions.push(Attacking::new_transition(
-                    CanAttack::default(),
-                ));
+
+                if dashing.hit {
+                    // stop all movement when we slam into the ground, but leave our velocity when we hit through an enemy
+                    if dashing.hit_ground {
+                        velocity.x = 0.0;
+                        velocity.y = 0.0;
+                    }
+                    transitions.push(Dashing::new_transition(
+                        DashStrike::default(),
+                    ));
+                } else {
+                    transitions.push(Dashing::new_transition(CanDash::new(
+                        &config,
+                        &dashing.dash_type,
+                    )));
+                    exit_dash(&mut transitions, is_grounded);
+                }
             }
         }
     }
+}
+
+fn exit_dash(transitions: &mut TransitionQueue, is_grounded: bool) {
+    if is_grounded {
+        transitions.push(Running::new_transition(Idle));
+    } else {
+        transitions.push(Running::new_transition(Falling));
+    }
+    transitions.push(Attacking::new_transition(
+        CanAttack::default(),
+    ));
+}
+
+fn trigger_dash_strike(
+    mut commands: &mut Commands,
+    mut dashing: &mut Dashing,
+    grounded: bool,
+) {
+    dashing.duration = f32::MAX;
+    dashing.hit = true;
+    dashing.hit_ground = grounded;
+    commands.insert_resource(CameraShake::new(3.5, 0.4, 2.0));
+}
+
+fn add_dash_strike_collider(
+    mut commands: &mut Commands,
+    entity: Entity,
+    gent: &Gent,
+    facing: &Facing,
+    stealthed: bool,
+    attack_mod: f32,
+    pushback_values: PushbackValues,
+) {
+    let PushbackValues {
+        self_pushback,
+        self_pushback_ticks,
+        pushback,
+        pushback_ticks,
+    } = pushback_values;
+
+    let attack = commands
+        .spawn((
+            TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+            AnimationCollider(gent.e_gfx),
+            // TODO: ? ColliderMeta
+            Collider::empty(InteractionGroups::new(
+                PLAYER_ATTACK,
+                ENEMY_HURT,
+            )),
+            Attack::new(16, entity, 20. * attack_mod),
+            SelfPushback(Knockback::new(
+                Vec2::new(self_pushback * -facing.direction(), 0.),
+                self_pushback_ticks,
+            )),
+            Pushback(Knockback::new(
+                Vec2::new(facing.direction() * pushback, 0.),
+                pushback_ticks,
+            )),
+        ))
+        .set_parent(entity)
+        .id();
+
+    if stealthed {
+        commands.entity(attack).insert(Stealthed);
+    };
 }
 
 pub fn player_collisions(
@@ -516,6 +679,7 @@ pub fn player_collisions(
             &Collider,
             Option<&mut WallSlideTime>,
             Option<&mut Dashing>,
+            Has<DashStrike>,
             Option<&mut Whirling>,
         ),
         With<Player>,
@@ -531,7 +695,8 @@ pub fn player_collisions(
         mut linear_velocity,
         collider,
         slide,
-        dashing,
+        mut dashing,
+        is_dash_strike,
         whirling,
     ) in q_gent.iter_mut()
     {
@@ -574,11 +739,28 @@ pub fn player_collisions(
                         // if we are not yet inside the enemy, collide, but not if we are falling
                         // from above
                         TOIStatus::Converged | TOIStatus::OutOfIterations => {
-                            // if we are also dashing, or whirling, ignore the collision entirely
-                            if dashing.is_none() && whirling.is_none() {
+                            // If we are dashing downwards, immediately cancel the dash, shake the camera, and start the attack animation, but don't do anything else.
+                            if let Some(mut dashing) = dashing.as_mut() {
+                                if dashing.is_down_dash() {
+                                    // currently, this feels out of place, as the strike stops just short of the ground.
+                                    // we currently do not have any flying enemies, so disabling dash strikes for enemies.
+
+                                    // trigger_dash_strike(
+                                    //     &mut commands,
+                                    //     dashing,
+                                    //     false,
+                                    // );
+                                }
+                            }
+
+                            // if we are also dashing, or whirling, ignore the collision
+                            if dashing.is_none()
+                                && whirling.is_none()
+                                && !is_dash_strike
+                            {
                                 let sliding_plane =
                                     into_vec2(first_hit.normal1);
-                                // configurable theshold for collision normal/sliding plane in case of physics instability
+                                // configurable threshold for collision normal/sliding plane in case of physics instability
                                 let threshold = 0.000001;
                                 if !(1. - threshold..=1. + threshold)
                                     .contains(&sliding_plane.y)
@@ -605,7 +787,9 @@ pub fn player_collisions(
                                 .insert(crate::game::enemy::Inside);
                         },
                         // maybe failed never happens?
-                        TOIStatus::Failed => println!("failed"),
+                        TOIStatus::Failed => {
+                            println!("player/enemy collision failed")
+                        },
                     }
                 // otherwise we are colliding with the ground
                 } else {
@@ -615,8 +799,23 @@ pub fn player_collisions(
                             // the bounce helps prevent the player from getting stuck.
                             let sliding_plane = into_vec2(first_hit.normal1);
 
+                            // If we are dashing downwards, immediately cancel the dash, shake the camera, and start the attack animation
+                            if let Some(mut dashing) = dashing.as_mut() {
+                                if dashing.is_down_dash() {
+                                    trigger_dash_strike(
+                                        &mut commands,
+                                        dashing,
+                                        true,
+                                    );
+                                }
+                            }
+
                             let bounce_coefficient =
-                                if dashing.is_some() { 0.0 } else { 0.05 };
+                                if dashing.is_some() || is_dash_strike {
+                                    0.0
+                                } else {
+                                    0.05
+                                };
                             let bounce_force = -sliding_plane
                                 * linear_velocity.dot(sliding_plane)
                                 * bounce_coefficient;
@@ -631,7 +830,7 @@ pub fn player_collisions(
                             let friction_force = if projected_velocity.y < -0.0
                             {
                                 // make sure at least 1/2 of player is against the wall
-                                // (because it looks wierd to have the character hanging by their head)
+                                // (because it looks weird to have the character hanging by their head)
                                 if spatial_query
                                     .ray_cast(
                                         pos.translation.xy(),
@@ -672,7 +871,9 @@ pub fn player_collisions(
                             projected_velocity += depenetration;
                             possible_pos = original_pos;
                         },
-                        TOIStatus::Failed => println!("failed"),
+                        TOIStatus::Failed => {
+                            println!("player/ground collision failed")
+                        },
                     }
                 }
                 linear_velocity.0 = projected_velocity;
@@ -741,15 +942,16 @@ fn player_grounded(
         mut jump_count,
     ) in query.iter_mut()
     {
-        let mut time_of_impact = 0.0;
-        let is_falling = ray_cast_info
-            .cast(&spatial_query, &position, Some(entity))
+        let ray_cast =
+            ray_cast_info.cast(&spatial_query, &position, Some(entity));
+        let falling_toi = ray_cast
             .iter()
-            .any(|x| {
-                time_of_impact = x.1.toi;
-                x.1.toi > GROUNDED_THRESHOLD + 0.01
-            });
-        // Ensures player character lands at the expected x height every time.
+            .find(|x| x.1.toi > GROUNDED_THRESHOLD + 0.01);
+        let is_falling = falling_toi.is_some();
+        let time_of_impact = falling_toi.map_or(0.0, |x| x.1.toi);
+
+        // This condition might never be true, but in the rare case where the TOI goes above the threshold
+        // it will ensure that the player character lands at the expected y height every time.
         if !is_falling && time_of_impact != 0.0 {
             position.translation.y =
                 position.translation.y - time_of_impact + GROUNDED_THRESHOLD;
@@ -929,6 +1131,7 @@ fn add_attack(
             Without<Attacking>,
             Without<Whirling>,
             Without<Dashing>,
+            Without<DashStrike>,
             With<Player>,
         ),
     >,
@@ -976,56 +1179,160 @@ fn player_attack(
             Entity,
             &Gent,
             &Facing,
+            &Transform,
+            Option<&WallSlideTime>,
+            &mut PlayerStats,
             &mut Attacking,
             &mut TransitionQueue,
             &ActionState<PlayerAction>,
+            &PlayerStatMod,
             Has<Stealthing>,
         ),
         (With<Player>, Without<Whirling>),
     >,
     mut commands: Commands,
     config: Res<PlayerConfig>,
+    combat_style: Res<PlayerCombatStyle>,
+    melee_weapon: Res<PlayerMeleeWeapon>,
+    time: Res<GameTime>,
 ) {
     for (
         entity,
         gent,
         facing,
+        transform,
+        wall_slide_time,
+        mut player_stats,
         mut attacking,
         mut transitions,
         action_state,
+        stat_mod,
         stealthed,
     ) in query.iter_mut()
     {
         if attacking.ticks == 0 {
-            let attack = commands
-                .spawn((
-                    TransformBundle::from_transform(Transform::from_xyz(
-                        0.0, 0.0, 0.0,
-                    )),
-                    AnimationCollider(gent.e_gfx),
-                    // TODO: ? ColliderMeta
-                    Collider::empty(InteractionGroups::new(
-                        PLAYER_ATTACK,
-                        ENEMY_HURT,
-                    )),
-                    Attack::new(16, entity),
-                    SelfPushback(Knockback::new(
-                        Vec2::new(
-                            config.melee_self_pushback * -facing.direction(),
-                            0.,
+            let attack = match *combat_style {
+                PlayerCombatStyle::Ranged => {
+                    let mut animation: ScriptPlayer<SpriteAnimation> =
+                        ScriptPlayer::default();
+                    animation.play_key("anim.player.BowBasicArrow");
+                    animation.set_slot("Start", true);
+
+                    let is_player_pressed_against_wall = wall_slide_time
+                        .is_some_and(|s| s.is_pressed_against_wall(&time));
+                    let arrow_direction = if is_player_pressed_against_wall {
+                        -facing.direction()
+                    } else {
+                        facing.direction()
+                    };
+                    let vel = LinearVelocity(
+                        Vec2::X * arrow_direction * config.arrow_velocity,
+                    );
+
+                    if !is_player_pressed_against_wall {
+                        commands.entity(entity).insert(Knockback::new(
+                            Vec2::new(
+                                -facing.direction() * config.bow_self_pushback,
+                                0.,
+                            ),
+                            config.bow_self_pushback_ticks,
+                        ));
+                    }
+
+                    commands
+                        .spawn((
+                            Arrow,
+                            SpriteSheetBundle {
+                                transform: *transform,
+                                ..Default::default()
+                            },
+                            Projectile { vel },
+                            Collider::cuboid(
+                                12.0,
+                                3.0,
+                                InteractionGroups::new(
+                                    PLAYER_ATTACK,
+                                    ENEMY_HURT | GROUND,
+                                ),
+                            ),
+                            Attack::new(
+                                192,
+                                entity,
+                                config.bow_attack_damage * stat_mod.attack,
+                            )
+                            .with_max_targets(1),
+                            Pushback(Knockback::new(
+                                Vec2::new(
+                                    facing.direction() * config.bow_pushback,
+                                    0.,
+                                ),
+                                config.bow_pushback_ticks,
+                            )),
+                            animation,
+                            StateDespawnMarker,
+                        ))
+                        .id()
+                },
+                PlayerCombatStyle::Melee => {
+                    let (
+                        damage,
+                        self_pushback,
+                        self_pushback_ticks,
+                        pushback,
+                        pushback_ticks,
+                    ) = match *melee_weapon {
+                        PlayerMeleeWeapon::Hammer => (
+                            config.hammer_attack_damage,
+                            config.hammer_self_pushback,
+                            config.hammer_self_pushback_ticks,
+                            config.hammer_pushback,
+                            config.hammer_pushback_ticks,
                         ),
-                        config.melee_self_pushback_ticks,
-                    )),
-                    Pushback(Knockback::new(
-                        Vec2::new(
-                            facing.direction() * config.melee_pushback,
-                            0.,
+                        PlayerMeleeWeapon::Sword => (
+                            config.sword_attack_damage,
+                            config.sword_self_pushback,
+                            config.sword_self_pushback_ticks,
+                            config.sword_pushback,
+                            config.sword_pushback_ticks,
                         ),
-                        config.melee_pushback_ticks,
-                    )),
-                ))
-                .set_parent(entity)
-                .id();
+                    };
+
+                    // Slow the player down when they attack with the Hammer
+                    if let PlayerMeleeWeapon::Hammer = *melee_weapon {
+                        player_stats.set(
+                            StatType::MoveVelMax,
+                            config.hammer_max_move_vel,
+                        );
+                    }
+
+                    commands
+                        .spawn((
+                            TransformBundle::from_transform(
+                                Transform::from_xyz(0.0, 0.0, 0.0),
+                            ),
+                            AnimationCollider(gent.e_gfx),
+                            // TODO: ? ColliderMeta
+                            Collider::empty(InteractionGroups::new(
+                                PLAYER_ATTACK,
+                                ENEMY_HURT,
+                            )),
+                            Attack::new(16, entity, damage * stat_mod.attack),
+                            SelfPushback(Knockback::new(
+                                Vec2::new(
+                                    self_pushback * -facing.direction(),
+                                    0.,
+                                ),
+                                self_pushback_ticks,
+                            )),
+                            Pushback(Knockback::new(
+                                Vec2::new(facing.direction() * pushback, 0.),
+                                pushback_ticks,
+                            )),
+                        ))
+                        .set_parent(entity)
+                        .id()
+                },
+            };
 
             if stealthed {
                 commands.entity(attack).insert(Stealthed);
@@ -1033,16 +1340,20 @@ fn player_attack(
         }
 
         attacking.ticks += 1;
+        let maximum_ticks = (((Attacking::MAX * 8) as f32 / stat_mod.cdr)
+            as u32)
+            .clamp(Attacking::MIN * 8, Attacking::MAX * 8);
+
         // if we are in the later half of attacking and another attack input was pressed,
         // indicate an immediate follow up on animation end
-        if attacking.ticks >= Attacking::MAX * 8 - 8
+        if attacking.ticks >= maximum_ticks - 8
             && action_state.just_pressed(&PlayerAction::Attack)
         {
             attacking.followup = true;
         }
 
         // leave attacking state
-        if attacking.ticks == Attacking::MAX * 8 {
+        if attacking.ticks >= maximum_ticks {
             if attacking.followup {
                 transitions.push(Attacking::new_transition(CanAttack {
                     immediate: true,
@@ -1056,13 +1367,23 @@ fn player_attack(
     }
 }
 
+/// Restores the player movement velocity after attacking.
+fn player_restore_velocity(
+    mut query: Query<&mut PlayerStats, (With<Player>, Added<CanAttack>)>,
+) {
+    for mut stats in query.iter_mut() {
+        stats.reset_stat(StatType::MoveVelMax);
+    }
+}
+
 pub fn player_whirl_charge(
-    mut query: Query<&mut WhirlAbility, Without<Whirling>>,
+    mut query: Query<(&mut WhirlAbility, &PlayerStatMod), Without<Whirling>>,
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
-    for mut whirl in query.iter_mut() {
-        whirl.energy = (whirl.energy + config.whirl_regen / time.hz as f32)
+    for (mut whirl, statmod) in query.iter_mut() {
+        whirl.energy = (whirl.energy
+            + (config.whirl_regen * statmod.cdr) / time.hz as f32)
             .clamp(0.0, config.max_whirl_energy);
     }
 }
@@ -1075,10 +1396,16 @@ pub fn player_whirl(
             &mut TransitionQueue,
             &mut Whirling,
             &mut WhirlAbility,
+            &mut PlayerStats,
+            &PlayerStatMod,
             Has<Stealthing>,
             &Gent,
         ),
-        (With<Player>, Without<Dashing>),
+        (
+            With<Player>,
+            Without<Dashing>,
+            Without<DashStrike>,
+        ),
     >,
     // attacks which have had their collider changed by the AnimationCollider system
     // TODO: need to not change collider unless there is a collider?
@@ -1090,6 +1417,7 @@ pub fn player_whirl(
         ),
     >,
     mut commands: Commands,
+    melee_weapon: Res<PlayerMeleeWeapon>,
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
 ) {
@@ -1099,6 +1427,8 @@ pub fn player_whirl(
         mut transitions,
         mut whirling,
         mut whirl_ability,
+        mut player_stats,
+        stat_mod,
         is_stealthing,
         gent,
     ) in gent_query.iter_mut()
@@ -1108,6 +1438,14 @@ pub fn player_whirl(
         if action_state.pressed(&PlayerAction::Whirl)
             || whirling.ticks < Whirling::MIN_TICKS
         {
+            // Slow the player down when they attack with the Hammer
+            if let PlayerMeleeWeapon::Hammer = *melee_weapon {
+                player_stats.set(
+                    StatType::MoveVelMax,
+                    config.hammer_max_move_vel,
+                );
+            }
+
             if let Some(attack_entity) = whirling.attack_entity {
                 // if the attack entities collider was changed, set the attack to none
                 if attack_query.get(attack_entity).is_err() {
@@ -1119,7 +1457,11 @@ pub fn player_whirl(
                     .spawn((
                         AttackBundle {
                             // lifetime of two frames...
-                            attack: Attack::new(24, entity),
+                            attack: Attack::new(
+                                24,
+                                entity,
+                                20. * stat_mod.attack,
+                            ),
                             collider: Collider::empty(InteractionGroups::new(
                                 PLAYER_ATTACK,
                                 ENEMY_HURT,
@@ -1149,6 +1491,46 @@ pub fn player_whirl(
             transitions.push(Whirling::new_transition(
                 CanAttack::default(),
             ));
+        }
+    }
+}
+
+pub fn bow_auto_aim(
+    mut q_gent: Query<(&mut Facing, &Transform), (With<Player>, With<Gent>)>,
+    q_enemy: Query<Entity, With<Enemy>>,
+    spatial_query: Res<PhysicsWorld>,
+) {
+    for (mut facing, transform) in q_gent.iter_mut() {
+        let is_facing_enemies = spatial_query
+            .ray_cast(
+                transform.translation.xy(),
+                Vec2::X * facing.direction(),
+                f32::MAX,
+                true,
+                InteractionGroups {
+                    memberships: PLAYER,
+                    filter: ENEMY | GROUND,
+                },
+                None,
+            )
+            .is_some_and(|(entity, _)| q_enemy.contains(entity));
+
+        let is_facing_away_from_enemy = spatial_query
+            .ray_cast(
+                transform.translation.xy(),
+                Vec2::NEG_X * facing.direction(),
+                f32::MAX,
+                true,
+                InteractionGroups {
+                    memberships: PLAYER,
+                    filter: ENEMY | GROUND,
+                },
+                None,
+            )
+            .is_some_and(|(entity, _)| q_enemy.contains(entity));
+
+        if !is_facing_enemies && is_facing_away_from_enemy {
+            *facing = facing.invert();
         }
     }
 }

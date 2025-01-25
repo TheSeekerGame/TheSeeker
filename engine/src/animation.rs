@@ -85,12 +85,10 @@ impl SpriteAnimationTracker {
             } else {
                 None
             }
+        } else if current < self.frame_max {
+            Some(current + 1)
         } else {
-            if current < self.frame_max {
-                Some(current + 1)
-            } else {
-                None
-            }
+            None
         };
     }
 }
@@ -112,22 +110,22 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
     ) -> Result<(), ScriptUpdateResult> {
         if let Some(oldanim_index) = tracker.carryover.frame {
             if let Some(lt) = &self.if_oldanim_frame_lt {
-                if !(oldanim_index < *lt) {
+                if oldanim_index >= *lt {
                     return Err(ScriptUpdateResult::NormalRun);
                 }
             }
             if let Some(le) = &self.if_oldanim_frame_le {
-                if !(oldanim_index <= *le) {
+                if oldanim_index > *le {
                     return Err(ScriptUpdateResult::NormalRun);
                 }
             }
             if let Some(gt) = &self.if_oldanim_frame_gt {
-                if !(oldanim_index > *gt) {
+                if oldanim_index <= *gt {
                     return Err(ScriptUpdateResult::NormalRun);
                 }
             }
             if let Some(ge) = &self.if_oldanim_frame_ge {
-                if !(oldanim_index >= *ge) {
+                if oldanim_index < *ge {
                     return Err(ScriptUpdateResult::NormalRun);
                 }
             }
@@ -167,29 +165,29 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
         let current_index =
             FrameId::from_sprite_index(q_self.get(entity).unwrap().0.index);
         if let Some(lt) = &self.if_frame_lt {
-            if !(current_index
-                < tracker.resolve_frame(self.frame_bookmark.as_ref(), lt))
+            if current_index
+                >= tracker.resolve_frame(self.frame_bookmark.as_ref(), lt)
             {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
         if let Some(le) = &self.if_frame_le {
-            if !(current_index
-                <= tracker.resolve_frame(self.frame_bookmark.as_ref(), le))
+            if current_index
+                > tracker.resolve_frame(self.frame_bookmark.as_ref(), le)
             {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
         if let Some(gt) = &self.if_frame_gt {
-            if !(current_index
-                > tracker.resolve_frame(self.frame_bookmark.as_ref(), gt))
+            if current_index
+                <= tracker.resolve_frame(self.frame_bookmark.as_ref(), gt)
             {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
         if let Some(ge) = &self.if_frame_ge {
-            if !(current_index
-                >= tracker.resolve_frame(self.frame_bookmark.as_ref(), ge))
+            if current_index
+                < tracker.resolve_frame(self.frame_bookmark.as_ref(), ge)
             {
                 return Err(ScriptUpdateResult::NormalRun);
             }
@@ -297,12 +295,23 @@ impl ScriptAction for SpriteAnimationScriptAction {
                 let index = frame_index.unwrap_or_default() + bm_offset;
                 atlas.index = index.as_sprite_index();
                 tracker.set_auto_next_frame(index);
+                if tracker.ticks_remain == 0 {
+                    tracker.ticks_remain = tracker.ticks_per_frame;
+                }
                 if let Some(actions) = tracker.frame_actions.get(&index) {
                     tracker.q_extra.extend(
                         actions
                             .iter()
                             .map(|&action| QueuedAction { timing, action }),
                     );
+                }
+                for (quant, action_id) in &tracker.framequant_actions {
+                    if quant.check(index.as_sprite_index() as i64) {
+                        tracker.q_extra.push(QueuedAction {
+                            timing,
+                            action: *action_id,
+                        });
+                    }
                 }
                 ScriptUpdateResult::NormalRun
             },
@@ -436,7 +445,7 @@ impl ScriptTracker for SpriteAnimationTracker {
 
         let mut atlas = q
             .get_mut(entity)
-            .expect("Animation entity must have TextureAtlasSprite component");
+            .expect("Animation entity must have TextureAtlas component");
         atlas.index = settings.frame_start.as_sprite_index();
     }
 
@@ -509,19 +518,19 @@ impl ScriptTracker for SpriteAnimationTracker {
     ) -> ScriptUpdateResult {
         let mut atlas = q
             .get_mut(entity)
-            .expect("Animation entity must have TextureAtlasSprite component");
+            .expect("Animation entity must have TextureAtlas component");
 
         if self.ticks_remain == 0 {
             let Some(next_frame) = self.next_frame else {
                 return ScriptUpdateResult::Finished;
             };
             if let Some(actions) = self.frame_actions.get(&next_frame) {
-                queue.extend(actions.iter().map(|&action| {
-                    QueuedAction {
+                queue.extend(
+                    actions.iter().map(|&action| QueuedAction {
                         timing: ScriptActionTiming::Tick(gt.tick()),
                         action,
-                    }
-                }));
+                    }),
+                );
             }
             for (quant, action_id) in &self.framequant_actions {
                 if quant.check(next_frame.as_sprite_index() as i64) {
@@ -583,7 +592,7 @@ impl ScriptAsset for SpriteAnimation {
             .expect("Animation entity must have Texture Atlas components");
 
         let (h_image, h_layout) = self
-            .resolve_image_atlas(&preloaded, builder.asset_key())
+            .resolve_image_atlas(preloaded, builder.asset_key())
             .expect(
                 "Cannot resolve Animation asset's Image and Layout assets.",
             );

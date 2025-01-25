@@ -13,19 +13,9 @@ action = "SetFrameNext"
 frame_index = 2
 
 [[script]]
-run_at_frame = [2, 4]
+run_on_playback_control = "Start"
 action = "PlayAudio"
-asset_key = "audio.game.HammerImpact"
-
-# Support left/right flipping
-[[script]]
-run_on_slot_enable = "DirectionLeft"
-action = "SetSpriteFlip"
-flip_x = true
-[[script]]
-run_on_slot_enable = "DirectionRight"
-action = "SetSpriteFlip"
-flip_x = false
+asset_key = "audio.game.SwordWhirl"
 
 # Blink Red on Damage
 [[script]]

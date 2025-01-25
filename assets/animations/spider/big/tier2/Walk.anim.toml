@@ -1,0 +1,25 @@
+atlas_asset_key = "anim.spider2.Walk.sprite"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 10
+frame_start = 1
+
+# LOOP
+[[script]]
+run_at_frame = 10
+action = "SetFrameNext"
+frame_index = 1
+
+# Support left/right flipping
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

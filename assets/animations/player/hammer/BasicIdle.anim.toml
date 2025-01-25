@@ -1,0 +1,168 @@
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 29
+frame_start = 1
+
+# From air
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 1
+action = "SetFrameNow"
+frame_index = 2
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 2
+action = "SetFrameNow"
+frame_index = 3
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 3
+action = "SetFrameNow"
+frame_index = 4
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 4
+action = "SetFrameNow"
+frame_index = 5
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 5
+action = "SetFrameNext"
+frame_index = 6
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 6
+action = "SetFrameNow"
+frame_index = 7
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 7
+action = "SetFrameNow"
+frame_index = 9
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 8
+action = "SetFrameNow"
+frame_index = 10
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 9
+action = "SetFrameNow"
+frame_index = 11
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 10
+action = "SetFrameNext"
+frame_index = 12
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 11
+action = "SetFrameNow"
+frame_index = 13
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 12
+action = "SetFrameNow"
+frame_index = 14
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 13
+action = "SetFrameNow"
+frame_index = 16
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 14
+action = "SetFrameNow"
+frame_index = 17
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 15
+action = "SetFrameNext"
+frame_index = 18
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 16
+action = "SetFrameNext"
+frame_index = 19
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 17
+action = "SetFrameNext"
+frame_index = 20
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.HammerBasicAir"
+if_oldanim_frame_was = 18
+action = "SetFrameNext"
+frame_index = 21
+
+# VARIANT 1 INIT
+[[script]]
+run_on_playback_control = "Start"
+forbid_slots_all = ["AttackTransition"]
+action = "SetFrameNow"
+frame_index = 2
+
+# VARIANT 2 INIT
+[[script]]
+run_on_playback_control = "Start"
+forbid_slots_all = ["AttackTransition"]
+if_runcount_quant = "2"
+action = "SetFrameNow"
+frame_index = 9
+
+# VARIANT 3 INIT
+[[script]]
+run_on_playback_control = "Start"
+forbid_slots_all = ["AttackTransition"]
+if_runcount_quant = "3"
+action = "SetFrameNow"
+frame_index = 16
+
+
+# Support left/right flipping
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

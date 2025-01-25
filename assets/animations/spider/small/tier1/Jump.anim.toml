@@ -1,0 +1,51 @@
+atlas_asset_key = "anim.smallspider.Jump.sprite"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 13
+frame_start = 1
+
+
+# INITIALIZE JUMP
+[[script]]
+# Needs run condition here instead of the 'run at frame'
+# Has to be triggered by jump state start
+run_at_frame = 3
+action = "SetFrameNow"
+frame_index = 3
+
+# LOOP JUMP
+[[script]]
+run_at_frame = 7
+action = "SetFrameNext"
+frame_index = 4
+
+
+# INITIALIZE FALL
+[[script]]
+# Needs run condition here instead of the 'run at frame'
+# Has to be triggered by fall state start
+run_at_frame = 8
+action = "SetFrameNow"
+frame_index = 8
+
+# LOOP FALL
+[[script]]
+run_at_frame = 12
+action = "SetFrameNext"
+frame_index = 9
+
+
+
+# Support left/right flipping
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

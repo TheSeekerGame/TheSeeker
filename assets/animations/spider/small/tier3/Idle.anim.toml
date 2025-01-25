@@ -1,0 +1,37 @@
+atlas_asset_key = "anim.smallspider3.Idle.sprite"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 6
+frame_start = 1
+
+# Loop
+[[script]]
+run_at_frame = 6
+action = "SetFrameNext"
+frame_index = 1
+
+# needed for expected flip behavior
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false
+
+# Ensure correct color after damage stops
+[[script]]
+run_on_slot_disable = "Damage"
+action = "SetSpriteColor"
+color = "#ffffff"
+
+# On Damage, immediately change color to ensure no delay
+[[script]]
+run_on_slot_enable = "Damage"
+action = "SetSpriteColor"
+color = "#ff0000"

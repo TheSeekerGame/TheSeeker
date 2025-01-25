@@ -1,0 +1,93 @@
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 6
+frame_min = 1
+frame_max = 18
+frame_start = 1
+
+
+# keep looping final frame
+[[script]]
+run_at_frame = 3
+action = "SetFrameNext"
+frame_index = 3
+# keep looping final frame
+[[script]]
+run_at_frame = 6
+action = "SetFrameNext"
+frame_index = 6
+# keep looping final frame
+[[script]]
+run_at_frame = 9
+action = "SetFrameNext"
+frame_index = 9
+# keep looping final frame
+[[script]]
+run_at_frame = 12
+action = "SetFrameNext"
+frame_index = 12
+# keep looping final frame
+[[script]]
+run_at_frame = 15
+action = "SetFrameNext"
+frame_index = 15
+# keep looping final frame
+[[script]]
+run_at_frame = 18
+action = "SetFrameNext"
+frame_index = 18
+
+# Support left/right flipping
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false
+
+# Spark Variation 1
+[[script]]
+run_on_slot_enable = "Spark1"
+action = "SetFrameNext"
+frame_index = 1
+
+# Spark Variation 2
+[[script]]
+run_on_slot_enable = "Spark2"
+action = "SetFrameNext"
+frame_index = 4
+
+# Spark Variation 3
+[[script]]
+run_on_slot_enable = "Spark3"
+action = "SetFrameNext"
+frame_index = 7
+
+# Spark Variation 4
+[[script]]
+run_on_slot_enable = "Spark4"
+action = "SetFrameNext"
+frame_index = 10
+
+# Spark Variation 5
+[[script]]
+run_on_slot_enable = "Spark5"
+action = "SetFrameNext"
+frame_index = 13
+
+# Spark Variation 6
+[[script]]
+run_on_slot_enable = "Spark6"
+action = "SetFrameNext"
+frame_index = 16
+
+# Starting Frame (Empty)
+[[script]]
+run_on_slot_enable = "Start"
+action = "SetFrameNext"
+frame_index = 3
+
+

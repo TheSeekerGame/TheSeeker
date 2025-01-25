@@ -1,0 +1,23 @@
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 5
+frame_start = 1
+
+# keep looping final frame
+[[script]]
+run_at_frame = 5
+action = "SetFrameNext"
+frame_index = 5
+
+# Support left/right flipping
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

@@ -10,17 +10,17 @@ use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
     into_vec2, update_sprite_colliders, AnimationCollider, Collider,
-    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK, ENEMY_HURT,
+    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK,
     ENEMY_INSIDE, GROUND, PLAYER, SENSOR,
 };
 use theseeker_engine::script::ScriptPlayer;
 
 use super::physics::Knockback;
 use super::player::{Player, PlayerConfig, StatusModifier, Stealthing};
-use crate::game::attack::arc_attack::Projectile;
 use crate::game::attack::particles::ArcParticleEffectHandle;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
+use crate::game::{attack::arc_attack::Projectile, player::EnemiesNearby};
 use crate::graphics::particles_util::BuildParticles;
 use crate::prelude::*;
 
@@ -75,29 +75,55 @@ pub struct EnemyBlueprintBundle {
 #[derive(Bundle, LdtkEntity, Default)]
 pub struct EnemySpawnerBundle {
     marker: EnemySpawner,
-    killed: Killed,
 }
 
-/// Component used to track kills for each EnemySpawner
-/// not the same as the overall KillCount resource
-#[derive(Component, Default, Debug, Deref, DerefMut)]
-struct Killed(usize);
-
-/// Enemy spawner, each slot has its own spawn cooldown
+/// Enemy spawner, cooldown starts ticking once all spawned enemies have been killed
 #[derive(Component, Default, Debug)]
 pub struct EnemySpawner {
+    // slots for enemies to spawn, shouldnt grow past EnemySpawner::MAX
     pub slots: Vec<SpawnSlot>,
+    // tracks total killed enemies of this spawner
+    pub killed: u32,
+    // clears, used to track when to next upgrade
+    pub clears: u32,
+    // after an upgrade, how many more clears till the next upgrade
+    pub threshold_next: u32,
+    // cooldown increases to EnemySpawner::COOLDOWN before spawning new batch of enemies
+    pub cooldown_ticks: u32,
+    pub spawn_state: SpawnerState,
+    // the next slot to buff
+    pub next_buff_index: usize,
+}
+
+impl EnemySpawner {
+    const MAX: usize = 3;
+    const COOLDOWN: u32 = 4000;
+    const RANGE: f32 = 400.;
+
+    fn is_cleared(&self) -> bool {
+        self.slots
+            .iter()
+            .filter(|x| x.enemy.is_some())
+            .collect::<Vec<_>>()
+            .is_empty()
+    }
+}
+
+#[derive(Default, Debug)]
+pub enum SpawnerState {
+    #[default]
+    // Add slots or upgrade the Tier of the next slot
+    Upgrade,
+    // Ready to spawn
+    Ready,
+    Spawned,
+    Cooldown,
 }
 
 #[derive(Debug)]
 pub struct SpawnSlot {
     pub enemy: Option<Entity>,
-    pub cooldown_ticks: u32,
-}
-
-impl EnemySpawner {
-    const COOLDOWN: u32 = 620;
-    const RANGE: f32 = 500.;
+    pub tier: Tier,
 }
 
 #[derive(Component, Default)]
@@ -142,12 +168,13 @@ pub struct EnemyEffectGfx {
     e_gent: Entity,
 }
 
+//TODO:only spawn when all from spawner have died, increase scaling, when 5 are cleared, up spider
+//tier one at a time
+//when ranged should be capped at 2 per spawner
+//only tick cooldown when spawner is cleared
 fn spawn_enemy(
-    mut spawner_q: Query<(
-        &Transform,
-        &mut EnemySpawner,
-        &mut Killed,
-    )>,
+    mut spawner_q: Query<(&Transform, &mut EnemySpawner)>,
+    //dead enemies to clear
     enemy_q: Query<
         Entity,
         (
@@ -160,57 +187,111 @@ fn spawn_enemy(
     mut commands: Commands,
 ) {
     let p_transform = player_query.get_single();
-    for (transform, mut spawner, mut killed) in spawner_q.iter_mut() {
-        // if spawner is empty, add a slot with completed cooldown to spawn initial enemies
-        if spawner.slots.is_empty() {
-            spawner.slots.push(SpawnSlot {
-                enemy: None,
-                cooldown_ticks: EnemySpawner::COOLDOWN,
-            })
-        }
-        // if we have killed enough enemies from this spawner, adds another slot
-        if spawner.slots.len() < **killed {
-            spawner.slots.push(SpawnSlot {
-                enemy: None,
-                cooldown_ticks: 0,
-            })
-        }
-        // check if enemies are dead and update
+    for (transform, mut spawner) in spawner_q.iter_mut() {
+        let mut killed = spawner.killed;
+
+        // check if enemies are dead and update kill count
         for slot in spawner.slots.iter_mut() {
             if let Some(enemy) = slot.enemy {
-                // clear dead enemies
+                // clear dead enemy
                 if enemy_q.get(enemy).is_ok() {
                     slot.enemy = None;
-                    **killed += 1;
+                    killed += 1;
                 }
-            // if the slot is empty, cooldown finished and player out of range, spawn another enemy
-            } else {
-                // if there is a player and it is close, dont spawn, otherwise spawn
-                let should_spawn = if let Ok(ptrans) = p_transform {
-                    let distance = transform
-                        .translation
-                        .truncate()
-                        .distance(ptrans.translation.truncate());
-                    distance > EnemySpawner::RANGE
-                } else {
-                    true
-                };
-                slot.cooldown_ticks += 1;
-                if slot.cooldown_ticks >= EnemySpawner::COOLDOWN && should_spawn
-                {
-                    let id = commands
-                        .spawn((
-                            EnemyBlueprintBundle {
-                                marker: EnemyBlueprint {
-                                    bonus_hp: 20 * killed.0 as u32,
-                                },
-                            },
-                            TransformBundle::from_transform(*transform),
-                        ))
-                        .id();
-                    slot.enemy = Some(id);
-                    slot.cooldown_ticks = 0;
-                }
+            }
+        }
+        spawner.killed = killed;
+
+        loop {
+            match spawner.spawn_state {
+                SpawnerState::Upgrade => {
+                    // set number of clears till next upgrade 2 or 3
+                    spawner.threshold_next = thread_rng().gen_range(2..4);
+                    // add a slot
+                    if spawner.slots.len() < EnemySpawner::MAX {
+                        spawner.slots.push(SpawnSlot {
+                            enemy: None,
+                            tier: Tier::Base,
+                        })
+                    // or increase tier of the next slot
+                    } else {
+                        let i = spawner.next_buff_index % EnemySpawner::MAX;
+                        if let Some(mut slot_to_buff) = spawner.slots.get_mut(i)
+                        {
+                            slot_to_buff.tier = match slot_to_buff.tier {
+                                Tier::Base => Tier::Two,
+                                Tier::Two => Tier::Three,
+                                Tier::Three => Tier::Three,
+                            };
+                            spawner.next_buff_index += 1;
+                        }
+                    }
+                    spawner.spawn_state = SpawnerState::Ready;
+                },
+                SpawnerState::Ready => {
+                    if if let Ok(ptrans) = p_transform {
+                        transform
+                            .translation
+                            .truncate()
+                            .distance(ptrans.translation.truncate())
+                            > EnemySpawner::RANGE
+                    } else {
+                        true
+                    } {
+                        let mut ranged_role = 0;
+                        for slot in spawner.slots.iter_mut() {
+                            //generate a random roll, max 2 per spawner
+                            let role = if ranged_role < 2 {
+                                let r = Role::random();
+                                if matches!(r, Role::Ranged) {
+                                    ranged_role += 1;
+                                };
+                                r
+                            } else {
+                                Role::Melee
+                            };
+
+                            let e = commands
+                                .spawn((
+                                    EnemyBlueprintBundle {
+                                        marker: EnemyBlueprint {
+                                            bonus_hp: 20 * killed,
+                                        },
+                                    },
+                                    slot.tier.clone(),
+                                    role,
+                                    TransformBundle::from_transform(*transform),
+                                ))
+                                .id();
+                            slot.enemy = Some(e);
+                        }
+                        spawner.spawn_state = SpawnerState::Spawned;
+                    } else {
+                        break;
+                    }
+                },
+                SpawnerState::Spawned => {
+                    if spawner.is_cleared() {
+                        spawner.spawn_state = SpawnerState::Cooldown;
+                        spawner.clears += 1;
+                    } else {
+                        break;
+                    };
+                },
+                SpawnerState::Cooldown => {
+                    spawner.cooldown_ticks += 1;
+                    if spawner.cooldown_ticks >= EnemySpawner::COOLDOWN {
+                        spawner.cooldown_ticks = 0;
+                        if spawner.clears >= spawner.threshold_next {
+                            spawner.clears = 0;
+                            spawner.spawn_state = SpawnerState::Upgrade;
+                        } else {
+                            spawner.spawn_state = SpawnerState::Ready;
+                        }
+                    } else {
+                        break;
+                    }
+                },
             }
         }
     }
@@ -219,18 +300,20 @@ fn spawn_enemy(
 fn setup_enemy(
     mut q: Query<(
         &mut Transform,
+        &Tier,
         Entity,
         Ref<EnemyBlueprint>,
     )>,
     mut commands: Commands,
 ) {
-    for (mut xf_gent, e_gent, bp) in q.iter_mut() {
+    for (mut xf_gent, tier, e_gent, bp) in q.iter_mut() {
         if !bp.is_added() {
             continue;
         }
-        // TODO: ensure propper z order
+        // TODO: ensure proper z order
         xf_gent.translation.z = 14.0 * 0.000001;
         xf_gent.translation.y += 2.0; // Sprite offset so it looks like it is standing on the ground
+        let health = (100 + bp.bonus_hp) * *tier as u32;
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
@@ -269,16 +352,15 @@ fn setup_enemy(
             Range::None,
             Target(None),
             Health {
-                current: 100 + bp.bonus_hp,
-                max: 100 + bp.bonus_hp,
+                current: health,
+                max: health,
             },
-            Role::random(),
             Facing::Right,
             Patrolling,
             Idle,
             Waiting::new(12),
             AddQueue::default(),
-            TransitionQueue::default(), // },
+            TransitionQueue::default(),
             StateDespawnMarker,
         ));
         commands.entity(e_gfx).insert((
@@ -296,10 +378,8 @@ fn setup_enemy(
             },
             StateDespawnMarker,
         ));
-        let mut animation: ScriptPlayer<SpriteAnimation> =
-            ScriptPlayer::default();
+        let mut animation = ScriptPlayer::<SpriteAnimation>::default();
         animation.play_key("anim.spider.Sparks");
-        animation.set_slot("Start", true);
         commands.entity(e_effects_gfx).insert((
             EnemyEffectsGfxBundle {
                 marker: EnemyEffectGfx { e_gent },
@@ -476,9 +556,6 @@ impl Waiting {
 impl GentState for Waiting {}
 impl GenericState for Waiting {}
 
-#[derive(Component)]
-pub struct JustGotHitMarker;
-
 #[derive(Component, Reflect)]
 enum Navigation {
     Grounded,
@@ -499,7 +576,15 @@ impl Role {
     }
 }
 
-// TODO: 60/40 distribution?
+// Spider upgrade/scaling tier
+#[derive(Component, Default, Debug, Reflect, Clone, Copy)]
+enum Tier {
+    #[default]
+    Base = 1,
+    Two = 2,
+    Three = 3,
+}
+
 impl Distribution<Role> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Role {
         let index: u8 = rng.gen_range(0..=1);
@@ -507,6 +592,34 @@ impl Distribution<Role> for Standard {
             0 => Role::Melee,
             1 => Role::Ranged,
             _ => unreachable!(),
+        }
+    }
+}
+impl Role {
+    pub fn check_range(&self, distance: f32) -> Range {
+        match self {
+            Role::Melee => {
+                if distance <= Range::MELEE_MELEE {
+                    Range::Melee
+                } else if distance <= Range::MELEE_AGGRO {
+                    Range::Aggro
+                } else if distance <= Range::MELEE_DEAGGRO {
+                    Range::Deaggro
+                } else {
+                    Range::Far
+                }
+            },
+            Role::Ranged => {
+                if distance <= Range::RANGED_MELEE {
+                    Range::Melee
+                } else if distance <= Range::RANGED_AGGRO {
+                    Range::Aggro
+                } else if distance <= Range::RANGED_RANGED {
+                    Range::Ranged
+                } else {
+                    Range::Far
+                }
+            },
         }
     }
 }
@@ -522,16 +635,21 @@ enum Range {
 }
 
 #[derive(Component, Debug, Deref)]
-// Target entity, distance
 struct Target(Option<Entity>);
 
 impl Range {
-    const AGGRO: f32 = 50.;
-    const DEAGGRO: f32 = 70.;
-    // const GROUPED: f32 = 100.;
-    const MELEE: f32 = 14.;
-    // const MELEE: f32 = 12.;
-    const RANGED: f32 = 60.;
+    const RANGED_AGGRO: f32 = 100.;
+    // const RANGED_DEAGGRO: f32 = 70.;
+    const RANGED_MELEE: f32 = 29.;
+    const RANGED_RANGED: f32 = 100.;
+
+    const MELEE_AGGRO: f32 = 100.;
+    const MELEE_DEAGGRO: f32 = 70.;
+    const MELEE_MELEE: f32 = 12.;
+    // const MELEE_RANGED: f32 = 60.;
+
+    // for players passive enemies nearby buff
+    const NEARBY: f32 = 20.;
 }
 
 /// Component that indicates that the player is inside of this enemy,
@@ -547,7 +665,7 @@ struct Decay;
 
 // Check how far the player is, set our range, set our target if applicable, turn to face player if
 // in range
-// TODO: check x and y distance independantly?
+// TODO: check x and y distance independently?
 fn check_player_range(
     mut query: Query<
         (
@@ -562,29 +680,34 @@ fn check_player_range(
         ),
         With<Enemy>,
     >,
-    player_query: Query<
+    mut player_query: Query<
         (
             Entity,
             &GlobalTransform,
             Option<&Stealthing>,
+            &mut EnemiesNearby,
         ),
         (Without<Enemy>, With<Player>),
     >,
 ) {
-    for (
-        mut range,
-        mut target,
-        mut facing,
-        role,
-        trans,
-        is_aggroed,
-        is_meleeing,
-        is_defending,
-    ) in query.iter_mut()
+    if let Ok((player_e, player_trans, player_stealth, mut enemies_nearby)) =
+        player_query.get_single_mut()
     {
-        if let Ok((player_e, player_trans, player_stealth)) =
-            player_query.get_single()
+        //reset every tick
+        **enemies_nearby = 0;
+
+        for (
+            mut range,
+            mut target,
+            mut facing,
+            role,
+            trans,
+            is_aggroed,
+            is_meleeing,
+            is_defending,
+        ) in query.iter_mut()
         {
+            //TODO: still update enemies nearby in stealth?
             if player_stealth.is_some() {
                 *range = Range::Deaggro;
                 target.0 = None;
@@ -595,10 +718,8 @@ fn check_player_range(
                 .truncate()
                 .distance(player_trans.translation().truncate());
 
+            // face player
             if is_aggroed && !is_meleeing && !is_defending {
-                // }
-                // if we are in AGGRO range, face the player
-                // if distance <= Range::AGGRO {
                 if trans.translation().x > player_trans.translation().x {
                     *facing = Facing::Right;
                 } else if trans.translation().x < player_trans.translation().x {
@@ -606,32 +727,24 @@ fn check_player_range(
                 }
             }
 
-            // set range and target
-            if distance <= Range::MELEE {
-                *range = Range::Melee;
-                target.0 = Some(player_e);
-            } else if distance <= Range::AGGRO {
-                *range = Range::Aggro;
-                target.0 = Some(player_e);
-            } else if matches!(role, Role::Ranged) && distance <= Range::RANGED
-            {
-                *range = Range::Ranged;
-                target.0 = Some(player_e);
-            } else if matches!(role, Role::Melee) && distance <= Range::DEAGGRO
-            {
-                *range = Range::Deaggro;
-                target.0 = Some(player_e);
-                // target.0 = None;
-            } else {
-                *range = Range::Far;
-                target.0 = None;
-            }
-        // if there is no player
-        } else {
+            // set range
+            *range = role.check_range(distance);
+            // set target
+            target.0 = match *range {
+                Range::Melee | Range::Aggro | Range::Ranged => Some(player_e),
+                Range::Deaggro | Range::Far | Range::None => None,
+            };
+            //set nearby enemies for passive buff
+            if distance < Range::NEARBY {
+                **enemies_nearby += 1;
+            };
+        }
+    // if there is no player
+    } else {
+        for (mut range, mut target, _, _, _, _, _, _) in query.iter_mut() {
             *range = Range::None;
             target.0 = None;
         }
-        // dbg!(range);
     }
 }
 
@@ -789,22 +902,17 @@ fn aggro(
     for (role, range, target, mut velocity, mut transitions) in query.iter_mut()
     {
         if let Some(p_entity) = target.0 {
-            let mut rng = rand::thread_rng();
             // return to patrol if out of aggro range
             if matches!(range, Range::Far) {
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if matches!(range, Range::Melee) {
                 match role {
-                    Role::Melee => {
-                        transitions.push(Waiting::new_transition(
-                            MeleeAttack::default(),
-                        ))
-                    },
+                    Role::Melee => transitions.push(Waiting::new_transition(
+                        MeleeAttack::default(),
+                    )),
                     Role::Ranged => {
                         velocity.x = 0.;
-                        transitions.push(Waiting::new_transition(
-                            Defense::default(),
-                        ));
+                        transitions.push(Waiting::new_transition(Defense));
                     },
                 }
             } else if matches!(role, Role::Melee) {
@@ -830,11 +938,11 @@ fn ranged_attack(
             Entity,
             &GlobalTransform,
             &Range,
+            &Tier,
             &mut RangedAttack,
             &mut LinearVelocity,
             &mut TransitionQueue,
             &mut AddQueue,
-            // Has<Grouped>,
         ),
         (With<Enemy>, Without<Knockback>),
     >,
@@ -848,6 +956,7 @@ fn ranged_attack(
         entity,
         enemy_transform,
         range,
+        tier,
         mut attack,
         mut velocity,
         mut trans_q,
@@ -858,14 +967,13 @@ fn ranged_attack(
             velocity.x = 0.;
         }
         attack.ticks += 1;
-        // if attack.ticks >= 15 * 8 || !matches!(range, Range::Ranged) {
         if attack.ticks >= 15 * 8 {
             trans_q.push(RangedAttack::new_transition(
                 Waiting::default(),
             ));
             add_q.add(Idle);
         }
-        // if player isnt alive, do nothing, we will transiton back once animation finishes
+        // if player isnt alive, do nothing, we will transition back once animation finishes
         let Ok(transform) = player_query.get(attack.target) else {
             continue;
         };
@@ -877,7 +985,7 @@ fn ranged_attack(
                 * 0.5;
             // how far is the ceiling above the mid point of the projectile trajectory?
             let mut ceiling = f32::MAX;
-            if let Some((hit_e, hit)) = spatial_query.ray_cast(
+            if let Some((_hit_e, hit)) = spatial_query.ray_cast(
                 mid_pt,
                 Vec2::new(0.0, 1.0),
                 f32::MAX,
@@ -891,7 +999,7 @@ fn ranged_attack(
                         mid_pt.y + hit.toi - enemy_transform.translation().y;
                 } else {
                     // if it did start underground, fire another one to find how far underground, and then fire again from there + 0.1
-                    if let Some((hit_e, hit)) = spatial_query.ray_cast(
+                    if let Some((_hit_e, hit)) = spatial_query.ray_cast(
                         mid_pt,
                         Vec2::new(0.0, 1.0),
                         f32::MAX,
@@ -899,7 +1007,7 @@ fn ranged_attack(
                         InteractionGroups::new(ENEMY, GROUND),
                         None,
                     ) {
-                        if let Some((hit_e, hit_2)) = spatial_query.ray_cast(
+                        if let Some((_hit_e, hit_2)) = spatial_query.ray_cast(
                             mid_pt + Vec2::new(0.0, hit.toi + 0.001),
                             Vec2::new(0.0, 1.0),
                             f32::MAX,
@@ -923,9 +1031,11 @@ fn ranged_attack(
                 transform.translation.x - enemy_transform.translation().x;
             let gravity = config.fall_accel * time.hz as f32;
             let rng_factor = 1.0;
-            let mut speed =
-                ballistic_speed(Range::RANGED, gravity, relative_height)
-                    * rng_factor as f32;
+            let mut speed = ballistic_speed(
+                Range::RANGED_RANGED,
+                gravity,
+                relative_height,
+            ) * rng_factor as f32;
             let max_attempts = 10;
             // Define default arc as 50ish degree shot with in the direction of the player
             let mut final_solution = Projectile {
@@ -960,18 +1070,16 @@ fn ranged_attack(
                     }
                     final_solution = projectile;
                     break;
+                } else if i == max_attempts - 1 {
+                    warn!("No solution for ballistic trajectory, even after increased speed to {speed}, using default trajectory!")
                 } else {
-                    if i == max_attempts - 1 {
-                        warn!("No solution for ballistic trajectory, even after increased speed to {speed}, using default trajectory!")
-                    } else {
-                        speed *= 1.15;
-                    }
+                    speed *= 1.15;
                 }
             }
             // spawn in the new projectile:
             commands
                 .spawn((
-                    Attack::new(1000, entity)
+                    Attack::new(1000, entity, 31. * *tier as u32 as f32)
                         .set_stat_mod(StatusModifier::basic_ice_spider()),
                     final_solution,
                     Collider::cuboid(
@@ -986,9 +1094,7 @@ fn ranged_attack(
                 .with_lingering_particles(particle_effect.0.clone());
         }
         if matches!(range, Range::Melee) {
-            trans_q.push(RangedAttack::new_transition(
-                Defense::default(),
-            ));
+            trans_q.push(RangedAttack::new_transition(Defense));
         }
     }
 }
@@ -998,7 +1104,7 @@ fn melee_attack(
         (
             Entity,
             &mut MeleeAttack,
-            &Facing,
+            &Tier,
             &mut TransitionQueue,
             &Gent,
         ),
@@ -1006,11 +1112,11 @@ fn melee_attack(
     >,
     mut commands: Commands,
 ) {
-    for (entity, mut attack, facing, mut trans_q, gent) in query.iter_mut() {
+    for (entity, mut attack, tier, mut trans_q, gent) in query.iter_mut() {
         attack.ticks += 1;
         if attack.ticks == 8 * MeleeAttack::STARTUP {
             // spawn attack hitbox collider as child
-            let collider = commands
+            commands
                 .spawn((
                     Collider::empty(InteractionGroups {
                         memberships: SENSOR,
@@ -1018,10 +1124,9 @@ fn melee_attack(
                     }),
                     TransformBundle::from_transform(Transform::default()),
                     AnimationCollider(gent.e_gfx),
-                    Attack::new(8, entity),
+                    Attack::new(8, entity, 17. * *tier as u32 as f32),
                 ))
-                .set_parent(entity)
-                .id();
+                .set_parent(entity);
         }
         if attack.ticks >= MeleeAttack::MAX * 8 {
             trans_q.push(MeleeAttack::new_transition(
@@ -1186,7 +1291,7 @@ fn chasing(
         if !matches!(role, Role::Melee) {
             continue;
         }
-        if let Some(p_entity) = target.0 {
+        if target.0.is_some() {
             // check if we need to transition
             match *range {
                 Range::Melee => {
@@ -1253,7 +1358,7 @@ fn move_collide(
         // If the enemy encounters a collision with the player, wall or edge of platform, it sets
         // the Navigation component to Navigation::Blocked
         while let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
-            if let Some((e, first_hit)) = spatial_query.shape_cast(
+            if let Some((_entity, first_hit)) = spatial_query.shape_cast(
                 transform.translation.xy(),
                 shape_dir,
                 &*shape,
@@ -1284,7 +1389,7 @@ fn move_collide(
 
         // Raycast from underground directly below the enemy in direction of movement, detecting the edges of a platform from
         // inside
-        if let Some((entity, first_hit)) = spatial_query.ray_cast(
+        if let Some((_entity, first_hit)) = spatial_query.ray_cast(
             // TODO: should be based on collider half extent y + a little
             Vec2::new(front, transform.translation.y - 10.),
             Vec2::new(dir, 0.),
@@ -1339,16 +1444,21 @@ fn remove_inside(
 /// Increments the global KillCount, removes most components from the Enemy
 /// after a set amount of ticks transitions to the Decay state
 pub fn dead(
-    mut query: Query<(Entity, &mut Dead, &Gent), With<Enemy>>,
+    mut query: Query<(Entity, &mut Dead), With<Enemy>>,
     mut kill_count: ResMut<KillCount>,
     mut commands: Commands,
 ) {
-    for (entity, mut dead, gent) in query.iter_mut() {
+    for (entity, mut dead) in query.iter_mut() {
         if dead.ticks == 0 {
             **kill_count += 1;
-            commands
-                .entity(entity)
-                .retain::<(TransformBundle, Gent, Dead, Enemy, Role)>();
+            commands.entity(entity).retain::<(
+                TransformBundle,
+                Gent,
+                Dead,
+                Enemy,
+                Role,
+                Tier,
+            )>();
         }
         if dead.ticks == 8 * 7 {
             commands.entity(entity).remove::<Dead>().insert(Decay);
@@ -1422,98 +1532,109 @@ impl Plugin for EnemyAnimationPlugin {
 }
 
 fn enemy_sparks_on_hit_animation(
-    i_query: Query<(Entity, &Gent), (Added<JustGotHitMarker>, With<Enemy>)>,
+    i_query: Query<&Gent, With<Enemy>>,
+    mut damage_events: EventReader<DamageInfo>,
     mut gfx_query: Query<
         &mut ScriptPlayer<SpriteAnimation>,
         With<EnemyEffectGfx>,
     >,
-    mut commands: Commands,
     player_facing_dir: Query<&Facing, With<Player>>,
 ) {
-    for (e, gent) in i_query.iter() {
-        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_effects_gfx) {
-            let mut rng = thread_rng();
-            let picked_spark = rng.gen_range(1..=6);
-            enemy.play_key("anim.spider.Sparks");
-            enemy.clear_slots();
-            enemy.set_slot(
-                format!("Spark{picked_spark}").as_str(),
-                true,
-            );
-            if let Ok(direction) = player_facing_dir.get_single() {
-                match direction {
-                    Facing::Right => {
-                        enemy.set_slot("DirectionRight", true);
-                        enemy.set_slot("DirectionLeft", false);
-                    },
-                    Facing::Left => {
-                        enemy.set_slot("DirectionRight", false);
-                        enemy.set_slot("DirectionLeft", true);
-                    },
-                };
+    for damage_info in damage_events.read() {
+        if let Ok(enemy) = i_query.get(damage_info.target) {
+            if let Ok(mut hit_gfx) = gfx_query.get_mut(enemy.e_effects_gfx) {
+                let mut rng = thread_rng();
+                let picked_spark = rng.gen_range(1..=6);
+                hit_gfx.play_key("anim.spider.Sparks");
+                hit_gfx.clear_slots();
+                hit_gfx.set_slot(
+                    format!("Spark{picked_spark}").as_str(),
+                    true,
+                );
+                hit_gfx.set_slot("Hit", true);
+                if let Ok(direction) = player_facing_dir.get_single() {
+                    match direction {
+                        Facing::Right => {
+                            hit_gfx.set_slot("DirectionRight", true);
+                            hit_gfx.set_slot("DirectionLeft", false);
+                        },
+                        Facing::Left => {
+                            hit_gfx.set_slot("DirectionRight", false);
+                            hit_gfx.set_slot("DirectionLeft", true);
+                        },
+                    };
+                }
             }
-            commands.entity(e).remove::<JustGotHitMarker>();
         }
     }
 }
 
 fn enemy_idle_animation(
-    i_query: Query<(&Gent, &Role), (Added<Idle>, With<Enemy>)>,
+    i_query: Query<(&Gent, &Role, &Tier), (Added<Idle>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for (gent, role) in i_query.iter() {
+    for (gent, role, tier) in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            match role {
-                Role::Melee => enemy.play_key("anim.smallspider.Idle"),
-                Role::Ranged => enemy.play_key("anim.spider.Idle"),
-            }
+            enemy.play_key((enemy_anim_prefix(role, tier) + ".Idle").as_str());
         }
     }
 }
 
 fn enemy_walking_animation(
-    i_query: Query<(&Gent, &Role), (Added<Walking>, With<Enemy>)>,
+    i_query: Query<(&Gent, &Role, &Tier), (Added<Walking>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for (gent, role) in i_query.iter() {
+    for (gent, role, tier) in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            match role {
-                Role::Melee => enemy.play_key("anim.smallspider.Walk"),
-                Role::Ranged => enemy.play_key("anim.spider.Walk"),
-            }
+            enemy.play_key((enemy_anim_prefix(role, tier) + ".Walk").as_str());
         }
     }
 }
 
 fn enemy_chasing_animation(
-    i_query: Query<&Gent, (Added<Chasing>, With<Enemy>)>,
+    i_query: Query<(&Gent, &Tier), (Added<Chasing>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for gent in i_query.iter() {
+    for (gent, tier) in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.smallspider.Chase");
+            let key = match tier {
+                Tier::Base => "anim.smallspider.Chase",
+                Tier::Two => "anim.smallspider2.Chase",
+                Tier::Three => "anim.smallspider3.Chase",
+            };
+            enemy.play_key(key);
         }
     }
 }
 
 fn enemy_ranged_attack_animation(
-    i_query: Query<&Gent, (Added<RangedAttack>, With<Enemy>)>,
+    i_query: Query<(&Gent, &Tier), (Added<RangedAttack>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for gent in i_query.iter() {
+    for (gent, tier) in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.spider.RangedAttack");
+            let key = match tier {
+                Tier::Base => "anim.spider.RangedAttack",
+                Tier::Two => "anim.spider2.RangedAttack",
+                Tier::Three => "anim.spider3.RangedAttack",
+            };
+            enemy.play_key(key);
         }
     }
 }
 
 fn enemy_melee_attack_animation(
-    i_query: Query<&Gent, (Added<MeleeAttack>, With<Enemy>)>,
+    i_query: Query<(&Gent, &Tier), (Added<MeleeAttack>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for gent in i_query.iter() {
+    for (gent, tier) in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.smallspider.MeleeAttack");
+            let key = match tier {
+                Tier::Base => "anim.smallspider.MeleeAttack",
+                Tier::Two => "anim.smallspider2.MeleeAttack",
+                Tier::Three => "anim.smallspider3.MeleeAttack",
+            };
+            enemy.play_key(key);
         }
     }
 }
@@ -1530,12 +1651,17 @@ fn enemy_melee_attack_animation(
 // }
 
 fn enemy_defense_animation(
-    i_query: Query<&Gent, (Added<Defense>, With<Enemy>)>,
+    i_query: Query<(&Gent, &Tier), (Added<Defense>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for gent in i_query.iter() {
+    for (gent, tier) in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key("anim.spider.Defense");
+            let key = match tier {
+                Tier::Base => "anim.spider.Defense",
+                Tier::Two => "anim.spider2.Defense",
+                Tier::Three => "anim.spider3.Defense",
+            };
+            enemy.play_key(key);
         }
     }
 }
@@ -1553,29 +1679,23 @@ fn enemy_defense_animation(
 // }
 
 fn enemy_death_animation(
-    i_query: Query<(&Gent, &Role), (Added<Dead>, With<Enemy>)>,
+    i_query: Query<(&Gent, &Role, &Tier), (Added<Dead>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for (gent, role) in i_query.iter() {
+    for (gent, role, tier) in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            match role {
-                Role::Melee => enemy.play_key("anim.smallspider.Death"),
-                Role::Ranged => enemy.play_key("anim.spider.Death"),
-            }
+            enemy.play_key((enemy_anim_prefix(role, tier) + ".Death").as_str());
         }
     }
 }
 
 fn enemy_decay_animation(
-    i_query: Query<(&Gent, &Role), (Added<Decay>, With<Enemy>)>,
+    i_query: Query<(&Gent, &Role, &Tier), (Added<Decay>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for (gent, role) in i_query.iter() {
+    for (gent, role, tier) in i_query.iter() {
         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            match role {
-                Role::Melee => enemy.play_key("anim.smallspider.Decay"),
-                Role::Ranged => enemy.play_key("anim.spider.Decay"),
-            }
+            enemy.play_key((enemy_anim_prefix(role, tier) + ".Decay").as_str());
         }
     }
 }
@@ -1595,7 +1715,19 @@ fn enemy_decay_visibility(
     }
 }
 
-// TODO: no turn/flip in Defense
+fn enemy_anim_prefix(role: &Role, tier: &Tier) -> String {
+    let r = match role {
+        Role::Ranged => "spider",
+        Role::Melee => "smallspider",
+    };
+    let t = match tier {
+        Tier::Base => "",
+        Tier::Two => "2",
+        Tier::Three => "3",
+    };
+    "anim.".to_owned() + r + t
+}
+
 fn sprite_flip(
     query: Query<(&Facing, &Gent), With<Enemy>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,

@@ -20,7 +20,7 @@ flip_x = false
 [[script]]
 run_on_slot_disable = "DecayRate"
 action = "SetTicksPerFrame"
-ticks_per_frame = 3_800_000
+ticks_per_frame = 1_000_000
 reset_progress = true
 
 

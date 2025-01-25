@@ -4,17 +4,21 @@
 # (in pixels/second)
 max_move_vel = 70.0
 
+# The maximum horizontal velocity the player can move at while using the Hammer weapon.
+# (in pixels/second)
+hammer_max_move_vel = 35.0
+
 # The maximum downward velocity the player can fall at.
 # (in pixels/second)
-max_fall_vel = 200.0
+max_fall_vel = 180.0
 
 # The initial acceleration applied to the player for the first tick they start moving.
 # (in pixels/second^2)
-move_accel_init = 51.0
+move_accel_init = 20.0
 
 # The acceleration applied to the player while they continue moving horizontally.
 # (in pixels/second^2)
-move_accel = 102.0
+move_accel = 20.0
 
 # How much velocity does the player have at the moment they jump?
 # (in pixels/second)
@@ -33,7 +37,7 @@ fall_accel = 4.5
 # How many seconds does our characters innate hover boots work?
 max_coyote_time = 0.1
 
-# Onlly applies in the downward y direction while the player is falling
+# Only applies in the downward y direction while the player is falling
 # and trying to walk into the wall
 sliding_friction = 0.25
 
@@ -43,8 +47,11 @@ hitfreeze_ticks = 45.0
 # How many seconds does our character dash for?
 dash_duration = 0.06
 
+# How many seconds does our character dash down for?
+dash_down_duration = 0.3
+
 # How many seconds does our character stealth for?
-stealth_duration = 2.0
+stealth_duration = 3.0
 
 # How many seconds does our character stealth for?
 stealth_cooldown = 5.0
@@ -52,8 +59,17 @@ stealth_cooldown = 5.0
 # How many pixels/s do they dash with?
 dash_velocity = 400.0
 
+# How many pixels/s do they dash down with, horizontally?
+dash_down_horizontal_velocity = 500.0
+
+# How many pixels/s do they dash down with, vertically?
+dash_down_vertical_velocity = 500.0
+
 # How long before the player can dash again?
 dash_cooldown_duration = 1.0
+
+# How long before the player can dash again?
+dash_down_cooldown_duration = 5.0
 
 max_whirl_energy = 5.0
 
@@ -72,17 +88,63 @@ wall_pushback = 50.0
 # Ticks for wall pushback velocity; determines how long movement is locked for
 wall_pushback_ticks = 5.0
 
-# Pushback velocity on basic melee hits
-melee_self_pushback = 60.0
+# Pushback velocity on basic sword hits
+sword_self_pushback = 60.0
 
-# Ticks for melee pushback velocity; determines how long movement is locked for
-melee_self_pushback_ticks = 3.0
+# Ticks for sword pushback velocity; determines how long movement is locked for
+sword_self_pushback_ticks = 3.0
 
-# Knockback velocity applied to enemy on basic melee hit
-melee_pushback = 60.0
+# Knockback velocity applied to enemy on basic sword hit
+sword_pushback = 60.0
+
+# Ticks for sword knockback velocity; determines how long movement is locked for
+sword_pushback_ticks = 12.0
+
+# Pushback velocity on basic hammer hits
+hammer_self_pushback = 60.0
+
+# Ticks for hammer pushback velocity; determines how long movement is locked for
+hammer_self_pushback_ticks = 3.0
+
+# Knockback velocity applied to enemy on basic hammer hit
+hammer_pushback = 60.0
+
+# Ticks for hammer knockback velocity; determines how long movement is locked for
+hammer_pushback_ticks = 12.0
+
+# Pushback velocity on basic bow shots
+bow_self_pushback = 0.0
+
+# Ticks for bow pushback velocity; determines how long movement is locked for
+bow_self_pushback_ticks = 0.0
+
+# Knockback velocity applied to enemy on basic bow hit
+bow_pushback = 60.0
 
 # Ticks for melee knockback velocity; determines how long movement is locked for
-melee_pushback_ticks = 12.0
+bow_pushback_ticks = 5.0
+
+# Base sword attack damage
+sword_attack_damage = 37.0
+
+# Base hammer attack damage
+hammer_attack_damage = 31.0
+
+# Base bow attack damage
+bow_attack_damage = 11.0
+
+# Velocity of the projectiles fired by the Bow weapon
+arrow_velocity = 1000.0
+
+# Default configuration values for on hit camera screen shake
+default_on_hit_screenshake_strength = 0.9
+default_on_hit_screenshake_duration_secs = 0.1
+default_on_hit_screenshake_frequency = 2.0
+
+# Hammer-specific configuration values for on hit camera screen shake
+hammer_on_hit_screenshake_strength = 1.35
+hammer_on_hit_screenshake_duration_secs = 0.2
+hammer_on_hit_screenshake_frequency = 2.5
 
 # Number of kills to trigger passive gain
 passive_gain_rate = 3.0

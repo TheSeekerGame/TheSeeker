@@ -13,6 +13,11 @@ forbid_slots_all = ["AttackTransition"]
 action = "SetFrameNow"
 frame_index = 1
 
+[[script]]
+run_at_frame = [1]
+action = "PlayAudio"
+asset_key = "audio.game.BowShoot"
+
 # Support left/right flipping
 [[script]]
 run_on_slot_enable = "DirectionLeft"

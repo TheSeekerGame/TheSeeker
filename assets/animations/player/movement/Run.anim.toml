@@ -28,6 +28,7 @@ frame_index = 1
 [[script]]
 run_at_frame = [3, 7]
 action = "PlayAudio"
+volume = 0.5
 asset_key = "audio.game.Footstep"
 
 # LOOP

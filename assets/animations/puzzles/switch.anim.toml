@@ -1,0 +1,32 @@
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 12
+frame_start = 1
+
+
+# Loop 1st frame (when not activated)
+[[script]]
+run_at_frame = 1
+action = "SetFrameNext"
+frame_index = 1
+
+# Go to 2nd frame (when activated)
+[[script]]
+run_on_slot_enable = "Activated"
+action = "SetFrameNow"
+frame_index = 2
+
+# Go to 1st frame (when deactivated)
+[[script]]
+run_on_slot_disable = "Activated"
+action = "SetFrameNow"
+frame_index = 1
+
+# Loop 2nd frame (while activated) 
+[[script]]
+run_at_frame = 2
+action = "SetFrameNext"
+frame_index = 2
