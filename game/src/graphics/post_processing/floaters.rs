@@ -11,7 +11,6 @@ use bevy::core_pipeline::core_3d::graph::Node3d;
 use bevy::core_pipeline::core_3d::{self, CORE_3D_DEPTH_FORMAT};
 use bevy::ecs::query::QueryItem;
 use bevy::ecs::system::lifetimeless::Read;
-use bevy::prelude::*;
 use bevy::render::extract_component::{
     ComponentUniforms, DynamicUniformIndex, ExtractComponent,
     ExtractComponentPlugin, UniformComponentPlugin,
@@ -44,6 +43,7 @@ use bevy::render::view::{
 use bevy::render::RenderApp;
 
 use crate::graphics::dof::DepthOfFieldPostProcessLabel;
+use crate::prelude::*;
 
 /// Grid dimension for the camera-relative floater buffer; shader shared constant
 const FLOATER_SAMPLES_X: usize = 32;
@@ -61,7 +61,7 @@ const FLOATER_SHADER_HANDLE: Handle<Shader> =
     Handle::weak_from_u128(134392054226504942300212274996024942407);
 
 /// File path to the floater sprite strip (x-axis)
-const FLOATER_TEXTURE_FILE: &str = "fx/circle_05.png";
+const FLOATER_TEXTURE_FILE: &str = "fx/floater.png";
 
 /// Plugin that adds the floater post processing effect to the render graph
 pub(crate) struct FloaterPlugin;
@@ -191,13 +191,13 @@ pub struct FloaterSettings {
 impl Default for FloaterSettings {
     fn default() -> Self {
         Self {
-            static_drift: Vec2::new(0.4, -0.8),
-            spawn_spacing: Vec2::splat(40.0),
-            particle_size: 6.0,
+            static_drift: Vec2::new(0.4, -1.8),
+            spawn_spacing: Vec2::splat(25.0),
+            particle_size: 10.0,
             movement_speed: 0.1,
             movement_strength: 0.5,
-            sprite_width: 512,
-            spritesheet_width: 512,
+            sprite_width: 256,
+            spritesheet_width: 256,
             sprite_index: 0,
         }
     }
