@@ -2,6 +2,8 @@
 //!
 //! Create sub-modules for different aspects of the gameplay.
 
+use switches::{PuzzleBundle, SwitchBundle};
+
 use self::enemy::{EnemyBlueprintBundle, EnemySpawnerBundle};
 use self::player::PlayerBlueprintBundle;
 use crate::game::merchant::MerchantBlueprintBundle;
@@ -15,6 +17,7 @@ pub mod gentstate;
 mod merchant;
 pub mod physics;
 pub mod player;
+mod switches;
 mod wall;
 mod xp_orbs;
 mod yak;
@@ -36,6 +39,32 @@ impl Plugin for GameplayPlugin {
         app.register_ldtk_entity::<EnemyBlueprintBundle>("Enemy");
         app.register_ldtk_entity::<EnemySpawnerBundle>("EnemySpawner");
 
+        app.register_ldtk_entity::<SwitchBundle>("Switch1")
+            .register_ldtk_entity::<SwitchBundle>("Switch2")
+            .register_ldtk_entity::<SwitchBundle>("Switch3")
+            .register_ldtk_entity::<SwitchBundle>("Switch4")
+            .register_ldtk_entity::<SwitchBundle>("Switch5")
+            .register_ldtk_entity::<SwitchBundle>("Switch6")
+            .register_ldtk_entity::<SwitchBundle>("Switch7")
+            .register_ldtk_entity::<SwitchBundle>("Switch8")
+            .register_ldtk_entity::<SwitchBundle>("Switch9")
+            .register_ldtk_entity::<SwitchBundle>("Switch10")
+            .register_ldtk_entity::<SwitchBundle>("Switch11")
+            .register_ldtk_entity::<SwitchBundle>("Switch12");
+
+        app.register_ldtk_entity::<PuzzleBundle>("Puzzle1")
+            .register_ldtk_entity::<PuzzleBundle>("Puzzle2")
+            .register_ldtk_entity::<PuzzleBundle>("Puzzle3")
+            .register_ldtk_entity::<PuzzleBundle>("Puzzle4")
+            .register_ldtk_entity::<PuzzleBundle>("Puzzle5")
+            .register_ldtk_entity::<PuzzleBundle>("Puzzle6")
+            .register_ldtk_entity::<PuzzleBundle>("Puzzle7")
+            .register_ldtk_entity::<PuzzleBundle>("Puzzle8")
+            .register_ldtk_entity::<PuzzleBundle>("Puzzle9")
+            .register_ldtk_entity::<PuzzleBundle>("Puzzle10")
+            .register_ldtk_entity::<PuzzleBundle>("Puzzle11")
+            .register_ldtk_entity::<PuzzleBundle>("Puzzle12");
+
         // Add the plugins for each game mechanic
         app.add_plugins((
             player::PlayerPlugin,
@@ -46,6 +75,7 @@ impl Plugin for GameplayPlugin {
             wall::WallPlugin,
             game_over::GameOverPlugin,
             xp_orbs::XpPlugin,
+            switches::SwitchesPlugin,
             pickups::PickupPlugin,
         ));
     }

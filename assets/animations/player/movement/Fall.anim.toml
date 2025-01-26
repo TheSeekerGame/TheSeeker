@@ -14,6 +14,12 @@ forbid_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 1
 
+[[script]]
+run_on_playback_control = "Start"
+action = "PlayAudio"
+asset_key = "audio.game.FallStart"
+
+
 
 #SWITCH FROM FORWARD TO STRAIGHT
 [[script]]

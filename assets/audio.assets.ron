@@ -4,66 +4,88 @@
 ({
     "audio.game.Footstep": Files (
         paths: [
-            "audio/Footstep1.flac",
-            "audio/Footstep2.flac",
-            "audio/Footstep3.flac",
-            "audio/Footstep4.flac",
-            "audio/Footstep5.flac",
-            "audio/Footstep6.flac",
-            "audio/Footstep7.flac",
-            "audio/Footstep8.flac",
-            "audio/Footstep9.flac",
-            "audio/Footstep10.flac",
-            "audio/Footstep11.flac",
-            "audio/Footstep12.flac",
-            "audio/Footstep13.flac",
+            "audio/movement/Step1.flac",
+            "audio/movement/Step2.flac",
+            "audio/movement/Step3.flac",
+            "audio/movement/Step4.flac",
+            "audio/movement/Step5.flac",
+            "audio/movement/Step6.flac",
+            "audio/movement/Step7.flac",
+            "audio/movement/Step8.flac",
+            "audio/movement/Step9.flac",
+            "audio/movement/Step10.flac",
+            "audio/movement/Step11.flac",
+            "audio/movement/Step12.flac",
+            "audio/movement/Step13.flac",
+            "audio/movement/Step14.flac",
+            "audio/movement/Step15.flac",
         ],
     ),
-    "audio.game.JumpUp": Files (
+    "audio.game.JumpStart": Files (
         paths: [
-            "audio/JumpUp.flac",
-            "audio/JumpUp2.flac",
-            "audio/JumpUp3.flac",
+            "audio/movement/JumpStart3.flac",
+            "audio/movement/JumpStart4.flac",
         ],
     ),
-    "audio.game.FallDown": Files (
+    "audio.game.FallStart": Files (
         paths: [
-            "audio/FallDown.flac",
+            "audio/movement/FallStart2.flac",
+            "audio/movement/FallStart3.flac",
+        ],
+    ),
+    "audio.game.FallImpact": Files (
+        paths: [
+            "audio/movement/FallImpact3.flac",
+        ],
+    ),
+    "audio.game.WallSlide": Files (
+        paths: [
+            "audio/movement/Slide3.flac",
+            "audio/movement/Slide4.flac",
+        ],
+    ),
+    "audio.game.Dash": Files (
+        paths: [
+            "audio/movement/Dash2a.flac",
+            "audio/movement/Dash2b.flac",
+        ],
+    ),
+    "audio.game.SwordSlash": Files (
+        paths: [
+            "audio/attack/Slash1.flac",
+            "audio/attack/Slash2.flac",
+        ],
+    ),
+    "audio.game.BowShoot": Files (
+        paths: [
+            "audio/attack/Shoot1.flac",
+            "audio/attack/Shoot2.flac",
+        ],
+    ),
+    "audio.game.SwordWhirl": Files (
+        paths: [
+            "audio/attack/Whirl1.flac",
         ],
     ),
     "audio.game.ImpactBass": Files (
         paths: [
-            "audio/ImpactBass1.flac",
-            "audio/ImpactBass2.flac",
+            "audio/attack/ImpactBass1.flac",
+            "audio/attack/ImpactBass2.flac",
         ],
     ),
-    "audio.game.HammerImpact": Files (
+    "audio.game.SpiderGetDamage": Files (
         paths: [
-            "audio/HammerImpact1.flac",
-            "audio/HammerImpact2.flac",
-            "audio/HammerImpact3.flac",
-            "audio/HammerImpact4.flac",
-            "audio/HammerImpact5.flac",
+            "audio/attack/Impact1.flac",
         ],
     ),
-    "audio.game.HammerImpactIce": Files (
+    "audio.game.BigSpiderDeath": Files (
         paths: [
-            "audio/HammerImpactIce1.flac",
-            "audio/HammerImpactIce2.flac",
-            "audio/HammerImpactIce3.flac",
-            "audio/HammerImpactIce4.flac",
-            "audio/HammerImpactIce4New.flac",
-            "audio/HammerImpactIce5.flac",
-            "audio/HammerImpactIce6.flac",
-            "audio/HammerImpactIce7.flac",
+            "audio/spider/BigDeath.flac",
         ],
     ),
-    "audio.game.HammerWhoosh": Files (
+    "audio.game.SmallSpiderDeath": Files (
         paths: [
-            "audio/HammerWhoosh1.flac",
-            "audio/HammerWhoosh2.flac",
-            "audio/HammerWhoosh3.flac",
-            "audio/HammerWhoosh4.flac",
+            "audio/spider/SmallDeath.flac",
         ],
     ),
 })
