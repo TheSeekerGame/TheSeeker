@@ -166,10 +166,13 @@ pub struct FloaterSettings {
 
     /// Scale of the floater particles. Since floater layers have different
     /// distances from the camera, this is the base size used for perspective
-    /// scaling.
+    /// scaling. The two components define min and max size.
     ///
     /// Floater size is this value at gameplay layer (z camera distance of 1.0)
-    pub particle_size: f32,
+    pub particle_size: Vec2,
+
+    /// How fast the floater particle size randomizes over time
+    pub particle_size_variance_speed: f32,
 
     /// Controls the random movement speed
     pub movement_speed: f32,
@@ -193,7 +196,8 @@ impl Default for FloaterSettings {
         Self {
             static_drift: Vec2::new(0.4, -1.8),
             spawn_spacing: Vec2::splat(25.0),
-            particle_size: 10.0,
+            particle_size: Vec2::new(10.0, 20.0),
+            particle_size_variance_speed: 0.1,
             movement_speed: 0.1,
             movement_strength: 0.5,
             sprite_width: 256,

@@ -18,7 +18,8 @@ struct FloaterBuffer {
 struct FloaterSettings {
     static_drift: vec2<f32>,
     spawn_spacing: vec2<f32>,
-    particle_size: f32,
+    particle_size: vec2<f32>,
+    particle_size_variance_speed: f32,
     movement_speed: f32,
     movement_strength: f32,
     sprite_width: u32,
@@ -40,16 +41,15 @@ fn gid_to_floater_grid_index(camera_pos: vec2<f32>, gid: vec3<u32>, spacing: vec
 // Computes the floater data
 fn compute_floater(grid_idx: vec2<i32>, layer: u32, time: f32, settings: FloaterSettings) -> Floater {
     var floater = Floater();
-    let layer_distance = get_layer_distance(layer);
+    let scale = 1 / (1 - get_layer_distance(layer));
 
     // Simulate perspective scaling
-    let scaled_spacing = settings.spawn_spacing / (1 - layer_distance);
-    floater.scale = settings.particle_size / (1 - layer_distance);
+    let scaled_spacing = settings.spawn_spacing * scale;
 
     // Base offset is obtained by hashing the floater grid coords, deconstructing it into
-    // two clamped 0-1 values for xy and scaling it by the spacing to fit the grid
+    // two normalized float values for xy and scaling it by the spacing to fit the grid
     let offset_hash = xxhash32_3d(vec3<u32>(bitcast<vec2<u32>>(grid_idx), layer));
-    let offset = vec2<f32>(f32(offset_hash & 0xFFFFu), f32(offset_hash >> 16u)) / 65535.0 * scaled_spacing;
+    let offset = unpack2x16unorm(offset_hash) * scaled_spacing;
     let root_pos = vec2<f32>(grid_idx) * scaled_spacing;
 
     let drift_offset = settings.static_drift * time;
@@ -61,6 +61,12 @@ fn compute_floater(grid_idx: vec2<i32>, layer: u32, time: f32, settings: Floater
     ) * scaled_spacing * settings.movement_strength;
 
     floater.position = root_pos + offset + drift_offset + movement_offset;
+
+    floater.scale = mix(settings.particle_size.x, settings.particle_size.y, perlinNoise3(vec3<f32>(
+        time * settings.particle_size_variance_speed,
+        root_pos.x + f32(layer * FLOATER_SAMPLES_Y),
+        root_pos.y
+    ))) * scale;
 
     return floater;
 }
