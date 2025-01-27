@@ -36,7 +36,7 @@ impl Plugin for EnemyPlugin {
         );
         app.add_systems(
             GameTickUpdate,
-            spawn_enemy.after(setup_enemy),
+            spawn_enemies.after(setup_enemy),
         );
         app.add_plugins((
             EnemyBehaviorPlugin,
@@ -172,7 +172,7 @@ pub struct EnemyEffectGfx {
 //tier one at a time
 //when ranged should be capped at 2 per spawner
 //only tick cooldown when spawner is cleared
-fn spawn_enemy(
+fn spawn_enemies(
     mut spawner_q: Query<(&Transform, &mut EnemySpawner)>,
     //dead enemies to clear
     enemy_q: Query<
@@ -206,7 +206,10 @@ fn spawn_enemy(
             match spawner.spawn_state {
                 SpawnerState::Upgrade => {
                     // set number of clears till next upgrade 2 or 3
-                    spawner.threshold_next = thread_rng().gen_range(2..4);
+                    //TODO: get rid of threshold_next if we decide to continue with spawning every
+                    //clear
+                    spawner.threshold_next = 1;
+                    // spawner.threshold_next = thread_rng().gen_range(2..4);
                     // add a slot
                     if spawner.slots.len() < EnemySpawner::MAX {
                         spawner.slots.push(SpawnSlot {
@@ -258,7 +261,7 @@ fn spawn_enemy(
                                             bonus_hp: 20 * killed,
                                         },
                                     },
-                                    slot.tier.clone(),
+                                    slot.tier,
                                     role,
                                     TransformBundle::from_transform(*transform),
                                 ))
