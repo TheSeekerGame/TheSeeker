@@ -140,6 +140,13 @@ forbid_slots_all = ["AttackTransition"]
 action = "SetFrameNow"
 frame_index = 2
 
+[[script]]
+run_at_frame = [2]
+forbid_slots_all = ["AttackTransition"]
+action = "PlayAudio"
+volume = 0.5
+asset_key = "audio.game.HammerSwing"
+
 # VARIANT 2 INIT
 [[script]]
 run_on_playback_control = "Start"
@@ -148,6 +155,13 @@ if_runcount_quant = "2"
 action = "SetFrameNow"
 frame_index = 9
 
+[[script]]
+run_at_frame = [9]
+forbid_slots_all = ["AttackTransition"]
+action = "PlayAudio"
+volume = 0.5
+asset_key = "audio.game.HammerSwing"
+
 # VARIANT 3 INIT
 [[script]]
 run_on_playback_control = "Start"
@@ -155,6 +169,14 @@ forbid_slots_all = ["AttackTransition"]
 if_runcount_quant = "3"
 action = "SetFrameNow"
 frame_index = 16
+
+[[script]]
+run_at_frame = [16]
+forbid_slots_all = ["AttackTransition"]
+action = "PlayAudio"
+volume = 0.5
+asset_key = "audio.game.HammerSwingDown"
+
 
 
 # Support left/right flipping

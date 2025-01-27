@@ -14,6 +14,11 @@ run_at_frame = 5
 action = "SetFrameNext"
 frame_index = 1
 
+[[script]]
+run_at_frame = 4
+action = "PlayAudio"
+asset_key = "audio.game.SmallSpiderAttack"
+
 # Support left/right flipping
 [[script]]
 run_on_slot_enable = "DirectionLeft"
