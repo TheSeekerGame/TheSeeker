@@ -13,6 +13,18 @@ action = "PlayAudio"
 volume = 0.2
 asset_key = "audio.game.FallImpact"
 
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+if_previous_script_key = "anim.player.Fall"
+action = "SetFrameNow"
+frame_index = 1
+
+[[script]]
+run_on_slot_enable = "DirectionRight"
+if_previous_script_key = "anim.player.Fall"
+action = "SetFrameNow"
+frame_index = 13
+
 # LOOP (left)
 [[script]]
 run_at_frame = 12
@@ -28,10 +40,12 @@ frame_index = 15
 # Support left/right
 [[script]]
 run_on_slot_enable = "DirectionLeft"
+if_previous_script_key = "anim.player.Run"
 action = "SetFrameNow"
 frame_index = 3
 [[script]]
 run_on_slot_enable = "DirectionRight"
+if_previous_script_key = "anim.player.Run"
 action = "SetFrameNow"
 frame_index = 15
 

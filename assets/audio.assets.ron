@@ -165,4 +165,9 @@
             "audio/fx/XpOrbs.flac",
         ],
     ),
+    "audio.game.Music": Files (
+        paths: [
+            "audio/music/PurfaktAmbienceTest.flac",
+        ],
+    ),
 })
