@@ -17,10 +17,11 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::physics::Knockback;
 use super::player::{Player, PlayerConfig, StatusModifier, Stealthing};
+use crate::game::attack::arc_attack::Projectile;
 use crate::game::attack::particles::ArcParticleEffectHandle;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
-use crate::game::{attack::arc_attack::Projectile, player::EnemiesNearby};
+use crate::game::player::EnemiesNearby;
 use crate::graphics::particles_util::BuildParticles;
 use crate::prelude::*;
 
@@ -69,7 +70,7 @@ pub enum EnemyStateSet {
 
 #[derive(Bundle, LdtkEntity, Default)]
 pub struct EnemyBlueprintBundle {
-    marker: EnemyBlueprint,
+    pub(crate) marker: EnemyBlueprint,
 }
 
 #[derive(Bundle, LdtkEntity, Default)]
@@ -130,7 +131,7 @@ pub struct SpawnSlot {
 #[component(storage = "SparseSet")]
 pub struct EnemyBlueprint {
     /// Hp added from spawner due to number of enemies killed.
-    bonus_hp: u32,
+    pub(crate) bonus_hp: u32,
 }
 
 #[derive(Bundle)]
@@ -696,7 +697,7 @@ fn check_player_range(
     if let Ok((player_e, player_trans, player_stealth, mut enemies_nearby)) =
         player_query.get_single_mut()
     {
-        //reset every tick
+        // reset every tick
         **enemies_nearby = 0;
 
         for (
@@ -710,7 +711,7 @@ fn check_player_range(
             is_defending,
         ) in query.iter_mut()
         {
-            //TODO: still update enemies nearby in stealth?
+            // TODO: still update enemies nearby in stealth?
             if player_stealth.is_some() {
                 *range = Range::Deaggro;
                 target.0 = None;
@@ -910,9 +911,11 @@ fn aggro(
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if matches!(range, Range::Melee) {
                 match role {
-                    Role::Melee => transitions.push(Waiting::new_transition(
-                        MeleeAttack::default(),
-                    )),
+                    Role::Melee => {
+                        transitions.push(Waiting::new_transition(
+                            MeleeAttack::default(),
+                        ))
+                    },
                     Role::Ranged => {
                         velocity.x = 0.;
                         transitions.push(Waiting::new_transition(Defense));
