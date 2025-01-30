@@ -107,20 +107,32 @@
     ),
     "audio.game.SwordImpact": Files (
         paths: [
-            "audio/attack/ImpactBass1.flac",
-            "audio/attack/ImpactBass2.flac",
+            "audio/attack/SwordImpact1.flac",
+            "audio/attack/SwordImpact2.flac",
+            "audio/attack/SwordImpact3.flac",
+            "audio/attack/SwordImpact4.flac",
         ],
     ),
     "audio.game.HammerImpact": Files (
         paths: [
-            "audio/attack/ImpactBass1.flac",
-            "audio/attack/ImpactBass2.flac",
+            "audio/attack/HammerImpact1.flac",
+            "audio/attack/HammerImpact2.flac",
+            "audio/attack/HammerImpact3.flac",
+            "audio/attack/HammerImpact4.flac",
         ],
     ),
     "audio.game.BowImpact": Files (
         paths: [
             "audio/attack/ImpactBass1.flac",
             "audio/attack/ImpactBass2.flac",
+        ],
+    ),
+    "audio.game.PlayerGetsDamaged": Files (
+        paths: [
+            "audio/fx/PlayerGetsDamaged1.flac",
+            "audio/fx/PlayerGetsDamaged2.flac",
+            "audio/fx/PlayerGetsDamaged3.flac",
+            "audio/fx/PlayerGetsDamaged4.flac",
         ],
     ),
     "audio.game.BigSpiderSteps": Files (
