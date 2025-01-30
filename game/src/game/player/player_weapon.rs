@@ -3,7 +3,9 @@ use bevy::prelude::{in_state, IntoSystemConfigs, Res};
 use leafwing_input_manager::prelude::ActionState;
 use strum_macros::Display;
 use theseeker_engine::assets::animation::SpriteAnimation;
-use theseeker_engine::prelude::{on_event, Changed, Condition, DetectChanges};
+use theseeker_engine::prelude::{
+    on_event, Changed, Commands, Condition, DetectChanges, OnEnter,
+};
 use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::time::GameTickUpdate;
 
@@ -18,9 +20,13 @@ pub(crate) struct PlayerWeaponPlugin;
 
 impl Plugin for PlayerWeaponPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(PlayerMeleeWeapon::default());
-        app.insert_resource(PlayerRangedWeapon::default());
-        app.insert_resource(PlayerCombatStyle::default());
+        app.init_resource::<PlayerMeleeWeapon>();
+        app.init_resource::<PlayerRangedWeapon>();
+        app.init_resource::<PlayerCombatStyle>();
+        app.add_systems(
+            OnEnter(AppState::InGame),
+            initialize_resources,
+        );
         app.add_systems(
             GameTickUpdate,
             (
@@ -133,6 +139,12 @@ impl std::fmt::Display for CurrentWeapon<'_> {
         };
         write!(f, "{weapon}")
     }
+}
+
+fn initialize_resources(mut commands: Commands) {
+    commands.insert_resource(PlayerMeleeWeapon::default());
+    commands.insert_resource(PlayerRangedWeapon::default());
+    commands.insert_resource(PlayerCombatStyle::default());
 }
 
 fn swap_combat_style(
