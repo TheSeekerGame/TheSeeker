@@ -1555,7 +1555,7 @@ fn enemy_sparks_on_hit_animation(
                     format!("Spark{picked_spark}").as_str(),
                     true,
                 );
-                hit_gfx.set_slot("Hit", true);
+                hit_gfx.set_slot("AttackHit", true);
                 if let Ok(direction) = player_facing_dir.get_single() {
                     match direction {
                         Facing::Right => {
