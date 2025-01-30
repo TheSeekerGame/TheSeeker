@@ -212,7 +212,7 @@ pub enum Passive {
     /// Damage scaling based on number of enemies nearby
     GlowingShard,
     /// Crits lower cooldown of all abilities by 0.5 sec
-    ObsidionNecklace,
+    ObsidianNecklace,
     /// Increased damage while standing still, decreased while moving
     HeavyBoots,
     /// Move faster, get cdr, take double damage
@@ -1436,7 +1436,7 @@ pub fn on_crit_cooldown_reduce(
             mut maybe_can_stealth,
         )) = attacker_query.get_mut(attack.attacker)
         {
-            if passives.contains(&Passive::ObsidionNecklace) {
+            if passives.contains(&Passive::ObsidianNecklace) {
                 if let Some(ref mut can_dash) = maybe_can_dash {
                     can_dash.remaining_cooldown -= 0.5;
                 }

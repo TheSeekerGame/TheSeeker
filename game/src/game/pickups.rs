@@ -47,7 +47,7 @@ pub fn load_pickup_assets(assets: Res<AssetServer>, mut commands: Commands) {
         (Passive::FlamingHeart, "items/passives/FlamingHeart.png"),
         (Passive::IceDagger, "items/passives/IceDagger.png"),
         (Passive::GlowingShard, "items/passives/GlowingShard.png"),
-        (Passive::ObsidionNecklace, "items/passives/ObsidionNecklace.png"),
+        (Passive::ObsidianNecklace, "items/passives/ObsidianNecklace.png"),
         (Passive::HeavyBoots, "items/passives/HeavyBoots.png"),
         (Passive::SerpentRing, "items/passives/SerpentRing.png"),
         (Passive::FrenziedAttack, "items/passives/FrenziedAttack.png"),
@@ -116,7 +116,11 @@ impl Command for SpawnPickupCommand {
             },
             PickupType::PlanetarySeed => {
 
-
+                //category A 1/1000 drop chance
+                //category C 1/2000 drop chance
+                //category B 1/5000 drop chance
+                //category D 1/10000 drop chance
+                //category E 1/100000 drop chance
 
             },
         }
@@ -194,22 +198,28 @@ pub enum PlanetarySeed {
     CategoryE,
 }
 
+impl PlanetarySeed {
+    fn default() -> HashMap<Self, Vec<u32>> {
+
+        HashMap::from_iter(vec![
+                (Self::CategoryA, vec![]),
+                (Self::CategoryB, vec![]),
+                (Self::CategoryC, vec![]),
+                (Self::CategoryD, vec![]),
+                (Self::CategoryE, vec![]),
+            ]
+        )
+
+    }
+}
 
 #[derive(Resource)]
 pub struct DropTracker { 
     pub progress: usize, 
     pub passive_rolls: Vec<u32>,
+    pub seeds: HashMap<PlanetarySeed, Vec<u32>>,
 }
 
-//
-//
-//  category A 1/1000 drop chance
-//  category C 1/2000 drop chance
-//  category B 1/5000 drop chance
-//  category D 1/10000 drop chance
-//  category E 1/100000 drop chance
-//
-//
 
 
 impl FromWorld for DropTracker {
@@ -232,7 +242,7 @@ impl DropTracker {
 
     fn reset(passive_count: usize) -> Self {
 
-        const SPAN: u32 = 10;
+        const SPAN: u32 = 50;
 
         let mut rng = rand::thread_rng();
 
@@ -244,10 +254,58 @@ impl DropTracker {
 
         println!("DROP ROLLS: {:?}", rolls);
 
+
         Self {
             progress: 0,
             passive_rolls: rolls,
+            seeds: PlanetarySeed::default(),
         }
+    }
+    
+    //pub fn drop_random(&mut self) -> Option<Passive> {
+    //
+    //    let mut rng = rand::thread_rng();
+    //
+    //    if !self.locked.is_empty() {
+    //        let i = rng.gen_range(0..self.locked.len());
+    //        let passive = self.locked.swap_remove(i);
+        //
+    //        return Some(passive)
+    //    }
+    //    None
+    //}
+
+    fn roll_seed(&mut self) -> (PlanetarySeed, u32){
+
+        let mut rng = rand::thread_rng();
+
+        let seed_roll = rng.gen_range(0.0..1.0);
+        //
+        //
+        //  category A 1/1000 drop chance
+        //  category C 1/2000 drop chance
+        //  category B 1/5000 drop chance
+        //  category D 1/10000 drop chance
+        //  category E 1/100000 drop chance
+        //
+        //
+
+        return (PlanetarySeed::None, 0);
+
+        //let drop: Option<(PlanetarySeed, u32)> = {
+        //    if seed_roll < 0.00001 && self.seeds[Planetary::] {
+        //        // drop E
+        //    }
+        //    if seed_roll < 0.001 {
+        //        
+        //    }
+        //}
+    }
+
+    fn seed_cap(&self, seed_type: &PlanetarySeed) {
+
+        //self.seeds[seed_type].len()
+
     }
 
 }
@@ -316,7 +374,19 @@ fn spawn_pickups_on_death(
          */
         println!("PRE-DROPPING PASSIVE");
 
-        
+        let mut rng = rand::thread_rng();
+
+        let seed_roll = rng.gen_range(0.0..1.0);
+
+        //category A 1/1000 drop chance
+        //category C 1/2000 drop chance
+        //category B 1/5000 drop chance
+        //category D 1/10000 drop chance
+        //category E 1/100000 drop chance
+
+        //drop_tracker
+        //if seed_roll 
+
         if let Some(milestone) = drop_tracker.get_passive_progress() {
             if kill_count.0 >= *milestone {
                 drop_tracker.progress += 1;

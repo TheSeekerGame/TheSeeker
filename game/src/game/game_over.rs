@@ -185,5 +185,6 @@ pub fn on_game_over(
         });
     });
     kill_count.0 = 0;
+    commands.remove_resource::<DropTracker>();
     commands.init_resource::<DropTracker>();
 }
