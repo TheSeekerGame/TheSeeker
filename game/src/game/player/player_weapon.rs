@@ -3,10 +3,11 @@ use bevy::prelude::{in_state, IntoSystemConfigs, Res};
 use leafwing_input_manager::prelude::ActionState;
 use strum_macros::Display;
 use theseeker_engine::assets::animation::SpriteAnimation;
-use theseeker_engine::prelude::{Added, Changed, DetectChanges, Entity, Or};
+use theseeker_engine::prelude::{on_event, Changed, Condition, DetectChanges};
 use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::time::GameTickUpdate;
 
+use crate::game::attack::DamageInfo;
 use crate::game::enemy::{EnemyEffectGfx, EnemyStateSet};
 use crate::game::player::{Player, PlayerAction};
 use crate::prelude::{App, AppState, Plugin, Query, ResMut, Resource, With};
@@ -29,7 +30,10 @@ impl Plugin for PlayerWeaponPlugin {
                     .after(EnemyStateSet::Animation)
                     .after(swap_combat_style)
                     .after(swap_melee_weapon)
-                    .run_if(should_set_weapon_hit_sfx_slot),
+                    .run_if(
+                        is_current_weapon_changed
+                            .or_else(on_event::<DamageInfo>()),
+                    ),
             )
                 .run_if(in_state(AppState::InGame)),
         );
@@ -161,7 +165,13 @@ fn swap_melee_weapon(
 
 fn set_sfx_slot(
     current_weapon: CurrentWeapon,
-    mut query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyEffectGfx>>,
+    mut query: Query<
+        &mut ScriptPlayer<SpriteAnimation>,
+        (
+            Changed<ScriptPlayer<SpriteAnimation>>,
+            With<EnemyEffectGfx>,
+        ),
+    >,
 ) {
     let current_weapon_name = current_weapon.to_string();
     if current_weapon_name.is_empty() {
@@ -174,18 +184,6 @@ fn set_sfx_slot(
     }
 }
 
-fn should_set_weapon_hit_sfx_slot(
-    current_weapon: CurrentWeapon,
-    query: Query<
-        Entity,
-        Or<(
-            Added<EnemyEffectGfx>,
-            (
-                Changed<ScriptPlayer<SpriteAnimation>>,
-                With<EnemyEffectGfx>,
-            ),
-        )>,
-    >,
-) -> bool {
-    current_weapon.is_changed() || !query.is_empty()
+fn is_current_weapon_changed(current_weapon: CurrentWeapon) -> bool {
+    current_weapon.is_changed()
 }
