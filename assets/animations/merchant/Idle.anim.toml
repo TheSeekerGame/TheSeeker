@@ -14,7 +14,33 @@ run_on_playback_control = "Start"
 action = "SetSpriteFlip"
 flip_x = true
 
-# Loop
+# Hide instrument and stand Idle when Player is nearby
+[[script]]
+run_on_slot_enable = "PlayerNearby"
+action = "SetFrameNext"
+frame_index = 42
+
+# Play Instrument when Player is not nearby
+[[script]]
+run_on_slot_disable = "PlayerNearby"
+action = "SetFrameNext"
+frame_index = 18
+
+# Loop Idle
+[[script]]
+run_at_frame = 17
+require_slots_all = ["PlayerNearby"]
+action = "SetFrameNext"
+frame_index = 1
+
+# Loop Playing Instrument
+[[script]]
+run_at_frame = 41
+forbid_slots_all = ["PlayerNearby"]
+action = "SetFrameNext"
+frame_index = 23
+
+# Reset
 [[script]]
 run_at_frame = 46
 action = "SetFrameNext"
