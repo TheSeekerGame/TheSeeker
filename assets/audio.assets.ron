@@ -105,6 +105,24 @@
             "audio/attack/ImpactBass2.flac",
         ],
     ),
+    "audio.game.SwordImpact": Files (
+        paths: [
+            "audio/attack/ImpactBass1.flac",
+            "audio/attack/ImpactBass2.flac",
+        ],
+    ),
+    "audio.game.HammerImpact": Files (
+        paths: [
+            "audio/attack/ImpactBass1.flac",
+            "audio/attack/ImpactBass2.flac",
+        ],
+    ),
+    "audio.game.BowImpact": Files (
+        paths: [
+            "audio/attack/ImpactBass1.flac",
+            "audio/attack/ImpactBass2.flac",
+        ],
+    ),
     "audio.game.BigSpiderSteps": Files (
         paths: [
             "audio/spider/BigSpiderStep1.flac",
