@@ -27,10 +27,14 @@ struct ControlsPopup {
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         OnEnter(AppState::InGame),
-        (
-            spawn_control_overlay,
-            spawn_control_hint,
-        ),
+        spawn_control_overlay,
+    )
+    .add_systems(
+        OnTransition {
+            from: AppState::MainMenu,
+            to: AppState::InGame,
+        },
+        spawn_control_hint,
     )
     .add_systems(
         Update,
