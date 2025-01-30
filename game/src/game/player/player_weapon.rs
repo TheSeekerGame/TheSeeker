@@ -1,13 +1,17 @@
-use bevy::app::Update;
 use bevy::ecs::system::SystemParam;
 use bevy::prelude::{in_state, IntoSystemConfigs, Res};
 use leafwing_input_manager::prelude::ActionState;
 use strum_macros::Display;
+use theseeker_engine::assets::animation::SpriteAnimation;
+use theseeker_engine::prelude::{Added, Changed, DetectChanges, Entity, Or};
+use theseeker_engine::script::ScriptPlayer;
+use theseeker_engine::time::GameTickUpdate;
 
+use crate::game::enemy::{EnemyEffectGfx, EnemyStateSet};
 use crate::game::player::{Player, PlayerAction};
-use crate::prelude::{App, Plugin, Query, ResMut, Resource, With};
+use crate::prelude::{App, AppState, Plugin, Query, ResMut, Resource, With};
 
-use super::{GameState, PlayerConfig};
+use super::PlayerConfig;
 
 pub(crate) struct PlayerWeaponPlugin;
 
@@ -17,9 +21,17 @@ impl Plugin for PlayerWeaponPlugin {
         app.insert_resource(PlayerRangedWeapon::default());
         app.insert_resource(PlayerCombatStyle::default());
         app.add_systems(
-            Update,
-            (swap_combat_style, swap_melee_weapon)
-                .run_if(in_state(GameState::Playing)),
+            GameTickUpdate,
+            (
+                swap_combat_style,
+                swap_melee_weapon,
+                set_sfx_slot
+                    .after(EnemyStateSet::Animation)
+                    .after(swap_combat_style)
+                    .after(swap_melee_weapon)
+                    .run_if(should_set_weapon_hit_sfx_slot),
+            )
+                .run_if(in_state(AppState::InGame)),
         );
     }
 }
@@ -86,6 +98,12 @@ pub struct CurrentWeapon<'w> {
 }
 
 impl CurrentWeapon<'_> {
+    pub fn is_changed(&self) -> bool {
+        self.combat_style.is_changed()
+            || self.melee_weapon.is_changed()
+            || self.ranged_weapon.is_changed()
+    }
+
     pub fn get_anim_key(&self, action: &str) -> String {
         let weapon_str = self.to_string();
         format!("anim.player.{weapon_str}{action}")
@@ -139,4 +157,35 @@ fn swap_melee_weapon(
             };
         }
     }
+}
+
+fn set_sfx_slot(
+    current_weapon: CurrentWeapon,
+    mut query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyEffectGfx>>,
+) {
+    let current_weapon_name = current_weapon.to_string();
+    if current_weapon_name.is_empty() {
+        eprintln!("Invalid weapon name");
+        return;
+    }
+    let slot = &format!("{current_weapon_name}Hit");
+    for mut animation in query.iter_mut() {
+        animation.set_slot(slot, true);
+    }
+}
+
+fn should_set_weapon_hit_sfx_slot(
+    current_weapon: CurrentWeapon,
+    query: Query<
+        Entity,
+        Or<(
+            Added<EnemyEffectGfx>,
+            (
+                Changed<ScriptPlayer<SpriteAnimation>>,
+                With<EnemyEffectGfx>,
+            ),
+        )>,
+    >,
+) -> bool {
+    current_weapon.is_changed() || !query.is_empty()
 }

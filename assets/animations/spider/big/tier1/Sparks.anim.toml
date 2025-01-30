@@ -14,9 +14,31 @@ asset_key = "audio.game.SpiderGetDamage"
 
 [[script]]
 run_on_slot_enable = "Hit"
+forbid_slots_all = ["SwordHit", "HammerHit", "BowHit"]
 action = "PlayAudio"
 volume = 0.15
 asset_key = "audio.game.ImpactBass"
+
+[[script]]
+run_on_slot_enable = "Hit"
+require_slots_all = ["SwordHit"]
+action = "PlayAudio"
+volume = 0.15
+asset_key = "audio.game.SwordImpact"
+
+[[script]]
+run_on_slot_enable = "Hit"
+require_slots_all = ["HammerHit"]
+action = "PlayAudio"
+volume = 0.15
+asset_key = "audio.game.HammerImpact"
+
+[[script]]
+run_on_slot_enable = "Hit"
+require_slots_all = ["BowHit"]
+action = "PlayAudio"
+volume = 0.15
+asset_key = "audio.game.BowImpact"
 
 # keep looping final frame
 [[script]]
