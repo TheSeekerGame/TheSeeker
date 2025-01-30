@@ -271,7 +271,7 @@ impl<T: Spawn> ControlsOverlayUi for T {
                     margin: UiRect::new(
                         Val::Auto,
                         Val::Auto,
-                        Val::Percent(65.0),
+                        Val::Percent(40.0),
                         Val::Auto,
                     ),
                     padding: UiRect::axes(Val::Px(16.0), Val::Px(4.0)),
