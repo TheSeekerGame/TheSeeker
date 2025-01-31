@@ -7,6 +7,8 @@ use theseeker_engine::script::ScriptPlayer;
 
 use crate::prelude::*;
 
+use super::player::{Idle, Player};
+
 pub struct SwitchesPlugin;
 
 impl Plugin for SwitchesPlugin {
@@ -14,14 +16,14 @@ impl Plugin for SwitchesPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                setup_switches,
-                setup_puzzles,
-                activate_switches.run_if(should_change_switch_status),
+                setup_switches.run_if(any_matching::<Added<Switch>>()),
+                setup_puzzles.run_if(any_matching::<Added<Switch>>()),
+                activate_switches.run_if(any_matching::<(
+                    With<Player>,
+                    Without<Idle>,
+                )>()),
             )
-                .run_if(
-                    in_state(AppState::InGame)
-                        .and_then(in_state(GameState::Playing)),
-                ),
+                .run_if(in_state(AppState::InGame)),
         );
     }
 }
@@ -92,8 +94,8 @@ fn setup_switches(
                 e_effects_gfx,
             },
             Collider::cuboid(
-                32.0,
-                32.0,
+                30.0,
+                30.0,
                 InteractionGroups {
                     memberships: SENSOR,
                     filter: PLAYER,
@@ -174,7 +176,7 @@ fn activate_switches(
                 memberships: SENSOR,
                 filter: PLAYER,
             },
-            None,
+            Some(entity),
         );
 
         if let Ok(mut animation) = switch_animation_query.get_mut(gent.e_gfx) {
@@ -208,35 +210,4 @@ fn parse_puzzle_id(name: &Name, prefix: &str) -> u8 {
     name.strip_prefix(prefix)
         .and_then(|id| id.parse::<u8>().ok())
         .unwrap_or_default()
-}
-
-fn should_change_switch_status(
-    spatial_query: Res<PhysicsWorld>,
-    query: Query<(&Gent, &GlobalTransform, &Collider), With<Switch>>,
-    switch_animation_query: Query<
-        &ScriptPlayer<SpriteAnimation>,
-        With<SwitchGfx>,
-    >,
-) -> bool {
-    query.iter().any(|(gent, transform, collider)| {
-        switch_animation_query
-            .get(gent.e_gfx)
-            .is_ok_and(|animation| {
-                let intersections = spatial_query.intersect(
-                    transform.translation().xy(),
-                    collider.0.shape(),
-                    InteractionGroups {
-                        memberships: SENSOR,
-                        filter: PLAYER,
-                    },
-                    None,
-                );
-
-                if intersections.is_empty() {
-                    animation.has_slot("Activated")
-                } else {
-                    !animation.has_slot("Activated")
-                }
-            })
-    })
 }
