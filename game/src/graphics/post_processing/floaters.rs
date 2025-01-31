@@ -194,12 +194,12 @@ pub struct FloaterSettings {
 impl Default for FloaterSettings {
     fn default() -> Self {
         Self {
-            static_drift: Vec2::new(0.4, -1.8),
-            spawn_spacing: Vec2::splat(25.0),
-            particle_size: Vec2::new(10.0, 20.0),
+            static_drift: Vec2::new(8.0, -4.0),
+            spawn_spacing: Vec2::splat(35.0),
+            particle_size: Vec2::new(5.0, 8.0),
             particle_size_variance_speed: 0.1,
             movement_speed: 0.1,
-            movement_strength: 0.5,
+            movement_strength: 0.6,
             sprite_width: 256,
             spritesheet_width: 256,
             sprite_index: 0,
