@@ -27,10 +27,14 @@ struct ControlsPopup {
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
         OnEnter(AppState::InGame),
-        (
-            spawn_control_overlay,
-            spawn_control_hint,
-        ),
+        spawn_control_overlay,
+    )
+    .add_systems(
+        OnTransition {
+            from: AppState::MainMenu,
+            to: AppState::InGame,
+        },
+        spawn_control_hint,
     )
     .add_systems(
         Update,
@@ -271,7 +275,7 @@ impl<T: Spawn> ControlsOverlayUi for T {
                     margin: UiRect::new(
                         Val::Auto,
                         Val::Auto,
-                        Val::Percent(65.0),
+                        Val::Percent(40.0),
                         Val::Auto,
                     ),
                     padding: UiRect::axes(Val::Px(16.0), Val::Px(4.0)),
