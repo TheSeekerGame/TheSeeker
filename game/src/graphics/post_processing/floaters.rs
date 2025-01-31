@@ -196,7 +196,7 @@ impl Default for FloaterSettings {
         Self {
             static_drift: Vec2::new(8.0, -4.0),
             spawn_spacing: Vec2::splat(35.0),
-            particle_size: Vec2::new(5.0, 8.0),
+            particle_size: Vec2::new(6.0, 9.0),
             particle_size_variance_speed: 0.1,
             movement_speed: 0.1,
             movement_strength: 0.6,
