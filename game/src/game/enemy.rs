@@ -911,11 +911,9 @@ fn aggro(
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if matches!(range, Range::Melee) {
                 match role {
-                    Role::Melee => {
-                        transitions.push(Waiting::new_transition(
-                            MeleeAttack::default(),
-                        ))
-                    },
+                    Role::Melee => transitions.push(Waiting::new_transition(
+                        MeleeAttack::default(),
+                    )),
                     Role::Ranged => {
                         velocity.x = 0.;
                         transitions.push(Waiting::new_transition(Defense));
@@ -1526,7 +1524,7 @@ impl Plugin for EnemyAnimationPlugin {
                 // enemy_pushback_attack_animation,
                 enemy_death_animation,
                 enemy_decay_animation,
-                enemy_sparks_on_hit_animation,
+                enemy_sparks_on_hit_animation.run_if(on_event::<DamageInfo>()),
                 enemy_decay_visibility,
                 sprite_flip,
             )
@@ -1557,7 +1555,7 @@ fn enemy_sparks_on_hit_animation(
                     format!("Spark{picked_spark}").as_str(),
                     true,
                 );
-                hit_gfx.set_slot("Hit", true);
+                hit_gfx.set_slot("AttackHit", true);
                 if let Ok(direction) = player_facing_dir.get_single() {
                     match direction {
                         Facing::Right => {
