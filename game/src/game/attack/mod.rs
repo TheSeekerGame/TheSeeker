@@ -196,15 +196,12 @@ pub struct Crit;
 
 // checks nearest entities, modifies attacks targets
 pub fn determine_attack_targets(
-    mut attack_query: Query<
-        (
-            Entity,
-            &GlobalTransform,
-            &mut Attack,
-            &Collider,
-        ),
-        Changed<Collider>,
-    >,
+    mut attack_query: Query<(
+        Entity,
+        &GlobalTransform,
+        &mut Attack,
+        &Collider,
+    )>,
     damageable_query: Query<
         &GlobalTransform,
         (With<Collider>, With<Health>, With<Gent>),
