@@ -1583,8 +1583,8 @@ fn player_pickup_interact(
                             commands.entity(entity).despawn();
                             break;
                         },
-                        PickupType::PlanetarySeed => {
-
+                        PickupType::Seed(categ, id ) => {
+                            todo!("implement UI Display for Planetary Seed Pickups");
                         },
                     }
 

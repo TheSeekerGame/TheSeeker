@@ -2,7 +2,7 @@ use bevy::{ecs::system::Command, prelude::*, utils::hashbrown::HashMap};
 use rand::Rng;
 use theseeker_engine::{physics::LinearVelocity, time::{GameTickUpdate, GameTime}};
 
-use super::{attack::KillCount, enemy::{dead, Enemy}, gentstate::Dead, player::{Passive, Passives, Player}};
+use super::{attack::KillCount, enemy::{dead, Enemy, Tier}, gentstate::Dead, player::{Passive, Passives, Player}};
 
 pub struct PickupPlugin;
 impl Plugin for PickupPlugin {
@@ -35,7 +35,7 @@ impl PickupDrop {
 #[derive(Resource)]
 pub struct PickupAssetHandles {
     passive_map: HashMap<Passive, Handle<Image>>,
-    seed_map: HashMap<PlanetarySeed, Handle<Image>>,
+    seed_map: HashMap<PlanetarySeed, String>,
 }
 
 
@@ -72,7 +72,7 @@ pub fn load_pickup_assets(assets: Res<AssetServer>, mut commands: Commands) {
             ),
             seed_map: HashMap::from_iter(
                 seed_mappings.iter().map(|(x, y)|
-                    (x.clone(), assets.load(*y))).collect::<Vec<_>>()
+                    (x.clone(), String::from(*y))).collect::<Vec<_>>()
             )
         }
     );
@@ -88,7 +88,7 @@ impl Command for SpawnPickupCommand {
         let pos = self.pos;
 
         let handles = world.get_resource::<PickupAssetHandles>().unwrap();
-
+        let asset_server = world.get_resource::<AssetServer>().unwrap();
 
         match self.p_type.clone() {
             PickupType::None => {
@@ -97,7 +97,6 @@ impl Command for SpawnPickupCommand {
             PickupType::PassiveDrop(passive) => {
 
                 let texture_handle = handles.passive_map.get(&passive).unwrap();
-
 
                 world.spawn((
                     PickupDrop::new(self.p_type),
@@ -114,14 +113,23 @@ impl Command for SpawnPickupCommand {
         
 
             },
-            PickupType::PlanetarySeed => {
+            PickupType::Seed(categ, id) => {
 
-                //category A 1/1000 drop chance
-                //category C 1/2000 drop chance
-                //category B 1/5000 drop chance
-                //category D 1/10000 drop chance
-                //category E 1/100000 drop chance
+                let path = &handles.seed_map[&categ];
 
+                let texture_handle = asset_server.load(format!("{path}{id}.png"));
+
+                world.spawn((
+                    PickupDrop::new(self.p_type),
+                    SpriteBundle {
+                        //sprite: Sprite { 
+                        //    ..default()
+                        //},
+                        transform: Transform::from_translation(Vec3::new(pos.x, pos.y, 50.0)),
+                        texture: texture_handle.clone(),
+                        ..default()
+                    }
+                ));
             },
         }
 
@@ -135,7 +143,7 @@ impl Command for SpawnPickupCommand {
 pub enum PickupType {
     None,
     PassiveDrop(Passive),
-    PlanetarySeed,
+    Seed(PlanetarySeed, u32),
 }
 
 struct DropTable(Vec<(f32, PickupType)>);
@@ -202,11 +210,11 @@ impl PlanetarySeed {
     fn default() -> HashMap<Self, Vec<u32>> {
 
         HashMap::from_iter(vec![
-                (Self::CategoryA, vec![]),
-                (Self::CategoryB, vec![]),
-                (Self::CategoryC, vec![]),
-                (Self::CategoryD, vec![]),
-                (Self::CategoryE, vec![]),
+                (Self::CategoryA, vec![1,4,5,8,11,12]),
+                (Self::CategoryB, vec![1,3,4,7,8,12]),
+                (Self::CategoryC, vec![1,2,3,4,5,8,9,11]),
+                (Self::CategoryD, vec![1,2,3,6,7,8]),
+                (Self::CategoryE, vec![3,6,7,8,11,12]),
             ]
         )
 
@@ -218,6 +226,7 @@ pub struct DropTracker {
     pub progress: usize, 
     pub passive_rolls: Vec<u32>,
     pub seeds: HashMap<PlanetarySeed, Vec<u32>>,
+    //pub locked: Vec<PlanetarySeed>,
 }
 
 
@@ -262,52 +271,18 @@ impl DropTracker {
         }
     }
     
-    //pub fn drop_random(&mut self) -> Option<Passive> {
-    //
-    //    let mut rng = rand::thread_rng();
-    //
-    //    if !self.locked.is_empty() {
-    //        let i = rng.gen_range(0..self.locked.len());
-    //        let passive = self.locked.swap_remove(i);
-        //
-    //        return Some(passive)
-    //    }
-    //    None
-    //}
-
-    fn roll_seed(&mut self) -> (PlanetarySeed, u32){
+    pub fn drop_random_seed(&mut self, seed_type: &PlanetarySeed) -> Option<u32> {
 
         let mut rng = rand::thread_rng();
 
-        let seed_roll = rng.gen_range(0.0..1.0);
-        //
-        //
-        //  category A 1/1000 drop chance
-        //  category C 1/2000 drop chance
-        //  category B 1/5000 drop chance
-        //  category D 1/10000 drop chance
-        //  category E 1/100000 drop chance
-        //
-        //
+        if !self.seeds[seed_type].is_empty() {
+            let i = rng.gen_range(0..self.seeds[seed_type].len());
+            let seed = self.seeds.get_mut(seed_type).unwrap().swap_remove(i);
 
-        return (PlanetarySeed::None, 0);
-
-        //let drop: Option<(PlanetarySeed, u32)> = {
-        //    if seed_roll < 0.00001 && self.seeds[Planetary::] {
-        //        // drop E
-        //    }
-        //    if seed_roll < 0.001 {
-        //        
-        //    }
-        //}
+            return Some(seed)
+        }
+        None
     }
-
-    fn seed_cap(&self, seed_type: &PlanetarySeed) {
-
-        //self.seeds[seed_type].len()
-
-    }
-
 }
 
 #[derive(Component)]
@@ -319,7 +294,7 @@ fn spawn_pickups_on_death(
     mut kill_count: ResMut<KillCount>,
     mut drop_tracker: ResMut<DropTracker>,
     enemy_q: Query<
-        &GlobalTransform,
+        (&GlobalTransform, &Tier),
         (
             With<Enemy>,
             Added<Dead>,
@@ -337,7 +312,7 @@ fn spawn_pickups_on_death(
 
     //println!("spawn system post let Ok");
 
-    for tr in enemy_q.iter() {
+    for (tr, tier) in enemy_q.iter() {
 
         let translation = tr.translation();
         
@@ -376,16 +351,79 @@ fn spawn_pickups_on_death(
 
         let mut rng = rand::thread_rng();
 
+        
         let seed_roll = rng.gen_range(0.0..1.0);
 
-        //category A 1/1000 drop chance
-        //category C 1/2000 drop chance
-        //category B 1/5000 drop chance
-        //category D 1/10000 drop chance
-        //category E 1/100000 drop chance
+        println!("seed roll: {}", seed_roll);
 
-        //drop_tracker
-        //if seed_roll 
+        let seed_category: Option<PlanetarySeed> = match tier {
+            Tier::Base => {
+                if seed_roll < 0.001 {
+                    Some(PlanetarySeed::CategoryA)
+                }
+                else if seed_roll < 0.0015 {
+                    Some(PlanetarySeed::CategoryC)
+                }
+                else { None }
+            },
+            Tier::Two => {
+                if seed_roll < 0.001 {
+                    Some(PlanetarySeed::CategoryA)
+                }
+                else if seed_roll < 0.0015 {
+                    Some(PlanetarySeed::CategoryC)
+                }
+                else if seed_roll < 0.0017 {
+                    Some(PlanetarySeed::CategoryB)
+                }
+                else if seed_roll < 0.00171 {
+                    Some(PlanetarySeed::CategoryD)
+                }
+                else { None }
+            },
+            Tier::Three => {
+                if seed_roll < 0.001 {
+                    Some(PlanetarySeed::CategoryA)
+                }
+                else if seed_roll < 0.0015 {
+                    Some(PlanetarySeed::CategoryC)
+                }
+                else if seed_roll < 0.0017 {
+                    Some(PlanetarySeed::CategoryB)
+                }
+                else if seed_roll < 0.00171 {
+                    Some(PlanetarySeed::CategoryD)
+                }
+                else if seed_roll < 0.001711 {
+                    Some(PlanetarySeed::CategoryE)
+                }
+                else { None }
+            },
+        };
+
+        if let Some(seed_category) = seed_category {
+            let seed_id = drop_tracker.drop_random_seed(&seed_category);
+
+            if let Some(seed_id) = seed_id {
+                commands.add(SpawnPickupCommand {
+                    pos: translation,
+                    p_type: PickupType::Seed(seed_category, seed_id),
+                });
+
+            }
+        }
+        
+        //category A 1/1000 drop chance
+            //all tiers
+        //category C 1/2000 drop chance
+            //all tiers
+        //category B 1/5000 drop chance
+            //Tiers 2 and 3
+        //category D 1/10000 drop chance
+            //Tiers 2 and 3
+        //category E 1/100000 drop chance
+            //Tier 3 only
+
 
         if let Some(milestone) = drop_tracker.get_passive_progress() {
             if kill_count.0 >= *milestone {
