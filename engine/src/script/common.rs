@@ -20,6 +20,23 @@ pub struct ScriptBundle {
     pub player: ScriptPlayer<Script>,
 }
 
+impl ScriptBundle {
+    pub fn new_play_handle(handle: Handle<Script>) -> Self {
+        let mut player = ScriptPlayer::default();
+        player.play_handle(handle);
+        Self {
+            player
+        }
+    }
+    pub fn new_play_key(key: &str) -> Self {
+        let mut player = ScriptPlayer::default();
+        player.play_key(key);
+        Self {
+            player
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct CommonScriptTracker {
     tick_actions: Vec<(u64, ActionId)>,

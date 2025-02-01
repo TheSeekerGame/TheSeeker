@@ -21,6 +21,23 @@ pub struct SpriteAnimationBundle {
     pub player: ScriptPlayer<SpriteAnimation>,
 }
 
+impl SpriteAnimationBundle {
+    pub fn new_play_handle(handle: Handle<SpriteAnimation>) -> Self {
+        let mut player = ScriptPlayer::default();
+        player.play_handle(handle);
+        Self {
+            player
+        }
+    }
+    pub fn new_play_key(key: &str) -> Self {
+        let mut player = ScriptPlayer::default();
+        player.play_key(key);
+        Self {
+            player
+        }
+    }
+}
+
 #[derive(Default)]
 pub struct SpriteAnimationTracker {
     carryover: SpriteAnimationCarryover,

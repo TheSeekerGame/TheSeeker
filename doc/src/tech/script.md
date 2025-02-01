@@ -35,9 +35,7 @@ spawn_script script_asset_key
 From Rust code, you can run a script by spawning a special entity, as follows:
 
 ```rust
-commands.spawn(ScriptBundle {
-    key: "script.asset.key",
-});
+commands.spawn(ScriptBundle::new_play_key("script_asset_key"));
 ```
 
 ### Scripts
