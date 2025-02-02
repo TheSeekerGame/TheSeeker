@@ -107,15 +107,16 @@
     ),
     "audio.game.SwordImpact": Files (
         paths: [
-            "audio/attack/SwordImpact1.flac",
-            "audio/attack/SwordImpact2.flac",
-            "audio/attack/SwordImpact3.flac",
+            "audio/attack/SwordImpact7.flac",
             "audio/attack/SwordImpact4.flac",
         ],
     ),
     "audio.game.HammerImpact": Files (
         paths: [
             "audio/attack/HammerImpact1.flac",
+            "audio/attack/HammerImpact2.flac",
+            "audio/attack/HammerImpact3.flac",
+            "audio/attack/HammerImpact4.flac",
         ],
     ),
     "audio.game.BowImpact": Files (
@@ -195,6 +196,7 @@
     "audio.game.Music": Files (
         paths: [
             "audio/music/Music2.flac",
+            "audio/music/Music3.flac",
         ],
     ),
     "audio.game.Ambience": Files (

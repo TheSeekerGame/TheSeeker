@@ -17,7 +17,7 @@ run_at_frame = 15
 [[script]]
 run_at_frame = 3
 action = "PlayAudio"
-volume = 0.8
+volume = 0.6
 asset_key = "audio.game.BigSpiderAttack"
 
 # Support left/right flipping
