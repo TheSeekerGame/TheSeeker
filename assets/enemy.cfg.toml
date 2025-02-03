@@ -24,5 +24,5 @@ melee_damage = 20.0
 walking_speed = 20.0
 chasing_speed = 35.0
 
-fall_y_velocity = 10.0
+fall_y_velocity = 30.0
 jump_y_velocity = 140.0

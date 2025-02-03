@@ -1317,6 +1317,7 @@ fn walking(
 }
 
 const GROUNDED_THRESHOLD: f32 = 1.0;
+const GROUND_BUFFER: f32 = -1.0;
 fn falling(
     spatial_query: Res<PhysicsWorld>,
     mut query: Query<
@@ -1356,12 +1357,13 @@ fn falling(
                     // If we are close to the ground
                     if velocity.y < 0. && toi.witness2[1] < 0. {
                         println!(
-                            "hit ground {toi:?} {}",
-                            transform.translation
+                            "hit ground {toi:?} {} {:?}",
+                            transform.translation, velocity
                         );
                         *nav = Navigation::Grounded;
                         transform.translation.y =
-                            transform.translation.y - toi.witness2[1] - toi.toi;
+                            transform.translation.y - toi.witness2[1] - toi.toi
+                                + GROUND_BUFFER;
                         velocity.y = 0.;
                         if let Ok(mut enemy_anim) =
                             gfx_query.get_mut(gent.e_gfx)
@@ -1385,7 +1387,8 @@ fn falling(
                     collider.0.shape(),
                     GROUNDED_THRESHOLD
                         + collider.0.shape().compute_local_aabb().extents()[1]
-                            / 2.,
+                            / 2.
+                        + GROUND_BUFFER,
                     InteractionGroups {
                         memberships: ENEMY,
                         filter: GROUND,
@@ -1503,6 +1506,7 @@ fn chasing(
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
     enemy_config: Res<EnemyConfig>,
 ) {
+    // println!("tick");
     for (
         target,
         facing,
