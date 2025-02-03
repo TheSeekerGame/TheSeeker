@@ -3,10 +3,13 @@ fall_accel = 4.5
 
 start_hp = 100.0
 
-range_melee = 14.0
-range_aggro = 50.0
-range_ranged = 60.0
-range_deaggro = 70.0
+range_melee_melee = 12.0
+range_melee_aggro = 100.0
+range_melee_deaggro = 70.0
+range_ranged_melee = 29.0
+range_ranged_aggro = 100.0
+range_ranged_ranged = 100.0
+range_nearby = 20.0
 
 walking_min_time = 24.0
 walking_max_time = 300.0

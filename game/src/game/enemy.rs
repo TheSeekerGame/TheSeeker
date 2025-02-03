@@ -72,10 +72,13 @@ struct EnemyConfig {
 
     start_hp: u32,
 
-    range_aggro: f32,
-    range_deaggro: f32,
-    range_melee: f32,
-    range_ranged: f32,
+    range_melee_melee: f32,
+    range_melee_aggro: f32,
+    range_melee_deaggro: f32,
+    range_ranged_melee: f32,
+    range_ranged_aggro: f32,
+    range_ranged_ranged: f32,
+    range_nearby: f32,
 
     walking_min_time: u32,
     walking_max_time: u32,
@@ -140,10 +143,13 @@ fn update_enemy_config(config: &mut EnemyConfig, cfg: &DynamicConfig) {
 
     update_field(&mut errors, &cfg.0, "start_hp", |val| config.start_hp = val as u32);
 
-    update_field(&mut errors, &cfg.0, "range_aggro", |val| config.range_aggro = val);
-    update_field(&mut errors, &cfg.0, "range_deaggro", |val| config.range_deaggro = val);
-    update_field(&mut errors, &cfg.0, "range_melee", |val| config.range_melee = val);
-    update_field(&mut errors, &cfg.0, "range_ranged", |val| config.range_ranged = val);
+    update_field(&mut errors, &cfg.0, "range_melee_melee", |val| config.range_melee_melee = val);
+    update_field(&mut errors, &cfg.0, "range_melee_aggro", |val| config.range_melee_aggro = val);
+    update_field(&mut errors, &cfg.0, "range_melee_deaggro", |val| config.range_melee_deaggro = val);
+    update_field(&mut errors, &cfg.0, "range_ranged_melee", |val| config.range_ranged_melee = val);
+    update_field(&mut errors, &cfg.0, "range_ranged_aggro", |val| config.range_ranged_aggro = val);
+    update_field(&mut errors, &cfg.0, "range_ranged_ranged", |val| config.range_ranged_ranged = val);
+    update_field(&mut errors, &cfg.0, "range_nearby", |val| config.range_nearby = val);
 
     update_field(&mut errors, &cfg.0, "walking_min_time", |val| config.walking_min_time = val as u32);
     update_field(&mut errors, &cfg.0, "walking_max_time", |val| config.walking_max_time = val as u32);
@@ -202,8 +208,8 @@ pub struct EnemySpawner {
 }
 
 impl EnemySpawner {
-    const MAX: usize = 3;
     const COOLDOWN: u32 = 4000;
+    const MAX: usize = 3;
     const RANGE: f32 = 400.;
 
     fn is_cleared(&self) -> bool {
@@ -274,13 +280,13 @@ pub struct EnemyEffectGfx {
     e_gent: Entity,
 }
 
-//TODO:only spawn when all from spawner have died, increase scaling, when 5 are cleared, up spider
-//tier one at a time
-//when ranged should be capped at 2 per spawner
-//only tick cooldown when spawner is cleared
+// TODO:only spawn when all from spawner have died, increase scaling, when 5 are cleared, up spider
+// tier one at a time
+// when ranged should be capped at 2 per spawner
+// only tick cooldown when spawner is cleared
 fn spawn_enemies(
     mut spawner_q: Query<(&Transform, &mut EnemySpawner)>,
-    //dead enemies to clear
+    // dead enemies to clear
     enemy_q: Query<
         Entity,
         (
@@ -312,8 +318,8 @@ fn spawn_enemies(
             match spawner.spawn_state {
                 SpawnerState::Upgrade => {
                     // set number of clears till next upgrade 2 or 3
-                    //TODO: get rid of threshold_next if we decide to continue with spawning every
-                    //clear
+                    // TODO: get rid of threshold_next if we decide to continue with spawning every
+                    // clear
                     spawner.threshold_next = 1;
                     // spawner.threshold_next = thread_rng().gen_range(2..4);
                     // add a slot
@@ -349,7 +355,7 @@ fn spawn_enemies(
                     } {
                         let mut ranged_role = 0;
                         for slot in spawner.slots.iter_mut() {
-                            //generate a random roll, max 2 per spawner
+                            // generate a random roll, max 2 per spawner
                             let role = if ranged_role < 2 {
                                 let r = Role::random();
                                 if matches!(r, Role::Ranged) {
@@ -707,25 +713,29 @@ impl Distribution<Role> for Standard {
     }
 }
 impl Role {
-    pub fn check_range(&self, distance: f32) -> Range {
+    pub fn check_range(
+        &self,
+        distance: f32,
+        enemy_config: &EnemyConfig,
+    ) -> Range {
         match self {
             Role::Melee => {
-                if distance <= Range::MELEE_MELEE {
+                if distance <= enemy_config.range_melee_melee {
                     Range::Melee
-                } else if distance <= Range::MELEE_AGGRO {
+                } else if distance <= enemy_config.range_melee_aggro {
                     Range::Aggro
-                } else if distance <= Range::MELEE_DEAGGRO {
+                } else if distance <= enemy_config.range_melee_deaggro {
                     Range::Deaggro
                 } else {
                     Range::Far
                 }
             },
             Role::Ranged => {
-                if distance <= Range::RANGED_MELEE {
+                if distance <= enemy_config.range_ranged_melee {
                     Range::Melee
-                } else if distance <= Range::RANGED_AGGRO {
+                } else if distance <= enemy_config.range_ranged_aggro {
                     Range::Aggro
-                } else if distance <= Range::RANGED_RANGED {
+                } else if distance <= enemy_config.range_ranged_ranged {
                     Range::Ranged
                 } else {
                     Range::Far
@@ -747,21 +757,6 @@ enum Range {
 
 #[derive(Component, Debug, Deref)]
 struct Target(Option<Entity>);
-
-impl Range {
-    const RANGED_AGGRO: f32 = 100.;
-    // const RANGED_DEAGGRO: f32 = 70.;
-    const RANGED_MELEE: f32 = 29.;
-    const RANGED_RANGED: f32 = 100.;
-
-    const MELEE_AGGRO: f32 = 100.;
-    const MELEE_DEAGGRO: f32 = 70.;
-    const MELEE_MELEE: f32 = 12.;
-    // const MELEE_RANGED: f32 = 60.;
-
-    // for players passive enemies nearby buff
-    const NEARBY: f32 = 20.;
-}
 
 /// Component that indicates that the player is inside of this enemy,
 /// and has its usual collision layer membership modified to ENEMY_INSIDE
@@ -840,14 +835,14 @@ fn check_player_range(
             }
 
             // set range
-            *range = role.check_range(distance);
+            *range = role.check_range(distance, &enemy_config);
             // set target
             target.0 = match *range {
                 Range::Melee | Range::Aggro | Range::Ranged => Some(player_e),
                 Range::Deaggro | Range::Far | Range::None => None,
             };
-            //set nearby enemies for passive buff
-            if distance < Range::NEARBY {
+            // set nearby enemies for passive buff
+            if distance < enemy_config.range_nearby {
                 **enemies_nearby += 1;
             };
         }
@@ -1151,7 +1146,7 @@ fn ranged_attack(
             let gravity = config.fall_accel * time.hz as f32;
             let rng_factor = 1.0;
             let mut speed = ballistic_speed(
-                enemy_config.range_ranged,
+                enemy_config.range_ranged_ranged,
                 gravity,
                 relative_height,
             ) * rng_factor as f32;
@@ -1250,7 +1245,11 @@ fn melee_attack(
                     }),
                     TransformBundle::from_transform(Transform::default()),
                     AnimationCollider(gent.e_gfx),
-                    Attack::new(8, entity, enemy_config.melee_damage * *tier as u32 as f32),
+                    Attack::new(
+                        8,
+                        entity,
+                        enemy_config.melee_damage * *tier as u32 as f32,
+                    ),
                 ))
                 .set_parent(entity);
         }
@@ -1503,7 +1502,7 @@ fn chasing(
         if !matches!(role, Role::Melee) {
             continue;
         }
-        if target.0.is_some() {
+        if let Some(p_entity) = target.0 {
             // check if we need to transition
             match *range {
                 Range::Melee => {
