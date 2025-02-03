@@ -1,6 +1,11 @@
-use bevy::{ecs::system::Command, prelude::*, utils::hashbrown::HashMap};
+use bevy::{
+    ecs::system::Command, prelude::*, text::BreakLineOn,
+    transform::TransformSystem, ui::UiSystem, utils::hashbrown::HashMap,
+};
 use rand::Rng;
 use theseeker_engine::time::GameTickUpdate;
+
+use crate::prelude::StateDespawnMarker;
 
 use super::{
     attack::KillCount,
@@ -14,10 +19,30 @@ impl Plugin for PickupPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(Startup, load_pickup_assets).add_systems(
             GameTickUpdate,
-            spawn_pickups_on_death
-                .after(dead)
-                .run_if(resource_exists::<DropTracker>),
+            (
+                spawn_pickups_on_death
+                    .after(dead)
+                    .run_if(resource_exists::<DropTracker>),
+                display_passives_description
+                    .after(UiSystem::Layout)
+                    .before(TransformSystem::TransformPropagate)
+                    .run_if(any_with_component::<PickupDrop>),
+            ),
         );
+    }
+}
+
+#[derive(Component)]
+pub struct PassiveDescriptionNode;
+
+/// Stores the [Entity] and [Transform] of a dropped passive.
+/// Should be used in the passive description UI node to reference and reposition it.
+#[derive(Component)]
+pub struct PassiveEntity(Entity);
+
+impl PassiveEntity {
+    pub fn get(&self) -> Entity {
+        self.0
     }
 }
 
@@ -127,16 +152,60 @@ impl Command for SpawnPickupCommand {
         match self.p_type.clone() {
             PickupType::PassiveDrop(passive) => {
                 let texture_handle = handles.passive_map.get(&passive).unwrap();
+                let transform = Transform::from_xyz(pos.x, pos.y, 50.0);
+
+                let entity = world
+                    .spawn((
+                        PickupDrop::new(self.p_type),
+                        SpriteBundle {
+                            transform,
+                            texture: texture_handle.clone(),
+                            ..default()
+                        },
+                        StateDespawnMarker,
+                    ))
+                    .id();
 
                 world.spawn((
-                    PickupDrop::new(self.p_type),
-                    SpriteBundle {
-                        transform: Transform::from_translation(Vec3::new(
-                            pos.x, pos.y, 50.0,
-                        )),
-                        texture: texture_handle.clone(),
-                        ..default()
+                    Name::new("PassiveDescription"),
+                    PassiveDescriptionNode,
+                    PassiveEntity(entity),
+                    TextBundle {
+                        text: Text {
+                            sections: vec![
+                                TextSection::new(
+                                    passive.name(),
+                                    TextStyle {
+                                        font_size: 24.0,
+                                        ..Default::default()
+                                    },
+                                ),
+                                TextSection::from("\n"),
+                                TextSection::new(
+                                    passive.description(),
+                                    TextStyle {
+                                        font_size: 24.0,
+                                        ..Default::default()
+                                    },
+                                ),
+                            ],
+                            justify: JustifyText::Center,
+                            linebreak_behavior: BreakLineOn::WordBoundary,
+                        },
+                        style: Style {
+                            max_width: Val::Percent(33.0),
+                            ..Default::default()
+                        },
+                        global_transform: GlobalTransform::from_translation(
+                            Vec3::new(pos.x, pos.y, 50.0),
+                        ),
+                        background_color: BackgroundColor::from(
+                            Color::BLACK.with_a(0.75),
+                        ),
+                        visibility: Visibility::Hidden,
+                        ..Default::default()
                     },
+                    StateDespawnMarker,
                 ));
             },
             PickupType::Seed(categ, id) => {
@@ -353,6 +422,49 @@ fn spawn_pickups_on_death(
                         pos: translation,
                         p_type: PickupType::PassiveDrop(passive),
                     });
+                }
+            }
+        }
+    }
+}
+
+fn display_passives_description(
+    mut passive_descriptions: Query<
+        (
+            &PassiveEntity,
+            &mut GlobalTransform,
+            &mut Visibility,
+        ),
+        With<PassiveDescriptionNode>,
+    >,
+    player_query: Query<&Transform, With<Player>>,
+    pickup_query: Query<(Entity, &PickupDrop, &Transform), With<PickupDrop>>,
+) {
+    for p_transform in player_query.iter() {
+        const PICKUP_RANGE_SQUARED: f32 = 100.0;
+
+        let p_pos = p_transform.translation.truncate();
+
+        for (entity, pickup, transform) in pickup_query.iter() {
+            if let PickupType::PassiveDrop(_) = pickup.p_type {
+                let Some((
+                    _,
+                    mut description_transform,
+                    mut description_visibility,
+                )) = passive_descriptions.iter_mut().find(
+                    |(passive_entity, _, _)| entity == passive_entity.get(),
+                )
+                else {
+                    continue;
+                };
+                let dist =
+                    p_pos.distance_squared(transform.translation.truncate());
+
+                if dist <= PICKUP_RANGE_SQUARED {
+                    *description_transform = (*transform).into();
+                    *description_visibility = Visibility::Visible;
+                } else {
+                    *description_visibility = Visibility::Hidden;
                 }
             }
         }

@@ -27,7 +27,7 @@ use crate::game::xp_orbs::XpOrbPickup;
 use crate::prelude::*;
 
 use super::physics::Knockback;
-use super::pickups::PickupDrop;
+use super::pickups::{PassiveDescriptionNode, PassiveEntity, PickupDrop};
 
 pub struct PlayerPlugin;
 
@@ -222,6 +222,34 @@ pub enum Passive {
     SerpentRing,
     /// Increase cdr for every consecutive hit within 3 seconds
     FrenziedAttack,
+}
+
+impl Passive {
+    pub fn name(&self) -> &str {
+        match self {
+            Passive::Bloodstone => "Bloodstone",
+            Passive::FlamingHeart => "Flaming Heart",
+            Passive::IceDagger => "Ice Dagger",
+            Passive::GlowingShard => "Glowing Shard",
+            Passive::ObsidianNecklace => "Obsidian Necklace",
+            Passive::HeavyBoots => "Heavy Boots",
+            Passive::SerpentRing => "Serpent Ring",
+            Passive::FrenziedAttack => "Frenzied Attack",
+        }
+    }
+
+    pub fn description(&self) -> &str {
+        match self {
+            Passive::Bloodstone => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::FlamingHeart => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::IceDagger => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::GlowingShard => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::ObsidianNecklace => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::HeavyBoots => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::SerpentRing => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::FrenziedAttack => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+        }
+    }
 }
 
 fn gain_passives(
@@ -1551,7 +1579,11 @@ fn player_pickup_interact(
         ),
         With<Player>,
     >,
-    mut pickup_query: Query<(Entity, &PickupDrop, &Transform)>,
+    pickup_query: Query<(Entity, &PickupDrop, &Transform)>,
+    passive_descriptions: Query<
+        (Entity, &PassiveEntity),
+        With<PassiveDescriptionNode>,
+    >,
     mut commands: Commands,
 ) {
     for (p_transform, action_state, mut passives) in query.iter_mut() {
@@ -1574,7 +1606,19 @@ fn player_pickup_interact(
                         PickupType::PassiveDrop(passive) => {
                             println!("passive pickup!!!");
                             passives.add_passive(passive.clone());
-                            commands.entity(entity).despawn();
+                            commands.entity(entity).despawn_recursive();
+                            // Despawn the passive description UI node for the picked up passive.
+                            if let Some((passive_description, _)) =
+                                passive_descriptions.iter().find(
+                                    |(_, passive_entity)| {
+                                        passive_entity.get() == entity
+                                    },
+                                )
+                            {
+                                commands
+                                    .entity(passive_description)
+                                    .despawn_recursive();
+                            }
                             break;
                         },
                         PickupType::Seed(categ, id) => {
