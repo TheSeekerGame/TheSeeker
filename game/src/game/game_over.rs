@@ -6,7 +6,7 @@ use sickle_ui::ui_style::{
 };
 use sickle_ui::widgets::prelude::*;
 use theseeker_engine::gent::Gent;
-use theseeker_engine::prelude::{in_state, Color, GameTickUpdate, GameTime};
+use theseeker_engine::prelude::{in_state, Color, GameTickUpdate, GameTime, Or};
 
 use crate::camera::MainCamera;
 use crate::game::attack::KillCount;
@@ -22,7 +22,8 @@ use crate::prelude::{
 };
 use crate::ui::button;
 
-use super::pickups::DropTracker;
+use super::pickups::{DropTracker, PickupDrop};
+use super::xp_orbs::XpOrb;
 
 /// A plugin that handles when the player has a game over
 pub struct GameOverPlugin;
@@ -67,6 +68,7 @@ pub fn update_fade_in(
 
 pub fn on_game_over(
     query: Query<(Entity, &Gent, Has<Dead>), With<Player>>,
+    drops_query: Query<Entity, Or<(With<XpOrb>, With<PickupDrop>)>>,
     q_cam: Query<Entity, With<MainCamera>>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -185,6 +187,12 @@ pub fn on_game_over(
         });
     });
     kill_count.0 = 0;
+
     commands.remove_resource::<DropTracker>();
     commands.init_resource::<DropTracker>();
+
+    for entity in drops_query.iter() {
+        commands.entity(entity).despawn();
+        
+    }
 }

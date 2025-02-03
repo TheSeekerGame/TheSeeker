@@ -11,8 +11,8 @@ impl Plugin for PickupPlugin {
         .add_systems(Startup, load_pickup_assets)
         .add_systems(GameTickUpdate, (
             spawn_pickups_on_death.after(dead).run_if(resource_exists::<DropTracker>),
-            update_orbs_pos,
-            update_orbs_vel,
+            //update_orbs_pos,
+            //update_orbs_vel,
         ));
     }
 }
@@ -230,7 +230,6 @@ pub struct DropTracker {
 }
 
 
-
 impl FromWorld for DropTracker {
     fn from_world(world: &mut World) -> Self {
 
@@ -263,7 +262,6 @@ impl DropTracker {
 
         println!("DROP ROLLS: {:?}", rolls);
 
-
         Self {
             progress: 0,
             passive_rolls: rolls,
@@ -283,11 +281,6 @@ impl DropTracker {
         }
         None
     }
-}
-
-#[derive(Component)]
-pub struct XpOrb{
-    init_timer: f32, 
 }
 
 fn spawn_pickups_on_death(
@@ -443,7 +436,7 @@ fn spawn_pickups_on_death(
 }
 
 const DIST_THRESHOLD: f32 = 0.75;
-
+/*
 fn update_orbs_vel(
     mut commands: Commands,
     mut query: Query<(Entity, &GlobalTransform, &mut LinearVelocity, &XpOrb)>,
@@ -494,3 +487,4 @@ fn update_orbs_pos(
         }
     }
 }
+*/
