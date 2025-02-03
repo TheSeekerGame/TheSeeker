@@ -41,7 +41,6 @@ impl Plugin for PlayerPlugin {
                 load_player_stats.run_if(resource_changed::<PlayerConfig>),
                 track_hits,
                 player_update_stats_mod,
-                //gain_passives.run_if(resource_changed::<KillCount>),
                 player_update_passive_buffs,
             )
                 .chain()
@@ -233,7 +232,6 @@ fn gain_passives(
     for mut passives in query.iter_mut() {
         if **kills % player_config.passive_gain_rate == 0 {
             passives.gain_random();
-            // println!("{:?}", passives);
         }
     }
 }
@@ -1573,7 +1571,6 @@ fn player_pickup_interact(
 
                 if dist <= PICKUP_RANGE_SQUARED {
                     match &pickup.p_type {
-                        PickupType::None => {},
                         PickupType::PassiveDrop(passive) => {
                             println!("passive pickup!!!");
                             passives.add_passive(passive.clone());
