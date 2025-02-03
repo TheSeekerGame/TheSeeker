@@ -17,10 +17,11 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::physics::Knockback;
 use super::player::{Player, PlayerConfig, StatusModifier, Stealthing};
+use crate::game::attack::arc_attack::Projectile;
 use crate::game::attack::particles::ArcParticleEffectHandle;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
-use crate::game::{attack::arc_attack::Projectile, player::EnemiesNearby};
+use crate::game::player::EnemiesNearby;
 use crate::graphics::particles_util::BuildParticles;
 use crate::prelude::*;
 
@@ -348,6 +349,7 @@ impl Plugin for EnemyBehaviorPlugin {
                             walking.run_if(any_with_component::<Walking>),
                             // retreating.run_if(any_with_component::<Retreating>),
                             chasing.run_if(any_with_component::<Chasing>),
+                            falling,
                         ),
                     )
                         .chain(),
@@ -479,7 +481,7 @@ impl GenericState for Waiting {}
 #[derive(Component, Reflect)]
 enum Navigation {
     Grounded,
-    // Falling,
+    Falling,
     Blocked,
 }
 
@@ -499,7 +501,8 @@ impl Role {
 // TODO: 60/40 distribution?
 impl Distribution<Role> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Role {
-        let index: u8 = rng.gen_range(0..=1);
+        // let index: u8 = rng.gen_range(0..=1);
+        let index = 0;
         match index {
             0 => Role::Melee,
             1 => Role::Ranged,
@@ -572,7 +575,7 @@ fn check_player_range(
     if let Ok((player_e, player_trans, player_stealth, mut enemies_nearby)) =
         player_query.get_single_mut()
     {
-        //reset every tick
+        // reset every tick
         **enemies_nearby = 0;
 
         for (
@@ -586,7 +589,7 @@ fn check_player_range(
             is_defending,
         ) in query.iter_mut()
         {
-            //TODO: still update enemies nearby in stealth?
+            // TODO: still update enemies nearby in stealth?
             if player_stealth.is_some() {
                 *range = Range::Deaggro;
                 target.0 = None;
@@ -799,9 +802,11 @@ fn aggro(
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if matches!(range, Range::Melee) {
                 match role {
-                    Role::Melee => transitions.push(Waiting::new_transition(
-                        MeleeAttack::default(),
-                    )),
+                    Role::Melee => {
+                        transitions.push(Waiting::new_transition(
+                            MeleeAttack::default(),
+                        ))
+                    },
                     Role::Ranged => {
                         velocity.x = 0.;
                         transitions.push(Waiting::new_transition(
@@ -1081,9 +1086,83 @@ fn walking(
                     Facing::Left => Facing::Right,
                 }
             },
-            Navigation::Grounded => {},
+            Navigation::Grounded | Navigation::Falling => {},
         }
         walking.ticks += 1;
+    }
+}
+
+const GROUNDED_THRESHOLD: f32 = 1.0;
+fn falling(
+    spatial_query: Res<PhysicsWorld>,
+    mut query: Query<
+        (
+            Entity,
+            &mut LinearVelocity,
+            &mut Transform,
+            &ShapeCaster,
+            &mut Navigation,
+            &Collider,
+        ),
+        With<Enemy>,
+    >,
+    players: Query<(), (With<Player>, Without<Enemy>)>,
+    time: Res<GameTime>,
+) {
+    for (entity, mut velocity, mut transform, _, mut nav, collider) in
+        query.iter_mut()
+    {
+        if matches!(*nav, Navigation::Falling) {
+            if let Some((e, toi)) = spatial_query.shape_cast(
+                transform.translation.xy(),
+                Direction2d::new_unchecked(Vec2::new(0., -1.)),
+                collider.0.shape(),
+                GROUNDED_THRESHOLD,
+                InteractionGroups {
+                    memberships: ENEMY,
+                    filter: GROUND,
+                },
+                Some(entity),
+            ) {
+                // println!("coll {toi:?}");
+                // If we are not a player
+                if players.get(e).is_err() {
+                    // If we are close to the ground
+                    if velocity.y < 0. && toi.witness2[1] < 0. {
+                        println!(
+                            "hit ground {toi:?} {}",
+                            transform.translation
+                        );
+                        *nav = Navigation::Grounded;
+                        transform.translation.y =
+                            transform.translation.y - toi.witness2[1] - toi.toi;
+                        velocity.y = 0.;
+                        continue;
+                    }
+                }
+            }
+            velocity.y -= 1.7;
+        } else if matches!(*nav, Navigation::Grounded) {
+            if spatial_query
+                .shape_cast(
+                    transform.translation.xy(),
+                    Direction2d::new_unchecked(Vec2::new(0., -1.)),
+                    collider.0.shape(),
+                    GROUNDED_THRESHOLD
+                        + collider.0.shape().compute_local_aabb().extents()[1]
+                            / 2.,
+                    InteractionGroups {
+                        memberships: ENEMY,
+                        filter: GROUND,
+                    },
+                    Some(entity),
+                )
+                .is_none()
+            {
+                println!("refalling");
+                *nav = Navigation::Falling;
+            }
+        }
     }
 }
 
@@ -1173,6 +1252,7 @@ fn chasing(
             &mut Navigation,
             &mut LinearVelocity,
             &mut TransitionQueue,
+            &Transform,
         ),
         (
             With<Enemy>,
@@ -1180,9 +1260,18 @@ fn chasing(
             Without<Knockback>,
         ),
     >,
+    players: Query<&Transform, (With<Player>, Without<Enemy>)>,
 ) {
-    for (target, facing, role, range, mut nav, mut velocity, mut transitions) in
-        query.iter_mut()
+    for (
+        target,
+        facing,
+        role,
+        range,
+        mut nav,
+        mut velocity,
+        mut transitions,
+        trans,
+    ) in query.iter_mut()
     {
         // only melee chase
         if !matches!(role, Role::Melee) {
@@ -1201,12 +1290,27 @@ fn chasing(
                     velocity.x = -35. * facing.direction();
                     // if we cant get any closer because of edge
                     if let Navigation::Blocked = *nav {
-                        velocity.x = 0.;
-                        *nav = Navigation::Grounded;
+                        // velocity.x = 0.;
+                        let ptrans = players
+                            .get(p_entity)
+                            .expect("Wasnt targeting player");
+                        if ptrans.translation.y < trans.translation.y {
+                            println!("fall off {trans:?}");
+                            velocity.y = 10.;
+                            *nav = Navigation::Falling;
+                            // velocity.x = 10.
+                            //     * (ptrans.translation.x - trans.translation.x)
+                            //         .signum();
+                        } else {
+                            println!("jump {}", trans.translation);
+                            velocity.y = 140.;
+                            // *nav = Navigation::Grounded;
+                            *nav = Navigation::Falling;
+                        }
                         // println!("chasing but blocked");
-                        transitions.push(Chasing::new_transition(
-                            Waiting::default(),
-                        ));
+                        // transitions.push(Chasing::new_transition(
+                        //     Waiting::default(),
+                        // ));
                     }
                 },
                 _ => {
@@ -1234,14 +1338,21 @@ fn move_collide(
             &mut Navigation,
             &Collider,
             Has<Knockback>,
+            Has<Chasing>,
         ),
         With<Enemy>,
     >,
     time: Res<GameTime>,
     spatial_query: Res<PhysicsWorld>,
 ) {
-    for (mut linear_velocity, mut transform, mut nav, collider, is_knocked) in
-        query.iter_mut()
+    for (
+        mut linear_velocity,
+        mut transform,
+        mut nav,
+        collider,
+        is_knocked,
+        is_chasing,
+    ) in query.iter_mut()
     {
         let shape = collider.0.shared_shape().clone();
         let dir = linear_velocity.x.signum();
@@ -1262,8 +1373,8 @@ fn move_collide(
                 linear_velocity.length() / time.hz as f32 + 0.5,
                 InteractionGroups {
                     memberships: ENEMY,
-                    // combination of the PLAYER + GROUND Groups
-                    filter: Group::from_bits_truncate(0b10001),
+                    // Ground group
+                    filter: Group::from_bits_truncate(0b10000),
                 },
                 None,
             ) {
@@ -1272,10 +1383,16 @@ fn move_collide(
                     projected_velocity = linear_velocity.xy()
                         - sliding_plane
                             * linear_velocity.xy().dot(sliding_plane);
+                    // println!("b {is_chasing} {transform:?}");
+                    // if is_chasing {
+                    //     println!("chasing noblock");
+                    //     break;
+                    // } else {
                     linear_velocity.0 = projected_velocity;
-                    if !is_knocked {
+                    if !is_knocked && !matches!(*nav, Navigation::Falling) {
                         *nav = Navigation::Blocked;
                     }
+                    // }
                 } else {
                     break;
                 }
@@ -1298,7 +1415,7 @@ fn move_collide(
             },
             None,
         ) {
-            if !is_knocked {
+            if !is_knocked && !matches!(*nav, Navigation::Falling) {
                 *nav = Navigation::Blocked;
             }
             projected_velocity.x = first_hit.toi * dir;
