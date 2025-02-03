@@ -10,4 +10,7 @@
     "cfg.player": File (
         path: "player.cfg.toml",
     ),
+    "cfg.enemy": File (
+        path: "enemy.cfg.toml",
+    ),
 })

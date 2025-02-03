@@ -6,6 +6,7 @@ use rapier2d::parry::query::TOIStatus;
 use rapier2d::prelude::{Group, InteractionGroups};
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
+use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
@@ -39,6 +40,11 @@ impl Plugin for EnemyPlugin {
             GameTickUpdate,
             spawn_enemy.after(setup_enemy),
         );
+        app.insert_resource(EnemyConfig::default());
+        app.add_systems(
+            GameTickUpdate,
+            load_enemy_config.before(EnemyStateSet::Behavior),
+        );
         app.add_plugins((
             EnemyBehaviorPlugin,
             EnemyTransitionPlugin,
@@ -58,6 +64,105 @@ pub fn debug_enemy(world: &World, query: Query<Entity, With<Gent>>) {
             println!("{:?}", component.name());
         }
     }
+}
+
+#[derive(Resource, Debug, Default)]
+struct EnemyConfig {
+    fall_accel: f32,
+
+    start_hp: u32,
+
+    range_aggro: f32,
+    range_deaggro: f32,
+    range_melee: f32,
+    range_ranged: f32,
+
+    walking_min_time: u32,
+    walking_max_time: u32,
+    idle_time: u32,
+
+    projectile_arc_x: f32,
+    projectile_arc_y: f32,
+    projectile_damage: f32,
+
+    melee_damage: f32,
+
+    walking_speed: f32,
+    chasing_speed: f32,
+
+    fall_y_velocity: f32,
+    jump_y_velocity: f32,
+}
+fn load_enemy_config(
+    mut ev_asset: EventReader<AssetEvent<DynamicConfig>>,
+    cfgs: Res<Assets<DynamicConfig>>,
+    preloaded: Res<PreloadedAssets>,
+    mut enemy_config: ResMut<EnemyConfig>,
+    mut initialized_config: Local<bool>,
+) {
+    // convert from asset key string to bevy handle
+    let Some(cfg_handle) =
+        preloaded.get_single_asset::<DynamicConfig>("cfg.enemy")
+    else {
+        println!("Couldnt find enemy cfg file");
+        return;
+    };
+    // The reason we do this here instead of in an AssetEvent::Added match arm, is because
+    // the Added match arm fires before preloaded updates with the asset key; as a result
+    // you can't tell what specific DynamicConfig loaded in like that.
+    if !*initialized_config {
+        if let Some(cfg) = cfgs.get(cfg_handle.clone()) {
+            update_enemy_config(&mut enemy_config, cfg);
+            println!("init:");
+            dbg!(&enemy_config);
+        }
+        *initialized_config = true;
+    }
+    for ev in ev_asset.read() {
+        if let AssetEvent::Modified { id } = ev {
+            if let Some(cfg) = cfgs.get(*id) {
+                if cfg_handle.id() == *id {
+                    println!("before:");
+                    dbg!(&enemy_config);
+                    update_enemy_config(&mut enemy_config, cfg);
+                    println!("after:");
+                    dbg!(&enemy_config);
+                }
+            }
+        }
+    }
+}
+
+#[rustfmt::skip]
+fn update_enemy_config(config: &mut EnemyConfig, cfg: &DynamicConfig) {
+    let mut errors = Vec::new();
+    update_field(&mut errors, &cfg.0, "fall_accel", |val| config.fall_accel = val);
+
+    update_field(&mut errors, &cfg.0, "start_hp", |val| config.start_hp = val as u32);
+
+    update_field(&mut errors, &cfg.0, "range_aggro", |val| config.range_aggro = val);
+    update_field(&mut errors, &cfg.0, "range_deaggro", |val| config.range_deaggro = val);
+    update_field(&mut errors, &cfg.0, "range_melee", |val| config.range_melee = val);
+    update_field(&mut errors, &cfg.0, "range_ranged", |val| config.range_ranged = val);
+
+    update_field(&mut errors, &cfg.0, "walking_min_time", |val| config.walking_min_time = val as u32);
+    update_field(&mut errors, &cfg.0, "walking_max_time", |val| config.walking_max_time = val as u32);
+    update_field(&mut errors, &cfg.0, "idle_time", |val| config.idle_time = val as u32);
+
+    update_field(&mut errors, &cfg.0, "projectile_arc_x", |val| config.projectile_arc_x = val);
+    update_field(&mut errors, &cfg.0, "projectile_arc_y", |val| config.projectile_arc_y = val);
+    update_field(&mut errors, &cfg.0, "projectile_damage", |val| config.projectile_damage = val);
+    update_field(&mut errors, &cfg.0, "melee_damage", |val| config.melee_damage = val);
+
+    update_field(&mut errors, &cfg.0, "walking_speed", |val| config.walking_speed = val);
+    update_field(&mut errors, &cfg.0, "chasing_speed", |val| config.chasing_speed = val);
+
+    update_field(&mut errors, &cfg.0, "fall_y_velocity", |val| config.fall_y_velocity = val);
+    update_field(&mut errors, &cfg.0, "jump_y_velocity", |val| config.jump_y_velocity = val);
+
+    for error in errors{
+       warn!("failed to load enemy cfg value: {}", error);
+   }
 }
 
 #[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
@@ -224,6 +329,7 @@ fn setup_enemy(
         Ref<EnemyBlueprint>,
     )>,
     mut commands: Commands,
+    enemy_config: Res<EnemyConfig>,
 ) {
     for (mut xf_gent, e_gent, bp) in q.iter_mut() {
         if !bp.is_added() {
@@ -270,8 +376,8 @@ fn setup_enemy(
             Range::None,
             Target(None),
             Health {
-                current: 100 + bp.bonus_hp,
-                max: 100 + bp.bonus_hp,
+                current: enemy_config.start_hp + bp.bonus_hp,
+                max: enemy_config.start_hp + bp.bonus_hp,
             },
             Role::random(),
             Facing::Right,
@@ -501,8 +607,7 @@ impl Role {
 // TODO: 60/40 distribution?
 impl Distribution<Role> for Standard {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Role {
-        // let index: u8 = rng.gen_range(0..=1);
-        let index = 0;
+        let index: u8 = rng.gen_range(0..=1);
         match index {
             0 => Role::Melee,
             1 => Role::Ranged,
@@ -524,15 +629,6 @@ enum Range {
 #[derive(Component, Debug, Deref)]
 // Target entity, distance
 struct Target(Option<Entity>);
-
-impl Range {
-    const AGGRO: f32 = 50.;
-    const DEAGGRO: f32 = 70.;
-    // const GROUPED: f32 = 100.;
-    const MELEE: f32 = 14.;
-    // const MELEE: f32 = 12.;
-    const RANGED: f32 = 60.;
-}
 
 /// Component that indicates that the player is inside of this enemy,
 /// and has its usual collision layer membership modified to ENEMY_INSIDE
@@ -571,6 +667,7 @@ fn check_player_range(
         ),
         (Without<Enemy>, With<Player>),
     >,
+    enemy_config: Res<EnemyConfig>,
 ) {
     if let Ok((player_e, player_trans, player_stealth, mut enemies_nearby)) =
         player_query.get_single_mut()
@@ -612,18 +709,20 @@ fn check_player_range(
             }
 
             // set range and target
-            if distance <= Range::MELEE {
+            if distance <= enemy_config.range_melee {
                 *range = Range::Melee;
                 target.0 = Some(player_e);
-            } else if distance <= Range::AGGRO {
+            } else if distance <= enemy_config.range_aggro {
                 *range = Range::Aggro;
                 target.0 = Some(player_e);
                 **enemies_nearby += 1;
-            } else if matches!(role, Role::Ranged) && distance <= Range::RANGED
+            } else if matches!(role, Role::Ranged)
+                && distance <= enemy_config.range_ranged
             {
                 *range = Range::Ranged;
                 target.0 = Some(player_e);
-            } else if matches!(role, Role::Melee) && distance <= Range::DEAGGRO
+            } else if matches!(role, Role::Melee)
+                && distance <= enemy_config.range_deaggro
             {
                 *range = Range::Deaggro;
                 target.0 = Some(player_e);
@@ -681,6 +780,7 @@ fn patrolling(
         ),
         (With<Patrolling>, With<Enemy>),
     >,
+    enemy_config: Res<EnemyConfig>,
 ) {
     for (range, mut transitions, mut additions, maybe_waiting) in
         query.iter_mut()
@@ -696,7 +796,10 @@ fn patrolling(
                 if let Some(waiting) = maybe_waiting {
                     if waiting.ticks >= waiting.max_ticks {
                         transitions.push(Waiting::new_transition(Walking {
-                            max_ticks: rand::thread_rng().gen_range(24..300),
+                            max_ticks: rand::thread_rng().gen_range(
+                                (enemy_config.walking_min_time)
+                                    ..(enemy_config.walking_max_time),
+                            ),
                             ticks: 0,
                         }));
                     }
@@ -850,6 +953,7 @@ fn ranged_attack(
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
     particle_effect: Res<ArcParticleEffectHandle>,
+    enemy_config: Res<EnemyConfig>,
 ) {
     for (
         entity,
@@ -930,13 +1034,17 @@ fn ranged_attack(
                 transform.translation.x - enemy_transform.translation().x;
             let gravity = config.fall_accel * time.hz as f32;
             let rng_factor = 1.0;
-            let mut speed =
-                ballistic_speed(Range::RANGED, gravity, relative_height)
-                    * rng_factor as f32;
+            let mut speed = ballistic_speed(
+                enemy_config.range_ranged,
+                gravity,
+                relative_height,
+            ) * rng_factor as f32;
             let max_attempts = 10;
             // Define default arc as 50ish degree shot with in the direction of the player
             let mut final_solution = Projectile {
                 vel: LinearVelocity(Vec2::new(
+                    // enemy_config.projectile_arc_x * delta_x.signum(),
+                    // enemy_config.projectile_arc_y,
                     134.0 * delta_x.signum(),
                     151.0,
                 )),
@@ -978,8 +1086,12 @@ fn ranged_attack(
             // spawn in the new projectile:
             commands
                 .spawn((
-                    Attack::new(1000, entity, 20.)
-                        .set_stat_mod(StatusModifier::basic_ice_spider()),
+                    Attack::new(
+                        1000,
+                        entity,
+                        enemy_config.projectile_damage,
+                    )
+                    .set_stat_mod(StatusModifier::basic_ice_spider()),
                     final_solution,
                     Collider::cuboid(
                         5.,
@@ -1012,6 +1124,7 @@ fn melee_attack(
         With<Enemy>,
     >,
     mut commands: Commands,
+    enemy_config: Res<EnemyConfig>,
 ) {
     for (entity, mut attack, facing, mut trans_q, gent) in query.iter_mut() {
         attack.ticks += 1;
@@ -1025,7 +1138,7 @@ fn melee_attack(
                     }),
                     TransformBundle::from_transform(Transform::default()),
                     AnimationCollider(gent.e_gfx),
-                    Attack::new(8, entity, 20.),
+                    Attack::new(8, entity, enemy_config.melee_damage),
                 ))
                 .set_parent(entity)
                 .id();
@@ -1055,6 +1168,7 @@ fn walking(
             Without<Knockback>,
         ),
     >,
+    enemy_config: Res<EnemyConfig>,
 ) {
     for (
         mut nav,
@@ -1066,12 +1180,12 @@ fn walking(
     ) in query.iter_mut()
     {
         // set initial velocity
-        velocity.x = -20. * facing.direction();
+        velocity.x = -enemy_config.walking_speed * facing.direction();
         if walking.ticks >= walking.max_ticks {
             velocity.x = 0.;
             transitions.push(Walking::new_transition(Waiting {
                 ticks: 0,
-                max_ticks: 240,
+                max_ticks: enemy_config.idle_time,
             }));
             add_q.add(Idle);
             continue;
@@ -1107,7 +1221,7 @@ fn falling(
         With<Enemy>,
     >,
     players: Query<(), (With<Player>, Without<Enemy>)>,
-    time: Res<GameTime>,
+    enemy_config: Res<EnemyConfig>,
 ) {
     for (entity, mut velocity, mut transform, _, mut nav, collider) in
         query.iter_mut()
@@ -1141,7 +1255,7 @@ fn falling(
                     }
                 }
             }
-            velocity.y -= 1.7;
+            velocity.y -= enemy_config.fall_accel;
         } else if matches!(*nav, Navigation::Grounded) {
             if spatial_query
                 .shape_cast(
@@ -1261,6 +1375,7 @@ fn chasing(
         ),
     >,
     players: Query<&Transform, (With<Player>, Without<Enemy>)>,
+    enemy_config: Res<EnemyConfig>,
 ) {
     for (
         target,
@@ -1287,7 +1402,8 @@ fn chasing(
                     ));
                 },
                 Range::Ranged | Range::Aggro | Range::Deaggro => {
-                    velocity.x = -35. * facing.direction();
+                    velocity.x =
+                        -enemy_config.chasing_speed * facing.direction();
                     // if we cant get any closer because of edge
                     if let Navigation::Blocked = *nav {
                         // velocity.x = 0.;
@@ -1296,14 +1412,14 @@ fn chasing(
                             .expect("Wasnt targeting player");
                         if ptrans.translation.y < trans.translation.y {
                             println!("fall off {trans:?}");
-                            velocity.y = 10.;
+                            velocity.y = enemy_config.fall_y_velocity;
                             *nav = Navigation::Falling;
                             // velocity.x = 10.
                             //     * (ptrans.translation.x - trans.translation.x)
                             //         .signum();
                         } else {
                             println!("jump {}", trans.translation);
-                            velocity.y = 140.;
+                            velocity.y = enemy_config.jump_y_velocity;
                             // *nav = Navigation::Grounded;
                             *nav = Navigation::Falling;
                         }

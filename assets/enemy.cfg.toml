@@ -1,0 +1,25 @@
+# How fast does an enemy accelerate downward while in the falling state?
+fall_accel = 4.5
+
+start_hp = 100.0
+
+range_melee = 14.0
+range_aggro = 50.0
+range_ranged = 60.0
+range_deaggro = 70.0
+
+walking_min_time = 24.0
+walking_max_time = 300.0
+idle_time = 240.0
+
+projectile_arc_x = 134.0
+projectile_arc_y = 151.0
+projectile_damage = 20.0
+
+melee_damage = 20.0
+
+walking_speed = 20.0
+chasing_speed = 35.0
+
+fall_y_velocity = 10.0
+jump_y_velocity = 140.0
