@@ -20,12 +20,14 @@ use theseeker_engine::physics::{
     Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER,
 };
 
-use super::physics::Knockback;
-use super::pickups::PickupDrop;
+use crate::game::attack::*;
 use crate::game::gentstate::*;
 use crate::game::pickups::{DropTracker, PickupType};
-use crate::game::{attack::*, xp_orbs::XpOrbPickup};
+use crate::game::xp_orbs::XpOrbPickup;
 use crate::prelude::*;
+
+use super::physics::Knockback;
+use super::pickups::PickupDrop;
 
 pub struct PlayerPlugin;
 
@@ -52,7 +54,10 @@ impl Plugin for PlayerPlugin {
         app.add_systems(Startup, load_dash_asset);
         app.add_systems(
             GameTickUpdate,
-            ((setup_player, despawn_dead_player)
+            ((
+                setup_player,
+                despawn_dead_player.after(super::game_over::on_game_over),
+            )
                 .run_if(in_state(GameState::Playing)))
             .before(PlayerStateSet::Transition)
             .run_if(in_state(AppState::InGame)),
@@ -183,14 +188,13 @@ impl Passives {
     }
 
     pub fn drop_random(&mut self) -> Option<Passive> {
-
         let mut rng = rand::thread_rng();
 
         if !self.locked.is_empty() {
             let i = rng.gen_range(0..self.locked.len());
             let passive = self.locked.swap_remove(i);
 
-            return Some(passive)
+            return Some(passive);
         }
         None
     }
@@ -200,7 +204,7 @@ impl Passives {
     }
 }
 
-//they could also be components...limit only by the pickup/gain function instead of sized hashmap
+// they could also be components...limit only by the pickup/gain function instead of sized hashmap
 #[derive(Debug, Eq, PartialEq, Hash, EnumIter, Clone)]
 pub enum Passive {
     /// Heal when killing an enemy
@@ -450,7 +454,7 @@ fn setup_player(
             ),
             (
                 PlayerStats::init_from_config(&config),
-                //maybe consolidate with PlayerStats
+                // maybe consolidate with PlayerStats
                 PlayerStatMod::new(),
                 EnemiesNearby(0),
             ),
@@ -481,7 +485,6 @@ fn setup_player(
         },));
 
         commands.init_resource::<DropTracker>();
-
     }
 }
 
@@ -563,7 +566,7 @@ pub struct Attacking {
 impl Attacking {
     pub const MAX: u32 = 4;
     // pub const MAX: u32 = 4;
-    //minimum amount of frames that should be played from attack animation
+    // minimum amount of frames that should be played from attack animation
     pub const MIN: u32 = 2;
 }
 impl GentState for Attacking {}
@@ -1231,7 +1234,7 @@ fn player_update_passive_buffs(
             defense *= 0.5;
         }
         if passives.contains(&Passive::HeavyBoots) {
-            //if we are moving
+            // if we are moving
             if vel.length() > 0.0001 {
                 attack *= 0.5;
                 defense *= 0.5;
@@ -1262,7 +1265,7 @@ fn player_update_stats_mod(
         &mut PlayerStats,
     )>,
     mut gfx_query: Query<(&PlayerGfx, &mut Sprite)>,
-    //TODO: switch to ticks
+    // TODO: switch to ticks
     time: Res<Time<Virtual>>,
     mut commands: Commands,
 ) {
@@ -1279,7 +1282,7 @@ fn player_update_stats_mod(
 
         sprite.color = modifier.effect_col;
 
-        //TODO: switch to ticks
+        // TODO: switch to ticks
         modifier.time_remaining -= time.delta_seconds();
 
         if modifier.time_remaining < 0. {
@@ -1525,7 +1528,7 @@ fn track_hits(
     mut damage_events: EventReader<DamageInfo>,
 ) {
     if let Ok((player_e, passives, mut buff)) = query.get_single_mut() {
-        //tick falloff
+        // tick falloff
         buff.falloff = buff.falloff.saturating_sub(1);
         if passives.contains(&Passive::FrenziedAttack) {
             for damage_info in damage_events.read() {
@@ -1541,25 +1544,20 @@ fn track_hits(
     }
 }
 
-
-
 fn player_pickup_interact(
     mut query: Query<
         (
             &Transform,
             &ActionState<PlayerAction>,
-            &mut Passives
+            &mut Passives,
         ),
         With<Player>,
     >,
     mut pickup_query: Query<(Entity, &PickupDrop, &Transform)>,
-    mut commands: Commands
+    mut commands: Commands,
 ) {
-
     for (p_transform, action_state, mut passives) in query.iter_mut() {
-
         if action_state.just_pressed(&PlayerAction::Interact) {
-
             //Get Pickups in Range
             //Pick up a single one
 
@@ -1568,13 +1566,12 @@ fn player_pickup_interact(
             let p_pos = p_transform.translation.truncate();
 
             for (entity, pickup, transform) in pickup_query.iter() {
-
-                let dist = p_pos.distance_squared(transform.translation.truncate());
+                let dist =
+                    p_pos.distance_squared(transform.translation.truncate());
 
                 println!("dist: {}", dist);
 
                 if dist <= PICKUP_RANGE_SQUARED {
-
                     match &pickup.p_type {
                         PickupType::None => {},
                         PickupType::PassiveDrop(passive) => {
@@ -1583,16 +1580,12 @@ fn player_pickup_interact(
                             commands.entity(entity).despawn();
                             break;
                         },
-                        PickupType::Seed(categ, id ) => {
+                        PickupType::Seed(categ, id) => {
                             todo!("implement UI Display for Planetary Seed Pickups");
                         },
                     }
-
-
                 }
-
             }
         }
     }
-
 }

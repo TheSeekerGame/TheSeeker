@@ -157,6 +157,11 @@ pub enum CommonScriptAction {
         volume: Option<f32>,
         pan: Option<f32>,
     },
+    /// Play a sound (using regular bevy audio, not our precise system)
+    PlayBackgroundAudio {
+        asset_key: String,
+        volume: Option<f32>,
+    },
 }
 
 #[derive(Debug, Clone)]

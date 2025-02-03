@@ -708,8 +708,37 @@ The sound timing is carefully enforced. For example, you could use this
 action as a sort of "musical sequencer" to play sounds at specific time
 intervals to form rhythmic patterns.
 
+This should only be used for short sound effects. For music, ambience,
+etc, use `"PlayBackgroundAudio"` instead.
+
 The `volume` and `pan` options default to `1.0` and `0.0`, respectively.
 Pan ranges from `-1.0` (fully to the left) to `1.0` (fully to the right).
+
+</details>
+
+<details>
+  <summary>
+  <code>PlayBackgroundAudio</code>
+  </summary>
+
+Example:
+
+```toml
+[[script]]
+run_on_slot_enable = "Play"
+action = "PlayBackgroundAudio"
+asset_key = "sound.mymusic"
+volume = 0.25
+```
+
+Plays the given audio asset independently of any precisely timed sounds.
+
+This should be used for music, ambience, and other long-running sounds that do
+not need to be precisely timed.
+
+If you want precise timing, use the `"PlayAudio"` action instead.
+
+The `volume` and option defaults to `1.0`. Panning is not supported.
 
 </details>
 

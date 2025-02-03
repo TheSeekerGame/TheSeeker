@@ -9,21 +9,15 @@ frame_start = 1
 # INITIALIZE RUN REGULAR
 [[script]]
 run_on_playback_control = "Start"
-action = "SetFrameNext"
+action = "SetFrameNow"
 frame_index = 2
 
 # RESET ON DIRECTION CHANGE
 [[script]]
 run_on_slot_enable = "DirectionChanged"
-action = "SetFrameNext"
+action = "SetFrameNow"
 frame_index = 1
 
-# INITIALIZE FALL>RUN TRANSITION
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "testtt"
-action = "SetFrameNext"
-frame_index = 1
 
 [[script]]
 run_at_frame = [3, 7]

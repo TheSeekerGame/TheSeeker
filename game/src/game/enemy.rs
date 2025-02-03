@@ -17,10 +17,11 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::physics::Knockback;
 use super::player::{Player, PlayerConfig, StatusModifier, Stealthing};
+use crate::game::attack::arc_attack::Projectile;
 use crate::game::attack::particles::ArcParticleEffectHandle;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
-use crate::game::{attack::arc_attack::Projectile, player::EnemiesNearby};
+use crate::game::player::EnemiesNearby;
 use crate::graphics::particles_util::BuildParticles;
 use crate::prelude::*;
 
@@ -36,7 +37,7 @@ impl Plugin for EnemyPlugin {
         );
         app.add_systems(
             GameTickUpdate,
-            spawn_enemy.after(setup_enemy),
+            spawn_enemies.after(setup_enemy),
         );
         app.add_plugins((
             EnemyBehaviorPlugin,
@@ -69,7 +70,7 @@ pub enum EnemyStateSet {
 
 #[derive(Bundle, LdtkEntity, Default)]
 pub struct EnemyBlueprintBundle {
-    marker: EnemyBlueprint,
+    pub(crate) marker: EnemyBlueprint,
 }
 
 #[derive(Bundle, LdtkEntity, Default)]
@@ -130,7 +131,7 @@ pub struct SpawnSlot {
 #[component(storage = "SparseSet")]
 pub struct EnemyBlueprint {
     /// Hp added from spawner due to number of enemies killed.
-    bonus_hp: u32,
+    pub(crate) bonus_hp: u32,
 }
 
 #[derive(Bundle)]
@@ -172,7 +173,7 @@ pub struct EnemyEffectGfx {
 //tier one at a time
 //when ranged should be capped at 2 per spawner
 //only tick cooldown when spawner is cleared
-fn spawn_enemy(
+fn spawn_enemies(
     mut spawner_q: Query<(&Transform, &mut EnemySpawner)>,
     //dead enemies to clear
     enemy_q: Query<
@@ -206,7 +207,10 @@ fn spawn_enemy(
             match spawner.spawn_state {
                 SpawnerState::Upgrade => {
                     // set number of clears till next upgrade 2 or 3
-                    spawner.threshold_next = thread_rng().gen_range(2..4);
+                    //TODO: get rid of threshold_next if we decide to continue with spawning every
+                    //clear
+                    spawner.threshold_next = 1;
+                    // spawner.threshold_next = thread_rng().gen_range(2..4);
                     // add a slot
                     if spawner.slots.len() < EnemySpawner::MAX {
                         spawner.slots.push(SpawnSlot {
@@ -258,7 +262,7 @@ fn spawn_enemy(
                                             bonus_hp: 20 * killed,
                                         },
                                     },
-                                    slot.tier.clone(),
+                                    slot.tier,
                                     role,
                                     TransformBundle::from_transform(*transform),
                                 ))
@@ -693,7 +697,7 @@ fn check_player_range(
     if let Ok((player_e, player_trans, player_stealth, mut enemies_nearby)) =
         player_query.get_single_mut()
     {
-        //reset every tick
+        // reset every tick
         **enemies_nearby = 0;
 
         for (
@@ -707,7 +711,7 @@ fn check_player_range(
             is_defending,
         ) in query.iter_mut()
         {
-            //TODO: still update enemies nearby in stealth?
+            // TODO: still update enemies nearby in stealth?
             if player_stealth.is_some() {
                 *range = Range::Deaggro;
                 target.0 = None;
@@ -1520,7 +1524,7 @@ impl Plugin for EnemyAnimationPlugin {
                 // enemy_pushback_attack_animation,
                 enemy_death_animation,
                 enemy_decay_animation,
-                enemy_sparks_on_hit_animation,
+                enemy_sparks_on_hit_animation.run_if(on_event::<DamageInfo>()),
                 enemy_decay_visibility,
                 sprite_flip,
             )
@@ -1551,7 +1555,7 @@ fn enemy_sparks_on_hit_animation(
                     format!("Spark{picked_spark}").as_str(),
                     true,
                 );
-                hit_gfx.set_slot("Hit", true);
+                hit_gfx.set_slot("AttackHit", true);
                 if let Ok(direction) = player_facing_dir.get_single() {
                     match direction {
                         Facing::Right => {

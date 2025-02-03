@@ -23,7 +23,6 @@
     ),
     "audio.game.JumpStart": Files (
         paths: [
-            "audio/movement/JumpStart3.flac",
             "audio/movement/JumpStart4.flac",
         ],
     ),
@@ -56,21 +55,118 @@
             "audio/attack/Slash2.flac",
         ],
     ),
+    "audio.game.HammerSwing": Files (
+        paths: [
+            "audio/attack/HammerSwing1.flac",
+            "audio/attack/HammerSwing2.flac",
+            "audio/attack/HammerSwing3.flac",
+            "audio/attack/HammerSwing4.flac",
+        ],
+    ),
+    "audio.game.HammerSwingDown": Files (
+        paths: [
+            "audio/attack/HammerSwingDown1.flac",
+            "audio/attack/HammerSwingDown2.flac",
+        ],
+    ),
     "audio.game.BowShoot": Files (
         paths: [
             "audio/attack/Shoot1.flac",
             "audio/attack/Shoot2.flac",
+            "audio/attack/Shoot3.flac",
+            "audio/attack/Shoot4.flac",
+        ],
+    ),
+    "audio.game.DashDownStart": Files (
+        paths: [
+            "audio/attack/DashDownStart.flac",
+
+        ],
+    ),
+    "audio.game.DashDownImpact": Files (
+        paths: [
+            "audio/attack/DashDownImpact.flac",
+
         ],
     ),
     "audio.game.SwordWhirl": Files (
         paths: [
-            "audio/attack/Whirl1.flac",
+            "audio/attack/SwordWhirl1.flac",
+        ],
+    ),
+    "audio.game.HammerWhirl": Files (
+        paths: [
+            "audio/attack/HammerWhirl.flac",
         ],
     ),
     "audio.game.ImpactBass": Files (
         paths: [
             "audio/attack/ImpactBass1.flac",
             "audio/attack/ImpactBass2.flac",
+        ],
+    ),
+    "audio.game.SwordImpact": Files (
+        paths: [
+            "audio/attack/SwordImpact7.flac",
+            "audio/attack/SwordImpact4.flac",
+        ],
+    ),
+    "audio.game.HammerImpact": Files (
+        paths: [
+            "audio/attack/HammerImpact1.flac",
+            "audio/attack/HammerImpact2.flac",
+            "audio/attack/HammerImpact3.flac",
+            "audio/attack/HammerImpact4.flac",
+        ],
+    ),
+    "audio.game.BowImpact": Files (
+        paths: [
+            "audio/attack/ImpactBass1.flac",
+            "audio/attack/ImpactBass2.flac",
+        ],
+    ),
+    "audio.game.PlayerGetsDamaged": Files (
+        paths: [
+            "audio/fx/PlayerGetsDamaged1.flac",
+            "audio/fx/PlayerGetsDamaged2.flac",
+            "audio/fx/PlayerGetsDamaged3.flac",
+            "audio/fx/PlayerGetsDamaged4.flac",
+        ],
+    ),
+    "audio.game.BigSpiderSteps": Files (
+        paths: [
+            "audio/spider/BigSpiderStep1.flac",
+            "audio/spider/BigSpiderStep2.flac",
+            "audio/spider/BigSpiderStep3.flac",
+            "audio/spider/BigSpiderStep4.flac",
+            "audio/spider/BigSpiderStep5.flac",
+            "audio/spider/BigSpiderStep6.flac",
+            "audio/spider/BigSpiderStep7.flac",
+            "audio/spider/BigSpiderStep8.flac",
+        ],
+    ),
+    "audio.game.SmaellSpiderSteps": Files (
+        paths: [
+            "audio/spider/SmallSpiderStep1.flac",
+            "audio/spider/SmallSpiderStep2.flac",
+            "audio/spider/SmallSpiderStep3.flac",
+            "audio/spider/SmallSpiderStep4.flac",
+            "audio/spider/SmallSpiderStep5.flac",
+            "audio/spider/SmallSpiderStep6.flac",
+            "audio/spider/SmallSpiderStep7.flac",
+            "audio/spider/SmallSpiderStep8.flac",
+        ],
+    ),
+    "audio.game.BigSpiderAttack": Files (
+        paths: [
+            "audio/spider/BigSpiderAttack1.flac",
+            "audio/spider/BigSpiderAttack2.flac",
+        ],
+    ),
+    "audio.game.SmallSpiderAttack": Files (
+        paths: [
+            "audio/spider/SmallSpiderAttack1.flac",
+            "audio/spider/SmallSpiderAttack2.flac",
         ],
     ),
     "audio.game.SpiderGetDamage": Files (
@@ -80,12 +176,32 @@
     ),
     "audio.game.BigSpiderDeath": Files (
         paths: [
-            "audio/spider/BigDeath.flac",
+            "audio/spider/BigSpiderDeath1.flac",
+            "audio/spider/BigSpiderDeath2.flac",
+            "audio/spider/BigSpiderDeath3.flac",
         ],
     ),
     "audio.game.SmallSpiderDeath": Files (
         paths: [
-            "audio/spider/SmallDeath.flac",
+            "audio/spider/SmallSpiderDeath1.flac",
+            "audio/spider/SmallSpiderDeath2.flac",
+            "audio/spider/SmallSpiderDeath3.flac",
+        ],
+    ),
+    "audio.game.XpOrbs": Files (
+        paths: [
+            "audio/fx/XpOrbs.flac",
+        ],
+    ),
+    "audio.game.Music": Files (
+        paths: [
+            "audio/music/Music2.flac",
+            "audio/music/Music3.flac",
+        ],
+    ),
+    "audio.game.Ambience": Files (
+        paths: [
+            "audio/music/Ambience1.flac",
         ],
     ),
 })

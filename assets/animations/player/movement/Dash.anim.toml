@@ -9,7 +9,7 @@ frame_start = 1
 [[script]]
 run_on_playback_control = "Start"
 action = "PlayAudio"
-volume = 0.8
+volume = 0.6
 asset_key = "audio.game.Dash"
 
 

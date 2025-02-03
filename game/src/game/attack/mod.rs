@@ -4,6 +4,7 @@ pub mod particles;
 use std::mem;
 
 use arc_attack::Arrow;
+use bevy::transform::TransformSystem;
 use rapier2d::prelude::InteractionGroups;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
@@ -40,7 +41,8 @@ impl Plugin for AttackPlugin {
                 // (lifesteal, kill_on_damage, damage_flash).in_set(RespondToDamageInfoSet)
                 arc_projectile,
                 (
-                    determine_attack_targets,
+                    determine_attack_targets
+                        .before(TransformSystem::TransformPropagate),
                     apply_attack_modifications,
                     // DamageInfo event emitted here
                     apply_attack_damage,
@@ -239,12 +241,11 @@ pub fn determine_attack_targets(
 
         // Get the closest targets
         let valid_targets = targets
-            .into_iter()
+            .iter()
             .take(attack.max_targets as usize - attack.damaged_set.len())
-            .map(|(e, _)| e)
-            .collect::<Vec<_>>();
+            .map(|(e, _)| e);
 
-        for entity in valid_targets.iter() {
+        for entity in valid_targets {
             // if we already damaged this entity
             if attack.damaged_set.contains(entity) {
                 continue;

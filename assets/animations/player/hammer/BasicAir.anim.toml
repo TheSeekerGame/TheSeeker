@@ -9,3 +9,10 @@ frame_start = 7
 # I set the start frame to 7 which is the regular forward attack while in air.
 # The last frame index of the regular forward attack is 12
 # Then for the 'pogo' (downward) air attack, the start frame index is 13 and end is 18
+
+[[script]]
+run_at_frame = [7]
+forbid_slots_all = ["AttackTransition"]
+action = "PlayAudio"
+volume = 0.5
+asset_key = "audio.game.HammerSwing"

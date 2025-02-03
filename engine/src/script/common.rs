@@ -1,3 +1,4 @@
+use bevy::audio::{PlaybackMode, Volume};
 use bevy::ecs::system::lifetimeless::*;
 
 use super::*;
@@ -576,6 +577,27 @@ impl ScriptAction for CommonScriptAction {
                     tracker.set_slot(timing, slot, false);
                 } else {
                     tracker.set_slot(timing, slot, true);
+                }
+                ScriptUpdateResult::NormalRun
+            },
+            CommonScriptAction::PlayBackgroundAudio { asset_key, volume } => {
+                let sounds: Vec<Handle<AudioSource>> = preloaded
+                    .get_multi_asset(asset_key)
+                    .unwrap_or(&[])
+                    .iter()
+                    .map(|h_untyped| {
+                        h_untyped.clone().typed::<AudioSource>()
+                    })
+                    .collect();
+                if let Some(sound) = sounds.choose(&mut rand::thread_rng()) {
+                    commands.spawn(AudioBundle {
+                        source: sound.clone(),
+                        settings: PlaybackSettings {
+                            mode: PlaybackMode::Despawn,
+                            volume: Volume::new(volume.unwrap_or(1.0)),
+                            ..Default::default()
+                        },
+                    });
                 }
                 ScriptUpdateResult::NormalRun
             },
