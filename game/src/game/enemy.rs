@@ -1327,13 +1327,15 @@ fn falling(
             &ShapeCaster,
             &mut Navigation,
             &Collider,
+            &Gent,
         ),
         With<Enemy>,
     >,
     players: Query<(), (With<Player>, Without<Enemy>)>,
     enemy_config: Res<EnemyConfig>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for (entity, mut velocity, mut transform, _, mut nav, collider) in
+    for (entity, mut velocity, mut transform, _, mut nav, collider, gent) in
         query.iter_mut()
     {
         if matches!(*nav, Navigation::Falling) {
@@ -1361,6 +1363,11 @@ fn falling(
                         transform.translation.y =
                             transform.translation.y - toi.witness2[1] - toi.toi;
                         velocity.y = 0.;
+                        if let Ok(mut enemy_anim) =
+                            gfx_query.get_mut(gent.e_gfx)
+                        {
+                            enemy_anim.play_key("anim.smallspider.Chase");
+                        }
                         continue;
                     }
                 }
@@ -1477,6 +1484,7 @@ fn chasing(
             &mut LinearVelocity,
             &mut TransitionQueue,
             &Transform,
+            &Gent,
         ),
         (
             With<Enemy>,
@@ -1485,6 +1493,7 @@ fn chasing(
         ),
     >,
     players: Query<&Transform, (With<Player>, Without<Enemy>)>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
     enemy_config: Res<EnemyConfig>,
 ) {
     for (
@@ -1496,6 +1505,7 @@ fn chasing(
         mut velocity,
         mut transitions,
         trans,
+        gent,
     ) in query.iter_mut()
     {
         // only melee chase
@@ -1524,12 +1534,24 @@ fn chasing(
                             println!("fall off {trans:?}");
                             velocity.y = enemy_config.fall_y_velocity;
                             *nav = Navigation::Falling;
+                            if let Ok(mut enemy_anim) =
+                                gfx_query.get_mut(gent.e_gfx)
+                            {
+                                enemy_anim.play_key("anim.smallspider.Jump");
+                                enemy_anim.set_slot("fall", true);
+                            }
                             // velocity.x = 10.
                             //     * (ptrans.translation.x - trans.translation.x)
                             //         .signum();
                         } else {
                             println!("jump {}", trans.translation);
                             velocity.y = enemy_config.jump_y_velocity;
+                            if let Ok(mut enemy_anim) =
+                                gfx_query.get_mut(gent.e_gfx)
+                            {
+                                enemy_anim.play_key("anim.smallspider.Jump");
+                                enemy_anim.set_slot("jump", true);
+                            }
                             // *nav = Navigation::Grounded;
                             *nav = Navigation::Falling;
                         }
