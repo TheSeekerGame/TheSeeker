@@ -4,6 +4,7 @@ pub mod particles;
 use std::mem;
 
 use arc_attack::Arrow;
+use bevy::transform::TransformSystem;
 use rapier2d::prelude::InteractionGroups;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
@@ -13,10 +14,11 @@ use theseeker_engine::physics::{
 use super::enemy::{Defense, EnemyGfx, EnemyStateSet};
 use super::gentstate::{Dead, Facing};
 use super::physics::Knockback;
+use super::player::player_weapon::CurrentWeapon;
 use super::player::{
     on_crit_cooldown_reduce, on_hit_exit_stealthing,
-    on_stealth_hit_cooldown_reset, Passive, Passives, Player, PlayerGfx,
-    PlayerStateSet, StatusModifier,
+    on_stealth_hit_cooldown_reset, Passive, Passives, Player, PlayerConfig,
+    PlayerGfx, PlayerStateSet, StatusModifier,
 };
 use crate::game::attack::arc_attack::{arc_projectile, Projectile};
 use crate::game::attack::particles::AttackParticlesPlugin;
@@ -39,7 +41,8 @@ impl Plugin for AttackPlugin {
                 // (lifesteal, kill_on_damage, damage_flash).in_set(RespondToDamageInfoSet)
                 arc_projectile,
                 (
-                    determine_attack_targets,
+                    determine_attack_targets
+                        .before(TransformSystem::TransformPropagate),
                     apply_attack_modifications,
                     // DamageInfo event emitted here
                     apply_attack_damage,
@@ -238,12 +241,11 @@ pub fn determine_attack_targets(
 
         // Get the closest targets
         let valid_targets = targets
-            .into_iter()
+            .iter()
             .take(attack.max_targets as usize - attack.damaged_set.len())
-            .map(|(e, _)| e)
-            .collect::<Vec<_>>();
+            .map(|(e, _)| e);
 
-        for entity in valid_targets.iter() {
+        for entity in valid_targets {
             // if we already damaged this entity
             if attack.damaged_set.contains(entity) {
                 continue;
@@ -379,7 +381,7 @@ pub fn apply_attack_damage(
                 }
                 if is_defending {
                     //TODO: switch to defense modifiers
-                    damage /= 4.;
+                    damage /= 5.;
                 }
 
                 // TODO:
@@ -473,11 +475,27 @@ pub fn kill_on_damage(
 fn on_hit_cam_shake(
     query: Query<&Attack, Added<Hit>>,
     p_query: Query<Entity, With<Player>>,
+    config: Res<PlayerConfig>,
+    weapon: CurrentWeapon,
     mut commands: Commands,
 ) {
     for attack in query.iter() {
         if let Ok(_entity) = p_query.get(attack.attacker) {
-            commands.insert_resource(CameraShake::new(0.9, 0.1, 2.0));
+            let camera_shake = if weapon.is_wielding_hammer() {
+                CameraShake::new(
+                    config.hammer_on_hit_screenshake_strength,
+                    config.hammer_on_hit_screenshake_duration_secs,
+                    config.hammer_on_hit_screenshake_frequency,
+                )
+            } else {
+                CameraShake::new(
+                    config.default_on_hit_screenshake_strength,
+                    config.default_on_hit_screenshake_duration_secs,
+                    config.default_on_hit_screenshake_frequency,
+                )
+            };
+
+            commands.insert_resource(camera_shake);
         }
     }
 }

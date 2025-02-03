@@ -5,8 +5,8 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-#[patch."https://github.com/TheSeekerGame/seek_ecs_tilemap"]
-#seek_ecs_tilemap = { path = "../seek_ecs_tilemap" }
+# [patch."https://github.com/TheSeekerGame/seek_ecs_tilemap"]
+# seek_ecs_tilemap = { path = "../seek_ecs_tilemap" }
 
 [patch.crates-io]
 # bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
@@ -128,7 +128,6 @@ version = "0.9.17"
 git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
 
 [dependencies.seek_ecs_tilemap]
-version = "0.1.16"
 git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
 features = ["default", "use_3d_pipeline", "background_tiles"]
 

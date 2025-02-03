@@ -11,3 +11,8 @@ frame_start = 1
 run_at_frame = 8
 action = "SetFrameNext"
 frame_index = 3
+
+[[script]]
+run_on_playback_control = "Start"
+action = "PlayAudio"
+asset_key = "audio.game.HammerWhirl"

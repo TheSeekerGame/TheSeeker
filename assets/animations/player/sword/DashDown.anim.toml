@@ -11,3 +11,8 @@ frame_start = 1
 run_at_frame = 4
 action = "SetFrameNext"
 frame_index = 2
+
+[[script]]
+run_on_playback_control = "Start"
+action = "PlayAudio"
+asset_key = "audio.game.DashDownStart"

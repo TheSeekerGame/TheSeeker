@@ -14,6 +14,12 @@ forbid_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
 frame_index = 1
 
+[[script]]
+run_on_playback_control = "Start"
+action = "PlayAudio"
+volume = 0.5
+asset_key = "audio.game.JumpStart"
+
 #SWITCH FROM FORWARD TO STRAIGHT
 [[script]]
 run_at_frame = 7

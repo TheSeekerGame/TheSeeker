@@ -1,6 +1,6 @@
 mod player_anim;
 mod player_behaviour;
-mod player_weapon;
+pub mod player_weapon;
 use bevy::utils::hashbrown::HashMap;
 use leafwing_input_manager::action_state::ActionState;
 use leafwing_input_manager::axislike::VirtualAxis;
@@ -21,8 +21,9 @@ use theseeker_engine::physics::{
 };
 
 use super::physics::Knockback;
+use crate::game::attack::*;
 use crate::game::gentstate::*;
-use crate::game::{attack::*, xp_orbs::XpOrbPickup};
+use crate::game::xp_orbs::XpOrbPickup;
 use crate::prelude::*;
 
 pub struct PlayerPlugin;
@@ -50,7 +51,10 @@ impl Plugin for PlayerPlugin {
         app.add_systems(Startup, load_dash_asset);
         app.add_systems(
             GameTickUpdate,
-            ((setup_player, despawn_dead_player)
+            ((
+                setup_player,
+                despawn_dead_player.after(super::game_over::on_game_over),
+            )
                 .run_if(in_state(GameState::Playing)))
             .before(PlayerStateSet::Transition)
             .run_if(in_state(AppState::InGame)),
@@ -132,7 +136,8 @@ pub enum PlayerAction {
     Whirl,
     Stealth,
     Fall,
-    SwapWeapon,
+    SwapCombatStyle,
+    SwapMeleeWeapon,
     Interact,
     ToggleControlOverlay,
 }
@@ -180,7 +185,7 @@ impl Passives {
     }
 }
 
-//they could also be components...limit only by the pickup/gain function instead of sized hashmap
+// they could also be components...limit only by the pickup/gain function instead of sized hashmap
 #[derive(Debug, Eq, PartialEq, Hash, EnumIter)]
 pub enum Passive {
     /// Heal when killing an enemy
@@ -399,10 +404,17 @@ fn setup_player(
                         KeyCode::Semicolon,
                     )
                     .with(PlayerAction::Stealth, KeyCode::Digit4)
-                    .with(PlayerAction::SwapWeapon, KeyCode::KeyH)
                     .with(
-                        PlayerAction::SwapWeapon,
+                        PlayerAction::SwapCombatStyle,
+                        KeyCode::KeyH,
+                    )
+                    .with(
+                        PlayerAction::SwapCombatStyle,
                         KeyCode::Backquote,
+                    )
+                    .with(
+                        PlayerAction::SwapMeleeWeapon,
+                        KeyCode::KeyG,
                     )
                     .with(PlayerAction::Interact, KeyCode::KeyF)
                     .with(
@@ -423,7 +435,7 @@ fn setup_player(
             ),
             (
                 PlayerStats::init_from_config(&config),
-                //maybe consolidate with PlayerStats
+                // maybe consolidate with PlayerStats
                 PlayerStatMod::new(),
                 EnemiesNearby(0),
             ),
@@ -533,7 +545,7 @@ pub struct Attacking {
 impl Attacking {
     pub const MAX: u32 = 4;
     // pub const MAX: u32 = 4;
-    //minimum amount of frames that should be played from attack animation
+    // minimum amount of frames that should be played from attack animation
     pub const MIN: u32 = 2;
 }
 impl GentState for Attacking {}
@@ -573,15 +585,11 @@ impl Whirling {
 
 /// Differentiates between different types of dashing
 //#[allow(clippy::enum_variant_names)]
-#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug)]
+#[derive(Clone, Copy, Eq, PartialEq, Hash, Debug, Default)]
 pub enum DashType {
+    #[default]
     Horizontal,
     Downward,
-}
-impl Default for DashType {
-    fn default() -> Self {
-        return DashType::Horizontal;
-    }
 }
 
 #[derive(Component, Debug, Default)]
@@ -596,32 +604,32 @@ impl Dashing {
     pub fn from_action_state(action_state: &ActionState<PlayerAction>) -> Self {
         if action_state.pressed(&PlayerAction::Fall) {
             println!("dashing down!");
-            return Self {
+            Self {
                 dash_type: DashType::Downward,
                 ..default()
-            };
+            }
         } else {
             println!("dashing horizontally!");
-            return Self {
+            Self {
                 dash_type: DashType::Horizontal,
                 ..default()
-            };
+            }
         }
     }
 
     pub fn dash_duration(&self, config: &PlayerConfig) -> f32 {
-        return match self.dash_type {
+        match self.dash_type {
             DashType::Horizontal => config.dash_duration,
             DashType::Downward => config.dash_down_duration,
-        };
+        }
     }
 
     pub fn is_down_dash(&self) -> bool {
-        return self.dash_type == DashType::Downward;
+        self.dash_type == DashType::Downward
     }
 
     pub fn is_horizontal_dash(&self) -> bool {
-        return self.dash_type == DashType::Horizontal;
+        self.dash_type == DashType::Horizontal
     }
 
     pub fn set_player_velocity(
@@ -779,6 +787,11 @@ pub struct PlayerConfig {
     /// (in pixels/second)
     max_move_vel: f32,
 
+    /// The maximum horizontal velocity the player can move at while using the Hammer weapon.
+    ///
+    /// (in pixels/second)
+    hammer_max_move_vel: f32,
+
     /// The maximum downward velocity the player can fall at.
     ///
     /// (in pixels/second)
@@ -865,23 +878,29 @@ pub struct PlayerConfig {
     /// Ticks for wall pushback velocity; determines how long movement is locked for
     wall_pushback_ticks: u32,
 
-    /// Self pushback velocity on basic melee hits
-    melee_self_pushback: f32,
+    /// Self pushback velocity on basic sword hits
+    sword_self_pushback: f32,
 
-    /// Ticks for melee self pushback velocity; determines how long movement is locked for
-    melee_self_pushback_ticks: u32,
+    /// Ticks for sword self pushback velocity; determines how long movement is locked for
+    sword_self_pushback_ticks: u32,
 
-    /// Knockback velocity applied to enemy on basic melee hit
-    melee_pushback: f32,
+    /// Knockback velocity applied to enemy on basic sword hit
+    sword_pushback: f32,
 
-    /// Ticks for melee knockback velocity; determines how long movement is locked for
-    melee_pushback_ticks: u32,
+    /// Ticks for sword knockback velocity; determines how long movement is locked for
+    sword_pushback_ticks: u32,
 
-    /// Base sword attack damage
-    sword_attack_damage: f32,
+    /// Self pushback velocity on basic hammer hits
+    hammer_self_pushback: f32,
 
-    /// Base bow attack damage
-    bow_attack_damage: f32,
+    /// Ticks for hammer self pushback velocity; determines how long movement is locked for
+    hammer_self_pushback_ticks: u32,
+
+    /// Knockback velocity applied to enemy on basic hammer hit
+    hammer_pushback: f32,
+
+    /// Ticks for hammer knockback velocity; determines how long movement is locked for
+    hammer_pushback_ticks: u32,
 
     /// Pushback velocity on basic bow shots
     bow_self_pushback: f32,
@@ -895,8 +914,31 @@ pub struct PlayerConfig {
     /// Ticks for melee knockback velocity; determines how long movement is locked for
     bow_pushback_ticks: u32,
 
+    /// Base sword attack damage
+    sword_attack_damage: f32,
+
+    /// Base hammer attack damage
+    hammer_attack_damage: f32,
+
+    /// Base bow attack damage
+    bow_attack_damage: f32,
+
     /// Velocity of the projectiles fired by the Bow weapon
     arrow_velocity: f32,
+
+    /// Default strength for on hit camera screen shake
+    pub default_on_hit_screenshake_strength: f32,
+    /// Default duration (in seconds) for on hit camera screen shake
+    pub default_on_hit_screenshake_duration_secs: f32,
+    /// Default frequency for on hit camera screen shake
+    pub default_on_hit_screenshake_frequency: f32,
+
+    /// Hammer-specific strength for on hit camera screen shake
+    pub hammer_on_hit_screenshake_strength: f32,
+    /// Hammer-specific duration (in seconds) for on hit camera screen shake
+    pub hammer_on_hit_screenshake_duration_secs: f32,
+    /// Hammer-specific frequency for on hit camera screen shake
+    pub hammer_on_hit_screenshake_frequency: f32,
 
     /// How many kills to trigger a passive gain
     passive_gain_rate: u32,
@@ -945,6 +987,7 @@ fn load_player_config(
 fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     let mut errors = Vec::new();
     update_field(&mut errors, &cfg.0, "max_move_vel", |val| config.max_move_vel = val);
+    update_field(&mut errors, &cfg.0, "hammer_max_move_vel", |val| config.hammer_max_move_vel = val);
     update_field(&mut errors, &cfg.0, "max_fall_vel", |val| config.max_fall_vel = val);
     update_field(&mut errors, &cfg.0, "move_accel_init", |val| config.move_accel_init = val);
     update_field(&mut errors, &cfg.0, "move_accel", |val| config.move_accel = val);
@@ -969,18 +1012,29 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "max_health", |val| config.max_health = val as u32);
     update_field(&mut errors, &cfg.0, "wall_pushback", |val| config.wall_pushback = val);
     update_field(&mut errors, &cfg.0, "wall_pushback_ticks", |val| config.wall_pushback_ticks = val as u32);
-    update_field(&mut errors, &cfg.0, "melee_self_pushback", |val| config.melee_self_pushback = val);
-    update_field(&mut errors, &cfg.0, "melee_self_pushback_ticks", |val| config.melee_self_pushback_ticks = val as u32);
-    update_field(&mut errors, &cfg.0, "melee_pushback", |val| config.melee_pushback = val);
-    update_field(&mut errors, &cfg.0, "melee_pushback_ticks", |val| config.melee_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "sword_self_pushback", |val| config.sword_self_pushback = val);
+    update_field(&mut errors, &cfg.0, "sword_self_pushback_ticks", |val| config.sword_self_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "sword_pushback", |val| config.sword_pushback = val);
+    update_field(&mut errors, &cfg.0, "sword_pushback_ticks", |val| config.sword_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "hammer_self_pushback", |val| config.hammer_self_pushback = val);
+    update_field(&mut errors, &cfg.0, "hammer_self_pushback_ticks", |val| config.hammer_self_pushback_ticks = val as u32);
+    update_field(&mut errors, &cfg.0, "hammer_pushback", |val| config.hammer_pushback = val);
+    update_field(&mut errors, &cfg.0, "hammer_pushback_ticks", |val| config.hammer_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "sword_attack_damage", |val| config.sword_attack_damage = val);
+    update_field(&mut errors, &cfg.0, "hammer_attack_damage", |val| config.hammer_attack_damage = val);
     update_field(&mut errors, &cfg.0, "bow_attack_damage", |val| config.bow_attack_damage = val);
     update_field(&mut errors, &cfg.0, "bow_self_pushback", |val| config.bow_self_pushback = val);
     update_field(&mut errors, &cfg.0, "bow_self_pushback_ticks", |val| config.bow_self_pushback_ticks = val as u32);
     update_field(&mut errors, &cfg.0, "bow_pushback", |val| config.bow_pushback = val);
     update_field(&mut errors, &cfg.0, "bow_pushback_ticks", |val| config.bow_pushback_ticks = val as u32);
-    update_field(&mut errors, &cfg.0, "passive_gain_rate", |val| config.passive_gain_rate = val as u32);
     update_field(&mut errors, &cfg.0, "arrow_velocity", |val| config.arrow_velocity = val);
+    update_field(&mut errors, &cfg.0, "default_on_hit_screenshake_strength", |val| config.default_on_hit_screenshake_strength = val);
+    update_field(&mut errors, &cfg.0, "default_on_hit_screenshake_duration_secs", |val| config.default_on_hit_screenshake_duration_secs = val);
+    update_field(&mut errors, &cfg.0, "default_on_hit_screenshake_frequency", |val| config.default_on_hit_screenshake_frequency = val);
+    update_field(&mut errors, &cfg.0, "hammer_on_hit_screenshake_strength", |val| config.hammer_on_hit_screenshake_strength = val);
+    update_field(&mut errors, &cfg.0, "hammer_on_hit_screenshake_duration_secs", |val| config.hammer_on_hit_screenshake_duration_secs = val);
+    update_field(&mut errors, &cfg.0, "hammer_on_hit_screenshake_frequency", |val| config.hammer_on_hit_screenshake_frequency = val);
+    update_field(&mut errors, &cfg.0, "passive_gain_rate", |val| config.passive_gain_rate = val as u32);
 
     for error in errors{
        warn!("failed to load player cfg value: {}", error);
@@ -1069,6 +1123,18 @@ impl PlayerStats {
         self.effective_stats[&stat]
     }
 
+    pub fn set(&mut self, stat: StatType, value: f32) {
+        if let Some(effective_stat) = self.effective_stats.get_mut(&stat) {
+            *effective_stat = value;
+        }
+    }
+
+    pub fn reset_stat(&mut self, stat: StatType) {
+        if let Some(effective_stat) = self.effective_stats.get_mut(&stat) {
+            *effective_stat = self.base_stats[&stat];
+        }
+    }
+
     pub fn reset_stats(&mut self) {
         self.effective_stats = self.base_stats.clone();
     }
@@ -1139,7 +1205,7 @@ fn player_update_passive_buffs(
         let mut speed = 1.;
         let mut cdr = 1.;
         if passives.contains(&Passive::GlowingShard) {
-            attack *= (1. + 0.1 * enemies_nearby.0 as f32);
+            attack *= 1. + 0.1 * enemies_nearby.0 as f32;
         }
         if passives.contains(&Passive::SerpentRing) {
             speed *= 1.2;
@@ -1147,7 +1213,7 @@ fn player_update_passive_buffs(
             defense *= 0.5;
         }
         if passives.contains(&Passive::HeavyBoots) {
-            //if we are moving
+            // if we are moving
             if vel.length() > 0.0001 {
                 attack *= 0.5;
                 defense *= 0.5;
@@ -1178,7 +1244,7 @@ fn player_update_stats_mod(
         &mut PlayerStats,
     )>,
     mut gfx_query: Query<(&PlayerGfx, &mut Sprite)>,
-    //TODO: switch to ticks
+    // TODO: switch to ticks
     time: Res<Time<Virtual>>,
     mut commands: Commands,
 ) {
@@ -1195,7 +1261,7 @@ fn player_update_stats_mod(
 
         sprite.color = modifier.effect_col;
 
-        //TODO: switch to ticks
+        // TODO: switch to ticks
         modifier.time_remaining -= time.delta_seconds();
 
         if modifier.time_remaining < 0. {
@@ -1321,7 +1387,6 @@ pub fn dash_icon_fx(
     mut commands: Commands,
     mut query: Query<(Entity, &DashIcon, &mut Sprite)>,
     time: Res<GameTime>,
-    config: Res<PlayerConfig>,
 ) {
     for (entity, icon, mut sprite) in query.iter_mut() {
         let d = time.time_in_seconds() as f32 - icon.time;
@@ -1424,7 +1489,7 @@ pub fn on_xp_heal(
 ) {
     if let Ok((passives, mut health)) = query.get_single_mut() {
         if passives.contains(&Passive::Bloodstone) {
-            for event in xp_event.read() {
+            for _event in xp_event.read() {
                 health.current = (health.current + 2).min(health.max);
             }
         }
@@ -1442,7 +1507,7 @@ fn track_hits(
     mut damage_events: EventReader<DamageInfo>,
 ) {
     if let Ok((player_e, passives, mut buff)) = query.get_single_mut() {
-        //tick falloff
+        // tick falloff
         buff.falloff = buff.falloff.saturating_sub(1);
         if passives.contains(&Passive::FrenziedAttack) {
             for damage_info in damage_events.read() {
