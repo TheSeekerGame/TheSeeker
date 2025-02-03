@@ -1373,6 +1373,10 @@ fn falling(
                 }
             }
             velocity.y -= enemy_config.fall_accel;
+            if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
+                enemy_anim.set_slot("jump", velocity.y > 0.);
+                enemy_anim.set_slot("fall", velocity.y < 0.);
+            }
         } else if matches!(*nav, Navigation::Grounded) {
             if spatial_query
                 .shape_cast(
@@ -1392,6 +1396,9 @@ fn falling(
             {
                 println!("refalling");
                 *nav = Navigation::Falling;
+                if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
+                    enemy_anim.play_key("anim.smallspider.Jump");
+                }
             }
         }
     }
@@ -1538,7 +1545,8 @@ fn chasing(
                                 gfx_query.get_mut(gent.e_gfx)
                             {
                                 enemy_anim.play_key("anim.smallspider.Jump");
-                                enemy_anim.set_slot("fall", true);
+                                // enemy_anim.set_slot("fall", true);
+                                // enemy_anim.set_slot("jump", false);
                             }
                             // velocity.x = 10.
                             //     * (ptrans.translation.x - trans.translation.x)
@@ -1550,7 +1558,8 @@ fn chasing(
                                 gfx_query.get_mut(gent.e_gfx)
                             {
                                 enemy_anim.play_key("anim.smallspider.Jump");
-                                enemy_anim.set_slot("jump", true);
+                                // enemy_anim.set_slot("jump", true);
+                                // enemy_anim.set_slot("fall", false);
                             }
                             // *nav = Navigation::Grounded;
                             *nav = Navigation::Falling;
