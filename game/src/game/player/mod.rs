@@ -22,12 +22,11 @@ use theseeker_engine::physics::{
 
 use crate::game::attack::*;
 use crate::game::gentstate::*;
-use crate::game::pickups::{DropTracker, PickupType};
+use crate::game::pickups::DropTracker;
 use crate::game::xp_orbs::XpOrbPickup;
 use crate::prelude::*;
 
 use super::physics::Knockback;
-use super::pickups::{PassiveDescriptionNode, PassiveEntity, PickupDrop};
 
 pub struct PlayerPlugin;
 
@@ -1566,67 +1565,6 @@ fn track_hits(
         }
         if buff.falloff == 0 {
             buff.stacks = 0
-        }
-    }
-}
-
-fn player_pickup_interact(
-    mut query: Query<
-        (
-            &Transform,
-            &ActionState<PlayerAction>,
-            &mut Passives,
-        ),
-        With<Player>,
-    >,
-    pickup_query: Query<(Entity, &PickupDrop, &Transform)>,
-    passive_descriptions: Query<
-        (Entity, &PassiveEntity),
-        With<PassiveDescriptionNode>,
-    >,
-    mut commands: Commands,
-) {
-    for (p_transform, action_state, mut passives) in query.iter_mut() {
-        if action_state.just_pressed(&PlayerAction::Interact) {
-            //Get Pickups in Range
-            //Pick up a single one
-
-            const PICKUP_RANGE_SQUARED: f32 = 100.0;
-
-            let p_pos = p_transform.translation.truncate();
-
-            for (entity, pickup, transform) in pickup_query.iter() {
-                let dist =
-                    p_pos.distance_squared(transform.translation.truncate());
-
-                println!("dist: {}", dist);
-
-                if dist <= PICKUP_RANGE_SQUARED {
-                    match &pickup.p_type {
-                        PickupType::PassiveDrop(passive) => {
-                            println!("passive pickup!!!");
-                            passives.add_passive(passive.clone());
-                            commands.entity(entity).despawn_recursive();
-                            // Despawn the passive description UI node for the picked up passive.
-                            if let Some((passive_description, _)) =
-                                passive_descriptions.iter().find(
-                                    |(_, passive_entity)| {
-                                        passive_entity.get() == entity
-                                    },
-                                )
-                            {
-                                commands
-                                    .entity(passive_description)
-                                    .despawn_recursive();
-                            }
-                            break;
-                        },
-                        PickupType::Seed(categ, id) => {
-                            todo!("implement UI Display for Planetary Seed Pickups");
-                        },
-                    }
-                }
-            }
         }
     }
 }
