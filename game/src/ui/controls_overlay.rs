@@ -10,7 +10,7 @@ use super::{AppState, Spawn, StateDespawnMarker};
 use crate::game::player::PlayerAction;
 
 const OVERLAY_COLOR: Color = Color::rgba(0.08, 0.10, 0.06, 0.65);
-const BACKGROUND_COLOR: Color = Color::rgba(0.22, 0.27, 0.18, 0.8);
+const BACKGROUND_COLOR: Color = Color::rgba(0.0, 0.0, 0.0, 0.8);
 const ICON_BACKGROUND_COLOR: Color = Color::rgba(0.32, 0.37, 0.28, 1.0);
 const TEXT_COLOR: Color = Color::rgb(0.98, 0.99, 0.94);
 const SPACER_COLOR: Color = Color::rgb(0.20, 0.25, 0.15);
@@ -127,7 +127,8 @@ fn spawn_control_overlay(mut commands: Commands) {
     });
 }
 
-trait ControlsOverlayUi {
+// TODO: Refactor this into a more general popup spawner
+pub trait ControlsOverlayUi {
     fn root(&mut self) -> EntityCommands;
     fn container(&mut self) -> EntityCommands;
     fn row(&mut self) -> EntityCommands;
