@@ -82,12 +82,12 @@ fn spawn_toolbar(
             (
                 NodeBundle {
                     style: Style {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(14.0),
-                        padding: UiRect::all(Val::Px(1.0)),
+                        width: Val::Px(270.0),
+                        height: Val::Px(10.0),
+                        padding: UiRect::all(Val::Px(0.0)),
                         ..default()
                     },
-                    background_color: Color::rgb(0.75, 0.75, 0.75).into(),
+                    background_color: Color::rgb(0.0, 0.0, 0.0).into(),
                     ..default()
                 },
                 Name::new("hp_bg"),
@@ -103,9 +103,9 @@ fn spawn_toolbar(
                         },
                         material: ui_materials.add(player_hp::Material {
                             factor: 1.0,
-                            background_color: Color::rgb(0.15, 0.15, 0.15)
+                            background_color: Color::rgb(0.23137254901960785, 0.12549019607843137, 0.12549019607843137)
                                 .into(),
-                            filled_color: Color::rgb(0.8, 0.2, 0.2).into(),
+                            filled_color: Color::rgb(0.6352941176470588, 0.196078431372549022, 0.3058823529411765).into(),
                         }),
                         ..default()
                     },
@@ -121,8 +121,8 @@ fn spawn_toolbar(
         .container(ImageBundle::default(), |row| {
             row.style()
                 .image("ui/game/ToolbarFrame.png")
-                .width(Val::Px(320.0))
-                .height(Val::Px(80.0))
+                .width(Val::Px(360.0))
+                .height(Val::Px(150.0))
                 .justify_content(JustifyContent::SpaceAround);
             //.justify_content(JustifyContent::SpaceAround);
             row.ability_widget(AbilityWidgetConfig::from(
@@ -152,12 +152,12 @@ fn spawn_toolbar(
             (
                 NodeBundle {
                     style: Style {
-                        width: Val::Percent(100.0),
-                        height: Val::Px(7.0),
-                        padding: UiRect::all(Val::Px(1.0)),
+                        width: Val::Px(270.0),
+                        height: Val::Px(5.0),
+                        padding: UiRect::all(Val::Px(0.0)),
                         ..default()
                     },
-                    background_color: Color::rgb(0.75, 0.75, 0.75).into(),
+                    background_color: Color::rgb(0.0, 0.0, 0.0).into(),
                     ..default()
                 },
                 Name::new("xp_bg"),
@@ -173,9 +173,9 @@ fn spawn_toolbar(
                         },
                         material: ui_materials.add(player_hp::Material {
                             factor: 1.0,
-                            background_color: Color::rgb(0.15, 0.15, 0.15)
+                            background_color: Color::rgb(0.17647058823529413, 0.15294117647058825, 0.22745098039215686)
                                 .into(),
-                            filled_color: Color::rgb(0.1, 0.6, 0.1).into(),
+                            filled_color: Color::rgb(0.24705882352941178, 0.3137254901960784, 0.43137254901960786).into(),
                         }),
                         ..default()
                     },
