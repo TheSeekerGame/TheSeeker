@@ -13,6 +13,7 @@ mod console;
 mod controls_overlay;
 mod kill_counter;
 mod mainmenu;
+mod passives;
 pub mod popup;
 mod skill_toolbar;
 
@@ -24,6 +25,7 @@ impl Plugin for UiPlugin {
         app.add_plugins((
             controls_overlay::plugin,
             popup::plugin,
+            passives::plugin,
             self::console::UiConsolePlugin,
             self::mainmenu::MainMenuPlugin,
             SkillToolbarPlugin,

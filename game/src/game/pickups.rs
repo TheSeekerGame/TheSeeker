@@ -71,6 +71,15 @@ pub struct PickupAssetHandles {
     seed_map: HashMap<PlanetarySeed, String>,
 }
 
+impl PickupAssetHandles {
+    pub fn get_passive_handle(
+        &self,
+        passive: &Passive,
+    ) -> Option<&Handle<Image>> {
+        self.passive_map.get(passive)
+    }
+}
+
 pub fn load_pickup_assets(assets: Res<AssetServer>, mut commands: Commands) {
     let passive_mappings: Vec<(Passive, &str)> = vec![
         (

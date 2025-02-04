@@ -16,12 +16,13 @@ mod game_over;
 pub mod gentstate;
 mod merchant;
 pub mod physics;
+pub mod pickups;
 pub mod player;
 mod switches;
 mod wall;
 mod xp_orbs;
 mod yak;
-mod pickups;
+
 pub struct GameplayPlugin;
 
 impl Plugin for GameplayPlugin {
