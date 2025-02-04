@@ -28,6 +28,7 @@ use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::pickups::{
     PassiveDescriptionNode, PassiveEntity, PickupDrop, PickupType,
+    PICKUP_RANGE_SQUARED,
 };
 use crate::game::player::{
     Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded,
@@ -1562,8 +1563,6 @@ fn player_pickup_interact(
     for (p_transform, action_state, mut passives) in query.iter_mut() {
         if action_state.just_pressed(&PlayerAction::Interact) {
             // Get Pickups in Range and pick up a single one
-
-            const PICKUP_RANGE_SQUARED: f32 = 100.0;
 
             let p_pos = p_transform.translation.truncate();
 
