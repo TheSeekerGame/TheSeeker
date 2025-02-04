@@ -553,12 +553,14 @@ fn display_passives_description(
     };
     let p_pos = p_transform.translation.truncate();
 
-    for (pickup_entity, pickup_transform) in pickup_query.iter() {
-        let pickup_translation = pickup_transform.translation;
-        let dist = p_pos.distance_squared(pickup_translation.truncate());
-        let in_pickup_range = dist <= PICKUP_RANGE_SQUARED;
+    let pickup_in_range = pickup_query.iter().find(|(_, pickup_transform)| {
+        let dist =
+            p_pos.distance_squared(pickup_transform.translation.truncate());
+        dist <= PICKUP_RANGE_SQUARED
+    });
 
-        if in_pickup_range {
+    match pickup_in_range {
+        Some((pickup_entity, pickup_transform)) => {
             if pickup_hint.is_empty() {
                 commands.popup().insert(PickupHint).with_children(|popup| {
                     popup.row().with_children(|row| {
@@ -568,42 +570,43 @@ fn display_passives_description(
                     });
                 });
             }
-        } else {
+
+            if let Some((
+                _,
+                description_node,
+                mut description_transform,
+                mut description_visibility,
+            )) = passive_descriptions.iter_mut().find(
+                |(passive_entity, _, _, _)| {
+                    pickup_entity == passive_entity.get()
+                },
+            ) {
+                *description_visibility = Visibility::Visible;
+                if let Some(pickup_viewport_pos) = camera.world_to_viewport(
+                    camera_transform,
+                    pickup_transform.translation,
+                ) {
+                    const ADDITIONAL_Y_OFFSET: f32 = 24.0;
+
+                    let y_offset =
+                        description_node.size().y + ADDITIONAL_Y_OFFSET;
+
+                    *description_transform = GlobalTransform::from_xyz(
+                        pickup_viewport_pos.x,
+                        pickup_viewport_pos.y - y_offset,
+                        description_transform.translation().z,
+                    );
+                }
+            }
+        },
+        None => {
             for entity in &pickup_hint {
                 commands.entity(entity).despawn_recursive();
             }
-        }
 
-        let Some((
-            _,
-            description_node,
-            mut description_transform,
-            mut description_visibility,
-        )) = passive_descriptions.iter_mut().find(
-            |(passive_entity, _, _, _)| pickup_entity == passive_entity.get(),
-        )
-        else {
-            continue;
-        };
-
-        *description_visibility = if in_pickup_range {
-            if let Some(pickup_viewport_pos) =
-                camera.world_to_viewport(camera_transform, pickup_translation)
-            {
-                const ADDITIONAL_Y_OFFSET: f32 = 24.0;
-
-                let y_offset = description_node.size().y + ADDITIONAL_Y_OFFSET;
-
-                *description_transform = GlobalTransform::from_xyz(
-                    pickup_viewport_pos.x,
-                    pickup_viewport_pos.y - y_offset,
-                    description_transform.translation().z,
-                );
+            for (_, _, _, mut visibility) in &mut passive_descriptions {
+                *visibility = Visibility::Hidden;
             }
-
-            Visibility::Visible
-        } else {
-            Visibility::Hidden
-        }
+        },
     }
 }
