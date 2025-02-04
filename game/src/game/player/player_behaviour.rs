@@ -1,4 +1,3 @@
-use bevy::prelude::{resource_equals, Added};
 use bevy::sprite::{Sprite, SpriteSheetBundle};
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
@@ -31,11 +30,7 @@ use crate::game::player::{
     HitFreezeTime, Idle, Jumping, Player, PlayerAction, PlayerConfig,
     PlayerGfx, PlayerStateSet, Running, WallSlideTime, WhirlAbility,
 };
-use crate::prelude::{
-    any_with_component, App, BuildChildren, Commands, DetectChanges,
-    Direction2d, Entity, GameTickUpdate, GameTime, Has, IntoSystemConfigs,
-    Plugin, Query, Res, Transform, TransformBundle, With, Without,
-};
+use crate::prelude::*;
 use crate::StateDespawnMarker;
 use crate::{camera::CameraShake, game::player::PlayerStatMod};
 
@@ -102,7 +97,8 @@ impl Plugin for PlayerBehaviorPlugin {
                     .before(TransformPropagate)
                     .in_set(PlayerStateSet::Collisions),
             )
-                .chain(),
+                .chain()
+                .run_if(in_state(AppState::InGame)),
         );
     }
 }
