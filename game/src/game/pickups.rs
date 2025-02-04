@@ -532,8 +532,9 @@ fn display_passives_description(
         ),
     >,
     player_query: Query<&Transform, With<Player>>,
-    pickup_query: Query<(Entity, &PickupDrop, &Transform), With<PickupDrop>>,
+    pickup_query: Query<(Entity, &Transform), With<PickupDrop>>,
     camera_query: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
+    pickup_hint: Query<Entity, With<PickupHint>>,
 ) {
     let Ok(p_transform) = player_query.get_single() else {
         return;
@@ -543,52 +544,57 @@ fn display_passives_description(
     };
     let p_pos = p_transform.translation.truncate();
 
-    for (pickup_entity, pickup, pickup_transform) in pickup_query.iter() {
-        if let PickupType::PassiveDrop(_) = pickup.p_type {
-            let Some((
-                _,
-                description_node,
-                mut description_transform,
-                mut description_visibility,
-            )) = passive_descriptions.iter_mut().find(
-                |(passive_entity, _, _, _)| {
-                    pickup_entity == passive_entity.get()
-                },
-            )
-            else {
-                continue;
-            };
-            let pickup_translation = pickup_transform.translation;
-            let dist = p_pos.distance_squared(pickup_translation.truncate());
+    for (pickup_entity, pickup_transform) in pickup_query.iter() {
+        let pickup_translation = pickup_transform.translation;
+        let dist = p_pos.distance_squared(pickup_translation.truncate());
+        let in_pickup_range = dist <= PICKUP_RANGE_SQUARED;
 
-            *description_visibility = if dist <= PICKUP_RANGE_SQUARED {
-                if let Some(pickup_viewport_pos) = camera
-                    .world_to_viewport(camera_transform, pickup_translation)
-                {
-                    const DESCRIPTION_ADDITIONAL_Y_OFFSET: f32 = 24.0;
-
-                    let y_offset = description_node.size().y
-                        + DESCRIPTION_ADDITIONAL_Y_OFFSET;
-
-                    *description_transform = GlobalTransform::from_xyz(
-                        pickup_viewport_pos.x,
-                        pickup_viewport_pos.y - y_offset,
-                        description_transform.translation().z,
-                    );
-                }
-
-                Visibility::Visible
-            } else {
-                Visibility::Hidden
+        if in_pickup_range {
+            if pickup_hint.is_empty() {
+                commands.popup().insert(PickupHint).with_children(|popup| {
+                    popup.row().with_children(|row| {
+                        row.text("Press ");
+                        row.control_icon("F");
+                        row.text(" to pick up");
+                    });
+                });
+            }
+        } else {
+            for entity in &pickup_hint {
+                commands.entity(entity).despawn_recursive();
             }
         }
 
-        commands.popup().insert(PickupHint).with_children(|popup| {
-            popup.row().with_children(|row| {
-                row.text("Press ");
-                row.control_icon("F");
-                row.text(" to pick up");
-            });
-        });
+        let Some((
+            _,
+            description_node,
+            mut description_transform,
+            mut description_visibility,
+        )) = passive_descriptions.iter_mut().find(
+            |(passive_entity, _, _, _)| pickup_entity == passive_entity.get(),
+        )
+        else {
+            continue;
+        };
+
+        *description_visibility = if in_pickup_range {
+            if let Some(pickup_viewport_pos) =
+                camera.world_to_viewport(camera_transform, pickup_translation)
+            {
+                const ADDITIONAL_Y_OFFSET: f32 = 24.0;
+
+                let y_offset = description_node.size().y + ADDITIONAL_Y_OFFSET;
+
+                *description_transform = GlobalTransform::from_xyz(
+                    pickup_viewport_pos.x,
+                    pickup_viewport_pos.y - y_offset,
+                    description_transform.translation().z,
+                );
+            }
+
+            Visibility::Visible
+        } else {
+            Visibility::Hidden
+        }
     }
 }

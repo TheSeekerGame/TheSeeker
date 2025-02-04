@@ -8,9 +8,13 @@ const BACKGROUND_COLOR: Color = Color::rgba(0.0, 0.0, 0.0, 0.8);
 const ICON_BACKGROUND_COLOR: Color = Color::rgba(0.32, 0.37, 0.28, 1.0);
 const TEXT_COLOR: Color = Color::rgb(0.98, 0.99, 0.94);
 const SPACER_COLOR: Color = Color::rgb(0.20, 0.25, 0.15);
+const POPUP_DURATION_SECS: f32 = 5.0;
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(Update, hide_popup);
+    app.add_systems(
+        Update,
+        despawn_popup_on_timer.run_if(any_with_component::<PopupTimer>),
+    );
 }
 
 #[derive(Component)]
@@ -25,6 +29,12 @@ impl PopupTimer {
             secs,
             TimerMode::Once,
         ))
+    }
+}
+
+impl Default for PopupTimer {
+    fn default() -> Self {
+        Self::from_secs(POPUP_DURATION_SECS)
     }
 }
 
@@ -184,7 +194,7 @@ impl<T: Spawn> PopupUi for T {
     }
 }
 
-fn hide_popup(
+fn despawn_popup_on_timer(
     mut popup_q: Query<(Entity, &mut PopupTimer), With<Popup>>,
     time: Res<Time>,
     mut commands: Commands,

@@ -41,7 +41,7 @@ use crate::prelude::{
     IntoSystemConfigs, Plugin, Query, Res, Transform, TransformBundle, With,
     Without,
 };
-use crate::ui::popup::PopupUi;
+use crate::ui::popup::{PopupTimer, PopupUi};
 use crate::StateDespawnMarker;
 use crate::{camera::CameraShake, game::player::PlayerStatMod};
 
@@ -1592,11 +1592,14 @@ fn player_pickup_interact(
                             }
                         },
                         PickupType::Seed(_, (_, word)) => {
-                            commands.popup().with_children(|popup| {
-                                popup.row().with_children(|row| {
-                                    row.text(word);
+                            commands
+                                .popup()
+                                .insert(PopupTimer::default())
+                                .with_children(|popup| {
+                                    popup.row().with_children(|row| {
+                                        row.text(word);
+                                    });
                                 });
-                            });
                         },
                     }
                     // Despawn the Pickup popup hint

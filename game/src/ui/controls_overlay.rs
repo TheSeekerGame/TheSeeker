@@ -8,8 +8,6 @@ use super::popup::PopupUi;
 use super::AppState;
 use crate::game::player::PlayerAction;
 
-const POPUP_DURATION_SECONDS: f32 = 5.0;
-
 #[derive(Component)]
 struct ControlsOverlay;
 
@@ -40,10 +38,7 @@ pub(super) fn plugin(app: &mut App) {
 fn spawn_control_hint(mut commands: Commands) {
     commands
         .popup()
-        .insert((
-            ControlsHint,
-            PopupTimer::from_secs(POPUP_DURATION_SECONDS),
-        ))
+        .insert((ControlsHint, PopupTimer::default()))
         .with_children(|popup| {
             popup.row().with_children(|row| {
                 row.text("Press ");
