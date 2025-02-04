@@ -10,9 +10,10 @@ use crate::ui::skill_toolbar::SkillToolbarPlugin;
 
 pub mod ability_widget;
 mod console;
-pub mod controls_overlay;
+mod controls_overlay;
 mod kill_counter;
 mod mainmenu;
+pub mod popup;
 mod skill_toolbar;
 
 pub struct UiPlugin;
@@ -22,6 +23,7 @@ impl Plugin for UiPlugin {
         app.add_plugins(iyes_ui::UiExtrasPlugin);
         app.add_plugins((
             controls_overlay::plugin,
+            popup::plugin,
             self::console::UiConsolePlugin,
             self::mainmenu::MainMenuPlugin,
             SkillToolbarPlugin,

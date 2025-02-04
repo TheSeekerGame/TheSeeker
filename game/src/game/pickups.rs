@@ -5,7 +5,9 @@ use bevy::{
 use rand::Rng;
 use theseeker_engine::time::GameTickUpdate;
 
-use crate::{camera::MainCamera, prelude::StateDespawnMarker};
+use crate::{
+    camera::MainCamera, prelude::StateDespawnMarker, ui::popup::PopupUi,
+};
 
 use super::{
     attack::KillCount,
@@ -33,6 +35,10 @@ impl Plugin for PickupPlugin {
         );
     }
 }
+
+/// Marker component for the Pickup interaction hint
+#[derive(Component)]
+pub struct PickupHint;
 
 #[derive(Component)]
 pub struct PassiveDescriptionNode;
@@ -512,6 +518,7 @@ fn spawn_pickups_on_death(
 }
 
 fn display_passives_description(
+    mut commands: Commands,
     mut passive_descriptions: Query<
         (
             &PassiveEntity,
@@ -575,5 +582,13 @@ fn display_passives_description(
                 Visibility::Hidden
             }
         }
+
+        commands.popup().insert(PickupHint).with_children(|popup| {
+            popup.row().with_children(|row| {
+                row.text("Press ");
+                row.control_icon("F");
+                row.text(" to pick up");
+            });
+        });
     }
 }

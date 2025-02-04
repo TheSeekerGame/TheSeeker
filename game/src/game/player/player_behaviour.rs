@@ -27,7 +27,7 @@ use crate::game::attack::{Attack, SelfPushback, Stealthed};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::pickups::{
-    PassiveDescriptionNode, PassiveEntity, PickupDrop, PickupType,
+    PassiveDescriptionNode, PassiveEntity, PickupDrop, PickupHint, PickupType,
     PICKUP_RANGE_SQUARED,
 };
 use crate::game::player::{
@@ -41,7 +41,7 @@ use crate::prelude::{
     IntoSystemConfigs, Plugin, Query, Res, Transform, TransformBundle, With,
     Without,
 };
-use crate::ui::controls_overlay::ControlsOverlayUi;
+use crate::ui::popup::PopupUi;
 use crate::StateDespawnMarker;
 use crate::{camera::CameraShake, game::player::PlayerStatMod};
 
@@ -1558,6 +1558,7 @@ fn player_pickup_interact(
         (Entity, &PassiveEntity),
         With<PassiveDescriptionNode>,
     >,
+    pickup_hint: Query<Entity, With<PickupHint>>,
     mut commands: Commands,
 ) {
     for (p_transform, action_state, mut passives) in query.iter_mut() {
@@ -1597,6 +1598,10 @@ fn player_pickup_interact(
                                 });
                             });
                         },
+                    }
+                    // Despawn the Pickup popup hint
+                    for entity in &pickup_hint {
+                        commands.entity(entity).despawn_recursive();
                     }
                     // Despawn the PickupDrop entity from the map
                     commands.entity(entity).despawn_recursive();
