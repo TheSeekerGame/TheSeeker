@@ -10,7 +10,7 @@ use crate::ui::skill_toolbar::SkillToolbarPlugin;
 
 pub mod ability_widget;
 mod console;
-mod controls_overlay;
+pub mod controls_overlay;
 mod kill_counter;
 mod mainmenu;
 mod skill_toolbar;

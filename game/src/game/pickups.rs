@@ -208,7 +208,7 @@ impl Command for SpawnPickupCommand {
                     StateDespawnMarker,
                 ));
             },
-            PickupType::Seed(categ, id) => {
+            PickupType::Seed(categ, (id, _)) => {
                 let path = &handles.seed_map[&categ];
 
                 let texture_handle =
@@ -232,7 +232,7 @@ impl Command for SpawnPickupCommand {
 #[derive(Clone)]
 pub enum PickupType {
     PassiveDrop(Passive),
-    Seed(PlanetarySeed, u32),
+    Seed(PlanetarySeed, (u32, String)),
 }
 
 #[derive(Clone, PartialEq, Eq, Hash)]
@@ -245,21 +245,101 @@ pub enum PlanetarySeed {
 }
 
 impl PlanetarySeed {
-    fn default() -> HashMap<Self, Vec<u32>> {
+    const PLANETARY_SEED_A1: &str = "PLANETARY_SEED_A1";
+    const PLANETARY_SEED_A4: &str = "PLANETARY_SEED_A4";
+    const PLANETARY_SEED_A5: &str = "PLANETARY_SEED_A5";
+    const PLANETARY_SEED_A8: &str = "PLANETARY_SEED_A8";
+    const PLANETARY_SEED_A11: &str = "PLANETARY_SEED_A11";
+    const PLANETARY_SEED_A12: &str = "PLANETARY_SEED_A12";
+
+    const PLANETARY_SEED_B1: &str = "PLANETARY_SEED_B1";
+    const PLANETARY_SEED_B3: &str = "PLANETARY_SEED_B3";
+    const PLANETARY_SEED_B4: &str = "PLANETARY_SEED_B4";
+    const PLANETARY_SEED_B7: &str = "PLANETARY_SEED_B7";
+    const PLANETARY_SEED_B8: &str = "PLANETARY_SEED_B8";
+    const PLANETARY_SEED_B12: &str = "PLANETARY_SEED_B12";
+
+    const PLANETARY_SEED_C1: &str = "PLANETARY_SEED_C1";
+    const PLANETARY_SEED_C2: &str = "PLANETARY_SEED_C2";
+    const PLANETARY_SEED_C3: &str = "PLANETARY_SEED_C3";
+    const PLANETARY_SEED_C4: &str = "PLANETARY_SEED_C4";
+    const PLANETARY_SEED_C5: &str = "PLANETARY_SEED_C5";
+    const PLANETARY_SEED_C8: &str = "PLANETARY_SEED_C8";
+    const PLANETARY_SEED_C9: &str = "PLANETARY_SEED_C9";
+    const PLANETARY_SEED_C11: &str = "PLANETARY_SEED_C11";
+
+    const PLANETARY_SEED_D1: &str = "PLANETARY_SEED_D1";
+    const PLANETARY_SEED_D2: &str = "PLANETARY_SEED_D2";
+    const PLANETARY_SEED_D3: &str = "PLANETARY_SEED_D3";
+    const PLANETARY_SEED_D6: &str = "PLANETARY_SEED_D6";
+    const PLANETARY_SEED_D7: &str = "PLANETARY_SEED_D7";
+    const PLANETARY_SEED_D8: &str = "PLANETARY_SEED_D8";
+
+    const PLANETARY_SEED_E3: &str = "PLANETARY_SEED_E3";
+    const PLANETARY_SEED_E6: &str = "PLANETARY_SEED_E6";
+    const PLANETARY_SEED_E7: &str = "PLANETARY_SEED_E7";
+    const PLANETARY_SEED_E8: &str = "PLANETARY_SEED_E8";
+    const PLANETARY_SEED_E11: &str = "PLANETARY_SEED_E11";
+    const PLANETARY_SEED_E12: &str = "PLANETARY_SEED_E12";
+
+    fn seed_map() -> HashMap<Self, Vec<(u32, String)>> {
         HashMap::from_iter(vec![
             (
                 Self::CategoryA,
-                vec![1, 4, 5, 8, 11, 12],
+                vec![
+                    (1, Self::PLANETARY_SEED_A1.to_string()),
+                    (4, Self::PLANETARY_SEED_A4.to_string()),
+                    (5, Self::PLANETARY_SEED_A5.to_string()),
+                    (8, Self::PLANETARY_SEED_A8.to_string()),
+                    (11, Self::PLANETARY_SEED_A11.to_string()),
+                    (12, Self::PLANETARY_SEED_A12.to_string()),
+                ],
             ),
-            (Self::CategoryB, vec![1, 3, 4, 7, 8, 12]),
+            (
+                Self::CategoryB,
+                vec![
+                    (1, Self::PLANETARY_SEED_B1.to_string()),
+                    (3, Self::PLANETARY_SEED_B3.to_string()),
+                    (4, Self::PLANETARY_SEED_B4.to_string()),
+                    (7, Self::PLANETARY_SEED_B7.to_string()),
+                    (8, Self::PLANETARY_SEED_B8.to_string()),
+                    (12, Self::PLANETARY_SEED_B12.to_string()),
+                ],
+            ),
             (
                 Self::CategoryC,
-                vec![1, 2, 3, 4, 5, 8, 9, 11],
+                vec![
+                    (1, Self::PLANETARY_SEED_C1.to_string()),
+                    (2, Self::PLANETARY_SEED_C2.to_string()),
+                    (3, Self::PLANETARY_SEED_C3.to_string()),
+                    (4, Self::PLANETARY_SEED_C4.to_string()),
+                    (5, Self::PLANETARY_SEED_C5.to_string()),
+                    (8, Self::PLANETARY_SEED_C8.to_string()),
+                    (9, Self::PLANETARY_SEED_C9.to_string()),
+                    (11, Self::PLANETARY_SEED_C11.to_string()),
+                ],
             ),
-            (Self::CategoryD, vec![1, 2, 3, 6, 7, 8]),
+            (
+                Self::CategoryD,
+                vec![
+                    (1, Self::PLANETARY_SEED_D1.to_string()),
+                    (2, Self::PLANETARY_SEED_D2.to_string()),
+                    (3, Self::PLANETARY_SEED_D3.to_string()),
+                    (6, Self::PLANETARY_SEED_D6.to_string()),
+                    (7, Self::PLANETARY_SEED_D7.to_string()),
+                    (8, Self::PLANETARY_SEED_D8.to_string()),
+                ],
+            ),
             (
                 Self::CategoryE,
-                vec![3, 6, 7, 8, 11, 12],
+                vec![
+                    (3, Self::PLANETARY_SEED_E3.to_string()),
+                    (6, Self::PLANETARY_SEED_E6.to_string()),
+                    (7, Self::PLANETARY_SEED_E7.to_string()),
+                    (8, Self::PLANETARY_SEED_E8.to_string()),
+                    (11, Self::PLANETARY_SEED_E11.to_string()),
+                    (12, Self::PLANETARY_SEED_E12.to_string()),
+                ],
             ),
         ])
     }
@@ -269,7 +349,7 @@ impl PlanetarySeed {
 pub struct DropTracker {
     pub progress: usize,
     pub passive_rolls: Vec<u32>,
-    pub seeds: HashMap<PlanetarySeed, Vec<u32>>,
+    pub seeds: HashMap<PlanetarySeed, Vec<(u32, String)>>,
 }
 
 impl FromWorld for DropTracker {
@@ -307,14 +387,14 @@ impl DropTracker {
         Self {
             progress: 0,
             passive_rolls: rolls,
-            seeds: PlanetarySeed::default(),
+            seeds: PlanetarySeed::seed_map(),
         }
     }
 
     pub fn drop_random_seed(
         &mut self,
         seed_type: &PlanetarySeed,
-    ) -> Option<u32> {
+    ) -> Option<(u32, String)> {
         let mut rng = rand::thread_rng();
 
         if !self.seeds[seed_type].is_empty() {

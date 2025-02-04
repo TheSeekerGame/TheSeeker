@@ -40,6 +40,7 @@ use crate::prelude::{
     IntoSystemConfigs, Plugin, Query, Res, Transform, TransformBundle, With,
     Without,
 };
+use crate::ui::controls_overlay::ControlsOverlayUi;
 use crate::StateDespawnMarker;
 use crate::{camera::CameraShake, game::player::PlayerStatMod};
 
@@ -1577,7 +1578,6 @@ fn player_pickup_interact(
                         PickupType::PassiveDrop(passive) => {
                             println!("passive pickup!!!");
                             passives.add_passive(passive.clone());
-                            commands.entity(entity).despawn_recursive();
                             // Despawn the passive description UI node for the picked up passive.
                             if let Some((passive_description, _)) =
                                 passive_descriptions.iter().find(
@@ -1590,12 +1590,18 @@ fn player_pickup_interact(
                                     .entity(passive_description)
                                     .despawn_recursive();
                             }
-                            break;
                         },
-                        PickupType::Seed(categ, id) => {
-                            todo!("implement UI Display for Planetary Seed Pickups");
+                        PickupType::Seed(_, (_, word)) => {
+                            commands.popup().with_children(|popup| {
+                                popup.row().with_children(|row| {
+                                    row.text(word);
+                                });
+                            });
                         },
                     }
+                    // Despawn the PickupDrop entity from the map
+                    commands.entity(entity).despawn_recursive();
+                    break;
                 }
             }
         }
