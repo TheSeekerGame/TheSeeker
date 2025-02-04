@@ -69,6 +69,7 @@ pub fn debug_enemy(world: &World, query: Query<Entity, With<Gent>>) {
 #[derive(Resource, Debug, Default)]
 struct EnemyConfig {
     fall_accel: f32,
+    jump_accel: f32,
 
     start_hp: u32,
 
@@ -140,6 +141,7 @@ fn load_enemy_config(
 fn update_enemy_config(config: &mut EnemyConfig, cfg: &DynamicConfig) {
     let mut errors = Vec::new();
     update_field(&mut errors, &cfg.0, "fall_accel", |val| config.fall_accel = val);
+    update_field(&mut errors, &cfg.0, "jump_accel", |val| config.jump_accel = val);
 
     update_field(&mut errors, &cfg.0, "start_hp", |val| config.start_hp = val as u32);
 
@@ -676,7 +678,7 @@ impl GenericState for Waiting {}
 #[derive(Component, Reflect)]
 enum Navigation {
     Grounded,
-    Falling,
+    Falling { jumping: bool },
     Blocked,
 }
 
@@ -1310,7 +1312,7 @@ fn walking(
                     Facing::Left => Facing::Right,
                 }
             },
-            Navigation::Grounded | Navigation::Falling => {},
+            Navigation::Grounded | Navigation::Falling { .. } => {},
         }
         walking.ticks += 1;
     }
@@ -1332,14 +1334,14 @@ fn falling(
         ),
         With<Enemy>,
     >,
-    players: Query<(), (With<Player>, Without<Enemy>)>,
+    players: Query<&Transform, (With<Player>, Without<Enemy>)>,
     enemy_config: Res<EnemyConfig>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
     for (entity, mut velocity, mut transform, _, mut nav, collider, gent) in
         query.iter_mut()
     {
-        if matches!(*nav, Navigation::Falling) {
+        if matches!(*nav, Navigation::Falling { .. }) {
             if let Some((e, toi)) = spatial_query.shape_cast(
                 transform.translation.xy(),
                 Direction2d::new_unchecked(Vec2::new(0., -1.)),
@@ -1374,7 +1376,21 @@ fn falling(
                     }
                 }
             }
-            velocity.y -= enemy_config.fall_accel;
+            if let Ok(ptrans) = players.get_single() {
+                if ptrans.translation.y < transform.translation.y {
+                    *nav = Navigation::Falling { jumping: false };
+                }
+            }
+            match *nav {
+                Navigation::Falling { jumping: true } => {
+                    velocity.y -= enemy_config.jump_accel;
+                },
+                Navigation::Falling { jumping: false } => {
+                    velocity.y -= enemy_config.fall_accel;
+                },
+                _ => unreachable!(),
+            }
+
             if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
                 enemy_anim.set_slot("jump", velocity.y > 0.);
                 enemy_anim.set_slot("fall", velocity.y < 0.);
@@ -1398,7 +1414,7 @@ fn falling(
                 .is_none()
             {
                 println!("refalling");
-                *nav = Navigation::Falling;
+                *nav = Navigation::Falling { jumping: false };
                 if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
                     enemy_anim.play_key("anim.smallspider.Jump");
                 }
@@ -1544,7 +1560,7 @@ fn chasing(
                         if ptrans.translation.y < trans.translation.y {
                             println!("fall off {trans:?}");
                             velocity.y = enemy_config.fall_y_velocity;
-                            *nav = Navigation::Falling;
+                            *nav = Navigation::Falling { jumping: false };
                             if let Ok(mut enemy_anim) =
                                 gfx_query.get_mut(gent.e_gfx)
                             {
@@ -1566,7 +1582,7 @@ fn chasing(
                                 // enemy_anim.set_slot("fall", false);
                             }
                             // *nav = Navigation::Grounded;
-                            *nav = Navigation::Falling;
+                            *nav = Navigation::Falling { jumping: true };
                         }
                         // println!("chasing but blocked");
                         // transitions.push(Chasing::new_transition(
@@ -1650,7 +1666,9 @@ fn move_collide(
                     //     break;
                     // } else {
                     linear_velocity.0 = projected_velocity;
-                    if !is_knocked && !matches!(*nav, Navigation::Falling) {
+                    if !is_knocked
+                        && !matches!(*nav, Navigation::Falling { .. })
+                    {
                         *nav = Navigation::Blocked;
                     }
                     // }
@@ -1676,7 +1694,7 @@ fn move_collide(
             },
             None,
         ) {
-            if !is_knocked && !matches!(*nav, Navigation::Falling) {
+            if !is_knocked && !matches!(*nav, Navigation::Falling { .. }) {
                 *nav = Navigation::Blocked;
             }
             projected_velocity.x = first_hit.toi * dir;

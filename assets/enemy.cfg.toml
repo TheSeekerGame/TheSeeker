@@ -1,5 +1,6 @@
 # How fast does an enemy accelerate downward while in the falling state?
 fall_accel = 4.5
+jump_accel = 3.5
 
 start_hp = 100.0
 
@@ -24,5 +25,5 @@ melee_damage = 20.0
 walking_speed = 20.0
 chasing_speed = 35.0
 
-fall_y_velocity = 30.0
+fall_y_velocity = 40.0
 jump_y_velocity = 140.0
