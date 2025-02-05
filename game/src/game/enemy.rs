@@ -1092,8 +1092,9 @@ fn ranged_attack(
                         InteractionGroups::new(ENEMY_ATTACK, PLAYER),
                     ),
                     TransformBundle::from(Transform::from_translation(
-                        enemy_transform.translation(),
+                        enemy_transform.translation().truncate().extend(1.0),
                     )),
+                    VisibilityBundle::default(),
                 ))
                 .with_lingering_particles(particle_effect.0.clone());
         }
