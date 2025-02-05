@@ -40,7 +40,7 @@ fn spawn_orbs_on_death(
     let size = Vec2::splat(2.0);
 
     for tr in enemy_q.iter() {
-        let translation = tr.translation();
+        let enemy_pos = tr.translation().truncate();
 
         let mut rng = rand::thread_rng();
 
@@ -52,7 +52,7 @@ fn spawn_orbs_on_death(
                 rng.gen_range(-POS_RADIUS..POS_RADIUS),
             )
             .clamp_length_max(POS_RADIUS);
-
+            let orb_position = enemy_pos + pos;
             let vel = pos * 0.25;
             let color: Color = if let Ok(passives) = player_q.get_single() {
                 if passives.contains(&Passive::Bloodstone) {
@@ -74,7 +74,7 @@ fn spawn_orbs_on_death(
                         ..default()
                     },
                     transform: Transform::from_translation(
-                        translation + pos.extend(0.),
+                        orb_position.extend((15.0 * 0.000001) - 0.0000001),
                     ),
                     ..default()
                 },
