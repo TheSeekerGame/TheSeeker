@@ -973,4 +973,28 @@
         rows: 1,
         columns: 12, 
     ),
+    "anim.sword.pickup": File (
+        path: "animations/weapons/Sword.anim.toml",
+    ),
+    "anim.sword.pickup.image": File (
+        path: "animations/weapons/Sword.png",
+    ),
+    "anim.sword.pickup.atlas": TextureAtlasLayout (
+        tile_size_x: 18.,
+        tile_size_y: 18.,
+        rows: 1,
+        columns: 16, 
+    ),
+    "anim.hammer.pickup": File (
+        path: "animations/weapons/Hammer.anim.toml",
+    ),
+    "anim.hammer.pickup.image": File (
+        path: "animations/weapons/Hammer.png",
+    ),
+    "anim.hammer.pickup.atlas": TextureAtlasLayout (
+        tile_size_x: 18.,
+        tile_size_y: 18.,
+        rows: 1,
+        columns: 16, 
+    ),
 })
