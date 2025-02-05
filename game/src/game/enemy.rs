@@ -128,11 +128,7 @@ pub struct SpawnSlot {
 }
 
 #[derive(Component, Default)]
-#[component(storage = "SparseSet")]
-pub struct EnemyBlueprint {
-    /// Hp added from spawner due to number of enemies killed.
-    pub(crate) bonus_hp: u32,
-}
+pub struct EnemyBlueprint;
 
 #[derive(Bundle)]
 pub struct EnemyGentBundle {
@@ -257,11 +253,7 @@ fn spawn_enemies(
 
                             let e = commands
                                 .spawn((
-                                    EnemyBlueprintBundle {
-                                        marker: EnemyBlueprint {
-                                            bonus_hp: 20 * killed,
-                                        },
-                                    },
+                                    EnemyBlueprintBundle::default(),
                                     slot.tier,
                                     role,
                                     TransformBundle::from_transform(*transform),
@@ -317,7 +309,7 @@ fn setup_enemy(
         // TODO: ensure proper z order
         xf_gent.translation.z = 14.0 * 0.000001;
         xf_gent.translation.y += 2.0; // Sprite offset so it looks like it is standing on the ground
-        let health = (100 + bp.bonus_hp) * *tier as u32;
+        let health = 100 * *tier as u32;
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
