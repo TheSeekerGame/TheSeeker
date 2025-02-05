@@ -305,17 +305,28 @@ fn setup_enemy(
     mut q: Query<(
         &mut Transform,
         &Tier,
+        &Role,
         Entity,
         Ref<EnemyBlueprint>,
     )>,
     mut commands: Commands,
 ) {
-    for (mut xf_gent, tier, e_gent, bp) in q.iter_mut() {
+    for (mut xf_gent, tier, role, e_gent, bp) in q.iter_mut() {
         if !bp.is_added() {
             continue;
         }
         // TODO: ensure proper z order
         xf_gent.translation.z = 14.0 * 0.000001;
+        // Make melee spiders appear in front of ranged ones
+        if let Role::Melee = role {
+            xf_gent.translation.z += 0.0000001;
+        }
+        // Make higher tier spiders appear in front of lower tier ones
+        xf_gent.translation.z += match tier {
+            Tier::Base => 0.0,
+            Tier::Two => 0.00000001,
+            Tier::Three => 0.00000002,
+        };
         xf_gent.translation.y += 2.0; // Sprite offset so it looks like it is standing on the ground
         let health = (100 + bp.bonus_hp) * *tier as u32;
         let e_gfx = commands.spawn(()).id();
