@@ -1503,10 +1503,20 @@ pub struct BuffTick {
 }
 
 fn track_hits(
-    mut query: Query<(Entity, &Passives, &mut BuffTick), With<Player>>,
+    mut query: Query<
+        (
+            Entity,
+            &Passives,
+            &mut Health,
+            &mut BuffTick,
+        ),
+        With<Player>,
+    >,
     mut damage_events: EventReader<DamageInfo>,
 ) {
-    if let Ok((player_e, passives, mut buff)) = query.get_single_mut() {
+    if let Ok((player_e, passives, mut health, mut buff)) =
+        query.get_single_mut()
+    {
         // tick falloff
         buff.falloff = buff.falloff.saturating_sub(1);
         if passives.contains(&Passive::FrenziedAttack) {
@@ -1514,6 +1524,7 @@ fn track_hits(
                 if damage_info.attacker == player_e {
                     buff.falloff = 288;
                     buff.stacks += 1;
+                    health.current -= buff.stacks;
                 }
             }
         }
