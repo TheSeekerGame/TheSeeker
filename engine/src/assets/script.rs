@@ -154,13 +154,32 @@ pub enum CommonScriptAction {
     /// Play a sound (precise timing based on action's trigger condition)
     PlayAudio {
         asset_key: String,
+        label: Option<String>,
         volume: Option<f32>,
         pan: Option<f32>,
+    },
+    /// Stop sounds that are currently playing
+    StopAudio {
+        /// If true (default), only apply to sounds started by the current script.
+        /// If false, apply to sounds started from anywhere.
+        current_script_only: Option<bool>,
+        /// Only stop sounds with the given label. If unset, stop all sounds.
+        label: Option<String>,
     },
     /// Play a sound (using regular bevy audio, not our precise system)
     PlayBackgroundAudio {
         asset_key: String,
+        label: Option<String>,
         volume: Option<f32>,
+        r#loop: Option<bool>,
+    },
+    /// Stop sounds that are currently playing
+    StopBackgroundAudio {
+        /// If true (default), only apply to sounds started by the current script.
+        /// If false, apply to sounds started from anywhere.
+        current_script_only: Option<bool>,
+        /// Only stop sounds with the given label. If unset, stop all sounds.
+        label: Option<String>,
     },
 }
 

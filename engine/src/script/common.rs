@@ -3,7 +3,7 @@ use bevy::ecs::system::lifetimeless::*;
 
 use super::*;
 use crate::assets::script::*;
-use crate::audio::PrecisionMixerControl;
+use crate::audio::{LabeledBackgroundSound, PreciseAudioId, PrecisionMixerControl};
 use crate::data::OneOrMany;
 use crate::script::label::EntityLabels;
 
@@ -55,6 +55,8 @@ pub struct CommonScriptTracker {
     q_delayed: Vec<(u64, ActionId)>,
     old_key: Option<String>,
     runcount: u32,
+    my_sounds: Vec<PreciseAudioId>,
+    my_background_sounds: Vec<Entity>,
 }
 
 #[derive(Default)]
@@ -83,7 +85,7 @@ impl ScriptTracker for CommonScriptTracker {
     );
     type RunIf = CommonScriptRunIf;
     type Settings = CommonScriptSettings;
-    type UpdateParam = (SRes<Time>, SRes<GameTime>);
+    type UpdateParam = (SRes<Time>, SRes<GameTime>, SQuery<&'static PrecisionMixerControl>,);
 
     fn init(
         &mut self,
@@ -230,7 +232,7 @@ impl ScriptTracker for CommonScriptTracker {
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
-        (time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<
+        (time, game_time, q_mixer): &mut <Self::UpdateParam as SystemParam>::Item<
             '_,
             '_,
         >,
@@ -283,6 +285,11 @@ impl ScriptTracker for CommonScriptTracker {
                 });
             }
         }
+        if let Ok(ctl) = q_mixer.get_single() {
+            ctl.controller.cleanup_stale_ids(&mut self.my_sounds);
+        } else {
+            self.my_sounds.clear();
+        }
         if self.next_time_id >= self.time_actions.len()
             && self.next_tick_id >= self.tick_actions.len()
             && self.tickquant_actions.is_empty()
@@ -305,7 +312,7 @@ impl ScriptTracker for CommonScriptTracker {
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
-        (_time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<
+        (_time, game_time, _q_mixer): &mut <Self::UpdateParam as SystemParam>::Item<
             '_,
             '_,
         >,
@@ -325,7 +332,7 @@ impl ScriptTracker for CommonScriptTracker {
         &mut self,
         _entity: Entity,
         _settings: &Self::Settings,
-        (_time, game_time): &mut <Self::UpdateParam as SystemParam>::Item<
+        (_time, game_time, _q_mixer): &mut <Self::UpdateParam as SystemParam>::Item<
             '_,
             '_,
         >,
@@ -536,6 +543,8 @@ impl ScriptAction for CommonScriptAction {
         SRes<EntityLabels>,
         SCommands,
         SQuery<&'static PrecisionMixerControl>,
+        SQuery<Entity, (With<PlaybackSettings>, Without<LabeledBackgroundSound>)>,
+        SQuery<(Entity, &'static LabeledBackgroundSound), With<PlaybackSettings>>,
     );
     type Tracker = CommonScriptTracker;
 
@@ -552,6 +561,8 @@ impl ScriptAction for CommonScriptAction {
             ref elabels,
             ref mut commands,
             q_mixer,
+            q_unlabeled_sounds,
+            q_labeled_sounds,
         ): &mut <Self::Param as SystemParam>::Item<'_, '_>,
     ) -> ScriptUpdateResult {
         match self {
@@ -597,7 +608,7 @@ impl ScriptAction for CommonScriptAction {
                 }
                 ScriptUpdateResult::NormalRun
             },
-            CommonScriptAction::PlayBackgroundAudio { asset_key, volume } => {
+            CommonScriptAction::PlayBackgroundAudio { asset_key, label, volume, r#loop } => {
                 let sounds: Vec<Handle<AudioSource>> = preloaded
                     .get_multi_asset(asset_key)
                     .unwrap_or(&[])
@@ -607,19 +618,30 @@ impl ScriptAction for CommonScriptAction {
                     })
                     .collect();
                 if let Some(sound) = sounds.choose(&mut rand::thread_rng()) {
-                    commands.spawn(AudioBundle {
+                    let e = commands.spawn(AudioBundle {
                         source: sound.clone(),
                         settings: PlaybackSettings {
-                            mode: PlaybackMode::Despawn,
+                            mode: if r#loop.unwrap_or(false) {
+                                PlaybackMode::Loop
+                            } else {
+                                PlaybackMode::Despawn
+                            },
                             volume: Volume::new(volume.unwrap_or(1.0)),
                             ..Default::default()
                         },
-                    });
+                    }).id();
+                    if let Some(label) = label {
+                        commands.entity(e).insert(LabeledBackgroundSound {
+                            label: label.clone(),
+                        });
+                    }
+                    tracker.my_background_sounds.push(e);
                 }
                 ScriptUpdateResult::NormalRun
             },
             CommonScriptAction::PlayAudio {
                 asset_key,
+                label,
                 volume,
                 pan,
             } => {
@@ -636,40 +658,103 @@ impl ScriptAction for CommonScriptAction {
                     .collect();
                 if let Some(sound) = sounds.choose(&mut rand::thread_rng()) {
                     let ctl = q_mixer.single();
-                    match timing {
+                    let l = if let Some(l) = label {
+                        Some(l.as_str())
+                    } else {
+                        None
+                    };
+                    let audio_id = match timing {
                         ScriptActionTiming::Unknown => {
                             ctl.controller.play_immediately(
+                                l,
                                 sound.decoder(),
                                 volume,
                                 pan,
-                            );
+                            )
                         },
                         ScriptActionTiming::UnknownTick => {
                             ctl.controller.play_at_tick(
+                                l,
                                 gt.tick() as u32,
                                 0,
                                 sound.decoder(),
                                 volume,
                                 pan,
-                            );
+                            )
                         },
                         ScriptActionTiming::Time(time) => {
                             ctl.controller.play_at_time(
+                                l,
                                 time,
                                 sound.decoder(),
                                 volume,
                                 pan,
-                            );
+                            )
                         },
                         ScriptActionTiming::Tick(tick) => {
                             ctl.controller.play_at_tick(
+                                l,
                                 tick as u32,
                                 0,
                                 sound.decoder(),
                                 volume,
                                 pan,
-                            );
+                            )
                         },
+                    };
+                    tracker.my_sounds.push(audio_id);
+                }
+                ScriptUpdateResult::NormalRun
+            },
+            CommonScriptAction::StopAudio { current_script_only, label } => {
+                let ctl = q_mixer.single();
+                if current_script_only.unwrap_or(true) {
+                    if let Some(label) = label {
+                        ctl.controller.stop_many_with_label(&mut tracker.my_sounds, &label);
+                    } else {
+                        ctl.controller.stop_many(&tracker.my_sounds);
+                        tracker.my_sounds.clear();
+                    }
+                } else {
+                    if let Some(label) = label {
+                        ctl.controller.stop_label(&label);
+                    } else {
+                        ctl.controller.stop_all();
+                    }
+                }
+                ScriptUpdateResult::NormalRun
+            },
+            CommonScriptAction::StopBackgroundAudio { current_script_only, label } => {
+                if current_script_only.unwrap_or(true) {
+                    if let Some(label) = label {
+                        tracker.my_background_sounds.retain(|e| {
+                            let mut retain = true;
+                            if let Ok((_, l)) = q_labeled_sounds.get(*e) {
+                                if &l.label == label {
+                                    commands.entity(*e).despawn();
+                                    retain = false;
+                                }
+                            } else {
+                                retain = false;
+                            }
+                            retain
+                        });
+                    } else {
+                        for e in tracker.my_background_sounds.drain(..) {
+                            commands.entity(e).despawn();
+                        }
+                    }
+                } else {
+                    if let Some(label) = label {
+                        for (e, l) in q_labeled_sounds.iter() {
+                            if &l.label == label {
+                                commands.entity(e).despawn();
+                            }
+                        }
+                    } else {
+                        for e in q_unlabeled_sounds.iter() {
+                            commands.entity(e).despawn();
+                        }
                     }
                 }
                 ScriptUpdateResult::NormalRun
