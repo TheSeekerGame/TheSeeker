@@ -1465,7 +1465,11 @@ pub fn dead(
             )>();
         }
         if dead.ticks == 8 * 7 {
-            commands.entity(entity).remove::<Dead>().insert(Decay);
+            commands
+                .entity(entity)
+                .remove::<Dead>()
+                .insert(Decay)
+                .remove_parent();
         }
         dead.ticks += 1;
     }
