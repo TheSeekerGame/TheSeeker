@@ -3,5 +3,5 @@ time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
 frame_min = 1
-frame_max = 5
+frame_max = 1
 frame_start = 1

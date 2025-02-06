@@ -997,4 +997,244 @@
         rows: 1,
         columns: 16, 
     ),
+    "anim.dialogue.000": File (
+        path: "animations/dialogue/000.anim.toml",
+    ),
+    "anim.dialogue.000.image": File (
+        path: "animations/dialogue/000_1f.png",
+    ),
+    "anim.dialogue.000.atlas": TextureAtlasLayout (
+        tile_size_x: 111.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.001": File (
+        path: "animations/dialogue/001.anim.toml",
+    ),
+    "anim.dialogue.001.image": File (
+        path: "animations/dialogue/001_1f.png",
+    ),
+    "anim.dialogue.001.atlas": TextureAtlasLayout (
+        tile_size_x: 137.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.002": File (
+        path: "animations/dialogue/002.anim.toml",
+    ),
+    "anim.dialogue.002.image": File (
+        path: "animations/dialogue/002_1f.png",
+    ),
+    "anim.dialogue.002.atlas": TextureAtlasLayout (
+        tile_size_x: 249.,
+        tile_size_y: 38.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.003": File (
+        path: "animations/dialogue/003.anim.toml",
+    ),
+    "anim.dialogue.003.image": File (
+        path: "animations/dialogue/003_1f.png",
+    ),
+    "anim.dialogue.003.atlas": TextureAtlasLayout (
+        tile_size_x: 220.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.004": File (
+        path: "animations/dialogue/004.anim.toml",
+    ),
+    "anim.dialogue.004.image": File (
+        path: "animations/dialogue/004_1f.png",
+    ),
+    "anim.dialogue.004.atlas": TextureAtlasLayout (
+        tile_size_x: 245.,
+        tile_size_y: 49.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.005": File (
+        path: "animations/dialogue/005.anim.toml",
+    ),
+    "anim.dialogue.005.image": File (
+        path: "animations/dialogue/005_1f.png",
+    ),
+    "anim.dialogue.005.atlas": TextureAtlasLayout (
+        tile_size_x: 71.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.006": File (
+        path: "animations/dialogue/006.anim.toml",
+    ),
+    "anim.dialogue.006.image": File (
+        path: "animations/dialogue/006_1f.png",
+    ),
+    "anim.dialogue.006.atlas": TextureAtlasLayout (
+        tile_size_x: 119.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.007": File (
+        path: "animations/dialogue/007.anim.toml",
+    ),
+    "anim.dialogue.007.image": File (
+        path: "animations/dialogue/007_1f.png",
+    ),
+    "anim.dialogue.007.atlas": TextureAtlasLayout (
+        tile_size_x: 247.,
+        tile_size_y: 49.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.008": File (
+        path: "animations/dialogue/008.anim.toml",
+    ),
+    "anim.dialogue.008.image": File (
+        path: "animations/dialogue/008_1f.png",
+    ),
+    "anim.dialogue.008.atlas": TextureAtlasLayout (
+        tile_size_x: 244.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.009": File (
+        path: "animations/dialogue/009.anim.toml",
+    ),
+    "anim.dialogue.009.image": File (
+        path: "animations/dialogue/009_1f.png",
+    ),
+    "anim.dialogue.009.atlas": TextureAtlasLayout (
+        tile_size_x: 75.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.010": File (
+        path: "animations/dialogue/010.anim.toml",
+    ),
+    "anim.dialogue.010.image": File (
+        path: "animations/dialogue/010_1f.png",
+    ),
+    "anim.dialogue.010.atlas": TextureAtlasLayout (
+        tile_size_x: 235.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.011": File (
+        path: "animations/dialogue/011.anim.toml",
+    ),
+    "anim.dialogue.011.image": File (
+        path: "animations/dialogue/011_1f.png",
+    ),
+    "anim.dialogue.011.atlas": TextureAtlasLayout (
+        tile_size_x: 233.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.012": File (
+        path: "animations/dialogue/012.anim.toml",
+    ),
+    "anim.dialogue.012.image": File (
+        path: "animations/dialogue/012_1f.png",
+    ),
+    "anim.dialogue.012.atlas": TextureAtlasLayout (
+        tile_size_x: 235.,
+        tile_size_y: 38.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.013": File (
+        path: "animations/dialogue/013.anim.toml",
+    ),
+    "anim.dialogue.013.image": File (
+        path: "animations/dialogue/013_1f.png",
+    ),
+    "anim.dialogue.013.atlas": TextureAtlasLayout (
+        tile_size_x: 242.,
+        tile_size_y: 38.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.014": File (
+        path: "animations/dialogue/014.anim.toml",
+    ),
+    "anim.dialogue.014.image": File (
+        path: "animations/dialogue/014_1f.png",
+    ),
+    "anim.dialogue.014.atlas": TextureAtlasLayout (
+        tile_size_x: 251.,
+        tile_size_y: 49.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.015": File (
+        path: "animations/dialogue/015.anim.toml",
+    ),
+    "anim.dialogue.015.image": File (
+        path: "animations/dialogue/015_1f.png",
+    ),
+    "anim.dialogue.015.atlas": TextureAtlasLayout (
+        tile_size_x: 247.,
+        tile_size_y: 38.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.016": File (
+        path: "animations/dialogue/016.anim.toml",
+    ),
+    "anim.dialogue.016.image": File (
+        path: "animations/dialogue/016_1f.png",
+    ),
+    "anim.dialogue.016.atlas": TextureAtlasLayout (
+        tile_size_x: 197.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.017": File (
+        path: "animations/dialogue/017.anim.toml",
+    ),
+    "anim.dialogue.017.image": File (
+        path: "animations/dialogue/017_1f.png",
+    ),
+    "anim.dialogue.017.atlas": TextureAtlasLayout (
+        tile_size_x: 241.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.018": File (
+        path: "animations/dialogue/018.anim.toml",
+    ),
+    "anim.dialogue.018.image": File (
+        path: "animations/dialogue/018_1f.png",
+    ),
+    "anim.dialogue.018.atlas": TextureAtlasLayout (
+        tile_size_x: 203.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
+    "anim.dialogue.019": File (
+        path: "animations/dialogue/019.anim.toml",
+    ),
+    "anim.dialogue.019.image": File (
+        path: "animations/dialogue/019_1f.png",
+    ),
+    "anim.dialogue.019.atlas": TextureAtlasLayout (
+        tile_size_x: 67.,
+        tile_size_y: 27.,
+        rows: 1,
+        columns: 1, 
+    ),
 })
