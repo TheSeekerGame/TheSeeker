@@ -1257,7 +1257,9 @@ fn player_attack(
                             },
                             Projectile { vel },
                             Collider::cuboid(
-                                12.0,
+                                //TODO: temp fix of extending collider length to account for
+                                //tunneling
+                                30.0,
                                 3.0,
                                 InteractionGroups::new(
                                     PLAYER_ATTACK,
