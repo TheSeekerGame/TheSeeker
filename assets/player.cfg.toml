@@ -80,7 +80,7 @@ whirl_cost = 2.0
 whirl_regen = 0.7
 
 # How much max health the player has
-max_health = 150.0
+max_health = 120.0
 
 # Pushback velocity on wall jumps
 wall_pushback = 50.0

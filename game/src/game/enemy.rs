@@ -656,7 +656,7 @@ impl Range {
     // const MELEE_RANGED: f32 = 60.;
 
     // for players passive enemies nearby buff
-    const NEARBY: f32 = 20.;
+    const NEARBY: f32 = 32.;
 }
 
 /// Component that indicates that the player is inside of this enemy,

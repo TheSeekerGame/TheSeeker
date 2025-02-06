@@ -375,7 +375,7 @@ pub fn apply_attack_damage(
                         },
                     };
                     if is_backstab {
-                        damage *= 3.;
+                        damage *= 2.;
                     }
                 }
                 if is_defending {
@@ -596,8 +596,8 @@ fn track_crits(mut query: Query<(&mut Crits, Option<&Passives>, &Health)>) {
         }
         if let Some(passives) = maybe_passives {
             if passives.contains(&Passive::FlamingHeart)
-                && health.current < health.max / 5
-                && (crits.hit_count % 3 == 0 || crits.hit_count % 5 == 0)
+                && health.current < health.max / 4
+                && (crits.hit_count % 2 == 0 || crits.hit_count % 3 == 0)
             {
                 crits.next_hit_is_critical = true;
             }

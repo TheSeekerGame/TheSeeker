@@ -389,7 +389,7 @@ impl DropTracker {
     }
 
     fn reset(passive_count: usize) -> Self {
-        const SPAN: u32 = 50;
+        const SPAN: u32 = 10;
 
         let mut rng = rand::thread_rng();
 
@@ -450,37 +450,37 @@ fn spawn_pickups_on_death(
         let seed_category: Option<PlanetarySeed> = match tier {
             Tier::Base => {
                 if seed_roll < 0.001 {
-                    Some(PlanetarySeed::CategoryA)
-                } else if seed_roll < 0.0015 {
                     Some(PlanetarySeed::CategoryC)
+                } else if seed_roll < 0.01 {
+                    Some(PlanetarySeed::CategoryA)
                 } else {
                     None
                 }
             },
             Tier::Two => {
-                if seed_roll < 0.001 {
-                    Some(PlanetarySeed::CategoryA)
-                } else if seed_roll < 0.0015 {
-                    Some(PlanetarySeed::CategoryC)
-                } else if seed_roll < 0.0017 {
-                    Some(PlanetarySeed::CategoryB)
-                } else if seed_roll < 0.00171 {
+                if seed_roll < 0.0007 {
                     Some(PlanetarySeed::CategoryD)
+                } else if seed_roll < 0.003 {
+                    Some(PlanetarySeed::CategoryB)
+                } else if seed_roll < 0.006 {
+                    Some(PlanetarySeed::CategoryC)
+                } else if seed_roll < 0.012 {
+                    Some(PlanetarySeed::CategoryA)
                 } else {
                     None
                 }
             },
             Tier::Three => {
-                if seed_roll < 0.001 {
-                    Some(PlanetarySeed::CategoryA)
-                } else if seed_roll < 0.0015 {
-                    Some(PlanetarySeed::CategoryC)
-                } else if seed_roll < 0.0017 {
-                    Some(PlanetarySeed::CategoryB)
-                } else if seed_roll < 0.00171 {
-                    Some(PlanetarySeed::CategoryD)
-                } else if seed_roll < 0.001711 {
+                if seed_roll < 0.0005 {
                     Some(PlanetarySeed::CategoryE)
+                } else if seed_roll < 0.001 {
+                    Some(PlanetarySeed::CategoryD)
+                } else if seed_roll < 0.005 {
+                    Some(PlanetarySeed::CategoryB)
+                } else if seed_roll < 0.01 {
+                    Some(PlanetarySeed::CategoryC)
+                } else if seed_roll < 0.1 {
+                    Some(PlanetarySeed::CategoryA)
                 } else {
                     None
                 }

@@ -220,14 +220,14 @@ impl Passive {
 
     pub fn description(&self) -> &str {
         match self {
-            Passive::Bloodstone => "Heal when killing an enemy",
-            Passive::FlamingHeart => "Crit every 3rd and 5th hit when low health",
-            Passive::IceDagger => "Deal extra damage when backstabbing",
+            Passive::Bloodstone => "Heal after kills",
+            Passive::FlamingHeart => "Crit every 2nd and 3rd hit when on low health",
+            Passive::IceDagger => "Deal double damage when backstabbing",
             Passive::GlowingShard => "Defense scaling based on number of enemies nearby",
             Passive::ObsidianNecklace => "Crits lower cooldown of all abilities by 0.5 sec",
-            Passive::HeavyBoots => "Increased damage while standing still, decreased while moving",
-            Passive::SerpentRing => "Move faster, get cdr, take double damage",
-            Passive::FrenziedAttack => "Increase cdr and lose health for every consecutive hit within 3 seconds",
+            Passive::HeavyBoots => "Doubled damage & defence while standing still,but halved while moving",
+            Passive::SerpentRing => "Move faster, get cooldown redudction, but take double damage",
+            Passive::FrenziedAttack => "Increase cooldown reduction but also lose health for every consecutive hit within 3 seconds",
         }
     }
 }
@@ -1220,7 +1220,7 @@ fn player_update_passive_buffs(
         let mut speed = 1.;
         let mut cdr = 1.;
         if passives.contains(&Passive::GlowingShard) {
-            defense *= 1. + 0.1 * enemies_nearby.0 as f32;
+            defense *= 1. + 0.2 * enemies_nearby.0 as f32;
         }
         if passives.contains(&Passive::SerpentRing) {
             speed *= 1.2;
