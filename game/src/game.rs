@@ -16,6 +16,7 @@ mod game_over;
 pub mod gentstate;
 mod merchant;
 pub mod physics;
+pub mod pickups;
 pub mod player;
 mod switches;
 mod wall;
@@ -76,6 +77,7 @@ impl Plugin for GameplayPlugin {
             game_over::GameOverPlugin,
             xp_orbs::XpPlugin,
             switches::SwitchesPlugin,
+            pickups::PickupPlugin,
         ));
     }
 }

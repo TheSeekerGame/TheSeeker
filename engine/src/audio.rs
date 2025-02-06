@@ -4,6 +4,8 @@ use crate::prelude::*;
 
 mod mixer;
 
+pub use mixer::PreciseAudioId;
+
 pub struct AudioPlugin;
 
 impl Plugin for AudioPlugin {
@@ -49,4 +51,9 @@ impl Decodable for PrecisionMixerInstance {
     fn decoder(&self) -> Self::Decoder {
         mixer::PrecisionMixer::new(self.controller.clone())
     }
+}
+
+#[derive(Component)]
+pub struct LabeledBackgroundSound {
+    pub label: String,
 }

@@ -19,18 +19,23 @@ use super::player_weapon::{
 };
 use super::{
     dash_icon_fx, player_dash_fx, AttackBundle, CanStealth, DashIcon,
-    DashStrike, DashType, JumpCount, Knockback, PlayerStats, Pushback,
-    StatType, Stealthing, Whirling,
+    DashStrike, DashType, JumpCount, Knockback, Passives, PlayerStats,
+    Pushback, StatType, Stealthing, Whirling,
 };
 use crate::game::attack::{Attack, SelfPushback, Stealthed};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
+use crate::game::pickups::{
+    PassiveDescriptionNode, PassiveEntity, PickupDrop, PickupHint, PickupType,
+    PICKUP_RANGE_SQUARED,
+};
 use crate::game::player::{
     Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded,
     HitFreezeTime, Idle, Jumping, Player, PlayerAction, PlayerConfig,
     PlayerGfx, PlayerStateSet, Running, WallSlideTime, WhirlAbility,
 };
 use crate::prelude::*;
+use crate::ui::popup::{PopupTimer, PopupUi};
 use crate::StateDespawnMarker;
 use crate::{camera::CameraShake, game::player::PlayerStatMod};
 
@@ -45,6 +50,8 @@ impl Plugin for PlayerBehaviorPlugin {
             GameTickUpdate,
             (
                 (
+                    player_pickup_interact
+                        .run_if(any_with_component::<PickupDrop>),
                     player_idle.run_if(any_with_component::<Idle>),
                     add_attack,
                     player_stealth,
@@ -69,14 +76,15 @@ impl Plugin for PlayerBehaviorPlugin {
                         .after(player_dash_fx)
                         .run_if(any_with_component::<DashIcon>),
                     player_grounded.run_if(any_with_component::<Grounded>),
-                    player_falling.run_if(any_with_component::<Falling>),
+                    (
+                        player_falling,
+                        player_sliding.before(player_jump),
+                    )
+                        .run_if(any_with_component::<Falling>),
                     crate::game::physics::knockback
                         .run_if(any_with_component::<Knockback>)
                         .before(player_jump)
                         .after(player_sliding),
-                    player_sliding
-                        .before(player_jump)
-                        .run_if(any_with_component::<Falling>),
                     bow_auto_aim
                         .after(player_move)
                         .before(player_attack)
@@ -1244,7 +1252,9 @@ fn player_attack(
                             },
                             Projectile { vel },
                             Collider::cuboid(
-                                12.0,
+                                //TODO: temp fix of extending collider length to account for
+                                //tunneling
+                                30.0,
                                 3.0,
                                 InteractionGroups::new(
                                     PLAYER_ATTACK,
@@ -1527,6 +1537,77 @@ pub fn bow_auto_aim(
 
         if !is_facing_enemies && is_facing_away_from_enemy {
             *facing = facing.invert();
+        }
+    }
+}
+
+fn player_pickup_interact(
+    mut query: Query<
+        (
+            &Transform,
+            &ActionState<PlayerAction>,
+            &mut Passives,
+        ),
+        With<Player>,
+    >,
+    pickup_query: Query<(Entity, &PickupDrop, &Transform)>,
+    passive_descriptions: Query<
+        (Entity, &PassiveEntity),
+        With<PassiveDescriptionNode>,
+    >,
+    pickup_hint: Query<Entity, With<PickupHint>>,
+    mut commands: Commands,
+) {
+    for (p_transform, action_state, mut passives) in query.iter_mut() {
+        if action_state.just_pressed(&PlayerAction::Interact) {
+            // Get Pickups in Range and pick up a single one
+
+            let p_pos = p_transform.translation.truncate();
+
+            for (entity, pickup, transform) in pickup_query.iter() {
+                let dist =
+                    p_pos.distance_squared(transform.translation.truncate());
+
+                println!("dist: {}", dist);
+
+                if dist <= PICKUP_RANGE_SQUARED {
+                    match &pickup.p_type {
+                        PickupType::PassiveDrop(passive) => {
+                            println!("passive pickup!!!");
+                            passives.add_passive(passive.clone());
+                            // Despawn the passive description UI node for the picked up passive.
+                            if let Some((passive_description, _)) =
+                                passive_descriptions.iter().find(
+                                    |(_, passive_entity)| {
+                                        passive_entity.get() == entity
+                                    },
+                                )
+                            {
+                                commands
+                                    .entity(passive_description)
+                                    .despawn_recursive();
+                            }
+                        },
+                        PickupType::Seed(_, (_, word)) => {
+                            commands
+                                .popup()
+                                .insert(PopupTimer::default())
+                                .with_children(|popup| {
+                                    popup.row().with_children(|row| {
+                                        row.text(word);
+                                    });
+                                });
+                        },
+                    }
+                    // Despawn the Pickup popup hint
+                    for entity in &pickup_hint {
+                        commands.entity(entity).despawn_recursive();
+                    }
+                    // Despawn the PickupDrop entity from the map
+                    commands.entity(entity).despawn_recursive();
+                    break;
+                }
+            }
         }
     }
 }

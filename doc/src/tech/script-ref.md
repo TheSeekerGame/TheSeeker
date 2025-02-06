@@ -701,6 +701,15 @@ volume = 0.5
 pan = -0.25
 ```
 
+```toml
+[[script]]
+run_at_tick = 0
+action = "PlayAudio"
+asset_key = "sound.footsteps"
+volume = 0.25
+label = "Footsteps"
+```
+
 Plays the given audio asset in a manner that is precisely timed according
 to the script action's trigger condition.
 
@@ -713,6 +722,10 @@ etc, use `"PlayBackgroundAudio"` instead.
 
 The `volume` and `pan` options default to `1.0` and `0.0`, respectively.
 Pan ranges from `-1.0` (fully to the left) to `1.0` (fully to the right).
+
+The `label` option can be used to assign a string label to the sound. This is
+useful if you would like to later stop the sound using a `StopBackgroundAudio`
+script action.
 
 </details>
 
@@ -728,7 +741,16 @@ Example:
 run_on_slot_enable = "Play"
 action = "PlayBackgroundAudio"
 asset_key = "sound.mymusic"
+```
+
+```toml
+[[script]]
+run_at_tick = 100
+action = "PlayBackgroundAudio"
+asset_key = "sound.mymusic2"
 volume = 0.25
+loop = true
+label = "ExtraAmbience"
 ```
 
 Plays the given audio asset independently of any precisely timed sounds.
@@ -738,7 +760,127 @@ not need to be precisely timed.
 
 If you want precise timing, use the `"PlayAudio"` action instead.
 
-The `volume` and option defaults to `1.0`. Panning is not supported.
+The `volume` option defaults to `1.0`. Panning is not supported.
+
+The `loop` option will make the audio loop indefinitely, instead of stopping
+when finished.  Defaults to `false`.
+
+The `label` option can be used to assign a string label to the sound. This is
+useful if you would like to later stop the sound using a `StopBackgroundAudio`
+script action.
+
+</details>
+
+<details>
+  <summary>
+  <code>StopAudio</code>
+  </summary>
+
+Example:
+
+```toml
+# Stops all sounds started by the current script
+[[script]]
+run_on_playback_control = "Stop"
+action = "StopAudio"
+```
+
+```toml
+# Stops all sounds (that use precise timing)
+[[script]]
+run_on_playback_control = "Stop"
+action = "StopAudio"
+current_script_only = false
+```
+
+```toml
+# Stops all sounds labeled "Footsteps" that were started by the current script
+[[script]]
+run_on_playback_control = "Stop"
+action = "StopAudio"
+label = "Footsteps"
+```
+
+```toml
+# Stops all sounds labeled "Attacks", regardless of how they were started
+[[script]]
+run_on_slot_enable = "MySlot"
+action = "StopAudio"
+current_script_only = false
+label = "Attacks"
+```
+
+Stops sounds that were played using the precise timing system (e.g by a
+`PlayAudio` script action).
+
+The selection of which sounds to stop can be controlled by the
+`current_script_only` and `label` options.
+
+`current_script_only` defaults to `true`. If `true`, only sounds started by
+the current run of the script will be stopped. Sounds that were started by
+other scripts, previous runs of the current script, or Rust code, will not
+be affected. If `false`, all sounds will be considered, regardless of how
+they were started.
+
+`label` can be used to specify a specific label string. If set, only sounds
+with that label will be stopped.
+
+</details>
+
+<details>
+  <summary>
+  <code>StopBackgroundAudio</code>
+  </summary>
+
+Example:
+
+```toml
+# Stops all background sounds started by the current script
+[[script]]
+run_on_playback_control = "Stop"
+action = "StopBackgroundAudio"
+```
+
+```toml
+# Stops all background sounds, regardless of how they were started
+[[script]]
+run_on_playback_control = "Stop"
+action = "StopBackgroundAudio"
+current_script_only = false
+```
+
+```toml
+# Stops all sounds labeled "Music" that were started by the current script
+[[script]]
+run_on_playback_control = "Stop"
+action = "StopBackgroundAudio"
+label = "Music"
+```
+
+```toml
+# Stops all sounds labeled "ExtraAmbience", regardless of how they were started
+[[script]]
+run_on_slot_enable = "MySlot"
+action = "StopBackgroundAudio"
+current_script_only = false
+label = "ExtraAmbience"
+```
+
+Stops background sounds (that do not use the precise timing system).
+This applies to sounds started with the `PlayBackgroundAudio` script action,
+as well as any sounds played using `bevy_audio` entities in Rust code.
+
+The selection of which sounds to stop can be controlled by the
+`current_script_only` and `label` options.
+
+`current_script_only` defaults to `true`. If `true`, only sounds started by
+the current run of the script will be stopped. Sounds that were started by
+other scripts, previous runs of the current script, or Rust code, will not
+be affected. If `false`, all sounds will be considered, regardless of how
+they were started.
+
+`label` can be used to specify a specific label string. If set, only sounds
+with that label will be stopped.
 
 </details>
 

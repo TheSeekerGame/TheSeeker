@@ -62,21 +62,24 @@ pub fn setup_merchant(
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn_empty().id();
-        commands.entity(e_gent).insert((
-            Name::new("Merchant"),
-            Gent {
-                e_gfx,
-                e_effects_gfx,
-            },
-            Collider::cuboid(
-                40.0,
-                40.0,
-                InteractionGroups {
-                    memberships: SENSOR,
-                    filter: PLAYER,
+        commands
+            .entity(e_gent)
+            .insert((
+                Name::new("Merchant"),
+                Gent {
+                    e_gfx,
+                    e_effects_gfx,
                 },
-            ),
-        ));
+                Collider::cuboid(
+                    40.0,
+                    40.0,
+                    InteractionGroups {
+                        memberships: SENSOR,
+                        filter: PLAYER,
+                    },
+                ),
+            ))
+            .remove_parent();
         let mut player = ScriptPlayer::<SpriteAnimation>::default();
         player.play_key("anim.merchant.Idle");
         commands.entity(e_gfx).insert((

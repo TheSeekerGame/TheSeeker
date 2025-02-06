@@ -1,0 +1,14 @@
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 16
+frame_start = 1
+
+# LOOP
+[[script]]
+run_at_frame = 16
+action = "SetFrameNext"
+frame_index = 1
