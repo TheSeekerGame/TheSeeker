@@ -150,6 +150,7 @@ pub struct Passives {
     pub locked: Vec<Passive>,
 }
 impl Passives {
+    /// Maximum number of passives player can hold at once
     pub const MAX: usize = 3;
 }
 

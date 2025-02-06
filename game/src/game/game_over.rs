@@ -186,8 +186,6 @@ pub fn on_game_over(
     });
     kill_count.0 = 0;
 
-    // TODO: Derive Default for DropTracker and use insert_resource instead.
     // TODO: Move this to some less obscure system that resets game state.
-    commands.remove_resource::<DropTracker>();
-    commands.init_resource::<DropTracker>();
+    commands.insert_resource(DropTracker::default());
 }
