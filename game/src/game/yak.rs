@@ -48,7 +48,10 @@ pub fn setup_yak(
         xf_gent.translation.y += 5.0;
         println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
-        commands.entity(e_gent).insert((Name::new("Yak"),));
+        commands
+            .entity(e_gent)
+            .insert(Name::new("Yak"))
+            .remove_parent();
         let mut player = ScriptPlayer::<SpriteAnimation>::default();
         player.play_key("anim.yak.Idle");
         commands.entity(e_gfx).insert((
