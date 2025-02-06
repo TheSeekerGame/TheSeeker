@@ -149,46 +149,26 @@ pub struct Passives {
     pub current: HashSet<Passive>,
     pub locked: Vec<Passive>,
 }
+impl Passives {
+    pub const MAX: usize = 5;
+}
 
 impl Default for Passives {
     fn default() -> Self {
         let passives: Vec<Passive> = Passive::iter().collect();
         Passives {
-            current: HashSet::with_capacity(5),
+            current: HashSet::with_capacity(Passives::MAX),
             locked: passives,
         }
     }
 }
 
 impl Passives {
-    // // TODO: pass in slice of passives, filter the locked passives on it
-    // fn new_with(passive: Passive) -> Self {
-    //     Passives::default()
-    // }
-
-    fn gain_random(&mut self) {
-        // TODO: add checks for no passives remaining
-        // TODO add limit on gaining past max passive slots?
-        // does nothing if there are no more passives to gain
-        let mut rng = rand::thread_rng();
-        if !self.locked.is_empty() {
-            let i = rng.gen_range(0..self.locked.len());
-            let passive = self.locked.swap_remove(i);
-            self.current.insert(passive);
-        }
-    }
-
-    fn gain(&mut self, passive: Passive) {
-        if !self.current.contains(&passive) {
-            self.locked.retain(|p| *p != passive);
-            self.current.insert(passive);
-        }
-    }
-
     pub fn drop_random(&mut self) -> Option<Passive> {
         let mut rng = rand::thread_rng();
 
-        if !self.locked.is_empty() {
+        // dont drop more passives if full
+        if !self.locked.is_empty() && self.current.len() < Passives::MAX {
             let i = rng.gen_range(0..self.locked.len());
             let passive = self.locked.swap_remove(i);
 
@@ -197,6 +177,7 @@ impl Passives {
         None
     }
 
+    // TODO: probably should also not be able to add a passive beyond MAX?
     pub fn add_passive(&mut self, passive: Passive) {
         self.current.insert(passive);
     }
@@ -219,7 +200,7 @@ pub enum Passive {
     HeavyBoots,
     /// Move faster, get cdr, take double damage
     SerpentRing,
-    /// Increase cdr for every consecutive hit within 3 seconds
+    /// Increase cdr and lose health for every consecutive hit within 3 seconds
     FrenziedAttack,
 }
 
@@ -239,26 +220,14 @@ impl Passive {
 
     pub fn description(&self) -> &str {
         match self {
-            Passive::Bloodstone => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-            Passive::FlamingHeart => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-            Passive::IceDagger => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-            Passive::GlowingShard => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-            Passive::ObsidianNecklace => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-            Passive::HeavyBoots => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-            Passive::SerpentRing => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-            Passive::FrenziedAttack => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
-        }
-    }
-}
-
-fn gain_passives(
-    mut query: Query<&mut Passives, With<Player>>,
-    kills: Res<KillCount>,
-    player_config: Res<PlayerConfig>,
-) {
-    for mut passives in query.iter_mut() {
-        if **kills % player_config.passive_gain_rate == 0 {
-            passives.gain_random();
+            Passive::Bloodstone => "Heal when killing an enemy",
+            Passive::FlamingHeart => "Crit every 3rd and 5th hit when low health",
+            Passive::IceDagger => "Deal extra damage when backstabbing",
+            Passive::GlowingShard => "Damage scaling based on number of enemies nearby",
+            Passive::ObsidianNecklace => "Crits lower cooldown of all abilities by 0.5 sec",
+            Passive::HeavyBoots => "Increased damage while standing still, decreased while moving",
+            Passive::SerpentRing => "Move faster, get cdr, take double damage",
+            Passive::FrenziedAttack => "Increase cdr and lose health for every consecutive hit within 3 seconds",
         }
     }
 }
