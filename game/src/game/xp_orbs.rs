@@ -5,7 +5,10 @@ use theseeker_engine::{
     time::{GameTickUpdate, GameTime, GameTimeAppExt},
 };
 
-use crate::game::player::{Passive, Passives};
+use crate::{
+    game::player::{Passive, Passives},
+    prelude::StateDespawnMarker,
+};
 
 use super::{enemy::Enemy, gentstate::Dead, player::Player};
 
@@ -78,6 +81,7 @@ fn spawn_orbs_on_death(
                     ),
                     ..default()
                 },
+                StateDespawnMarker,
             ));
         }
     }

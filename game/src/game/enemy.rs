@@ -574,7 +574,7 @@ impl Role {
 
 // Spider upgrade/scaling tier
 #[derive(Component, Default, Debug, Reflect, Clone, Copy)]
-enum Tier {
+pub enum Tier {
     #[default]
     Base = 1,
     Two = 2,

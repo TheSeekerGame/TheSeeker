@@ -20,11 +20,13 @@ use theseeker_engine::physics::{
     Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER,
 };
 
-use super::physics::Knockback;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
+use crate::game::pickups::DropTracker;
 use crate::game::xp_orbs::XpOrbPickup;
 use crate::prelude::*;
+
+use super::physics::Knockback;
 
 pub struct PlayerPlugin;
 
@@ -38,7 +40,6 @@ impl Plugin for PlayerPlugin {
                 load_player_stats.run_if(resource_changed::<PlayerConfig>),
                 track_hits,
                 player_update_stats_mod,
-                gain_passives.run_if(resource_changed::<KillCount>),
                 player_update_passive_buffs,
             )
                 .chain()
@@ -183,10 +184,26 @@ impl Passives {
             self.current.insert(passive);
         }
     }
+
+    pub fn drop_random(&mut self) -> Option<Passive> {
+        let mut rng = rand::thread_rng();
+
+        if !self.locked.is_empty() {
+            let i = rng.gen_range(0..self.locked.len());
+            let passive = self.locked.swap_remove(i);
+
+            return Some(passive);
+        }
+        None
+    }
+
+    pub fn add_passive(&mut self, passive: Passive) {
+        self.current.insert(passive);
+    }
 }
 
 // they could also be components...limit only by the pickup/gain function instead of sized hashmap
-#[derive(Debug, Eq, PartialEq, Hash, EnumIter)]
+#[derive(Debug, Eq, PartialEq, Hash, EnumIter, Clone)]
 pub enum Passive {
     /// Heal when killing an enemy
     Bloodstone,
@@ -197,13 +214,41 @@ pub enum Passive {
     /// Damage scaling based on number of enemies nearby
     GlowingShard,
     /// Crits lower cooldown of all abilities by 0.5 sec
-    ObsidionNecklace,
+    ObsidianNecklace,
     /// Increased damage while standing still, decreased while moving
     HeavyBoots,
     /// Move faster, get cdr, take double damage
     SerpentRing,
     /// Increase cdr for every consecutive hit within 3 seconds
     FrenziedAttack,
+}
+
+impl Passive {
+    pub fn name(&self) -> &str {
+        match self {
+            Passive::Bloodstone => "Bloodstone",
+            Passive::FlamingHeart => "Flaming Heart",
+            Passive::IceDagger => "Ice Dagger",
+            Passive::GlowingShard => "Glowing Shard",
+            Passive::ObsidianNecklace => "Obsidian Necklace",
+            Passive::HeavyBoots => "Heavy Boots",
+            Passive::SerpentRing => "Serpent Ring",
+            Passive::FrenziedAttack => "Frenzied Attack",
+        }
+    }
+
+    pub fn description(&self) -> &str {
+        match self {
+            Passive::Bloodstone => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::FlamingHeart => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::IceDagger => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::GlowingShard => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::ObsidianNecklace => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::HeavyBoots => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::SerpentRing => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+            Passive::FrenziedAttack => "Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat.",
+        }
+    }
 }
 
 fn gain_passives(
@@ -214,7 +259,6 @@ fn gain_passives(
     for mut passives in query.iter_mut() {
         if **kills % player_config.passive_gain_rate == 0 {
             passives.gain_random();
-            // println!("{:?}", passives);
         }
     }
 }
@@ -464,6 +508,8 @@ fn setup_player(
             },
             animation: Default::default(),
         },));
+
+        commands.init_resource::<DropTracker>();
     }
 }
 
@@ -1418,7 +1464,7 @@ pub fn on_crit_cooldown_reduce(
             mut maybe_can_stealth,
         )) = attacker_query.get_mut(attack.attacker)
         {
-            if passives.contains(&Passive::ObsidionNecklace) {
+            if passives.contains(&Passive::ObsidianNecklace) {
                 if let Some(ref mut can_dash) = maybe_can_dash {
                     can_dash.remaining_cooldown -= 0.5;
                 }

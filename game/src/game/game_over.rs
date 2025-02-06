@@ -22,6 +22,8 @@ use crate::prelude::{
 };
 use crate::ui::button;
 
+use super::pickups::DropTracker;
+
 /// A plugin that handles when the player has a game over
 pub struct GameOverPlugin;
 
@@ -183,4 +185,9 @@ pub fn on_game_over(
         });
     });
     kill_count.0 = 0;
+
+    // TODO: Derive Default for DropTracker and use insert_resource instead.
+    // TODO: Move this to some less obscure system that resets game state.
+    commands.remove_resource::<DropTracker>();
+    commands.init_resource::<DropTracker>();
 }

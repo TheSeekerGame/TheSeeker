@@ -13,6 +13,8 @@ mod console;
 mod controls_overlay;
 mod kill_counter;
 mod mainmenu;
+mod passives;
+pub mod popup;
 mod skill_toolbar;
 
 pub struct UiPlugin;
@@ -22,6 +24,8 @@ impl Plugin for UiPlugin {
         app.add_plugins(iyes_ui::UiExtrasPlugin);
         app.add_plugins((
             controls_overlay::plugin,
+            popup::plugin,
+            passives::plugin,
             self::console::UiConsolePlugin,
             self::mainmenu::MainMenuPlugin,
             SkillToolbarPlugin,
