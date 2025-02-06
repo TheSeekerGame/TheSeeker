@@ -192,7 +192,7 @@ pub enum Passive {
     FlamingHeart,
     /// Deal extra damage when backstabbing
     IceDagger,
-    /// Damage scaling based on number of enemies nearby
+    /// Defense scaling based on number of enemies nearby
     GlowingShard,
     /// Crits lower cooldown of all abilities by 0.5 sec
     ObsidianNecklace,
@@ -223,7 +223,7 @@ impl Passive {
             Passive::Bloodstone => "Heal when killing an enemy",
             Passive::FlamingHeart => "Crit every 3rd and 5th hit when low health",
             Passive::IceDagger => "Deal extra damage when backstabbing",
-            Passive::GlowingShard => "Damage scaling based on number of enemies nearby",
+            Passive::GlowingShard => "Defense scaling based on number of enemies nearby",
             Passive::ObsidianNecklace => "Crits lower cooldown of all abilities by 0.5 sec",
             Passive::HeavyBoots => "Increased damage while standing still, decreased while moving",
             Passive::SerpentRing => "Move faster, get cdr, take double damage",
@@ -1220,7 +1220,7 @@ fn player_update_passive_buffs(
         let mut speed = 1.;
         let mut cdr = 1.;
         if passives.contains(&Passive::GlowingShard) {
-            attack *= 1. + 0.1 * enemies_nearby.0 as f32;
+            defense *= 1. + 0.1 * enemies_nearby.0 as f32;
         }
         if passives.contains(&Passive::SerpentRing) {
             speed *= 1.2;
