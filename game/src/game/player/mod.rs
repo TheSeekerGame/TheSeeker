@@ -150,7 +150,7 @@ pub struct Passives {
     pub locked: Vec<Passive>,
 }
 impl Passives {
-    pub const MAX: usize = 5;
+    pub const MAX: usize = 3;
 }
 
 impl Default for Passives {
