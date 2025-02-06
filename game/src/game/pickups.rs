@@ -43,8 +43,7 @@ pub struct PickupHint;
 #[derive(Component)]
 pub struct PassiveDescriptionNode;
 
-/// Stores the [Entity] and [Transform] of a dropped passive.
-/// Should be used in the passive description UI node to reference and reposition it.
+/// Intended to be used in the passive description UI node to reference the dropped passive.
 #[derive(Component)]
 pub struct PassiveEntity(Entity);
 

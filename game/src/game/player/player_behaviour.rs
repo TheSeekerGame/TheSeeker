@@ -1234,9 +1234,15 @@ fn player_attack(
                     } else {
                         facing.direction()
                     };
+                    // Used for the collider length and the starting position offset
+                    let arrow_length = 30.0;
                     let vel = LinearVelocity(
                         Vec2::X * arrow_direction * config.arrow_velocity,
                     );
+                    let mut arrow_transform = *transform;
+                    // Add an offset to avoid arrows immediately colliding with walls when fired
+                    let arrow_pos_offset = arrow_length * 0.5 * arrow_direction;
+                    arrow_transform.translation.x += arrow_pos_offset;
 
                     if !is_player_pressed_against_wall {
                         commands.entity(entity).insert(Knockback::new(
@@ -1252,14 +1258,14 @@ fn player_attack(
                         .spawn((
                             Arrow,
                             SpriteSheetBundle {
-                                transform: *transform,
+                                transform: arrow_transform,
                                 ..Default::default()
                             },
                             Projectile { vel },
                             Collider::cuboid(
                                 //TODO: temp fix of extending collider length to account for
                                 //tunneling
-                                30.0,
+                                arrow_length,
                                 3.0,
                                 InteractionGroups::new(
                                     PLAYER_ATTACK,
