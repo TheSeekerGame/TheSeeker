@@ -41,8 +41,7 @@ impl Plugin for AttackPlugin {
                 // (lifesteal, kill_on_damage, damage_flash).in_set(RespondToDamageInfoSet)
                 arc_projectile,
                 (
-                    determine_attack_targets
-                        .before(TransformSystem::TransformPropagate),
+                    determine_attack_targets,
                     apply_attack_modifications,
                     // DamageInfo event emitted here
                     apply_attack_damage,
