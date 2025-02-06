@@ -32,14 +32,15 @@ impl Plugin for PlayerWeaponPlugin {
             (
                 swap_combat_style,
                 swap_melee_weapon,
-                set_sfx_slot
-                    .after(EnemyStateSet::Animation)
-                    .after(swap_combat_style)
-                    .after(swap_melee_weapon)
-                    .run_if(
-                        is_current_weapon_changed
-                            .or_else(on_event::<DamageInfo>()),
-                    ),
+                // TODO: Remove this system and implement a bug free solution for weapon hit sfx
+                // set_sfx_slot
+                //     .after(EnemyStateSet::Animation)
+                //     .after(swap_combat_style)
+                //     .after(swap_melee_weapon)
+                //     .run_if(
+                //         is_current_weapon_changed
+                //             .or_else(on_event::<DamageInfo>()),
+                //     ),
             )
                 .run_if(in_state(AppState::InGame)),
         );
