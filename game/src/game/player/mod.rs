@@ -1435,13 +1435,13 @@ pub fn on_crit_cooldown_reduce(
         {
             if passives.contains(&Passive::ObsidianNecklace) {
                 if let Some(ref mut can_dash) = maybe_can_dash {
-                    can_dash.remaining_cooldown -= 0.5;
+                    can_dash.remaining_cooldown -= 3.0;
                 }
                 if let Some(ref mut whirl_ability) = maybe_whirl_ability {
-                    whirl_ability.energy += 0.5;
+                    whirl_ability.energy += 3.0;
                 }
                 if let Some(ref mut can_stealth) = maybe_can_stealth {
-                    can_stealth.remaining_cooldown -= 0.5;
+                    can_stealth.remaining_cooldown -= 3.0;
                 }
             }
         }

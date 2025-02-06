@@ -660,7 +660,7 @@ fn add_dash_strike_collider(
                 PLAYER_ATTACK,
                 ENEMY_HURT,
             )),
-            Attack::new(16, entity, 20. * attack_mod),
+            Attack::new(16, entity, 69. * attack_mod),
             SelfPushback(Knockback::new(
                 Vec2::new(self_pushback * -facing.direction(), 0.),
                 self_pushback_ticks,
