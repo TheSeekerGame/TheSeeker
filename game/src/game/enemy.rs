@@ -588,8 +588,8 @@ impl Role {
 pub enum Tier {
     #[default]
     Base = 1,
-    Two = 2,
-    Three = 3,
+    Two = 3,
+    Three = 9,
 }
 
 impl Distribution<Role> for Standard {

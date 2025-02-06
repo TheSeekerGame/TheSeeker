@@ -150,6 +150,7 @@ pub struct Passives {
     pub locked: Vec<Passive>,
 }
 impl Passives {
+    /// Maximum number of passives player can hold at once
     pub const MAX: usize = 3;
 }
 
@@ -1539,7 +1540,7 @@ fn track_hits(
                 if damage_info.attacker == player_e {
                     buff.falloff = 288;
                     buff.stacks += 1;
-                    health.current -= buff.stacks;
+                    health.current = health.current.saturating_sub(buff.stacks);
                 }
             }
         }

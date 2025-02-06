@@ -3,6 +3,7 @@ use bevy::{
     transform::TransformSystem, ui::UiSystem, utils::hashbrown::HashMap,
 };
 use rand::Rng;
+use strum::IntoEnumIterator;
 use theseeker_engine::time::GameTickUpdate;
 
 use crate::{
@@ -369,12 +370,9 @@ pub struct DropTracker {
     pub seeds: HashMap<PlanetarySeed, Vec<(u32, String)>>,
 }
 
-impl FromWorld for DropTracker {
-    fn from_world(world: &mut World) -> Self {
-        let mut passives = world.query::<&Passives>();
-        let passives = &passives.single(world).locked;
-
-        Self::reset(passives.len())
+impl Default for DropTracker {
+    fn default() -> Self {
+        DropTracker::new(Passive::iter().count())
     }
 }
 
@@ -388,7 +386,7 @@ impl DropTracker {
         self.passive_rolls.get(self.progress)
     }
 
-    fn reset(passive_count: usize) -> Self {
+    fn new(passive_count: usize) -> Self {
         const SPAN: u32 = 10;
 
         let mut rng = rand::thread_rng();
