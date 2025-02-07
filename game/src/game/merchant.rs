@@ -31,10 +31,15 @@ impl Plugin for MerchantPlugin {
             (
                 setup_merchant
                     .run_if(any_matching::<Added<MerchantBlueprint>>()),
-                merchant_proximity_to_player.run_if(any_matching::<(
-                    With<Player>,
-                    Without<Idle>,
-                )>()),
+                (
+                    merchant_proximity_to_player,
+                    restore_merchant_interactability
+                        .run_if(any_with_component::<MerchantNonInteractable>),
+                )
+                    .run_if(any_matching::<(
+                        With<Player>,
+                        Without<Idle>,
+                    )>()),
                 (
                     player_enters_merchant_range.run_if(
                         any_added_component::<MerchantInPlayerRange>.and_then(
@@ -142,6 +147,14 @@ impl MerchantDialogueStage {
             Self::First => 6,
             Self::Second => 12,
             Self::Third => 19,
+        }
+    }
+
+    fn next(&self) -> Option<Self> {
+        match self {
+            Self::First => Some(Self::Second),
+            Self::Second => Some(Self::Third),
+            Self::Third => None,
         }
     }
 }
@@ -288,12 +301,21 @@ fn player_leaves_merchant_range(
             With<MerchantDialogueText>,
         )>,
     >,
+    merchant_query: Query<
+        Has<MerchantNonInteractable>,
+        With<MerchantBlueprint>,
+    >,
     dialogue_stage: Res<MerchantDialogueStage>,
 ) {
     for entity in &query {
         commands.entity(entity).despawn_recursive();
     }
-    dialogue_current_step.0 = dialogue_stage.initial_step();
+
+    if let Ok(is_merchant_non_interactable) = merchant_query.get_single() {
+        if !is_merchant_non_interactable {
+            dialogue_current_step.0 = dialogue_stage.initial_step();
+        }
+    }
 }
 
 fn spawn_merchant_dialog_ui(
@@ -427,6 +449,32 @@ fn handle_finished_dialogue_stage(
     }
 }
 
+fn restore_merchant_interactability(
+    mut commands: Commands,
+    mut dialogue_stage: ResMut<MerchantDialogueStage>,
+    merchant_query: Query<(Entity, &GlobalTransform), With<MerchantBlueprint>>,
+    player_query: Query<&GlobalTransform, With<Player>>,
+) {
+    let Ok((entity, merchant_transform)) = merchant_query.get_single() else {
+        return;
+    };
+    let Ok(player_transform) = player_query.get_single() else {
+        return;
+    };
+    const RANGE_SQUARED: f32 = 500.0 * 500.0;
+
+    if merchant_transform
+        .translation()
+        .distance_squared(player_transform.translation())
+        > RANGE_SQUARED
+    {
+        commands.entity(entity).remove::<MerchantNonInteractable>();
+        if let Some(next_stage) = dialogue_stage.next() {
+            *dialogue_stage = next_stage;
+        }
+    }
+}
+
 fn update_dialog_background(
     mut query: Query<&mut Handle<Image>, With<MerchantDialogueBox>>,
     dialogue_current_step: Res<MerchantDialogueCurrentStep>,
@@ -455,6 +503,7 @@ impl DialogueAssetHandles {
     }
 }
 
+// TODO: Try again with animation files instead of loading assets here.
 pub fn load_assets(assets: Res<AssetServer>, mut commands: Commands) {
     let asset_mappings: Vec<(u8, &str)> = vec![
         (0, "animations/dialogue/000_1f.png"),
