@@ -38,6 +38,7 @@ use crate::prelude::*;
 use crate::ui::popup::{PopupTimer, PopupUi};
 use crate::StateDespawnMarker;
 use crate::{camera::CameraShake, game::player::PlayerStatMod};
+use crate::game::player::Passive;
 
 /// Player behavior systems.
 /// Do stuff here in states and add transitions to other states by pushing
@@ -970,7 +971,7 @@ fn player_grounded(
             }
             if c_time.0 < max_coyote_time {
                 in_c_time = true;
-            }
+            };
         };
 
         // just pressed seems to get missed sometimes... but we need it because pressed makes you
@@ -1412,6 +1413,7 @@ pub fn player_whirl(
             &PlayerStatMod,
             Has<Stealthing>,
             &Gent,
+            &Passives
         ),
         (
             With<Player>,
@@ -1443,6 +1445,7 @@ pub fn player_whirl(
         stat_mod,
         is_stealthing,
         gent,
+        passives,
     ) in gent_query.iter_mut()
     {
         whirling.ticks += 1;
@@ -1465,23 +1468,31 @@ pub fn player_whirl(
                 }
             // if there is no attack, spawn a new one
             } else {
+                // Determine collider lifetime based on melee weapon and passives:
+                // For Sword: default = 16, if (SerpentRing or FrenziedAttack) active then 12
+                // For Hammer: default = 24, if (SerpentRing or FrenziedAttack) active then 18
+                let lifetime = if *melee_weapon == PlayerMeleeWeapon::Hammer {
+                    if passives.contains(&Passive::SerpentRing) || passives.contains(&Passive::FrenziedAttack) {
+                        18
+                    } else {
+                        24
+                    }
+                } else {
+                    if passives.contains(&Passive::SerpentRing) || passives.contains(&Passive::FrenziedAttack) {
+                        12
+                    } else {
+                        16
+                    }
+                };
+
+                let damage = if *melee_weapon == PlayerMeleeWeapon::Hammer { 51.0 } else { 33.0 } * stat_mod.attack;
                 let new_attack = commands
                     .spawn((
                         AttackBundle {
-                            // lifetime of two frames...
-                            attack: Attack::new(
-                                24,
-                                entity,
-                                20. * stat_mod.attack,
-                            ),
-                            collider: Collider::empty(InteractionGroups::new(
-                                PLAYER_ATTACK,
-                                ENEMY_HURT,
-                            )),
+                            attack: Attack::new(lifetime, entity, damage),
+                            collider: Collider::empty(InteractionGroups::new(PLAYER_ATTACK, ENEMY_HURT)),
                         },
-                        TransformBundle::from_transform(Transform::from_xyz(
-                            0.0, 0.0, 0.0,
-                        )),
+                        TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
                         AnimationCollider(gent.e_gfx),
                     ))
                     .set_parent(entity)

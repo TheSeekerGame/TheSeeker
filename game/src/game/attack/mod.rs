@@ -597,7 +597,7 @@ fn track_crits(mut query: Query<(&mut Crits, Option<&Passives>, &Health)>) {
         if let Some(passives) = maybe_passives {
             if passives.contains(&Passive::FlamingHeart)
                 && health.current < health.max / 4
-                && (crits.hit_count % 2 == 0 || crits.hit_count % 3 == 0)
+                && (crits.hit_count % 1 == 0 || crits.hit_count % 2 == 0)
             {
                 crits.next_hit_is_critical = true;
             }

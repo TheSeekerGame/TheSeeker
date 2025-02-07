@@ -224,13 +224,13 @@ impl Passive {
     pub fn description(&self) -> &str {
         match self {
             Passive::Bloodstone => "Heal after kills",
-            Passive::FlamingHeart => "Crit every 2nd and 3rd hit when on low health",
+            Passive::FlamingHeart => "Crit on every hit when on low health",
             Passive::IceDagger => "Deal double damage when backstabbing",
             Passive::GlowingShard => "Defense scaling based on number of enemies nearby",
-            Passive::ObsidianNecklace => "Crits lower cooldown of all abilities by 0.5 sec",
+            Passive::ObsidianNecklace => "Crits lower cooldown of all abilities by 0.4 seconds",
             Passive::HeavyBoots => "Doubled damage & defence while standing still,but halved while moving",
             Passive::SerpentRing => "Move faster, get cooldown redudction, but take double damage",
-            Passive::FrenziedAttack => "Increase cooldown reduction but also lose health for every consecutive hit within 3 seconds",
+            Passive::FrenziedAttack => "Sacrifice health but get increased cooldown reduction for every consecutive hit within 3 seconds",
         }
     }
 }
@@ -1438,13 +1438,13 @@ pub fn on_crit_cooldown_reduce(
         {
             if passives.contains(&Passive::ObsidianNecklace) {
                 if let Some(ref mut can_dash) = maybe_can_dash {
-                    can_dash.remaining_cooldown -= 3.0;
+                    can_dash.remaining_cooldown -= 0.4;
                 }
                 if let Some(ref mut whirl_ability) = maybe_whirl_ability {
-                    whirl_ability.energy += 3.0;
+                    whirl_ability.energy += 0.2;
                 }
                 if let Some(ref mut can_stealth) = maybe_can_stealth {
-                    can_stealth.remaining_cooldown -= 3.0;
+                    can_stealth.remaining_cooldown -= 0.4;
                 }
             }
         }

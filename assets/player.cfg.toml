@@ -71,13 +71,13 @@ dash_cooldown_duration = 1.0
 # How long before the player can dash again?
 dash_down_cooldown_duration = 5.0
 
-max_whirl_energy = 5.0
+max_whirl_energy = 2.0
 
 # Spends this much energy per second when using whirl
 whirl_cost = 2.0
 
 # Spends this much energy per second when not using whirl
-whirl_regen = 0.7
+whirl_regen = 0.2
 
 # How much max health the player has
 max_health = 120.0
@@ -128,7 +128,7 @@ bow_pushback_ticks = 5.0
 sword_attack_damage = 37.0
 
 # Base hammer attack damage
-hammer_attack_damage = 31.0
+hammer_attack_damage = 42.0
 
 # Base bow attack damage
 bow_attack_damage = 11.0
@@ -147,4 +147,4 @@ hammer_on_hit_screenshake_duration_secs = 0.2
 hammer_on_hit_screenshake_frequency = 2.5
 
 # Number of kills to trigger passive gain
-passive_gain_rate = 3.0
+passive_gain_rate = 10.0
