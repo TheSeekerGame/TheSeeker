@@ -178,9 +178,11 @@ impl Passives {
         None
     }
 
-    // TODO: probably should also not be able to add a passive beyond MAX?
+    // TODO: return result?
     pub fn add_passive(&mut self, passive: Passive) {
-        self.current.insert(passive);
+        if self.current.len() < Passives::MAX {
+            self.current.insert(passive);
+        }
     }
 }
 
