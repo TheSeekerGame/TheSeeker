@@ -199,6 +199,7 @@ pub fn setup_merchant(
                         filter: PLAYER,
                     },
                 ),
+                StateDespawnMarker,
             ))
             .remove_parent();
         let mut player = ScriptPlayer::<SpriteAnimation>::default();
