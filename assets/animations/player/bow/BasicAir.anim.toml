@@ -6,6 +6,12 @@ frame_min = 1
 frame_max = 5
 frame_start = 2
 
+[[script]]
+run_at_frame = [1, 2, 3, 4, 5]
+require_slots_all = ["SerpentRing"]
+action = "SetTicksPerFrame"
+ticks_per_frame = 6
+
 # VARIANT 1 INIT
 [[script]]
 run_on_playback_control = "Start"

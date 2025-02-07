@@ -11,6 +11,7 @@ use crate::game::gentstate::Facing;
 use crate::game::player::{
     Attacking, CanAttack, Dashing, Falling, HitFreezeTime, Idle, Jumping,
     PlayerConfig, PlayerGfx, PlayerStateSet, Running, WallSlideTime, Whirling,
+    Passive, Passives, Player,
 };
 use crate::prelude::{
     in_state, Added, App, Has, IntoSystemConfigs, Local, Or, Plugin, Query,
@@ -36,6 +37,7 @@ impl Plugin for PlayerAnimationPlugin {
                 player_dashing_animation,
                 player_dashing_strike_animation,
                 sprite_flip.after(player_dashing_animation),
+                update_serpent_ring_slot.after(sprite_flip)
             )
                 .in_set(PlayerStateSet::Animation)
                 .after(PlayerStateSet::Transition)
@@ -276,6 +278,22 @@ fn sprite_flip(
                 player.set_slot("DirectionChanged", true);
             } else {
                 player.set_slot("DirectionChanged", false);
+            }
+        }
+    }
+}
+
+fn update_serpent_ring_slot(
+    player_query: Query<(&Gent, &Passives), With<Player>>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+) {
+    for (gent, passives) in player_query.iter() {
+        let has_serpent_ring = passives.contains(&Passive::SerpentRing);
+        if let Ok(mut anim_player) = gfx_query.get_mut(gent.e_gfx) {
+            if has_serpent_ring {
+                anim_player.set_slot("SerpentRing", true);
+            } else {
+                anim_player.set_slot("SerpentRing", false);
             }
         }
     }
