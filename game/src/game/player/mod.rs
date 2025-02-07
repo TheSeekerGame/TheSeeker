@@ -1542,7 +1542,9 @@ fn track_hits(
                 if damage_info.attacker == player_e {
                     buff.falloff = 288;
                     buff.stacks += 1;
-                    health.current = health.current.saturating_sub(buff.stacks);
+                    // leaves the player at minimum of 1 health
+                    health.current =
+                        health.current.saturating_sub(buff.stacks).max(1);
                 }
             }
         }
