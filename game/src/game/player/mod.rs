@@ -57,7 +57,7 @@ impl Plugin for PlayerPlugin {
                 despawn_dead_player.after(super::game_over::on_game_over),
             )
                 .run_if(in_state(GameState::Playing)))
-            .before(PlayerStateSet::Transition)
+            .after(PlayerStateSet::Transition)
             .run_if(in_state(AppState::InGame)),
         );
         app.add_systems(

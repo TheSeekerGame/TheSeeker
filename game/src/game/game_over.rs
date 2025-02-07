@@ -33,7 +33,7 @@ impl Plugin for GameOverPlugin {
             GameTickUpdate,
             on_game_over
                 .run_if(in_state(GameState::Playing))
-                .before(PlayerStateSet::Transition)
+                .after(PlayerStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         );
         app.add_systems(Update, update_fade_in);

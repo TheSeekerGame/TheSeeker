@@ -4,7 +4,6 @@ pub mod particles;
 use std::mem;
 
 use arc_attack::Arrow;
-use bevy::transform::TransformSystem;
 use rapier2d::prelude::InteractionGroups;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
@@ -71,8 +70,8 @@ impl Plugin for AttackPlugin {
             )
                 .chain()
                 .after(update_sprite_colliders)
-                .after(PlayerStateSet::Behavior)
-                .after(EnemyStateSet::Behavior)
+                .after(PlayerStateSet::Transition)
+                .after(EnemyStateSet::Transition)
                 .before(PlayerStateSet::Collisions)
                 .before(EnemyStateSet::Collisions),
         );
