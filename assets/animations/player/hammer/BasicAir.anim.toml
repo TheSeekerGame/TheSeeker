@@ -10,6 +10,14 @@ frame_start = 7
 # The last frame index of the regular forward attack is 12
 # Then for the 'pogo' (downward) air attack, the start frame index is 13 and end is 18
 
+
+[[script]]
+run_at_frame = [7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18]
+require_slots_any = ["SerpentRing", "FrenziedAttack"]
+action = "SetTicksPerFrame"
+ticks_per_frame = 6
+
+
 [[script]]
 run_at_frame = [7]
 forbid_slots_all = ["AttackTransition"]

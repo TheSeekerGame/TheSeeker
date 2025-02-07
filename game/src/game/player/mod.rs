@@ -20,11 +20,13 @@ use theseeker_engine::physics::{
     Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER,
 };
 
-use super::physics::Knockback;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
+use crate::game::pickups::DropTracker;
 use crate::game::xp_orbs::XpOrbPickup;
 use crate::prelude::*;
+
+use super::physics::Knockback;
 
 pub struct PlayerPlugin;
 
@@ -38,7 +40,6 @@ impl Plugin for PlayerPlugin {
                 load_player_stats.run_if(resource_changed::<PlayerConfig>),
                 track_hits,
                 player_update_stats_mod,
-                gain_passives.run_if(resource_changed::<KillCount>),
                 player_update_passive_buffs,
             )
                 .chain()
@@ -148,45 +149,45 @@ pub struct Passives {
     pub current: HashSet<Passive>,
     pub locked: Vec<Passive>,
 }
+impl Passives {
+    /// Maximum number of passives player can hold at once
+    pub const MAX: usize = 3;
+}
 
 impl Default for Passives {
     fn default() -> Self {
         let passives: Vec<Passive> = Passive::iter().collect();
         Passives {
-            current: HashSet::with_capacity(5),
+            current: HashSet::with_capacity(Passives::MAX),
             locked: passives,
         }
     }
 }
 
 impl Passives {
-    // // TODO: pass in slice of passives, filter the locked passives on it
-    // fn new_with(passive: Passive) -> Self {
-    //     Passives::default()
-    // }
-
-    fn gain_random(&mut self) {
-        // TODO: add checks for no passives remaining
-        // TODO add limit on gaining past max passive slots?
-        // does nothing if there are no more passives to gain
+    pub fn drop_random(&mut self) -> Option<Passive> {
         let mut rng = rand::thread_rng();
-        if !self.locked.is_empty() {
+
+        // dont drop more passives if full
+        if !self.locked.is_empty() && self.current.len() < Passives::MAX {
             let i = rng.gen_range(0..self.locked.len());
             let passive = self.locked.swap_remove(i);
-            self.current.insert(passive);
+
+            return Some(passive);
         }
+        None
     }
 
-    fn gain(&mut self, passive: Passive) {
-        if !self.current.contains(&passive) {
-            self.locked.retain(|p| *p != passive);
+    // TODO: return result?
+    pub fn add_passive(&mut self, passive: Passive) {
+        if self.current.len() < Passives::MAX {
             self.current.insert(passive);
         }
     }
 }
 
 // they could also be components...limit only by the pickup/gain function instead of sized hashmap
-#[derive(Debug, Eq, PartialEq, Hash, EnumIter)]
+#[derive(Debug, Eq, PartialEq, Hash, EnumIter, Clone)]
 pub enum Passive {
     /// Heal when killing an enemy
     Bloodstone,
@@ -194,27 +195,42 @@ pub enum Passive {
     FlamingHeart,
     /// Deal extra damage when backstabbing
     IceDagger,
-    /// Damage scaling based on number of enemies nearby
+    /// Defense scaling based on number of enemies nearby
     GlowingShard,
     /// Crits lower cooldown of all abilities by 0.5 sec
-    ObsidionNecklace,
+    ObsidianNecklace,
     /// Increased damage while standing still, decreased while moving
     HeavyBoots,
     /// Move faster, get cdr, take double damage
     SerpentRing,
-    /// Increase cdr for every consecutive hit within 3 seconds
+    /// Increase cdr and lose health for every consecutive hit within 3 seconds
     FrenziedAttack,
 }
 
-fn gain_passives(
-    mut query: Query<&mut Passives, With<Player>>,
-    kills: Res<KillCount>,
-    player_config: Res<PlayerConfig>,
-) {
-    for mut passives in query.iter_mut() {
-        if **kills % player_config.passive_gain_rate == 0 {
-            passives.gain_random();
-            // println!("{:?}", passives);
+impl Passive {
+    pub fn name(&self) -> &str {
+        match self {
+            Passive::Bloodstone => "Bloodstone",
+            Passive::FlamingHeart => "Flaming Heart",
+            Passive::IceDagger => "Ice Dagger",
+            Passive::GlowingShard => "Glowing Shard",
+            Passive::ObsidianNecklace => "Obsidian Necklace",
+            Passive::HeavyBoots => "Heavy Boots",
+            Passive::SerpentRing => "Serpent Ring",
+            Passive::FrenziedAttack => "Frenzied Attack",
+        }
+    }
+
+    pub fn description(&self) -> &str {
+        match self {
+            Passive::Bloodstone => "Heal after kills",
+            Passive::FlamingHeart => "Crit every 2nd and 3rd hit when on low health",
+            Passive::IceDagger => "Deal double damage when backstabbing",
+            Passive::GlowingShard => "Defense scaling based on number of enemies nearby",
+            Passive::ObsidianNecklace => "Crits lower cooldown of all abilities by 0.5 sec",
+            Passive::HeavyBoots => "Doubled damage & defence while standing still,but halved while moving",
+            Passive::SerpentRing => "Move faster, get cooldown redudction, but take double damage",
+            Passive::FrenziedAttack => "Increase cooldown reduction but also lose health for every consecutive hit within 3 seconds",
         }
     }
 }
@@ -464,6 +480,8 @@ fn setup_player(
             },
             animation: Default::default(),
         },));
+
+        commands.init_resource::<DropTracker>();
     }
 }
 
@@ -1205,7 +1223,7 @@ fn player_update_passive_buffs(
         let mut speed = 1.;
         let mut cdr = 1.;
         if passives.contains(&Passive::GlowingShard) {
-            attack *= 1. + 0.1 * enemies_nearby.0 as f32;
+            defense *= 1. + 0.2 * enemies_nearby.0 as f32;
         }
         if passives.contains(&Passive::SerpentRing) {
             speed *= 1.2;
@@ -1418,15 +1436,15 @@ pub fn on_crit_cooldown_reduce(
             mut maybe_can_stealth,
         )) = attacker_query.get_mut(attack.attacker)
         {
-            if passives.contains(&Passive::ObsidionNecklace) {
+            if passives.contains(&Passive::ObsidianNecklace) {
                 if let Some(ref mut can_dash) = maybe_can_dash {
-                    can_dash.remaining_cooldown -= 0.5;
+                    can_dash.remaining_cooldown -= 3.0;
                 }
                 if let Some(ref mut whirl_ability) = maybe_whirl_ability {
-                    whirl_ability.energy += 0.5;
+                    whirl_ability.energy += 3.0;
                 }
                 if let Some(ref mut can_stealth) = maybe_can_stealth {
-                    can_stealth.remaining_cooldown -= 0.5;
+                    can_stealth.remaining_cooldown -= 3.0;
                 }
             }
         }
@@ -1503,10 +1521,20 @@ pub struct BuffTick {
 }
 
 fn track_hits(
-    mut query: Query<(Entity, &Passives, &mut BuffTick), With<Player>>,
+    mut query: Query<
+        (
+            Entity,
+            &Passives,
+            &mut Health,
+            &mut BuffTick,
+        ),
+        With<Player>,
+    >,
     mut damage_events: EventReader<DamageInfo>,
 ) {
-    if let Ok((player_e, passives, mut buff)) = query.get_single_mut() {
+    if let Ok((player_e, passives, mut health, mut buff)) =
+        query.get_single_mut()
+    {
         // tick falloff
         buff.falloff = buff.falloff.saturating_sub(1);
         if passives.contains(&Passive::FrenziedAttack) {
@@ -1514,6 +1542,9 @@ fn track_hits(
                 if damage_info.attacker == player_e {
                     buff.falloff = 288;
                     buff.stacks += 1;
+                    // leaves the player at minimum of 1 health
+                    health.current =
+                        health.current.saturating_sub(buff.stacks).max(1);
                 }
             }
         }

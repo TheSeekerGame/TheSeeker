@@ -6,6 +6,12 @@ frame_min = 1
 frame_max = 29
 frame_start = 1
 
+[[script]]
+run_at_frame = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29]
+require_slots_any = ["SerpentRing", "FrenziedAttack"]
+action = "SetTicksPerFrame"
+ticks_per_frame = 6
+
 # From air
 [[script]]
 run_on_playback_control = "Start"
@@ -168,7 +174,7 @@ run_on_playback_control = "Start"
 forbid_slots_all = ["AttackTransition"]
 if_runcount_quant = "3"
 action = "SetFrameNow"
-frame_index = 16
+frame_index = 17
 
 [[script]]
 run_at_frame = [16]

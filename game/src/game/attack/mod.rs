@@ -41,8 +41,7 @@ impl Plugin for AttackPlugin {
                 // (lifesteal, kill_on_damage, damage_flash).in_set(RespondToDamageInfoSet)
                 arc_projectile,
                 (
-                    determine_attack_targets
-                        .before(TransformSystem::TransformPropagate),
+                    determine_attack_targets,
                     apply_attack_modifications,
                     // DamageInfo event emitted here
                     apply_attack_damage,
@@ -376,7 +375,7 @@ pub fn apply_attack_damage(
                         },
                     };
                     if is_backstab {
-                        damage *= 3.;
+                        damage *= 2.;
                     }
                 }
                 if is_defending {
@@ -597,8 +596,8 @@ fn track_crits(mut query: Query<(&mut Crits, Option<&Passives>, &Health)>) {
         }
         if let Some(passives) = maybe_passives {
             if passives.contains(&Passive::FlamingHeart)
-                && health.current < health.max / 5
-                && (crits.hit_count % 3 == 0 || crits.hit_count % 5 == 0)
+                && health.current < health.max / 4
+                && (crits.hit_count % 2 == 0 || crits.hit_count % 3 == 0)
             {
                 crits.next_hit_is_critical = true;
             }

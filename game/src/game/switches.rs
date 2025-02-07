@@ -87,21 +87,24 @@ fn setup_switches(
         let e_effects_gfx = commands.spawn_empty().id();
 
         player.play_key("anim.switch.flip");
-        commands.entity(e_gent).insert((
-            PuzzleId(id),
-            Gent {
-                e_gfx,
-                e_effects_gfx,
-            },
-            Collider::cuboid(
-                30.0,
-                30.0,
-                InteractionGroups {
-                    memberships: SENSOR,
-                    filter: PLAYER,
+        commands
+            .entity(e_gent)
+            .insert((
+                PuzzleId(id),
+                Gent {
+                    e_gfx,
+                    e_effects_gfx,
                 },
-            ),
-        ));
+                Collider::cuboid(
+                    30.0,
+                    30.0,
+                    InteractionGroups {
+                        memberships: SENSOR,
+                        filter: PLAYER,
+                    },
+                ),
+            ))
+            .remove_parent();
         commands.entity(e_gfx).insert((
             SwitchGfxBundle {
                 marker: SwitchGfx { e_gent },
