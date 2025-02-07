@@ -4,4 +4,10 @@
     "script.test": File (
         path: "test.script.toml",
     ),
+    "dialog.MrSnafflesBackground": File (
+        path: "animations/dialogue/MrSnafflesBackground.png",
+    ),
+    "dialog.VagrantBackground": File (
+        path: "animations/dialogue/VagrantBackground.png",
+    ),
 })

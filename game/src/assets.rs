@@ -33,7 +33,8 @@ impl Plugin for AssetsPlugin {
                     "ui.assets.ron",
                 )
                 .load_collection::<UiAssets>()
-                .load_collection::<MainMenuAssets>(),
+                .load_collection::<MainMenuAssets>()
+                .load_collection::<DialogAssets>(),
         );
     }
 }
@@ -54,4 +55,12 @@ pub struct MainMenuAssets {
     pub background: Handle<Image>,
     #[asset(key = "ui.mainmenu.logo")]
     pub logo: Handle<Image>,
+}
+
+#[derive(AssetCollection, Resource)]
+pub struct DialogAssets {
+    #[asset(key = "dialog.MrSnafflesBackground")]
+    pub mr_snaffles_background: Handle<Image>,
+    #[asset(key = "dialog.VagrantBackground")]
+    pub vagrant_background: Handle<Image>,
 }
