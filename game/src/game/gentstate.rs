@@ -28,10 +28,9 @@ pub trait Transitionable<T: GentState> {
         <Self as Transitionable<T>>::Removals: Bundle,
     {
         Box::new(move |entity, commands| {
-            commands
-                .entity(entity)
-                .remove::<Self::Removals>()
-                .insert(next);
+            if let Some(mut entity_commands) = commands.get_entity(entity) {
+                entity_commands.remove::<Self::Removals>().insert(next);
+            }
         })
     }
 }
