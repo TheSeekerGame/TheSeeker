@@ -178,9 +178,11 @@ impl Passives {
         None
     }
 
-    // TODO: probably should also not be able to add a passive beyond MAX?
+    // TODO: return result?
     pub fn add_passive(&mut self, passive: Passive) {
-        self.current.insert(passive);
+        if self.current.len() < Passives::MAX {
+            self.current.insert(passive);
+        }
     }
 }
 
@@ -1540,7 +1542,9 @@ fn track_hits(
                 if damage_info.attacker == player_e {
                     buff.falloff = 288;
                     buff.stacks += 1;
-                    health.current = health.current.saturating_sub(buff.stacks);
+                    // leaves the player at minimum of 1 health
+                    health.current =
+                        health.current.saturating_sub(buff.stacks).max(1);
                 }
             }
         }
