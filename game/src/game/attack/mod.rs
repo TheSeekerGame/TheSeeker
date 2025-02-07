@@ -423,9 +423,7 @@ pub fn despawn_projectile(
 ) {
     for (entity, attack) in query.iter() {
         if attack.damaged_set.len() == attack.max_targets as usize {
-            // Note: purposefully does not despawn child entities, nor remove the
-            // reference, so that child particle systems have the option of lingering
-            commands.entity(entity).despawn();
+            commands.entity(entity).despawn_recursive();
         }
     }
 }
@@ -597,7 +595,7 @@ fn track_crits(mut query: Query<(&mut Crits, Option<&Passives>, &Health)>) {
         if let Some(passives) = maybe_passives {
             if passives.contains(&Passive::FlamingHeart)
                 && health.current < health.max / 4
-                && (crits.hit_count % 1 == 0 || crits.hit_count % 2 == 0)
+            // && (crits.hit_count % 1 == 0 || crits.hit_count % 2 == 0)
             {
                 crits.next_hit_is_critical = true;
             }

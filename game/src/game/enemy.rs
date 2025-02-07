@@ -1023,11 +1023,9 @@ fn aggro(
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if matches!(range, Range::Melee) {
                 match role {
-                    Role::Melee => {
-                        transitions.push(Waiting::new_transition(
-                            MeleeAttack::default(),
-                        ))
-                    },
+                    Role::Melee => transitions.push(Waiting::new_transition(
+                        MeleeAttack::default(),
+                    )),
                     Role::Ranged => {
                         velocity.x = 0.;
                         transitions.push(Waiting::new_transition(Defense));
@@ -1201,10 +1199,11 @@ fn ranged_attack(
             commands
                 .spawn((
                     Attack::new(
-                        1000,
+                        192,
                         entity,
                         enemy_config.projectile_damage * *tier as u32 as f32,
                     )
+                    .with_max_targets(1)
                     .set_stat_mod(StatusModifier::basic_ice_spider()),
                     final_solution,
                     Collider::cuboid(
