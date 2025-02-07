@@ -6,6 +6,7 @@ use rapier2d::parry::query::TOIStatus;
 use rapier2d::prelude::{Group, InteractionGroups};
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
+use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
@@ -39,6 +40,11 @@ impl Plugin for EnemyPlugin {
             GameTickUpdate,
             spawn_enemies.after(setup_enemy),
         );
+        app.insert_resource(EnemyConfig::default());
+        app.add_systems(
+            GameTickUpdate,
+            load_enemy_config.before(EnemyStateSet::Behavior),
+        );
         app.add_plugins((
             EnemyBehaviorPlugin,
             EnemyTransitionPlugin,
@@ -58,6 +64,113 @@ pub fn debug_enemy(world: &World, query: Query<Entity, With<Gent>>) {
             println!("{:?}", component.name());
         }
     }
+}
+
+#[derive(Resource, Debug, Default)]
+struct EnemyConfig {
+    fall_accel: f32,
+    jump_accel: f32,
+
+    start_hp: u32,
+
+    range_melee_melee: f32,
+    range_melee_aggro: f32,
+    range_melee_deaggro: f32,
+    range_ranged_melee: f32,
+    range_ranged_aggro: f32,
+    range_ranged_ranged: f32,
+    range_nearby: f32,
+
+    walking_min_time: u32,
+    walking_max_time: u32,
+    idle_time: u32,
+
+    projectile_arc_x: f32,
+    projectile_arc_y: f32,
+    projectile_damage: f32,
+
+    melee_damage: f32,
+
+    walking_speed: f32,
+    chasing_speed: f32,
+
+    fall_y_velocity: f32,
+    jump_y_velocity: f32,
+}
+fn load_enemy_config(
+    mut ev_asset: EventReader<AssetEvent<DynamicConfig>>,
+    cfgs: Res<Assets<DynamicConfig>>,
+    preloaded: Res<PreloadedAssets>,
+    mut enemy_config: ResMut<EnemyConfig>,
+    mut initialized_config: Local<bool>,
+) {
+    // convert from asset key string to bevy handle
+    let Some(cfg_handle) =
+        preloaded.get_single_asset::<DynamicConfig>("cfg.enemy")
+    else {
+        println!("Couldnt find enemy cfg file");
+        return;
+    };
+    // The reason we do this here instead of in an AssetEvent::Added match arm, is because
+    // the Added match arm fires before preloaded updates with the asset key; as a result
+    // you can't tell what specific DynamicConfig loaded in like that.
+    if !*initialized_config {
+        if let Some(cfg) = cfgs.get(cfg_handle.clone()) {
+            update_enemy_config(&mut enemy_config, cfg);
+            println!("init:");
+            dbg!(&enemy_config);
+        }
+        *initialized_config = true;
+    }
+    for ev in ev_asset.read() {
+        if let AssetEvent::Modified { id } = ev {
+            if let Some(cfg) = cfgs.get(*id) {
+                if cfg_handle.id() == *id {
+                    println!("before:");
+                    dbg!(&enemy_config);
+                    update_enemy_config(&mut enemy_config, cfg);
+                    println!("after:");
+                    dbg!(&enemy_config);
+                }
+            }
+        }
+    }
+}
+
+#[rustfmt::skip]
+fn update_enemy_config(config: &mut EnemyConfig, cfg: &DynamicConfig) {
+    let mut errors = Vec::new();
+    update_field(&mut errors, &cfg.0, "fall_accel", |val| config.fall_accel = val);
+    update_field(&mut errors, &cfg.0, "jump_accel", |val| config.jump_accel = val);
+
+    update_field(&mut errors, &cfg.0, "start_hp", |val| config.start_hp = val as u32);
+
+    update_field(&mut errors, &cfg.0, "range_melee_melee", |val| config.range_melee_melee = val);
+    update_field(&mut errors, &cfg.0, "range_melee_aggro", |val| config.range_melee_aggro = val);
+    update_field(&mut errors, &cfg.0, "range_melee_deaggro", |val| config.range_melee_deaggro = val);
+    update_field(&mut errors, &cfg.0, "range_ranged_melee", |val| config.range_ranged_melee = val);
+    update_field(&mut errors, &cfg.0, "range_ranged_aggro", |val| config.range_ranged_aggro = val);
+    update_field(&mut errors, &cfg.0, "range_ranged_ranged", |val| config.range_ranged_ranged = val);
+    update_field(&mut errors, &cfg.0, "range_nearby", |val| config.range_nearby = val);
+
+    update_field(&mut errors, &cfg.0, "walking_min_time", |val| config.walking_min_time = val as u32);
+    update_field(&mut errors, &cfg.0, "walking_max_time", |val| config.walking_max_time = val as u32);
+    update_field(&mut errors, &cfg.0, "idle_time", |val| config.idle_time = val as u32);
+
+    update_field(&mut errors, &cfg.0, "projectile_arc_x", |val| config.projectile_arc_x = val);
+    update_field(&mut errors, &cfg.0, "projectile_arc_y", |val| config.projectile_arc_y = val);
+    update_field(&mut errors, &cfg.0, "projectile_damage", |val| config.projectile_damage = val);
+    update_field(&mut errors, &cfg.0, "melee_damage", |val| config.melee_damage = val);
+
+    update_field(&mut errors, &cfg.0, "walking_speed", |val| config.walking_speed = val);
+    update_field(&mut errors, &cfg.0, "chasing_speed", |val| config.chasing_speed = val);
+
+    update_field(&mut errors, &cfg.0, "fall_y_velocity", |val| config.fall_y_velocity = val);
+    update_field(&mut errors, &cfg.0, "jump_y_velocity", |val| config.jump_y_velocity = val);
+
+    for error in errors{
+       warn!("failed to load enemy cfg value: {}", error);
+   }
 }
 
 #[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
@@ -97,8 +210,8 @@ pub struct EnemySpawner {
 }
 
 impl EnemySpawner {
-    const MAX: usize = 3;
     const COOLDOWN: u32 = 4000;
+    const MAX: usize = 3;
     const RANGE: f32 = 400.;
 
     fn is_cleared(&self) -> bool {
@@ -165,13 +278,13 @@ pub struct EnemyEffectGfx {
     e_gent: Entity,
 }
 
-//TODO:only spawn when all from spawner have died, increase scaling, when 5 are cleared, up spider
-//tier one at a time
-//when ranged should be capped at 2 per spawner
-//only tick cooldown when spawner is cleared
+// TODO:only spawn when all from spawner have died, increase scaling, when 5 are cleared, up spider
+// tier one at a time
+// when ranged should be capped at 2 per spawner
+// only tick cooldown when spawner is cleared
 fn spawn_enemies(
     mut spawner_q: Query<(&Transform, &mut EnemySpawner)>,
-    //dead enemies to clear
+    // dead enemies to clear
     enemy_q: Query<
         Entity,
         (
@@ -203,8 +316,8 @@ fn spawn_enemies(
             match spawner.spawn_state {
                 SpawnerState::Upgrade => {
                     // set number of clears till next upgrade 2 or 3
-                    //TODO: get rid of threshold_next if we decide to continue with spawning every
-                    //clear
+                    // TODO: get rid of threshold_next if we decide to continue with spawning every
+                    // clear
                     spawner.threshold_next = 1;
                     // spawner.threshold_next = thread_rng().gen_range(2..4);
                     // add a slot
@@ -240,7 +353,7 @@ fn spawn_enemies(
                     } {
                         let mut ranged_role = 0;
                         for slot in spawner.slots.iter_mut() {
-                            //generate a random roll, max 2 per spawner
+                            // generate a random roll, max 2 per spawner
                             let role = if ranged_role < 2 {
                                 let r = Role::random();
                                 if matches!(r, Role::Ranged) {
@@ -302,6 +415,7 @@ fn setup_enemy(
         Ref<EnemyBlueprint>,
     )>,
     mut commands: Commands,
+    enemy_config: Res<EnemyConfig>,
 ) {
     for (mut xf_gent, tier, role, e_gent, bp) in q.iter_mut() {
         if !bp.is_added() {
@@ -320,7 +434,7 @@ fn setup_enemy(
             Tier::Three => 0.00000002,
         };
         xf_gent.translation.y += 2.0; // Sprite offset so it looks like it is standing on the ground
-        let health = 100 * *tier as u32;
+        let health = enemy_config.start_hp * *tier as u32;
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn(()).id();
         commands.entity(e_gent).insert((
@@ -435,6 +549,7 @@ impl Plugin for EnemyBehaviorPlugin {
                             walking.run_if(any_with_component::<Walking>),
                             // retreating.run_if(any_with_component::<Retreating>),
                             chasing.run_if(any_with_component::<Chasing>),
+                            falling,
                         ),
                     )
                         .chain(),
@@ -566,7 +681,7 @@ impl GenericState for Waiting {}
 #[derive(Component, Reflect)]
 enum Navigation {
     Grounded,
-    // Falling,
+    Falling { jumping: bool },
     Blocked,
 }
 
@@ -603,25 +718,29 @@ impl Distribution<Role> for Standard {
     }
 }
 impl Role {
-    pub fn check_range(&self, distance: f32) -> Range {
+    pub fn check_range(
+        &self,
+        distance: f32,
+        enemy_config: &EnemyConfig,
+    ) -> Range {
         match self {
             Role::Melee => {
-                if distance <= Range::MELEE_MELEE {
+                if distance <= enemy_config.range_melee_melee {
                     Range::Melee
-                } else if distance <= Range::MELEE_AGGRO {
+                } else if distance <= enemy_config.range_melee_aggro {
                     Range::Aggro
-                } else if distance <= Range::MELEE_DEAGGRO {
+                } else if distance <= enemy_config.range_melee_deaggro {
                     Range::Deaggro
                 } else {
                     Range::Far
                 }
             },
             Role::Ranged => {
-                if distance <= Range::RANGED_MELEE {
+                if distance <= enemy_config.range_ranged_melee {
                     Range::Melee
-                } else if distance <= Range::RANGED_AGGRO {
+                } else if distance <= enemy_config.range_ranged_aggro {
                     Range::Aggro
-                } else if distance <= Range::RANGED_RANGED {
+                } else if distance <= enemy_config.range_ranged_ranged {
                     Range::Ranged
                 } else {
                     Range::Far
@@ -643,21 +762,6 @@ enum Range {
 
 #[derive(Component, Debug, Deref)]
 struct Target(Option<Entity>);
-
-impl Range {
-    const RANGED_AGGRO: f32 = 100.;
-    // const RANGED_DEAGGRO: f32 = 70.;
-    const RANGED_MELEE: f32 = 29.;
-    const RANGED_RANGED: f32 = 100.;
-
-    const MELEE_AGGRO: f32 = 100.;
-    const MELEE_DEAGGRO: f32 = 70.;
-    const MELEE_MELEE: f32 = 12.;
-    // const MELEE_RANGED: f32 = 60.;
-
-    // for players passive enemies nearby buff
-    const NEARBY: f32 = 32.;
-}
 
 /// Component that indicates that the player is inside of this enemy,
 /// and has its usual collision layer membership modified to ENEMY_INSIDE
@@ -696,6 +800,7 @@ fn check_player_range(
         ),
         (Without<Enemy>, With<Player>),
     >,
+    enemy_config: Res<EnemyConfig>,
 ) {
     if let Ok((player_e, player_trans, player_stealth, mut enemies_nearby)) =
         player_query.get_single_mut()
@@ -735,14 +840,14 @@ fn check_player_range(
             }
 
             // set range
-            *range = role.check_range(distance);
+            *range = role.check_range(distance, &enemy_config);
             // set target
             target.0 = match *range {
                 Range::Melee | Range::Aggro | Range::Ranged => Some(player_e),
                 Range::Deaggro | Range::Far | Range::None => None,
             };
-            //set nearby enemies for passive buff
-            if distance < Range::NEARBY {
+            // set nearby enemies for passive buff
+            if distance < enemy_config.range_nearby {
                 **enemies_nearby += 1;
             };
         }
@@ -794,6 +899,7 @@ fn patrolling(
         ),
         (With<Patrolling>, With<Enemy>),
     >,
+    enemy_config: Res<EnemyConfig>,
 ) {
     for (range, mut transitions, mut additions, maybe_waiting) in
         query.iter_mut()
@@ -809,7 +915,10 @@ fn patrolling(
                 if let Some(waiting) = maybe_waiting {
                     if waiting.ticks >= waiting.max_ticks {
                         transitions.push(Waiting::new_transition(Walking {
-                            max_ticks: rand::thread_rng().gen_range(24..300),
+                            max_ticks: rand::thread_rng().gen_range(
+                                (enemy_config.walking_min_time)
+                                    ..(enemy_config.walking_max_time),
+                            ),
                             ticks: 0,
                         }));
                     }
@@ -914,9 +1023,11 @@ fn aggro(
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if matches!(range, Range::Melee) {
                 match role {
-                    Role::Melee => transitions.push(Waiting::new_transition(
-                        MeleeAttack::default(),
-                    )),
+                    Role::Melee => {
+                        transitions.push(Waiting::new_transition(
+                            MeleeAttack::default(),
+                        ))
+                    },
                     Role::Ranged => {
                         velocity.x = 0.;
                         transitions.push(Waiting::new_transition(Defense));
@@ -958,6 +1069,7 @@ fn ranged_attack(
     config: Res<PlayerConfig>,
     time: Res<GameTime>,
     particle_effect: Res<ArcParticleEffectHandle>,
+    enemy_config: Res<EnemyConfig>,
 ) {
     for (
         entity,
@@ -1039,7 +1151,7 @@ fn ranged_attack(
             let gravity = config.fall_accel * time.hz as f32;
             let rng_factor = 1.0;
             let mut speed = ballistic_speed(
-                Range::RANGED_RANGED,
+                enemy_config.range_ranged_ranged,
                 gravity,
                 relative_height,
             ) * rng_factor as f32;
@@ -1047,6 +1159,8 @@ fn ranged_attack(
             // Define default arc as 50ish degree shot with in the direction of the player
             let mut final_solution = Projectile {
                 vel: LinearVelocity(Vec2::new(
+                    // enemy_config.projectile_arc_x * delta_x.signum(),
+                    // enemy_config.projectile_arc_y,
                     134.0 * delta_x.signum(),
                     151.0,
                 )),
@@ -1086,8 +1200,12 @@ fn ranged_attack(
             // spawn in the new projectile:
             commands
                 .spawn((
-                    Attack::new(1000, entity, 31. * *tier as u32 as f32)
-                        .set_stat_mod(StatusModifier::basic_ice_spider()),
+                    Attack::new(
+                        1000,
+                        entity,
+                        enemy_config.projectile_damage * *tier as u32 as f32,
+                    )
+                    .set_stat_mod(StatusModifier::basic_ice_spider()),
                     final_solution,
                     Collider::cuboid(
                         5.,
@@ -1119,6 +1237,7 @@ fn melee_attack(
         With<Enemy>,
     >,
     mut commands: Commands,
+    enemy_config: Res<EnemyConfig>,
 ) {
     for (entity, mut attack, tier, mut trans_q, gent) in query.iter_mut() {
         attack.ticks += 1;
@@ -1132,7 +1251,11 @@ fn melee_attack(
                     }),
                     TransformBundle::from_transform(Transform::default()),
                     AnimationCollider(gent.e_gfx),
-                    Attack::new(8, entity, 17. * *tier as u32 as f32),
+                    Attack::new(
+                        8,
+                        entity,
+                        enemy_config.melee_damage * *tier as u32 as f32,
+                    ),
                 ))
                 .set_parent(entity);
         }
@@ -1161,6 +1284,7 @@ fn walking(
             Without<Knockback>,
         ),
     >,
+    enemy_config: Res<EnemyConfig>,
 ) {
     for (
         mut nav,
@@ -1172,12 +1296,12 @@ fn walking(
     ) in query.iter_mut()
     {
         // set initial velocity
-        velocity.x = -20. * facing.direction();
+        velocity.x = -enemy_config.walking_speed * facing.direction();
         if walking.ticks >= walking.max_ticks {
             velocity.x = 0.;
             transitions.push(Walking::new_transition(Waiting {
                 ticks: 0,
-                max_ticks: 240,
+                max_ticks: enemy_config.idle_time,
             }));
             add_q.add(Idle);
             continue;
@@ -1192,9 +1316,114 @@ fn walking(
                     Facing::Left => Facing::Right,
                 }
             },
-            Navigation::Grounded => {},
+            Navigation::Grounded | Navigation::Falling { .. } => {},
         }
         walking.ticks += 1;
+    }
+}
+
+const GROUNDED_THRESHOLD: f32 = 1.0;
+const GROUND_BUFFER: f32 = -1.0;
+fn falling(
+    spatial_query: Res<PhysicsWorld>,
+    mut query: Query<
+        (
+            Entity,
+            &mut LinearVelocity,
+            &mut Transform,
+            &ShapeCaster,
+            &mut Navigation,
+            &Collider,
+            &Gent,
+        ),
+        With<Enemy>,
+    >,
+    players: Query<&Transform, (With<Player>, Without<Enemy>)>,
+    enemy_config: Res<EnemyConfig>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+) {
+    for (entity, mut velocity, mut transform, _, mut nav, collider, gent) in
+        query.iter_mut()
+    {
+        if matches!(*nav, Navigation::Falling { .. }) {
+            if let Some((e, toi)) = spatial_query.shape_cast(
+                transform.translation.xy(),
+                Direction2d::new_unchecked(Vec2::new(0., -1.)),
+                collider.0.shape(),
+                GROUNDED_THRESHOLD,
+                InteractionGroups {
+                    memberships: ENEMY,
+                    filter: GROUND,
+                },
+                Some(entity),
+            ) {
+                // println!("coll {toi:?}");
+                // If we are not a player
+                if players.get(e).is_err() {
+                    // If we are close to the ground
+                    if velocity.y < 0. && toi.witness2[1] < 0. {
+                        println!(
+                            "hit ground {toi:?} {} {:?}",
+                            transform.translation, velocity
+                        );
+                        *nav = Navigation::Grounded;
+                        transform.translation.y =
+                            transform.translation.y - toi.witness2[1] - toi.toi
+                                + GROUND_BUFFER;
+                        velocity.y = 0.;
+                        if let Ok(mut enemy_anim) =
+                            gfx_query.get_mut(gent.e_gfx)
+                        {
+                            enemy_anim.play_key("anim.smallspider.Chase");
+                        }
+                        continue;
+                    }
+                }
+            }
+            if let Ok(ptrans) = players.get_single() {
+                if ptrans.translation.y < transform.translation.y {
+                    *nav = Navigation::Falling { jumping: false };
+                }
+            }
+            match *nav {
+                Navigation::Falling { jumping: true } => {
+                    velocity.y -= enemy_config.jump_accel;
+                },
+                Navigation::Falling { jumping: false } => {
+                    velocity.y -= enemy_config.fall_accel;
+                },
+                _ => unreachable!(),
+            }
+
+            if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
+                enemy_anim.set_slot("jump", velocity.y > 0.);
+                enemy_anim.set_slot("fall", velocity.y < 0.);
+            }
+        } else if matches!(*nav, Navigation::Grounded) {
+            if spatial_query
+                .shape_cast(
+                    transform.translation.xy(),
+                    Direction2d::new_unchecked(Vec2::new(0., -1.)),
+                    collider.0.shape(),
+                    GROUNDED_THRESHOLD
+                        + collider.0.shape().compute_local_aabb().extents()[1]
+                            / 2.
+                        + GROUND_BUFFER,
+                    InteractionGroups {
+                        memberships: ENEMY,
+                        filter: GROUND,
+                    },
+                    Some(entity),
+                )
+                .is_none()
+            {
+                println!("refalling");
+                *nav = Navigation::Falling { jumping: false };
+                if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
+                    enemy_anim.play_key("anim.smallspider.Jump");
+                }
+            }
+        }
     }
 }
 
@@ -1284,6 +1513,8 @@ fn chasing(
             &mut Navigation,
             &mut LinearVelocity,
             &mut TransitionQueue,
+            &Transform,
+            &Gent,
         ),
         (
             With<Enemy>,
@@ -1291,15 +1522,28 @@ fn chasing(
             Without<Knockback>,
         ),
     >,
+    players: Query<&Transform, (With<Player>, Without<Enemy>)>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+    enemy_config: Res<EnemyConfig>,
 ) {
-    for (target, facing, role, range, mut nav, mut velocity, mut transitions) in
-        query.iter_mut()
+    // println!("tick");
+    for (
+        target,
+        facing,
+        role,
+        range,
+        mut nav,
+        mut velocity,
+        mut transitions,
+        trans,
+        gent,
+    ) in query.iter_mut()
     {
         // only melee chase
         if !matches!(role, Role::Melee) {
             continue;
         }
-        if target.0.is_some() {
+        if let Some(p_entity) = target.0 {
             // check if we need to transition
             match *range {
                 Range::Melee => {
@@ -1309,15 +1553,45 @@ fn chasing(
                     ));
                 },
                 Range::Ranged | Range::Aggro | Range::Deaggro => {
-                    velocity.x = -35. * facing.direction();
+                    velocity.x =
+                        -enemy_config.chasing_speed * facing.direction();
                     // if we cant get any closer because of edge
                     if let Navigation::Blocked = *nav {
-                        velocity.x = 0.;
-                        *nav = Navigation::Grounded;
+                        // velocity.x = 0.;
+                        let ptrans = players
+                            .get(p_entity)
+                            .expect("Wasnt targeting player");
+                        if ptrans.translation.y < trans.translation.y {
+                            println!("fall off {trans:?}");
+                            velocity.y = enemy_config.fall_y_velocity;
+                            *nav = Navigation::Falling { jumping: false };
+                            if let Ok(mut enemy_anim) =
+                                gfx_query.get_mut(gent.e_gfx)
+                            {
+                                enemy_anim.play_key("anim.smallspider.Jump");
+                                // enemy_anim.set_slot("fall", true);
+                                // enemy_anim.set_slot("jump", false);
+                            }
+                            // velocity.x = 10.
+                            //     * (ptrans.translation.x - trans.translation.x)
+                            //         .signum();
+                        } else {
+                            println!("jump {}", trans.translation);
+                            velocity.y = enemy_config.jump_y_velocity;
+                            if let Ok(mut enemy_anim) =
+                                gfx_query.get_mut(gent.e_gfx)
+                            {
+                                enemy_anim.play_key("anim.smallspider.Jump");
+                                // enemy_anim.set_slot("jump", true);
+                                // enemy_anim.set_slot("fall", false);
+                            }
+                            // *nav = Navigation::Grounded;
+                            *nav = Navigation::Falling { jumping: true };
+                        }
                         // println!("chasing but blocked");
-                        transitions.push(Chasing::new_transition(
-                            Waiting::default(),
-                        ));
+                        // transitions.push(Chasing::new_transition(
+                        //     Waiting::default(),
+                        // ));
                     }
                 },
                 _ => {
@@ -1345,14 +1619,21 @@ fn move_collide(
             &mut Navigation,
             &Collider,
             Has<Knockback>,
+            Has<Chasing>,
         ),
         With<Enemy>,
     >,
     time: Res<GameTime>,
     spatial_query: Res<PhysicsWorld>,
 ) {
-    for (mut linear_velocity, mut transform, mut nav, collider, is_knocked) in
-        query.iter_mut()
+    for (
+        mut linear_velocity,
+        mut transform,
+        mut nav,
+        collider,
+        is_knocked,
+        is_chasing,
+    ) in query.iter_mut()
     {
         let shape = collider.0.shared_shape().clone();
         let dir = linear_velocity.x.signum();
@@ -1373,8 +1654,8 @@ fn move_collide(
                 linear_velocity.length() / time.hz as f32 + 0.5,
                 InteractionGroups {
                     memberships: ENEMY,
-                    // combination of the PLAYER + GROUND Groups
-                    filter: Group::from_bits_truncate(0b10001),
+                    // Ground group
+                    filter: Group::from_bits_truncate(0b10000),
                 },
                 None,
             ) {
@@ -1383,10 +1664,18 @@ fn move_collide(
                     projected_velocity = linear_velocity.xy()
                         - sliding_plane
                             * linear_velocity.xy().dot(sliding_plane);
+                    // println!("b {is_chasing} {transform:?}");
+                    // if is_chasing {
+                    //     println!("chasing noblock");
+                    //     break;
+                    // } else {
                     linear_velocity.0 = projected_velocity;
-                    if !is_knocked {
+                    if !is_knocked
+                        && !matches!(*nav, Navigation::Falling { .. })
+                    {
                         *nav = Navigation::Blocked;
                     }
+                    // }
                 } else {
                     break;
                 }
@@ -1409,7 +1698,7 @@ fn move_collide(
             },
             None,
         ) {
-            if !is_knocked {
+            if !is_knocked && !matches!(*nav, Navigation::Falling { .. }) {
                 *nav = Navigation::Blocked;
             }
             projected_velocity.x = first_hit.toi * dir;
