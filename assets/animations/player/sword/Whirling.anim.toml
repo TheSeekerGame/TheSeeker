@@ -8,7 +8,7 @@ frame_start = 1
 
 [[script]]
 run_at_frame = [1, 2, 3, 4, 5, 6]
-require_slots_all = ["SerpentRing"]
+require_slots_any = ["SerpentRing", "FrenziedAttack"]
 action = "SetTicksPerFrame"
 ticks_per_frame = 6
 

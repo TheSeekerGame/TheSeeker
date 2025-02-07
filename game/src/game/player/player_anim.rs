@@ -37,7 +37,8 @@ impl Plugin for PlayerAnimationPlugin {
                 player_dashing_animation,
                 player_dashing_strike_animation,
                 sprite_flip.after(player_dashing_animation),
-                update_serpent_ring_slot.after(sprite_flip)
+                update_serpent_ring_slot.after(sprite_flip),
+                update_frenzied_attack_slot.after(update_serpent_ring_slot)
             )
                 .in_set(PlayerStateSet::Animation)
                 .after(PlayerStateSet::Transition)
@@ -294,6 +295,22 @@ fn update_serpent_ring_slot(
                 anim_player.set_slot("SerpentRing", true);
             } else {
                 anim_player.set_slot("SerpentRing", false);
+            }
+        }
+    }
+}
+
+fn update_frenzied_attack_slot(
+    player_query: Query<(&Gent, &Passives), With<Player>>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+) {
+    for (gent, passives) in player_query.iter() {
+        let has_frenzied_attack = passives.contains(&Passive::FrenziedAttack);
+        if let Ok(mut anim_player) = gfx_query.get_mut(gent.e_gfx) {
+            if has_frenzied_attack {
+                anim_player.set_slot("FrenziedAttack", true);
+            } else {
+                anim_player.set_slot("FrenziedAttack", false);
             }
         }
     }
