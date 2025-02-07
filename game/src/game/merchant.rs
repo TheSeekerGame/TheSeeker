@@ -71,6 +71,7 @@ impl Plugin for MerchantPlugin {
                         .after(spawn_merchant_dialog_ui)
                         .run_if(any_added_component::<MerchantDialogueBox>),
                     update_dialog_background.before(advance_dialog),
+                    handle_finished_dialogue_stage.before(advance_dialog),
                     advance_dialog.after(spawn_merchant_dialog_text).run_if(
                         any_with_component::<MerchantDialogueBox>
                             .and_then(
@@ -80,7 +81,6 @@ impl Plugin for MerchantPlugin {
                                 any_with_component::<MerchantInPlayerRange>,
                             ),
                     ),
-                    handle_finished_dialogue_stage.after(advance_dialog),
                 )
                     .after(player_in_merchant_range)
                     .run_if(on_event::<
