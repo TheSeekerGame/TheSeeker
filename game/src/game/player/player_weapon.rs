@@ -3,18 +3,15 @@ use bevy::prelude::{in_state, IntoSystemConfigs, Res};
 use leafwing_input_manager::prelude::ActionState;
 use strum_macros::Display;
 use theseeker_engine::assets::animation::SpriteAnimation;
-use theseeker_engine::prelude::{
-    on_event, Changed, Commands, Condition, DetectChanges, OnEnter,
-};
+use theseeker_engine::prelude::{Commands, DetectChanges, OnEnter};
 use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::time::GameTickUpdate;
 
-use crate::game::attack::DamageInfo;
-use crate::game::enemy::{EnemyEffectGfx, EnemyStateSet};
+use crate::game::enemy::EnemyEffectGfx;
 use crate::game::player::{Player, PlayerAction};
 use crate::prelude::{App, AppState, Plugin, Query, ResMut, Resource, With};
 
-use super::PlayerConfig;
+use super::{PlayerConfig, PlayerStateSet};
 
 pub(crate) struct PlayerWeaponPlugin;
 
@@ -29,19 +26,10 @@ impl Plugin for PlayerWeaponPlugin {
         );
         app.add_systems(
             GameTickUpdate,
-            (
-                swap_combat_style,
-                swap_melee_weapon,
-                set_sfx_slot
-                    .after(EnemyStateSet::Animation)
-                    .after(swap_combat_style)
-                    .after(swap_melee_weapon)
-                    .run_if(
-                        is_current_weapon_changed
-                            .or_else(on_event::<DamageInfo>()),
-                    ),
-            )
-                .run_if(in_state(AppState::InGame)),
+            ((swap_combat_style, swap_melee_weapon)
+                .chain()
+                .before(PlayerStateSet::Behavior))
+            .run_if(in_state(AppState::InGame)),
         );
     }
 }
@@ -180,19 +168,22 @@ fn set_sfx_slot(
     mut query: Query<
         &mut ScriptPlayer<SpriteAnimation>,
         (
-            Changed<ScriptPlayer<SpriteAnimation>>,
+            // Changed<ScriptPlayer<SpriteAnimation>>,
             With<EnemyEffectGfx>,
         ),
     >,
 ) {
     let current_weapon_name = current_weapon.to_string();
+    println!("weap sfx sys ran?");
+    println!("{:?}", current_weapon_name);
     if current_weapon_name.is_empty() {
         eprintln!("Invalid weapon name");
         return;
     }
     let slot = &format!("{current_weapon_name}Hit");
+    // println!("{:?}", slot);
     for mut animation in query.iter_mut() {
-        animation.set_slot(slot, true);
+        animation.set_slot(&current_weapon_name, true);
     }
 }
 

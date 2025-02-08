@@ -13,24 +13,21 @@ current_script_only = false
 label = "DamageSparks"
 
 [[script]]
-run_on_playback_control = "Start"
-require_slots_all = ["BowHit"]
+run_on_slot_enable = "BowHit"
 action = "PlayAudio"
 volume = 1.0
 asset_key = "audio.game.SpiderGetDamage"
 label = "DamageSparks"
 
 [[script]]
-run_on_playback_control = "Start"
-require_slots_all = ["HammerHit"]
+run_on_slot_enable = "HammerHit"
 action = "PlayAudio"
 volume = 1.0
 asset_key = "audio.game.HammerImpact"
 label = "DamageSparks"
 
 [[script]]
-run_on_playback_control = "Start"
-require_slots_all = ["SwordHit"]
+run_on_slot_enable = "SwordHit"
 action = "PlayAudio"
 volume = 1.0
 asset_key = "audio.game.SwordImpact"
