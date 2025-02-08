@@ -20,7 +20,26 @@ action = "SetFrameNow"
 frame_index = 1
 
 [[script]]
-run_at_frame = [1]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.Jump"
+action = "PlayAudio"
+asset_key = "audio.game.BowShoot"
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.Fall"
+action = "PlayAudio"
+asset_key = "audio.game.BowShoot"
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.BowBasicAir"
+action = "PlayAudio"
+asset_key = "audio.game.BowShoot"
+
+[[script]]
+run_on_playback_control = "Start"
+if_previous_script_key = "anim.player.Dash"
 action = "PlayAudio"
 asset_key = "audio.game.BowShoot"
 

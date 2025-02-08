@@ -5,23 +5,31 @@ time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
 frame_min = 1
-frame_max = 32
+frame_max = 34
 frame_start = 1
 
 [[script]]
-run_on_playback_control = "Start"
+run_at_frame = 1
+action = "StopBackgroundAudio"
+current_script_only = false
+label = "Music"
+
+[[script]]
+run_at_frame = 2
 action = "PlayBackgroundAudio"
 volume = 0.2
 asset_key = "audio.game.Music"
+label = "Music"
 
 [[script]]
-run_on_playback_control = "Start"
+run_at_frame = 2
 action = "PlayBackgroundAudio"
 volume = 0.1
 asset_key = "audio.game.Ambience"
+label = "Music"
 
 # Loop
 [[script]]
-run_at_frame = 32
+run_at_frame = 34
 action = "SetFrameNext"
-frame_index = 1
+frame_index = 3

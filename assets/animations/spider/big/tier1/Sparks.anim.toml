@@ -6,27 +6,35 @@ frame_min = 1
 frame_max = 18
 frame_start = 1
 
+[[script]]
+run_on_playback_control = "Start"
+action = "StopAudio"
+current_script_only = false
+label = "DamageSparks"
 
 [[script]]
-run_on_slot_enable = "AttackHit"
+run_on_playback_control = "Start"
 require_slots_all = ["BowHit"]
 action = "PlayAudio"
 volume = 1.0
-asset_key = "audio.game.BowImpact"
+asset_key = "audio.game.SpiderGetDamage"
+label = "DamageSparks"
 
 [[script]]
-run_on_slot_enable = "AttackHit"
+run_on_playback_control = "Start"
 require_slots_all = ["HammerHit"]
 action = "PlayAudio"
 volume = 1.0
 asset_key = "audio.game.HammerImpact"
+label = "DamageSparks"
 
 [[script]]
-run_on_slot_enable = "AttackHit"
+run_on_playback_control = "Start"
 require_slots_all = ["SwordHit"]
 action = "PlayAudio"
 volume = 1.0
 asset_key = "audio.game.SwordImpact"
+label = "DamageSparks"
 
 # keep looping final frame
 [[script]]

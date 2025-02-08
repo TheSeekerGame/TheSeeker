@@ -800,8 +800,8 @@
         path: "animations/merchant/Idle.png",
     ),
     "anim.merchant.Idle.atlas": TextureAtlasLayout (
-        tile_size_x: 96.,
-        tile_size_y: 96.,
+        tile_size_x: 48.,
+        tile_size_y: 48.,
         rows: 1,
         columns: 46,
     ),
@@ -812,10 +812,10 @@
         path: "animations/yak/Idle.png",
     ),
     "anim.yak.Idle.atlas": TextureAtlasLayout (
-        tile_size_x: 96.,
-        tile_size_y: 96.,
+        tile_size_x: 64.,
+        tile_size_y: 64.,
         rows: 1,
-        columns: 32,
+        columns: 34,
     ),
     "anim.switch.flip": File (
         path: "animations/puzzles/switch.anim.toml",

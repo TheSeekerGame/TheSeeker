@@ -16,9 +16,18 @@ run_at_frame = 15
 
 [[script]]
 run_at_frame = 3
+action = "StopAudio"
+label = "RangedAttack"
+current_script_only = false
+
+[[script]]
+run_at_frame = 3
 action = "PlayAudio"
 volume = 0.6
 asset_key = "audio.game.BigSpiderAttack"
+label = "RangedAttack"
+
+
 
 # Support left/right flipping
 [[script]]

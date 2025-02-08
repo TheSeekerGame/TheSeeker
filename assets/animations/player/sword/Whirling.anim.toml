@@ -23,6 +23,11 @@ run_on_playback_control = "Start"
 action = "PlayAudio"
 asset_key = "audio.game.SwordWhirl"
 
+[[script]]
+run_on_playback_control = "Stop"
+action = "StopAudio"
+asset_key = "audio.game.SwordWhirl"
+
 # Blink Red on Damage
 [[script]]
 run_every_n_ticks = "8+2"

@@ -11,6 +11,11 @@ run_on_playback_control = "Start"
 action = "PlayAudio"
 asset_key = "audio.game.WallSlide"
 
+[[script]]
+run_on_playback_control = "Stop"
+action = "StopAudio"
+asset_key = "audio.game.WallSlide"
+
 
 # LOOP
 [[script]]
