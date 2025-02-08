@@ -163,30 +163,6 @@ fn swap_melee_weapon(
     }
 }
 
-fn set_sfx_slot(
-    current_weapon: CurrentWeapon,
-    mut query: Query<
-        &mut ScriptPlayer<SpriteAnimation>,
-        (
-            // Changed<ScriptPlayer<SpriteAnimation>>,
-            With<EnemyEffectGfx>,
-        ),
-    >,
-) {
-    let current_weapon_name = current_weapon.to_string();
-    println!("weap sfx sys ran?");
-    println!("{:?}", current_weapon_name);
-    if current_weapon_name.is_empty() {
-        eprintln!("Invalid weapon name");
-        return;
-    }
-    let slot = &format!("{current_weapon_name}Hit");
-    // println!("{:?}", slot);
-    for mut animation in query.iter_mut() {
-        animation.set_slot(&current_weapon_name, true);
-    }
-}
-
 fn is_current_weapon_changed(current_weapon: CurrentWeapon) -> bool {
     current_weapon.is_changed()
 }

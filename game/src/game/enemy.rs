@@ -1816,13 +1816,10 @@ impl Plugin for EnemyAnimationPlugin {
                     enemy_defense_animation,
                     enemy_walking_animation,
                     enemy_chasing_animation,
-                    // enemy_retreat_animation,
                     enemy_ranged_attack_animation,
                     enemy_melee_attack_animation,
-                    // enemy_pushback_attack_animation,
                     enemy_death_animation,
                     enemy_decay_animation,
-                    // enemy_sparks_on_hit_animation.run_if(on_event::<DamageInfo>()),
                     enemy_decay_visibility,
                     sprite_flip,
                 )
@@ -1853,15 +1850,15 @@ fn enemy_hit_sfx_gfx(
                 let mut rng = thread_rng();
                 let picked_spark = rng.gen_range(1..=6);
                 hit_gfx.play_key("anim.spider.Sparks");
-                //reset everything so as not to glitch audio?
+                // reset everything so as not to glitch audio?
                 hit_gfx.clear_slots();
                 hit_gfx.set_slot(
                     format!("Spark{picked_spark}").as_str(),
                     true,
                 );
-                //set hit
+                // set hit
                 hit_gfx.set_slot("AttackHit", true);
-                //set weapon slot hit used for playing correct hit sfx
+                // set weapon slot hit used for playing correct hit sfx
                 let current_weapon_name = current_weapon.to_string();
                 let slot = &format!("{current_weapon_name}Hit");
                 hit_gfx.set_slot(slot, true);
