@@ -21,6 +21,7 @@ use crate::prelude::{
 
 use super::player_weapon::CurrentWeapon;
 use crate::game::xp_orbs::XpOrbPickup;
+use crate::game::attack::DamageInfo;
 
 /// play animations here, run after transitions
 pub struct PlayerAnimationPlugin;
@@ -41,7 +42,8 @@ impl Plugin for PlayerAnimationPlugin {
                 sprite_flip.after(player_dashing_animation),
                 update_serpent_ring_slot.after(sprite_flip),
                 update_frenzied_attack_slot.after(update_serpent_ring_slot),
-                xp_orb_animation_handler
+                xp_orb_animation_handler,
+                player_damage_animation_handler
             )
                 .in_set(PlayerStateSet::Animation)
                 .after(PlayerStateSet::Transition)
@@ -329,6 +331,20 @@ fn xp_orb_animation_handler(
             anim.set_slot("XpOrb", true);
         } else {
             anim.set_slot("XpOrb", false);
+        }
+    }
+}
+
+fn player_damage_animation_handler(
+    mut damage_events: EventReader<DamageInfo>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>
+) {
+    let damaged_event_occurred = !damage_events.is_empty();
+    for mut anim in gfx_query.iter_mut() {
+        if damaged_event_occurred {
+            anim.set_slot("Damaged", true);
+        } else {
+            anim.set_slot("Damaged", false);
         }
     }
 }

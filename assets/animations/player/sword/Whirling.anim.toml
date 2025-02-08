@@ -6,6 +6,13 @@ frame_min = 1
 frame_max = 6
 frame_start = 1
 
+
+[[script]]
+run_on_slot_enable = "Damaged"
+action = "PlayAudio"
+volume = 0.7
+asset_key = "audio.game.PlayerGetsDamaged"
+
 [[script]]
 run_on_slot_enable = "XpOrb"
 action = "PlayAudio"

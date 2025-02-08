@@ -128,8 +128,6 @@
     "audio.game.PlayerGetsDamaged": Files (
         paths: [
             "audio/fx/PlayerGetsDamaged1.flac",
-            "audio/fx/PlayerGetsDamaged2.flac",
-            "audio/fx/PlayerGetsDamaged3.flac",
             "audio/fx/PlayerGetsDamaged4.flac",
         ],
     ),
@@ -202,6 +200,13 @@
     "audio.game.Ambience": Files (
         paths: [
             "audio/music/Ambience1.flac",
+        ],
+    ),
+    "audio.game.Mooo": Files (
+        paths: [
+            "audio/yak/Mooo1.flac",
+            "audio/yak/Mooo2.flac",
+            "audio/yak/Mooo3.flac",
         ],
     ),
 })
