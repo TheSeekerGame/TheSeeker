@@ -26,6 +26,7 @@ use crate::game::pickups::DropTracker;
 use crate::game::xp_orbs::XpOrbPickup;
 use crate::prelude::*;
 
+use super::game_over::GameOver;
 use super::physics::Knockback;
 
 pub struct PlayerPlugin;
@@ -52,10 +53,7 @@ impl Plugin for PlayerPlugin {
         app.add_systems(Startup, load_dash_asset);
         app.add_systems(
             GameTickUpdate,
-            ((
-                setup_player,
-                despawn_dead_player.after(super::game_over::on_game_over),
-            )
+            ((setup_player, despawn_dead_player)
                 .run_if(in_state(GameState::Playing)))
             .after(PlayerStateSet::Transition)
             .run_if(in_state(AppState::InGame)),
@@ -492,6 +490,7 @@ fn despawn_dead_player(
     for (entity, gent) in query.iter() {
         commands.entity(gent.e_gfx).despawn_recursive();
         commands.entity(entity).despawn_recursive();
+        commands.insert_resource(GameOver);
     }
 }
 

@@ -5,17 +5,17 @@ use sickle_ui::ui_style::{
     SetNodeTopExt, SetNodeWidthExt,
 };
 use sickle_ui::widgets::prelude::*;
-use theseeker_engine::gent::Gent;
-use theseeker_engine::prelude::{in_state, Color, GameTickUpdate, GameTime};
+use theseeker_engine::prelude::{
+    in_state, resource_exists, Color, GameTickUpdate, GameTime, Resource,
+};
 
 use crate::camera::MainCamera;
 use crate::game::attack::KillCount;
-use crate::game::gentstate::Dead;
-use crate::game::player::{Player, PlayerStateSet};
+use crate::game::player::PlayerStateSet;
 use crate::gamestate::GameState;
 use crate::prelude::{
     default, AlignItems, App, AppState, AssetServer, BackgroundColor, Commands,
-    Component, Entity, FlexDirection, Has, IntoSystemConfigs, JustifyContent,
+    Component, Entity, FlexDirection, IntoSystemConfigs, JustifyContent,
     NodeBundle, Plugin, PositionType, Query, Res, ResMut, StateDespawnMarker,
     Style, TargetCamera, TextBundle, TextStyle, Time, Update, Val, With,
     ZIndex,
@@ -34,7 +34,8 @@ impl Plugin for GameOverPlugin {
             on_game_over
                 .run_if(in_state(GameState::Playing))
                 .after(PlayerStateSet::Transition)
-                .run_if(in_state(AppState::InGame)),
+                .run_if(in_state(AppState::InGame))
+                .run_if(resource_exists::<GameOver>),
         );
         app.add_systems(Update, update_fade_in);
     }
@@ -65,8 +66,11 @@ pub fn update_fade_in(
     }
 }
 
+/// Inserted on player despawn
+#[derive(Resource)]
+pub struct GameOver;
+
 pub fn on_game_over(
-    query: Query<(Entity, &Gent, Has<Dead>), With<Player>>,
     q_cam: Query<Entity, With<MainCamera>>,
     mut commands: Commands,
     asset_server: Res<AssetServer>,
@@ -74,13 +78,6 @@ pub fn on_game_over(
     time: Res<GameTime>,
 ) {
     let Ok(cam_e) = q_cam.get_single() else {
-        return;
-    };
-    if let Some((e, g, is_dead)) = query.iter().next() {
-        if !is_dead {
-            return;
-        }
-    } else {
         return;
     };
 
@@ -188,4 +185,5 @@ pub fn on_game_over(
 
     // TODO: Move this to some less obscure system that resets game state.
     commands.insert_resource(DropTracker::default());
+    commands.remove_resource::<GameOver>();
 }
