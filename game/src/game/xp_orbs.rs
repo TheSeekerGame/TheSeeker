@@ -39,6 +39,7 @@ fn spawn_orbs_on_death(
     enemy_q: Query<&GlobalTransform, (With<Enemy>, Added<Dead>)>,
     player_q: Query<&Passives, With<Player>>,
     mut commands: Commands,
+    asset_server: Res<AssetServer>
 ) {
     let size = Vec2::splat(2.0);
 
@@ -71,6 +72,7 @@ fn spawn_orbs_on_death(
                 LinearVelocity(vel + init_vel),
                 XpOrb { init_timer: 4.0 },
                 SpriteBundle {
+                    texture: asset_server.load("fx/xporb.png"),
                     sprite: Sprite {
                         color,
                         custom_size: Some(size),

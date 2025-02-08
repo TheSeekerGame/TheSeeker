@@ -449,7 +449,7 @@ fn spawn_pickups_on_death(
             Tier::Base => {
                 if seed_roll < 0.001 {
                     Some(PlanetarySeed::CategoryC)
-                } else if seed_roll < 0.01 {
+                } else if seed_roll < 0.005 {
                     Some(PlanetarySeed::CategoryA)
                 } else {
                     None
