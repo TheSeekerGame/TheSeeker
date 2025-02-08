@@ -4,6 +4,7 @@ use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::LinearVelocity;
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
+use bevy::ecs::event::EventReader;
 
 use super::DashStrike;
 use crate::appstate::AppState;
@@ -19,6 +20,7 @@ use crate::prelude::{
 };
 
 use super::player_weapon::CurrentWeapon;
+use crate::game::xp_orbs::XpOrbPickup;
 
 /// play animations here, run after transitions
 pub struct PlayerAnimationPlugin;
@@ -38,7 +40,8 @@ impl Plugin for PlayerAnimationPlugin {
                 player_dashing_strike_animation,
                 sprite_flip.after(player_dashing_animation),
                 update_serpent_ring_slot.after(sprite_flip),
-                update_frenzied_attack_slot.after(update_serpent_ring_slot)
+                update_frenzied_attack_slot.after(update_serpent_ring_slot),
+                xp_orb_animation_handler
             )
                 .in_set(PlayerStateSet::Animation)
                 .after(PlayerStateSet::Transition)
@@ -312,6 +315,20 @@ fn update_frenzied_attack_slot(
             } else {
                 anim_player.set_slot("FrenziedAttack", false);
             }
+        }
+    }
+}
+
+fn xp_orb_animation_handler(
+    mut xp_events: EventReader<XpOrbPickup>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>
+) {
+    let xp_event_occurred = !xp_events.is_empty();
+    for mut anim in gfx_query.iter_mut() {
+        if xp_event_occurred {
+            anim.set_slot("XpOrb", true);
+        } else {
+            anim.set_slot("XpOrb", false);
         }
     }
 }

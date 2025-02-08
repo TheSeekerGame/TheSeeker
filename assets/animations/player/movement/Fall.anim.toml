@@ -7,6 +7,12 @@ frame_max = 12
 frame_start = 1
 
 
+[[script]]
+run_on_slot_enable = "XpOrb"
+action = "PlayAudio"
+volume = 0.5
+asset_key = "audio.game.XpOrbs"
+
 # INITIALIZE FALL STRAIGHT
 [[script]]
 run_on_playback_control = "Start"

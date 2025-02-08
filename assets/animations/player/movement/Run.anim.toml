@@ -6,6 +6,12 @@ frame_min = 1
 frame_max = 10
 frame_start = 1
 
+[[script]]
+run_on_slot_enable = "XpOrb"
+action = "PlayAudio"
+volume = 0.5
+asset_key = "audio.game.XpOrbs"
+
 # INITIALIZE RUN REGULAR
 [[script]]
 run_on_playback_control = "Start"
