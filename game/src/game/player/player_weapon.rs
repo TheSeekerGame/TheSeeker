@@ -2,12 +2,9 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::{in_state, IntoSystemConfigs, Res};
 use leafwing_input_manager::prelude::ActionState;
 use strum_macros::Display;
-use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::prelude::{Commands, DetectChanges, OnEnter};
-use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::time::GameTickUpdate;
 
-use crate::game::enemy::EnemyEffectGfx;
 use crate::game::player::{Player, PlayerAction};
 use crate::prelude::{App, AppState, Plugin, Query, ResMut, Resource, With};
 
