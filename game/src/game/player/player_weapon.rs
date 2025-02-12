@@ -2,7 +2,7 @@ use bevy::ecs::system::SystemParam;
 use bevy::prelude::{in_state, IntoSystemConfigs, Res};
 use leafwing_input_manager::prelude::ActionState;
 use strum_macros::Display;
-use theseeker_engine::prelude::{Commands, DetectChanges, OnEnter};
+use theseeker_engine::prelude::{Commands, Component, OnEnter};
 use theseeker_engine::time::GameTickUpdate;
 
 use crate::game::player::{Player, PlayerAction};
@@ -38,6 +38,22 @@ pub struct PushbackValues {
     pub self_pushback_ticks: u32,
 }
 
+/// Add to an entity with [Attack] to determine which weapon triggered the attack.
+#[derive(Component)]
+pub struct AttackWeapon(String);
+
+impl From<PlayerMeleeWeapon> for AttackWeapon {
+    fn from(value: PlayerMeleeWeapon) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl From<PlayerRangedWeapon> for AttackWeapon {
+    fn from(value: PlayerRangedWeapon) -> Self {
+        Self(value.to_string())
+    }
+}
+
 #[derive(Resource, Default, PartialEq, Eq, Display)]
 pub enum PlayerCombatStyle {
     Ranged,
@@ -45,7 +61,7 @@ pub enum PlayerCombatStyle {
     Melee,
 }
 
-#[derive(Resource, Default, PartialEq, Eq, Display)]
+#[derive(Resource, Default, PartialEq, Eq, Display, Clone, Copy)]
 pub enum PlayerMeleeWeapon {
     Hammer,
     #[default]
@@ -93,12 +109,6 @@ pub struct CurrentWeapon<'w> {
 }
 
 impl CurrentWeapon<'_> {
-    pub fn is_changed(&self) -> bool {
-        self.combat_style.is_changed()
-            || self.melee_weapon.is_changed()
-            || self.ranged_weapon.is_changed()
-    }
-
     pub fn get_anim_key(&self, action: &str) -> String {
         let weapon_str = self.to_string();
         format!("anim.player.{weapon_str}{action}")
@@ -158,8 +168,4 @@ fn swap_melee_weapon(
             };
         }
     }
-}
-
-fn is_current_weapon_changed(current_weapon: CurrentWeapon) -> bool {
-    current_weapon.is_changed()
 }

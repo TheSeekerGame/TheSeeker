@@ -15,7 +15,8 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::arc_attack::{Arrow, Projectile};
 use super::player_weapon::{
-    PlayerCombatStyle, PlayerMeleeWeapon, PushbackValues,
+    AttackWeapon, PlayerCombatStyle, PlayerMeleeWeapon, PlayerRangedWeapon,
+    PushbackValues,
 };
 use super::{
     dash_icon_fx, player_dash_fx, AttackBundle, CanStealth, DashIcon,
@@ -1221,7 +1222,6 @@ fn player_attack(
                     let mut animation: ScriptPlayer<SpriteAnimation> =
                         ScriptPlayer::default();
                     animation.play_key("anim.player.BowBasicArrow");
-                    animation.set_slot("Start", true);
 
                     let is_player_pressed_against_wall = wall_slide_time
                         .is_some_and(|s| s.is_pressed_against_wall(&time));
@@ -1283,6 +1283,7 @@ fn player_attack(
                             )),
                             animation,
                             StateDespawnMarker,
+                            AttackWeapon::from(PlayerRangedWeapon::Bow),
                         ))
                         .id()
                 },
@@ -1341,6 +1342,8 @@ fn player_attack(
                                 Vec2::new(facing.direction() * pushback, 0.),
                                 pushback_ticks,
                             )),
+                            StateDespawnMarker,
+                            AttackWeapon::from(*melee_weapon),
                         ))
                         .set_parent(entity)
                         .id()
