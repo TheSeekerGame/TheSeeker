@@ -28,6 +28,7 @@ use crate::prelude::*;
 
 use super::game_over::GameOver;
 use super::physics::Knockback;
+use crate::game::enemy::Enemy;
 
 pub struct PlayerPlugin;
 
@@ -203,6 +204,12 @@ pub enum Passive {
     SerpentRing,
     /// Increase cdr and lose health for every consecutive hit within 3 seconds
     FrenziedAttack,
+    /// Deal more damage to packs of enemies
+    PackKiller,
+    /// Get increased defense when you're in the air, but become more vulnerable when on the ground.
+    DeadlyFeather,
+    /// Scale damage based on distance between you and enemy.
+    Sniper,
 }
 
 impl Passive {
@@ -216,19 +223,25 @@ impl Passive {
             Passive::HeavyBoots => "Heavy Boots",
             Passive::SerpentRing => "Serpent Ring",
             Passive::FrenziedAttack => "Frenzied Attack",
+            Passive::PackKiller => "Pack Killer",
+            Passive::DeadlyFeather => "Deadly Feather",
+            Passive::Sniper => "Sniper",
         }
     }
 
     pub fn description(&self) -> &str {
         match self {
             Passive::Bloodstone => "Heal after kills",
-            Passive::FlamingHeart => "Crit on every hit when on low health",
+            Passive::FlamingHeart => "Crit on every 2nd and 3rd hit when on low health",
             Passive::IceDagger => "Deal double damage when backstabbing",
             Passive::GlowingShard => "Defense scaling based on number of enemies nearby",
-            Passive::ObsidianNecklace => "Crits lower cooldown of all abilities by 0.4 seconds",
+            Passive::ObsidianNecklace => "Crits lower cooldown of all abilities by 0.5 seconds",
             Passive::HeavyBoots => "Doubled damage & defence while standing still,but halved while moving",
             Passive::SerpentRing => "Move faster, get cooldown redudction, but take double damage",
             Passive::FrenziedAttack => "Sacrifice health but get increased cooldown reduction for every consecutive hit within 3 seconds",
+            Passive::PackKiller => "Deal more damage to packs of enemies",
+            Passive::DeadlyFeather => "Deal extra damage, get faster cdr, and +50% crit chancewhen you're in the air, but become more vulnerable when on the ground",
+            Passive::Sniper => "Scale damage based on distance between you and nearest enemy",
         }
     }
 }
@@ -1208,21 +1221,25 @@ fn player_update_passive_buffs(
     mut query: Query<(
         &Passives,
         &LinearVelocity,
+        &GlobalTransform,
         &EnemiesNearby,
         &BuffTick,
         &mut PlayerStatMod,
+        Option<&Grounded>,
         Has<Stealthing>,
     )>,
+    enemy_q: Query<&GlobalTransform, With<Enemy>>,
 ) {
-    for (passives, vel, enemies_nearby, buff_tick, mut stat_mod, is_stealth) in
+    for (passives, vel, transform, enemies_nearby, buff_tick, mut stat_mod, grounded, is_stealth) in
         query.iter_mut()
     {
         let mut attack = 1.;
         let mut defense = 1.;
         let mut speed = 1.;
         let mut cdr = 1.;
+
         if passives.contains(&Passive::GlowingShard) {
-            defense *= 1. + 0.2 * enemies_nearby.0 as f32;
+            defense *= 1. + 1. * enemies_nearby.0 as f32;
         }
         if passives.contains(&Passive::SerpentRing) {
             speed *= 1.2;
@@ -1230,21 +1247,61 @@ fn player_update_passive_buffs(
             defense *= 0.5;
         }
         if passives.contains(&Passive::HeavyBoots) {
-            // if we are moving
-            if vel.length() > 0.0001 {
+            if vel.0.length() > 0.0001 {
                 attack *= 0.5;
                 defense *= 0.5;
             } else {
                 attack *= 2.;
-                defense *= 2.;
-            };
+                defense *= 2.5;
+            }
         }
         if passives.contains(&Passive::FrenziedAttack) {
             cdr *= 1. + (0.1 * buff_tick.stacks as f32).min(1.);
         }
+        if passives.contains(&Passive::DeadlyFeather) {
+            if grounded.is_some() {
+                attack *= 0.5;
+                cdr *= 0.7;
+                defense *= 0.5;
+            } else {
+                attack *= 1.5;
+                cdr *= 1.3;
+            }
+        }
         if is_stealth {
             attack *= 2.;
         }
+
+        if passives.contains(&Passive::Sniper) {
+            if vel.0.y >= 0.0 {
+                let player_pos = transform.translation().truncate();
+                let mut nearest_distance = f32::MAX;
+
+                for enemy_tf in enemy_q.iter() {
+                    let enemy_pos = enemy_tf.translation().truncate();
+                    let d = player_pos.distance(enemy_pos);
+                    if d < nearest_distance {
+                        nearest_distance = d;
+                    }
+                }
+
+                let multiplier = if nearest_distance >= 150.0 {
+                    4.0
+                } else if nearest_distance >= 120.0 {
+                    3.0
+                } else if nearest_distance >= 90.0 {
+                    2.0
+                } else if nearest_distance >= 60.0 {
+                    1.5
+                } else if nearest_distance >= 30.0 {
+                    1.25
+                } else {
+                    1.0
+                };
+                attack *= multiplier;
+            }
+        }
+
         *stat_mod = PlayerStatMod {
             attack,
             defense,
@@ -1437,13 +1494,13 @@ pub fn on_crit_cooldown_reduce(
         {
             if passives.contains(&Passive::ObsidianNecklace) {
                 if let Some(ref mut can_dash) = maybe_can_dash {
-                    can_dash.remaining_cooldown -= 0.4;
+                    can_dash.remaining_cooldown -= 0.5;
                 }
                 if let Some(ref mut whirl_ability) = maybe_whirl_ability {
-                    whirl_ability.energy += 0.2;
+                    whirl_ability.energy += 0.5;
                 }
                 if let Some(ref mut can_stealth) = maybe_can_stealth {
-                    can_stealth.remaining_cooldown -= 0.4;
+                    can_stealth.remaining_cooldown -= 0.5;
                 }
             }
         }
@@ -1482,20 +1539,16 @@ pub fn on_stealth_hit_cooldown_reset(
 
 /// Exits player Stealthing state when a stealthed attack first hits
 pub fn on_hit_exit_stealthing(
-    query: Query<&Attack, (Added<Hit>, With<Stealthed>)>,
+    query: Query<&Attack, (With<Hit>, With<Stealthed>)>,
     mut attacker_query: Query<(&Gent, &mut TransitionQueue), With<Player>>,
     mut sprites: Query<&mut Sprite, Without<Player>>,
     config: Res<PlayerConfig>,
 ) {
     for attack in query.iter() {
-        if let Ok((gent, mut transitions)) =
-            attacker_query.get_mut(attack.attacker)
-        {
+        if let Ok((gent, mut transitions)) = attacker_query.get_mut(attack.attacker) {
             let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
             sprite.color = sprite.color.with_a(1.0);
-            transitions.push(Stealthing::new_transition(
-                CanStealth::new(&config),
-            ));
+            transitions.push(Stealthing::new_transition(CanStealth::new(&config)));
         }
     }
 }

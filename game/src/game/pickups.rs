@@ -114,6 +114,18 @@ pub fn load_pickup_assets(assets: Res<AssetServer>, mut commands: Commands) {
             Passive::FrenziedAttack,
             "items/passives/FrenziedAttack.png",
         ),
+        (
+            Passive::PackKiller,
+            "items/passives/PackKiller.png",
+        ),
+        (
+            Passive::DeadlyFeather,
+            "items/passives/DeadlyFeather.png",
+        ),
+        (
+            Passive::Sniper,
+            "items/passives/Sniper.png",
+        ),
     ];
 
     let seed_mappings: Vec<(PlanetarySeed, &str)> = vec![

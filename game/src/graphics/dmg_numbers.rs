@@ -28,10 +28,8 @@ struct DmgNumber(Vec3, f64);
 fn instance(
     mut commands: Commands,
     asset_server: Res<AssetServer>,
-    entity_with_hp: Query<
-        (&GlobalTransform, Option<&Collider>),
-        Without<Player>,
-    >,
+    enemy_query: Query<(&GlobalTransform, Option<&Collider>), Without<Player>>,
+    player_query: Query<(&GlobalTransform, Option<&Collider>), With<Player>>,
     mut damage_events: EventReader<DamageInfo>,
     game_time: Res<GameTime>,
     q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
@@ -41,65 +39,70 @@ fn instance(
     };
 
     for damage_info in damage_events.read() {
-        if let Ok((transform, collider)) =
-            entity_with_hp.get(damage_info.target)
+        // Try the enemy query first:
+        let (transform, collider, text_color) = if let Ok((transform, collider)) =
+            enemy_query.get(damage_info.target)
         {
-            let mut world_position = transform.translation();
-
-            // Makes the number start above the collider, if it exists
-            world_position += match collider {
-                Some(collider) => {
-                    let above_hb_offset = 11.0;
-                    let collider_height =
-                        collider.0.compute_aabb().half_extents().y;
-                    Vec3::new(
-                        1.0,
-                        collider_height + above_hb_offset,
-                        0.0,
-                    )
+            (
+                transform,
+                collider,
+                if damage_info.crit && damage_info.stealthed {
+                    Color::PURPLE
+                } else if damage_info.crit {
+                    Color::YELLOW * 1.1
+                } else if damage_info.stealthed {
+                    Color::PINK
+                } else {
+                    Color::WHITE
                 },
-                None => Vec3::ZERO,
-            };
+            )
+        } else if let Ok((transform, collider)) =
+            player_query.get(damage_info.target)
+        {
+            // For player, force red color
+            (transform, collider, Color::RED)
+        } else {
+            continue;
+        };
 
-            let screen_position = camera
-                .world_to_viewport(camera_transform, world_position)
-                .unwrap_or_default();
+        let mut world_position = transform.translation();
 
-            commands.spawn((
-                DmgNumber(
-                    world_position,
-                    game_time.tick() as f64 / game_time.hz
-                        + game_time.last_update().as_secs_f64(),
-                ),
-                TextBundle::from_section(
-                    format!("{}", damage_info.amount),
-                    TextStyle {
-                        font: asset_server.load("font/Tektur-Regular.ttf"),
-                        font_size: 42.0,
-                        color: if damage_info.crit && damage_info.stealthed {
-                            Color::PURPLE
-                        } else if damage_info.crit {
-                            Color::YELLOW * 1.1
-                        } else if damage_info.stealthed {
-                            Color::PINK
-                        } else {
-                            Color::WHITE
-                        },
-                        // TODO:
-                        // if backstab, red?
-                        // TODO:
-                        // can we mix the colors to determine final color?
-                    },
-                )
-                .with_style(Style {
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(screen_position.x),
-                    top: Val::Px(screen_position.y),
-                    ..default()
-                }),
-                StateDespawnMarker,
-            ));
-        }
+        // Offset from collider (above hitbox) if available.
+        world_position += match collider {
+            Some(collider) => {
+                let above_hb_offset = 11.0;
+                let collider_height = collider.0.compute_aabb().half_extents().y;
+                Vec3::new(1.0, collider_height + above_hb_offset, 0.0)
+            }
+            None => Vec3::ZERO,
+        };
+
+        let screen_position = camera
+            .world_to_viewport(camera_transform, world_position)
+            .unwrap_or_default();
+
+        commands.spawn((
+            DmgNumber(
+                world_position,
+                game_time.tick() as f64 / game_time.hz
+                    + game_time.last_update().as_secs_f64(),
+            ),
+            TextBundle::from_section(
+                format!("{:.1}", damage_info.amount), // round to 1 decimal place
+                TextStyle {
+                    font: asset_server.load("font/Tektur-Regular.ttf"),
+                    font_size: 42.0,
+                    color: text_color,
+                },
+            )
+            .with_style(Style {
+                position_type: PositionType::Absolute,
+                left: Val::Px(screen_position.x),
+                top: Val::Px(screen_position.y),
+                ..default()
+            }),
+            StateDespawnMarker,
+        ));
     }
 }
 
