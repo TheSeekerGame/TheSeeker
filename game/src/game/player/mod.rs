@@ -58,6 +58,7 @@ impl Plugin for PlayerPlugin {
             .after(PlayerStateSet::Transition)
             .run_if(in_state(AppState::InGame)),
         );
+        #[cfg(feature = "dev")]
         app.add_systems(
             OnEnter(GameState::Paused),
             (
@@ -336,7 +337,6 @@ fn setup_player(
     for (mut xf_gent, e_gent, parent) in q.iter_mut() {
         // TODO: proper way of ensuring z is correct
         xf_gent.translation.z = 15.0 * 0.000001;
-        println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn(()).id();
         let mut passives = Passives::default();
@@ -620,13 +620,11 @@ pub struct Dashing {
 impl Dashing {
     pub fn from_action_state(action_state: &ActionState<PlayerAction>) -> Self {
         if action_state.pressed(&PlayerAction::Fall) {
-            println!("dashing down!");
             Self {
                 dash_type: DashType::Downward,
                 ..default()
             }
         } else {
-            println!("dashing horizontally!");
             Self {
                 dash_type: DashType::Horizontal,
                 ..default()
@@ -980,8 +978,6 @@ fn load_player_config(
     if !*initialized_config {
         if let Some(cfg) = cfgs.get(cfg_handle.clone()) {
             update_player_config(&mut player_config, cfg);
-            println!("init:");
-            dbg!(&player_config);
         }
         *initialized_config = true;
     }
@@ -989,11 +985,7 @@ fn load_player_config(
         if let AssetEvent::Modified { id } = ev {
             if let Some(cfg) = cfgs.get(*id) {
                 if cfg_handle.id() == *id {
-                    println!("before:");
-                    dbg!(&player_config);
                     update_player_config(&mut player_config, cfg);
-                    println!("after:");
-                    dbg!(&player_config);
                 }
             }
         }
@@ -1177,8 +1169,6 @@ impl PlayerStats {
 
             self.effective_stats.insert(*stat, val);
         }
-
-        println!("{:?}", self.effective_stats);
     }
 }
 
