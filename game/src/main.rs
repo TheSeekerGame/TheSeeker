@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "release", windows_subsystem = "windows")]
 #![allow(unused_mut)]
 
 /// Custom prelude, for stuff we'd like to access all over the codebase
