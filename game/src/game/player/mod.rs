@@ -58,7 +58,6 @@ impl Plugin for PlayerPlugin {
             .after(PlayerStateSet::Transition)
             .run_if(in_state(AppState::InGame)),
         );
-        #[cfg(feature = "dev")]
         app.add_systems(
             OnEnter(GameState::Paused),
             (

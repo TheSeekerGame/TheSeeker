@@ -118,8 +118,6 @@ fn load_enemy_config(
     if !*initialized_config {
         if let Some(cfg) = cfgs.get(cfg_handle.clone()) {
             update_enemy_config(&mut enemy_config, cfg);
-            println!("init:");
-            dbg!(&enemy_config);
         }
         *initialized_config = true;
     }
@@ -127,11 +125,7 @@ fn load_enemy_config(
         if let AssetEvent::Modified { id } = ev {
             if let Some(cfg) = cfgs.get(*id) {
                 if cfg_handle.id() == *id {
-                    println!("before:");
-                    dbg!(&enemy_config);
                     update_enemy_config(&mut enemy_config, cfg);
-                    println!("after:");
-                    dbg!(&enemy_config);
                 }
             }
         }
