@@ -9,13 +9,15 @@ use crate::ui::kill_counter::KillCounterPlugin;
 use crate::ui::skill_toolbar::SkillToolbarPlugin;
 
 pub mod ability_widget;
-mod console;
 mod controls_overlay;
 mod kill_counter;
 mod mainmenu;
 mod passives;
 pub mod popup;
 mod skill_toolbar;
+
+#[cfg(not(feature = "release"))]
+mod console;
 
 pub struct UiPlugin;
 
@@ -26,10 +28,13 @@ impl Plugin for UiPlugin {
             controls_overlay::plugin,
             popup::plugin,
             passives::plugin,
-            self::console::UiConsolePlugin,
             self::mainmenu::MainMenuPlugin,
             SkillToolbarPlugin,
             KillCounterPlugin,
+        ));
+        #[cfg(not(feature = "release"))]
+        app.add_plugins((
+            self::console::UiConsolePlugin,
         ));
     }
 }
