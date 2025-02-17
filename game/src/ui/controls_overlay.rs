@@ -43,6 +43,8 @@ fn spawn_control_hint(mut commands: Commands) {
             popup.row().with_children(|row| {
                 row.text("Press ");
                 row.control_icon("C");
+                row.text(" or ");
+                row.control_icon("Start");
                 row.text(" to show Controls");
             });
         });
@@ -59,12 +61,16 @@ fn spawn_control_overlay(mut commands: Commands) {
                     row.control_icon("A");
                     row.text(" or ");
                     row.control_icon("[<]");
+                    row.text(" or ");
+                    row.control_icon("L Stick Left");
                 });
                 container.row().with_children(|row| {
                     row.text("Move Right: ");
                     row.control_icon("D");
                     row.text(" or ");
                     row.control_icon("[>]");
+                    row.text(" or ");
+                    row.control_icon("L Stick Right");
                 });
                 container.row().with_children(|row| {
                     row.text("Jump: ");
@@ -73,6 +79,8 @@ fn spawn_control_overlay(mut commands: Commands) {
                     row.control_icon("SPACE");
                     row.text(" or ");
                     row.control_icon("[^]");
+                    row.text(" or ");
+                    row.control_icon("L2");
                 });
                 container.spacer();
                 container.row().with_children(|row| {
@@ -80,44 +88,60 @@ fn spawn_control_overlay(mut commands: Commands) {
                     row.control_icon("J");
                     row.text(" or ");
                     row.control_icon("1");
+                    row.text(" or ");
+                    row.control_icon("X / Square");
                 });
                 container.row().with_children(|row| {
                     row.text("Dash: ");
                     row.control_icon("K");
                     row.text(" or ");
                     row.control_icon("2");
+                    row.text(" or ");
+                    row.control_icon("R2");
                 });
                 container.row().with_children(|row| {
                     row.text("Whirl: ");
                     row.control_icon("L");
                     row.text(" or ");
                     row.control_icon("3");
+                    row.text(" or ");
+                    row.control_icon("A / Cross");
                 });
                 container.row().with_children(|row| {
                     row.text("Stealth: ");
                     row.control_icon(";");
                     row.text(" or ");
                     row.control_icon("4");
+                    row.text(" or ");
+                    row.control_icon("B / Circle");
                 });
                 container.row().with_children(|row| {
                     row.text("Swap Melee/Ranged: ");
                     row.control_icon("H");
                     row.text(" or ");
                     row.control_icon("`");
+                    row.text(" or ");
+                    row.control_icon("L1");
                 });
                 container.row().with_children(|row| {
                     row.text("Swap Melee Weapon: ");
                     row.control_icon("G");
+                    row.text(" or ");
+                    row.control_icon("R1");
                 });
                 container.spacer();
                 container.row().with_children(|row| {
                     row.text("Interact: ");
                     row.control_icon("F");
+                    row.text(" or ");
+                    row.control_icon("Y / Triangle");
                 });
                 container.spacer();
                 container.row().with_children(|row| {
                     row.text("Show/Hide Controls: ");
                     row.control_icon("C");
+                    row.text(" or ");
+                    row.control_icon("Start");
                 });
             });
         });
