@@ -261,14 +261,8 @@ pub fn determine_attack_targets(
 
 // could switch to command/component based approach for attack modifications
 pub fn apply_attack_modifications(
-    mut attack_query: Query<
-        (Entity, &mut Attack, Has<Crit>, Has<Hit>),
-        Without<Gent>,
-    >,
-    mut attacker_query: Query<
-        (Option<&mut Crits>, Option<&Passives>),
-        With<Gent>,
-    >,
+    mut attack_query: Query<(Entity, &mut Attack, Has<Crit>, Has<Hit>), Without<Gent>>,
+    mut attacker_query: Query<(Option<&mut Crits>, Option<&Passives>), With<Gent>>,
     mut commands: Commands,
 ) {
     for (entity, mut attack, is_crit, has_hit) in attack_query.iter_mut() {
@@ -277,27 +271,24 @@ pub fn apply_attack_modifications(
             continue;
         }
         // if there is an attacker, apply relevant buffs
-        if let Ok((maybe_crits, maybe_passives)) =
-            attacker_query.get_mut(attack.attacker)
-        {
-            // passives
+        if let Ok((maybe_crits, maybe_passives)) = attacker_query.get_mut(attack.attacker) {
             if let Some(passives) = maybe_passives {
-                // backstab
-                // check this later on application of damage for each enemy
+                // Existing IceDagger passive check
                 if passives.contains(&Passive::IceDagger) {
                     commands.entity(entity).insert(Backstab);
                 }
+                // <-- New Pack Killer effect:
+                if passives.contains(&Passive::PackKiller) {
+                    let bonus_multiplier = 1.0 + (attack.target_set.len() as f32 * 0.30);
+                    attack.damage *= bonus_multiplier;
+                }
             }
-            // TODO: attack should keep its original damage and modify only the multipliers
-            // crit multiplier
-            //
             if let Some(mut crit) = maybe_crits {
                 if crit.next_hit_is_critical && !is_crit {
                     commands.entity(entity).insert(Crit);
                     attack.damage *= crit.crit_damage_multiplier;
                     crit.next_hit_is_critical = false;
                 }
-
                 // increment hit count the first time we hit something with an attack
                 if !has_hit {
                     crit.hit_count += 1;
@@ -514,7 +505,7 @@ fn on_hit_lifesteal(
     for (attack, is_crit) in query.iter() {
         if let Ok(mut health) = health_query.get_mut(attack.attacker) {
             // heal by 100 percent or 20 percent max health
-            let stealth_lifesteal = if is_crit { 1. } else { 0.2 };
+            let stealth_lifesteal = if is_crit { 0.24 } else { 0.2 };
             health.current = u32::min(
                 health.current.saturating_add(
                     (stealth_lifesteal * health.max as f32) as u32,
@@ -594,7 +585,12 @@ fn track_crits(mut query: Query<(&mut Crits, Option<&Passives>, &Health)>) {
         if let Some(passives) = maybe_passives {
             if passives.contains(&Passive::FlamingHeart)
                 && health.current < health.max / 4
-            // && (crits.hit_count % 1 == 0 || crits.hit_count % 2 == 0)
+                && (crits.hit_count % 2 == 0 || crits.hit_count % 3 == 0)
+            {
+                crits.next_hit_is_critical = true;
+            }
+            if passives.contains(&Passive::DeadlyFeather)
+                && (crits.hit_count % 5 == 0 || crits.hit_count % 7 == 0 || crits.hit_count % 11 == 0|| crits.hit_count % 13 == 0)
             {
                 crits.next_hit_is_critical = true;
             }
