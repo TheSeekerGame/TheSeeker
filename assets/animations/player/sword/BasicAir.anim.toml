@@ -19,17 +19,46 @@ volume = 0.5
 asset_key = "audio.game.XpOrbs"
 
 [[script]]
-run_at_frame = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20]
+run_at_frame = [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9,
+    10,
+    11,
+    12,
+    13,
+    14,
+    15,
+    16,
+    17,
+    18,
+    19,
+    20,
+]
 require_slots_any = ["SerpentRing", "FrenziedAttack"]
 action = "SetTicksPerFrame"
 ticks_per_frame = 6
 
 [[script]]
-run_at_frame = [2, 7, 12]
+run_at_frame = [2, 7, 12, 16]
 forbid_slots_all = ["AttackTransition"]
 action = "PlayAudio"
 volume = 0.5
 asset_key = "audio.game.SwordSlash"
+
+# Downward Attack
+[[script]]
+run_on_playback_control = "Start"
+require_slots_all = ["DownwardAttack"]
+forbid_slots_all = ["AttackTransition"]
+action = "SetFrameNow"
+frame_index = 16
 
 # play the last frame again if the animation hasnt ended so we dont roll over into next variant
 [[script]]
