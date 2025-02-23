@@ -29,7 +29,6 @@ use crate::game::pickups::{
     PassiveDescriptionNode, PassiveEntity, PickupDrop, PickupHint, PickupType,
     PICKUP_RANGE_SQUARED,
 };
-use crate::game::player::Passive;
 use crate::game::player::{
     Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded,
     HitFreezeTime, Idle, Jumping, Player, PlayerAction, PlayerConfig,
@@ -1479,32 +1478,8 @@ pub fn player_whirl(
                 }
             // if there is no attack, spawn a new one
             } else {
-                // Determine collider lifetime based on melee weapon and passives:
-                // For Sword: default = 16, if (SerpentRing or FrenziedAttack) active then 12
-                // For Hammer: default = 24, if (SerpentRing or FrenziedAttack) active then 18
-                let lifetime = if *melee_weapon == PlayerMeleeWeapon::Hammer {
-                    if passives.contains(&Passive::SerpentRing)
-                        || passives.contains(&Passive::FrenziedAttack)
-                    {
-                        18
-                    } else {
-                        24
-                    }
-                } else {
-                    if passives.contains(&Passive::SerpentRing)
-                        || passives.contains(&Passive::FrenziedAttack)
-                    {
-                        12
-                    } else {
-                        16
-                    }
-                };
-
-                let damage = if *melee_weapon == PlayerMeleeWeapon::Hammer {
-                    51.0
-                } else {
-                    33.0
-                } * stat_mod.attack;
+                let lifetime = melee_weapon.attack_lifetime(passives);
+                let damage = melee_weapon.base_damage() * stat_mod.attack;
                 let new_attack = commands
                     .spawn((
                         AttackBundle {
