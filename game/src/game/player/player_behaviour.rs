@@ -22,7 +22,9 @@ use super::{
     DashStrike, DashType, JumpCount, Knockback, Passives, PlayerStats,
     Pushback, StatType, Stealthing, Whirling,
 };
-use crate::game::attack::{Attack, SelfPushback, Stealthed};
+use crate::game::attack::{
+    Attack, DownwardAttack, Hit, SelfPushback, Stealthed,
+};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::pickups::{
@@ -56,7 +58,13 @@ impl Plugin for PlayerBehaviorPlugin {
                     add_attack,
                     player_stealth,
                     player_whirl_charge.before(player_whirl),
-                    player_whirl.before(player_attack),
+                    (
+                        player_whirl,
+                        bow_auto_aim.after(player_move).run_if(
+                            resource_equals(PlayerCombatStyle::Ranged),
+                        ),
+                    )
+                        .before(player_attack),
                     player_attack.run_if(any_with_component::<Attacking>),
                     player_restore_velocity
                         .after(player_attack)
@@ -81,16 +89,11 @@ impl Plugin for PlayerBehaviorPlugin {
                         player_sliding.before(player_jump),
                     )
                         .run_if(any_with_component::<Falling>),
+                    reset_player_jump_on_downward_attack.after(player_falling),
                     crate::game::physics::knockback
                         .run_if(any_with_component::<Knockback>)
                         .before(player_jump)
                         .after(player_sliding),
-                    bow_auto_aim
-                        .after(player_move)
-                        .before(player_attack)
-                        .run_if(resource_equals(
-                            PlayerCombatStyle::Ranged,
-                        )),
                 )
                     .in_set(PlayerStateSet::Behavior)
                     .before(update_sprite_colliders),
@@ -108,6 +111,17 @@ impl Plugin for PlayerBehaviorPlugin {
                 .chain()
                 .run_if(in_state(AppState::InGame)),
         );
+    }
+}
+
+fn reset_player_jump_on_downward_attack(
+    mut p_query: Query<&mut JumpCount, With<Player>>,
+    query: Query<&Attack, (Added<Hit>, With<DownwardAttack>)>,
+) {
+    for attack in query.iter() {
+        if let Ok(mut jump_count) = p_query.get_mut(attack.attacker) {
+            jump_count.reset();
+        }
     }
 }
 
@@ -1322,7 +1336,7 @@ fn player_attack(
                     let is_attacking_downwards =
                         !grounded && action_state.pressed(&PlayerAction::Fall);
                     let self_knockback_strength = if is_attacking_downwards {
-                        Vec2::new(0.0, self_pushback)
+                        Vec2::new(0.0, self_pushback * 2.0)
                     } else {
                         Vec2::new(self_pushback * -facing.direction(), 0.)
                     };
@@ -1351,6 +1365,8 @@ fn player_attack(
                                 pushback_ticks,
                             ),
                         ));
+                    } else {
+                        attack_entity_commands.insert(DownwardAttack);
                     }
 
                     attack_entity_commands.id()

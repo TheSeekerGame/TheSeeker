@@ -142,16 +142,14 @@ impl Attack {
         self
     }
 
-    pub fn with_damage(mut self, damage: f32) -> Self {
-        self.damage = damage;
-        self
-    }
-
     pub fn with_max_targets(mut self, max_targets: u32) -> Self {
         self.max_targets = max_targets;
         self
     }
 }
+
+#[derive(Component)]
+pub struct DownwardAttack;
 
 /// Event sent when damage is applied
 #[derive(Event, Clone, Copy, PartialEq)]
