@@ -29,6 +29,7 @@ use crate::game::pickups::{
     PassiveDescriptionNode, PassiveEntity, PickupDrop, PickupHint, PickupType,
     PICKUP_RANGE_SQUARED,
 };
+use crate::game::player::Passive;
 use crate::game::player::{
     Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded,
     HitFreezeTime, Idle, Jumping, Player, PlayerAction, PlayerConfig,
@@ -38,7 +39,6 @@ use crate::prelude::*;
 use crate::ui::popup::{PopupTimer, PopupUi};
 use crate::StateDespawnMarker;
 use crate::{camera::CameraShake, game::player::PlayerStatMod};
-use crate::game::player::Passive;
 
 /// Player behavior systems.
 /// Do stuff here in states and add transitions to other states by pushing
@@ -1192,6 +1192,7 @@ fn player_attack(
             &ActionState<PlayerAction>,
             &PlayerStatMod,
             Has<Stealthing>,
+            Has<Grounded>,
         ),
         (With<Player>, Without<Whirling>),
     >,
@@ -1213,6 +1214,7 @@ fn player_attack(
         action_state,
         stat_mod,
         stealthed,
+        grounded,
     ) in query.iter_mut()
     {
         if attacking.ticks == 0 {
@@ -1318,32 +1320,41 @@ fn player_attack(
                         );
                     }
 
-                    commands
-                        .spawn((
-                            TransformBundle::from_transform(
-                                Transform::from_xyz(0.0, 0.0, 0.0),
-                            ),
-                            AnimationCollider(gent.e_gfx),
-                            // TODO: ? ColliderMeta
-                            Collider::empty(InteractionGroups::new(
-                                PLAYER_ATTACK,
-                                ENEMY_HURT,
-                            )),
-                            Attack::new(16, entity, damage * stat_mod.attack),
-                            SelfPushback(Knockback::new(
-                                Vec2::new(
-                                    self_pushback * -facing.direction(),
-                                    0.,
-                                ),
-                                self_pushback_ticks,
-                            )),
-                            Pushback(Knockback::new(
+                    let is_attacking_downwards =
+                        !grounded && action_state.pressed(&PlayerAction::Fall);
+                    let self_knockback_strength = if is_attacking_downwards {
+                        Vec2::new(0.0, self_pushback)
+                    } else {
+                        Vec2::new(self_pushback * -facing.direction(), 0.)
+                    };
+                    let mut attack_entity_commands = commands.spawn((
+                        TransformBundle::from_transform(Transform::from_xyz(
+                            0.0, 0.0, 0.0,
+                        )),
+                        AnimationCollider(gent.e_gfx),
+                        // TODO: ? ColliderMeta
+                        Collider::empty(InteractionGroups::new(
+                            PLAYER_ATTACK,
+                            ENEMY_HURT,
+                        )),
+                        Attack::new(16, entity, damage * stat_mod.attack),
+                        SelfPushback(Knockback::new(
+                            self_knockback_strength,
+                            self_pushback_ticks,
+                        )),
+                    ));
+                    attack_entity_commands.set_parent(entity);
+
+                    if !is_attacking_downwards {
+                        attack_entity_commands.insert(Pushback(
+                            Knockback::new(
                                 Vec2::new(facing.direction() * pushback, 0.),
                                 pushback_ticks,
-                            )),
-                        ))
-                        .set_parent(entity)
-                        .id()
+                            ),
+                        ));
+                    }
+
+                    attack_entity_commands.id()
                 },
             };
 
@@ -1413,7 +1424,7 @@ pub fn player_whirl(
             &PlayerStatMod,
             Has<Stealthing>,
             &Gent,
-            &Passives
+            &Passives,
         ),
         (
             With<Player>,
@@ -1472,27 +1483,40 @@ pub fn player_whirl(
                 // For Sword: default = 16, if (SerpentRing or FrenziedAttack) active then 12
                 // For Hammer: default = 24, if (SerpentRing or FrenziedAttack) active then 18
                 let lifetime = if *melee_weapon == PlayerMeleeWeapon::Hammer {
-                    if passives.contains(&Passive::SerpentRing) || passives.contains(&Passive::FrenziedAttack) {
+                    if passives.contains(&Passive::SerpentRing)
+                        || passives.contains(&Passive::FrenziedAttack)
+                    {
                         18
                     } else {
                         24
                     }
                 } else {
-                    if passives.contains(&Passive::SerpentRing) || passives.contains(&Passive::FrenziedAttack) {
+                    if passives.contains(&Passive::SerpentRing)
+                        || passives.contains(&Passive::FrenziedAttack)
+                    {
                         12
                     } else {
                         16
                     }
                 };
 
-                let damage = if *melee_weapon == PlayerMeleeWeapon::Hammer { 51.0 } else { 33.0 } * stat_mod.attack;
+                let damage = if *melee_weapon == PlayerMeleeWeapon::Hammer {
+                    51.0
+                } else {
+                    33.0
+                } * stat_mod.attack;
                 let new_attack = commands
                     .spawn((
                         AttackBundle {
                             attack: Attack::new(lifetime, entity, damage),
-                            collider: Collider::empty(InteractionGroups::new(PLAYER_ATTACK, ENEMY_HURT)),
+                            collider: Collider::empty(InteractionGroups::new(
+                                PLAYER_ATTACK,
+                                ENEMY_HURT,
+                            )),
                         },
-                        TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+                        TransformBundle::from_transform(Transform::from_xyz(
+                            0.0, 0.0, 0.0,
+                        )),
                         AnimationCollider(gent.e_gfx),
                     ))
                     .set_parent(entity)
