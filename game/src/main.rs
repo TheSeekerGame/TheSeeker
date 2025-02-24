@@ -1,3 +1,4 @@
+#![cfg_attr(feature = "release", windows_subsystem = "windows")]
 #![allow(unused_mut)]
 
 /// Custom prelude, for stuff we'd like to access all over the codebase
@@ -13,7 +14,6 @@ use bevy::core::TaskPoolThreadAssignmentPolicy;
 use bevy::ecs::schedule::ExecutorKind;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
-use iyes_perf_ui::PerfUiPlugin;
 use theseeker_engine::physics::PhysicsPlugin;
 
 use crate::prelude::*;
@@ -124,7 +124,11 @@ fn main() {
             .track_assets()
             .continue_to(AppState::MainMenu),
         PhysicsPlugin,
-        PerfUiPlugin,
+    ));
+
+    #[cfg(feature = "iyes_perf_ui")]
+    app.add_plugins((
+        iyes_perf_ui::PerfUiPlugin,
     ));
 
     // our stuff

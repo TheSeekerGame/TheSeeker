@@ -5,7 +5,6 @@ use std::f32::consts::PI;
 use bevy::core_pipeline::bloom::BloomSettings;
 use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
-use iyes_perf_ui::PerfUiCompleteBundle;
 use ran::ran_f64_range;
 
 use crate::game::player::Player;
@@ -96,10 +95,12 @@ enum LeadDirection {
 pub struct GameViewLimits(Rect);
 
 pub(crate) fn setup_main_camera(mut commands: Commands) {
+    #[cfg(feature = "iyes_perf_ui")]
     commands.spawn((
-        PerfUiCompleteBundle::default(),
+        iyes_perf_ui::PerfUiCompleteBundle::default(),
         StateDespawnMarker,
     ));
+
     let mut camera = Camera2dBundle {
         camera: Camera {
             hdr: true,

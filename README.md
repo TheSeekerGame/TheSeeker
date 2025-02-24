@@ -21,6 +21,6 @@ For docs related to the Rust source code, see: https://theseekergame.github.io/a
 
 Game code is under MIT/Apache-2.
 
-Assets are proprietary, unless noted otherwise.
+Assets are under Creative Commons Attribution-ShareAlike (CC BY-SA 4.0), unless noted otherwise.
 
 Fonts are licensed under the SIL Open Font License.
