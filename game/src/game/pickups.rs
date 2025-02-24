@@ -123,8 +123,24 @@ pub fn load_pickup_assets(assets: Res<AssetServer>, mut commands: Commands) {
             "items/passives/DeadlyFeather.png",
         ),
         (
-            Passive::Sniper,
-            "items/passives/Sniper.png",
+            Passive::Sharpshooter,
+            "items/passives/Sharpshooter.png",
+        ),
+        (
+            Passive::ProtectiveSpirit,
+            "items/passives/ProtectiveSpirit.png",
+        ),
+        (
+            Passive::RabbitsFoot,
+            "items/passives/RabbitsFoot.png",
+        ),
+        (
+            Passive::CriticalRegeneration,
+            "items/passives/CriticalRegeneration.png",
+        ),
+        (
+            Passive::VitalityOverclock,
+            "items/passives/VitalityOverclock.png",
         ),
     ];
 
@@ -399,7 +415,7 @@ impl DropTracker {
     }
 
     fn new(passive_count: usize) -> Self {
-        const SPAN: u32 = 10;
+        const SPAN: u32 = 5;
 
         let mut rng = rand::thread_rng();
 

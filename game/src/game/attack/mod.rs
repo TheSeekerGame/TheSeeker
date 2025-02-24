@@ -325,6 +325,7 @@ pub fn apply_attack_damage(
     >,
     mut damage_events: EventWriter<DamageInfo>,
     mut commands: Commands,
+    player_passives: Query<&Passives, With<Player>>,
 ) {
     for (
         a_entity,
@@ -382,6 +383,14 @@ pub fn apply_attack_damage(
                 // apply player defense modifier if it exists
                 if let Some(statmod) = maybe_player_statmod {
                     damage /= statmod.defense;
+                }
+
+                // If the target is the player and has ProtectiveSpirit, cap damage to 1/3 of max health.
+                if let Ok(passives) = player_passives.get(t_entity) {
+                    if passives.contains(&Passive::ProtectiveSpirit) {
+                        let max_allowed = (health.max as f32) / 3.0;
+                        damage = damage.min(max_allowed);
+                    }
                 }
 
                 // apply damage to the targets health
@@ -591,6 +600,16 @@ fn track_crits(mut query: Query<(&mut Crits, Option<&Passives>, &Health)>) {
             }
             if passives.contains(&Passive::DeadlyFeather)
                 && (crits.hit_count % 5 == 0 || crits.hit_count % 7 == 0 || crits.hit_count % 11 == 0|| crits.hit_count % 13 == 0)
+            {
+                crits.next_hit_is_critical = true;
+            }
+            if passives.contains(&Passive::ObsidianNecklace)
+                && (crits.hit_count % 23 == 0 || crits.hit_count % 29 == 0 || crits.hit_count % 31 == 0)
+            {
+                crits.next_hit_is_critical = true;
+            }
+            if passives.contains(&Passive::RabbitsFoot)
+                && (crits.hit_count % 37 == 0 || crits.hit_count % 41 == 0 || crits.hit_count % 43 == 0|| crits.hit_count % 47 == 0)
             {
                 crits.next_hit_is_critical = true;
             }

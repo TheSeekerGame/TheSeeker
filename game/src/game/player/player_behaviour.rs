@@ -925,6 +925,7 @@ fn player_grounded(
             &mut TransitionQueue,
             Option<&mut CoyoteTime>,
             &mut JumpCount,
+            &Passives,
         ),
         (
             With<Player>,
@@ -945,18 +946,15 @@ fn player_grounded(
         mut transitions,
         coyote_time,
         mut jump_count,
+        passives,
     ) in query.iter_mut()
     {
-        let ray_cast =
-            ray_cast_info.cast(&spatial_query, &position, Some(entity));
-        let falling_toi = ray_cast
-            .iter()
-            .find(|x| x.1.toi > GROUNDED_THRESHOLD + 0.01);
+        let ray_cast = ray_cast_info.cast(&spatial_query, &position, Some(entity));
+        let falling_toi = ray_cast.iter().find(|x| x.1.toi > GROUNDED_THRESHOLD + 0.01);
         let is_falling = falling_toi.is_some();
         let time_of_impact = falling_toi.map_or(0.0, |x| x.1.toi);
 
-        // This condition might never be true, but in the rare case where the TOI goes above the threshold
-        // it will ensure that the player character lands at the expected y height every time.
+        // Adjust position if TOI is nonzero.
         if !is_falling && time_of_impact != 0.0 {
             position.translation.y =
                 position.translation.y - time_of_impact + GROUNDED_THRESHOLD;
@@ -964,25 +962,28 @@ fn player_grounded(
         let mut in_c_time = false;
         if let Some(mut c_time) = coyote_time {
             if !is_falling {
-                // resets the c_time every time ground gets close again.
+                // resets the coyote timer every time ground gets close again.
                 c_time.0 = 0.0;
             } else {
-                c_time.0 += (1.0 / time.hz) as f32;
+                c_time.0 += 1.0 / time.hz as f32;
             }
             if c_time.0 < max_coyote_time {
                 in_c_time = true;
             };
-        };
+        }
+        // When the player is grounded (i.e. not falling), fully restore available jumps.
+        if !is_falling {
+            jump_count.0 = 0;
+        }
 
-        // just pressed seems to get missed sometimes... but we need it because pressed makes you
-        // jump continuously if held
-        // known issue https://github.com/bevyengine/bevy/issues/6183
         if action_state.just_pressed(&PlayerAction::Jump) {
-            jump_count.0 = 1;
-            transitions.push(Grounded::new_transition(Jumping))
+            let allowed_jumps = if passives.contains(&Passive::RabbitsFoot) { 3 } else { 2 };
+            if jump_count.0 < allowed_jumps {
+                jump_count.0 += 1;
+                transitions.push(Grounded::new_transition(Jumping));
+            }
         } else if is_falling && !in_c_time {
-            jump_count.0 = 1;
-            transitions.push(Grounded::new_transition(Falling))
+            transitions.push(Grounded::new_transition(Falling));
         }
     }
 }
@@ -998,6 +999,7 @@ fn player_falling(
             &ShapeCaster,
             &mut TransitionQueue,
             &mut JumpCount,
+            &Passives,
         ),
         (
             With<Player>,
@@ -1016,19 +1018,15 @@ fn player_falling(
         hits,
         mut transitions,
         mut jump_count,
+        passives,
     ) in query.iter_mut()
     {
         let fall_accel = config.fall_accel;
         let mut falling = true;
-        if let Some((_, toi)) =
-            hits.cast(&spatial_query, &transform, Some(entity))
-        {
+        if let Some((_, toi)) = hits.cast(&spatial_query, &transform, Some(entity)) {
             // if we are ~touching the ground
-            if (toi.toi + velocity.y * (1.0 / time.hz) as f32)
-                < GROUNDED_THRESHOLD
-            {
+            if (toi.toi + velocity.y * (1.0 / time.hz) as f32) < GROUNDED_THRESHOLD {
                 transitions.push(Falling::new_transition(Grounded));
-                // stop falling
                 velocity.y = 0.0;
                 transform.translation.y =
                     transform.translation.y - toi.toi + GROUNDED_THRESHOLD;
@@ -1041,23 +1039,19 @@ fn player_falling(
             }
         }
         if falling {
-            if action_state.just_pressed(&PlayerAction::Jump)
-                && jump_count.0 > 0
-            {
-                velocity.y = 0.0;
-                jump_count.0 -= 1;
-
-                // println!("air jump: {}", jump_count.0);
-                transitions.push(Falling::new_transition(Jumping))
+            if action_state.just_pressed(&PlayerAction::Jump) {
+                let allowed_jumps = if passives.contains(&Passive::RabbitsFoot) { 3 } else { 2 };
+                if jump_count.0 < allowed_jumps {
+                    velocity.y = 0.0;
+                    jump_count.0 += 1;
+                    transitions.push(Falling::new_transition(Jumping));
+                }
             }
             if velocity.y > 0.0 {
                 velocity.y /= 1.2;
             }
             velocity.y -= fall_accel;
-            velocity.y = velocity.y.clamp(
-                -config.max_fall_vel,
-                config.jump_vel_init,
-            );
+            velocity.y = velocity.y.clamp(-config.max_fall_vel, config.jump_vel_init);
         }
     }
 }

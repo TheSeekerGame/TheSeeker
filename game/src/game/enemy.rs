@@ -118,8 +118,6 @@ fn load_enemy_config(
     if !*initialized_config {
         if let Some(cfg) = cfgs.get(cfg_handle.clone()) {
             update_enemy_config(&mut enemy_config, cfg);
-            println!("init:");
-            dbg!(&enemy_config);
         }
         *initialized_config = true;
     }
@@ -127,11 +125,7 @@ fn load_enemy_config(
         if let AssetEvent::Modified { id } = ev {
             if let Some(cfg) = cfgs.get(*id) {
                 if cfg_handle.id() == *id {
-                    println!("before:");
-                    dbg!(&enemy_config);
                     update_enemy_config(&mut enemy_config, cfg);
-                    println!("after:");
-                    dbg!(&enemy_config);
                 }
             }
         }
@@ -1024,9 +1018,11 @@ fn aggro(
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if matches!(range, Range::Melee) {
                 match role {
-                    Role::Melee => transitions.push(Waiting::new_transition(
-                        MeleeAttack::default(),
-                    )),
+                    Role::Melee => {
+                        transitions.push(Waiting::new_transition(
+                            MeleeAttack::default(),
+                        ))
+                    },
                     Role::Ranged => {
                         velocity.x = 0.;
                         transitions.push(Waiting::new_transition(Defense));
@@ -1335,6 +1331,8 @@ fn falling(
             &mut Navigation,
             &Collider,
             &Gent,
+            &Role,
+            &Tier,
         ),
         With<Enemy>,
     >,
@@ -1342,8 +1340,17 @@ fn falling(
     enemy_config: Res<EnemyConfig>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
 ) {
-    for (entity, mut velocity, mut transform, _, mut nav, collider, gent) in
-        query.iter_mut()
+    for (
+        entity,
+        mut velocity,
+        mut transform,
+        _,
+        mut nav,
+        collider,
+        gent,
+        role,
+        tier,
+    ) in query.iter_mut()
     {
         if matches!(*nav, Navigation::Falling { .. }) {
             if let Some((e, toi)) = spatial_query.shape_cast(
@@ -1374,7 +1381,10 @@ fn falling(
                         if let Ok(mut enemy_anim) =
                             gfx_query.get_mut(gent.e_gfx)
                         {
-                            enemy_anim.play_key("anim.smallspider.Chase");
+                            enemy_anim.play_key(&format!(
+                                "{}.Chase",
+                                enemy_anim_prefix(role, tier)
+                            ));
                         }
                         continue;
                     }
@@ -1420,7 +1430,10 @@ fn falling(
                 println!("refalling");
                 *nav = Navigation::Falling { jumping: false };
                 if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
-                    enemy_anim.play_key("anim.smallspider.Jump");
+                    enemy_anim.play_key(&format!(
+                        "{}.Jump",
+                        enemy_anim_prefix(role, tier)
+                    )); 
                 }
             }
         }
@@ -1515,6 +1528,7 @@ fn chasing(
             &mut TransitionQueue,
             &Transform,
             &Gent,
+            &Tier,
         ),
         (
             With<Enemy>,
@@ -1537,6 +1551,7 @@ fn chasing(
         mut transitions,
         trans,
         gent,
+        tier,
     ) in query.iter_mut()
     {
         // only melee chase
@@ -1568,7 +1583,10 @@ fn chasing(
                             if let Ok(mut enemy_anim) =
                                 gfx_query.get_mut(gent.e_gfx)
                             {
-                                enemy_anim.play_key("anim.smallspider.Jump");
+                                enemy_anim.play_key(&format!(
+                                    "{}.Jump",
+                                    enemy_anim_prefix(role, tier)
+                                ));
                                 // enemy_anim.set_slot("fall", true);
                                 // enemy_anim.set_slot("jump", false);
                             }
@@ -1581,7 +1599,10 @@ fn chasing(
                             if let Ok(mut enemy_anim) =
                                 gfx_query.get_mut(gent.e_gfx)
                             {
-                                enemy_anim.play_key("anim.smallspider.Jump");
+                                enemy_anim.play_key(&format!(
+                                    "{}.Jump",
+                                    enemy_anim_prefix(role, tier)
+                                ));
                                 // enemy_anim.set_slot("jump", true);
                                 // enemy_anim.set_slot("fall", false);
                             }
@@ -2025,6 +2046,7 @@ fn enemy_decay_visibility(
     }
 }
 
+/// Outputs "anim.{enemy}{tier}"
 fn enemy_anim_prefix(role: &Role, tier: &Tier) -> String {
     let r = match role {
         Role::Ranged => "spider",

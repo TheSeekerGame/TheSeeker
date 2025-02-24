@@ -1,11 +1,10 @@
+mod player_action;
 mod player_anim;
 mod player_behaviour;
 pub mod player_weapon;
 use bevy::utils::hashbrown::HashMap;
 use leafwing_input_manager::action_state::ActionState;
-use leafwing_input_manager::axislike::VirtualAxis;
-use leafwing_input_manager::input_map::InputMap;
-use leafwing_input_manager::{Actionlike, InputManagerBundle};
+use player_action::PlayerActionPlugin;
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
 use player_weapon::PlayerWeaponPlugin;
@@ -15,7 +14,6 @@ use strum_macros::EnumIter;
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
-use theseeker_engine::input::InputManagerPlugin;
 use theseeker_engine::physics::{
     Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER,
 };
@@ -30,6 +28,7 @@ use super::game_over::GameOver;
 use super::physics::Knockback;
 use crate::game::enemy::Enemy;
 
+pub use player_action::PlayerAction;
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
@@ -51,6 +50,8 @@ impl Plugin for PlayerPlugin {
             GameTickUpdate,
             on_xp_heal.after(PlayerStateSet::Behavior),
         );
+        app.add_systems(GameTickUpdate, on_crit_heal);
+        app.add_systems(GameTickUpdate, apply_vitality_overclock);
         app.add_systems(Startup, load_dash_asset);
         app.add_systems(
             GameTickUpdate,
@@ -68,7 +69,7 @@ impl Plugin for PlayerPlugin {
                 .chain(),
         )
         .add_plugins((
-            InputManagerPlugin::<PlayerAction>::default(),
+            PlayerActionPlugin,
             PlayerBehaviorPlugin,
             PlayerTransitionPlugin,
             PlayerAnimationPlugin,
@@ -82,6 +83,8 @@ impl Plugin for PlayerPlugin {
                 .run_if(in_state(GameState::Playing))
                 .after(PlayerStateSet::Transition),
         );
+
+        app.add_systems(GameTickUpdate, update_serpentring_health);
     }
 }
 
@@ -127,20 +130,6 @@ pub struct PlayerGfx {
     pub e_gent: Entity,
 }
 
-#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
-pub enum PlayerAction {
-    Move,
-    Jump,
-    Attack,
-    Dash,
-    Whirl,
-    Stealth,
-    Fall,
-    SwapCombatStyle,
-    SwapMeleeWeapon,
-    Interact,
-    ToggleControlOverlay,
-}
 
 #[derive(Component, Debug, Deref, DerefMut)]
 pub struct Passives {
@@ -188,28 +177,36 @@ impl Passives {
 // they could also be components...limit only by the pickup/gain function instead of sized hashmap
 #[derive(Debug, Eq, PartialEq, Hash, EnumIter, Clone)]
 pub enum Passive {
-    /// Heal when killing an enemy
+    /// Heal after killing an enemy
     Bloodstone,
-    /// Crit every 3rd and 5th hit when low health
+    /// Crit on every 2nd and 3rd hit when on low health
     FlamingHeart,
-    /// Deal extra damage when backstabbing
+    /// Deal double damage when backstabbing
     IceDagger,
     /// Defense scaling based on number of enemies nearby
     GlowingShard,
-    /// Crits lower cooldown of all abilities by 0.5 sec
+    /// Crits lower cooldown of all abilities by 0.5 seconds
     ObsidianNecklace,
-    /// Increased damage while standing still, decreased while moving
+    /// Doubled damage & defence while standing still,but halved while moving
     HeavyBoots,
-    /// Move faster, get cdr, take double damage
+    /// Move faster, get cooldown redudction, but take double damage
     SerpentRing,
-    /// Increase cdr and lose health for every consecutive hit within 3 seconds
+    /// Sacrifice health but get increased cooldown reduction for every consecutive hit within 3 seconds
     FrenziedAttack,
     /// Deal more damage to packs of enemies
     PackKiller,
     /// Get increased defense when you're in the air, but become more vulnerable when on the ground.
     DeadlyFeather,
-    /// Scale damage based on distance between you and enemy.
-    Sniper,
+    /// Scale damage based on distance between you and nearest enemy
+    Sharpshooter,
+    /// Limits the damage taken from any attack to 1/3 of your maximum health.
+    ProtectiveSpirit,
+    /// Gain 1 extra jump.
+    RabbitsFoot,
+    /// Critical hits heal you
+    CriticalRegeneration,
+    /// Increases damage based on health percentage, at the cost of constant health degeneration.
+    VitalityOverclock,
 }
 
 impl Passive {
@@ -225,7 +222,11 @@ impl Passive {
             Passive::FrenziedAttack => "Frenzied Attack",
             Passive::PackKiller => "Pack Killer",
             Passive::DeadlyFeather => "Deadly Feather",
-            Passive::Sniper => "Sniper",
+            Passive::Sharpshooter => "Sharpshooter",
+            Passive::ProtectiveSpirit => "Protective Spirit",
+            Passive::RabbitsFoot => "Elastic Accelerator",
+            Passive::CriticalRegeneration => "Critical Regeneration",
+            Passive::VitalityOverclock => "Vitality Overclock",
         }
     }
 
@@ -235,13 +236,17 @@ impl Passive {
             Passive::FlamingHeart => "Crit on every 2nd and 3rd hit when on low health",
             Passive::IceDagger => "Deal double damage when backstabbing",
             Passive::GlowingShard => "Defense scaling based on number of enemies nearby",
-            Passive::ObsidianNecklace => "Crits lower cooldown of all abilities by 0.5 seconds",
+            Passive::ObsidianNecklace => "Get +11% crit chance. Crits lower cooldown of all abilities by 0.5 seconds",
             Passive::HeavyBoots => "Doubled damage & defence while standing still,but halved while moving",
-            Passive::SerpentRing => "Move faster, get cooldown redudction, but take double damage",
+            Passive::SerpentRing => "Move faster, get cooldown redudction, but your life gets cut in half",
             Passive::FrenziedAttack => "Sacrifice health but get increased cooldown reduction for every consecutive hit within 3 seconds",
             Passive::PackKiller => "Deal more damage to packs of enemies",
-            Passive::DeadlyFeather => "Deal extra damage, get faster cdr, and +50% crit chancewhen you're in the air, but become more vulnerable when on the ground",
-            Passive::Sniper => "Scale damage based on distance between you and nearest enemy",
+            Passive::DeadlyFeather => "Deal 50% extra damage, get faster cdr, and +50% crit chance when you're in the air, but become more vulnerable when on the ground",
+            Passive::Sharpshooter => "Scale damage based on distance between you and nearest enemy. Distance value only updated when Running.",
+            Passive::ProtectiveSpirit => "Damage you take from any attack is limited to 1/3rd of your maximum health",
+            Passive::RabbitsFoot => "Gain 1 extra jump, move 20% faster, and get +9% crit chance",
+            Passive::CriticalRegeneration => "Critical hits heal you",
+            Passive::VitalityOverclock => "Gain increased damage based on health percentage, at the cost of constant health degeneration",
         }
     }
 }
@@ -349,7 +354,6 @@ fn setup_player(
     for (mut xf_gent, e_gent, parent) in q.iter_mut() {
         // TODO: proper way of ensuring z is correct
         xf_gent.translation.z = 15.0 * 0.000001;
-        println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn(()).id();
         let mut passives = Passives::default();
@@ -401,54 +405,8 @@ fn setup_player(
             },
             // have to use builder here *i think* because of different types between keycode and
             // axis
-            InputManagerBundle::<PlayerAction> {
-                action_state: ActionState::default(),
-                input_map: InputMap::default()
-                    .with(PlayerAction::Jump, KeyCode::Space)
-                    .with(PlayerAction::Jump, KeyCode::KeyW)
-                    .with(PlayerAction::Jump, KeyCode::ArrowUp)
-                    .with(PlayerAction::Fall, KeyCode::ArrowDown)
-                    .with(PlayerAction::Fall, KeyCode::KeyS)
-                    .with(
-                        PlayerAction::Move,
-                        VirtualAxis::from_keys(KeyCode::KeyA, KeyCode::KeyD),
-                    )
-                    .with(
-                        PlayerAction::Move,
-                        VirtualAxis::from_keys(
-                            KeyCode::ArrowLeft,
-                            KeyCode::ArrowRight,
-                        ),
-                    )
-                    .with(PlayerAction::Attack, KeyCode::Digit1)
-                    .with(PlayerAction::Attack, KeyCode::KeyJ)
-                    .with(PlayerAction::Dash, KeyCode::KeyK)
-                    .with(PlayerAction::Dash, KeyCode::Digit2)
-                    .with(PlayerAction::Whirl, KeyCode::KeyL)
-                    .with(PlayerAction::Whirl, KeyCode::Digit3)
-                    .with(
-                        PlayerAction::Stealth,
-                        KeyCode::Semicolon,
-                    )
-                    .with(PlayerAction::Stealth, KeyCode::Digit4)
-                    .with(
-                        PlayerAction::SwapCombatStyle,
-                        KeyCode::KeyH,
-                    )
-                    .with(
-                        PlayerAction::SwapCombatStyle,
-                        KeyCode::Backquote,
-                    )
-                    .with(
-                        PlayerAction::SwapMeleeWeapon,
-                        KeyCode::KeyG,
-                    )
-                    .with(PlayerAction::Interact, KeyCode::KeyF)
-                    .with(
-                        PlayerAction::ToggleControlOverlay,
-                        KeyCode::KeyC,
-                    ),
-            },
+        
+            PlayerAction::input_manager_bundle(),
             // bundling things up because we reached max tuple
             (
                 Falling,
@@ -633,13 +591,11 @@ pub struct Dashing {
 impl Dashing {
     pub fn from_action_state(action_state: &ActionState<PlayerAction>) -> Self {
         if action_state.pressed(&PlayerAction::Fall) {
-            println!("dashing down!");
             Self {
                 dash_type: DashType::Downward,
                 ..default()
             }
         } else {
-            println!("dashing horizontally!");
             Self {
                 dash_type: DashType::Horizontal,
                 ..default()
@@ -993,8 +949,6 @@ fn load_player_config(
     if !*initialized_config {
         if let Some(cfg) = cfgs.get(cfg_handle.clone()) {
             update_player_config(&mut player_config, cfg);
-            println!("init:");
-            dbg!(&player_config);
         }
         *initialized_config = true;
     }
@@ -1002,11 +956,7 @@ fn load_player_config(
         if let AssetEvent::Modified { id } = ev {
             if let Some(cfg) = cfgs.get(*id) {
                 if cfg_handle.id() == *id {
-                    println!("before:");
-                    dbg!(&player_config);
                     update_player_config(&mut player_config, cfg);
-                    println!("after:");
-                    dbg!(&player_config);
                 }
             }
         }
@@ -1190,8 +1140,6 @@ impl PlayerStats {
 
             self.effective_stats.insert(*stat, val);
         }
-
-        println!("{:?}", self.effective_stats);
     }
 }
 
@@ -1204,6 +1152,7 @@ pub struct PlayerStatMod {
     pub defense: f32,
     pub speed: f32,
     pub cdr: f32,
+    pub sharpshooter_multiplier: f32,
 }
 
 impl PlayerStatMod {
@@ -1213,6 +1162,7 @@ impl PlayerStatMod {
             defense: 1.,
             speed: 1.,
             cdr: 1.,
+            sharpshooter_multiplier: 1.,
         }
     }
 }
@@ -1225,18 +1175,21 @@ fn player_update_passive_buffs(
         &EnemiesNearby,
         &BuffTick,
         &mut PlayerStatMod,
+        &Health,
         Option<&Grounded>,
         Has<Stealthing>,
+        Option<&Idle>,
+        Option<&Running>,
+        Option<&Jumping>,
     )>,
     enemy_q: Query<&GlobalTransform, With<Enemy>>,
 ) {
-    for (passives, vel, transform, enemies_nearby, buff_tick, mut stat_mod, grounded, is_stealth) in
-        query.iter_mut()
-    {
+    for (passives, vel, transform, enemies_nearby, buff_tick, mut stat_mod, health, grounded, is_stealth, idle, running, jumping) in query.iter_mut() {
         let mut attack = 1.;
         let mut defense = 1.;
         let mut speed = 1.;
         let mut cdr = 1.;
+        let mut sharpshooter_mult = stat_mod.sharpshooter_multiplier;
 
         if passives.contains(&Passive::GlowingShard) {
             defense *= 1. + 1. * enemies_nearby.0 as f32;
@@ -1244,7 +1197,9 @@ fn player_update_passive_buffs(
         if passives.contains(&Passive::SerpentRing) {
             speed *= 1.2;
             cdr *= 1.33;
-            defense *= 0.5;
+        }
+        if passives.contains(&Passive::RabbitsFoot) {
+            speed *= 1.2;
         }
         if passives.contains(&Passive::HeavyBoots) {
             if vel.0.length() > 0.0001 {
@@ -1259,21 +1214,19 @@ fn player_update_passive_buffs(
             cdr *= 1. + (0.1 * buff_tick.stacks as f32).min(1.);
         }
         if passives.contains(&Passive::DeadlyFeather) {
-            if grounded.is_some() {
-                attack *= 0.5;
-                cdr *= 0.7;
-                defense *= 0.5;
-            } else {
+            if grounded.is_none() {
                 attack *= 1.5;
                 cdr *= 1.3;
+            } else {
+                defense *= 0.5;
             }
         }
         if is_stealth {
             attack *= 2.;
         }
 
-        if passives.contains(&Passive::Sniper) {
-            if vel.0.y >= 0.0 {
+        if passives.contains(&Passive::Sharpshooter) {
+            if running.is_some() {
                 let player_pos = transform.translation().truncate();
                 let mut nearest_distance = f32::MAX;
 
@@ -1285,10 +1238,10 @@ fn player_update_passive_buffs(
                     }
                 }
 
-                let multiplier = if nearest_distance >= 150.0 {
-                    4.0
-                } else if nearest_distance >= 120.0 {
+                sharpshooter_mult = if nearest_distance >= 150.0 {
                     3.0
+                } else if nearest_distance >= 120.0 {
+                    2.5
                 } else if nearest_distance >= 90.0 {
                     2.0
                 } else if nearest_distance >= 60.0 {
@@ -1298,8 +1251,24 @@ fn player_update_passive_buffs(
                 } else {
                     1.0
                 };
-                attack *= multiplier;
             }
+            attack *= sharpshooter_mult;
+        }
+
+        if passives.contains(&Passive::VitalityOverclock) {
+            let ratio = health.current as f32 / health.max as f32;
+            let multiplier = if ratio >= 0.9 {
+                3.0
+            } else if ratio >= 0.7 {
+                2.0
+            } else if ratio >= 0.5 {
+                1.5
+            } else if ratio >= 0.25 {
+                1.25
+            } else {
+                1.0
+            };
+            attack *= multiplier;
         }
 
         *stat_mod = PlayerStatMod {
@@ -1307,6 +1276,7 @@ fn player_update_passive_buffs(
             defense,
             speed,
             cdr,
+            sharpshooter_multiplier: sharpshooter_mult,
         };
     }
 }
@@ -1346,6 +1316,7 @@ fn player_update_stats_mod(
         }
     }
 }
+
 #[derive(Component)]
 pub struct DashIcon {
     time: f32,
@@ -1602,6 +1573,70 @@ fn track_hits(
         }
         if buff.falloff == 0 {
             buff.stacks = 0
+        }
+    }
+}
+
+fn update_serpentring_health(
+    query: Query<(&Passives, Option<&Grounded>), With<Player>>,
+    mut health_q: Query<&mut Health, With<Player>>,
+    config: Res<PlayerConfig>,
+) {
+    if let Ok((passives, grounded)) = query.get_single() {
+        if let Ok(mut health) = health_q.get_single_mut() {
+            if passives.contains(&Passive::SerpentRing) {
+            
+                // Halve the max health when grounded.
+                let new_max = ((config.max_health as f32) / 4.0) as u32;
+                health.max = new_max;
+                // Ensure current health does not exceed the new maximum.
+                if health.current > new_max {
+                    health.current = new_max;
+                }
+            } else {
+                health.max = config.max_health as u32;
+            }
+        }
+    }
+}
+
+/// When an attack hit is critical, heal the attacker if they have CriticalRegeneration.
+fn on_crit_heal(
+    attack_query: Query<&Attack, (With<Crit>, Added<Hit>)>,
+    mut player_query: Query<(&Passives, &mut Health), With<Player>>,
+) {
+    for attack in attack_query.iter() {
+        if let Ok((passives, mut health)) = player_query.get_mut(attack.attacker) {
+            if passives.contains(&Passive::CriticalRegeneration) {
+                // Heal 2 points, capped at player's max health.
+                health.current = (health.current + 24).min(health.max);
+            }
+        }
+    }
+}
+
+/// Increases player's attack and applies constant health degeneration.
+fn apply_vitality_overclock(
+    mut query: Query<(&Passives, &mut Health, &mut PlayerStatMod), With<Player>>,
+    mut tick: Local<u32>,
+) {
+    *tick += 1;
+    for (passives, mut health, mut stat_mod) in query.iter_mut() {
+        if passives.contains(&Passive::VitalityOverclock) {
+
+            let mut deg_rate = 0;
+
+            if  passives.contains(&Passive::SerpentRing) {
+                deg_rate = 40
+            } else {
+                deg_rate = 20
+
+            }
+            // Every n ticks (depending on deg_tick rate), apply the health degeneration.
+            if *tick % deg_rate == 0 && health.current > 1 {
+                let mut deg = 1;
+                health.current = health.current.saturating_sub(deg);
+            }
         }
     }
 }
