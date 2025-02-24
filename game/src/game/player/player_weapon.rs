@@ -5,10 +5,9 @@ use strum_macros::Display;
 use theseeker_engine::prelude::{Commands, DetectChanges, OnEnter};
 use theseeker_engine::time::GameTickUpdate;
 
+use super::{PlayerConfig, PlayerStateSet};
 use crate::game::player::{Player, PlayerAction};
 use crate::prelude::{App, AppState, Plugin, Query, ResMut, Resource, With};
-
-use super::{PlayerConfig, PlayerStateSet};
 
 pub(crate) struct PlayerWeaponPlugin;
 
@@ -17,13 +16,18 @@ impl Plugin for PlayerWeaponPlugin {
         app.init_resource::<PlayerMeleeWeapon>();
         app.init_resource::<PlayerRangedWeapon>();
         app.init_resource::<PlayerCombatStyle>();
+        app.init_resource::<PlayerSwitchStyle>();
         app.add_systems(
             OnEnter(AppState::InGame),
             initialize_resources,
         );
         app.add_systems(
             GameTickUpdate,
-            ((swap_combat_style, swap_melee_weapon)
+            ((
+                swap_combat_style,
+                swap_switch_style,
+                swap_melee_weapon,
+            )
                 .chain()
                 .before(PlayerStateSet::Behavior))
             .run_if(in_state(AppState::InGame)),
@@ -46,6 +50,13 @@ pub enum PlayerCombatStyle {
 }
 
 #[derive(Resource, Default, PartialEq, Eq, Display)]
+pub enum PlayerSwitchStyle {
+    #[default]
+    Auto,
+    Manual,
+}
+
+#[derive(Resource, Default, PartialEq, Eq, Display)]
 pub enum PlayerMeleeWeapon {
     Hammer,
     #[default]
@@ -56,18 +67,22 @@ impl PlayerMeleeWeapon {
     pub fn pushback_values(&self, config: &PlayerConfig) -> PushbackValues {
         let (pushback, pushback_ticks, self_pushback, self_pushback_ticks) =
             match self {
-                Self::Hammer => (
-                    config.hammer_pushback,
-                    config.hammer_pushback_ticks,
-                    config.hammer_self_pushback,
-                    config.hammer_self_pushback_ticks,
-                ),
-                Self::Sword => (
-                    config.sword_pushback,
-                    config.sword_pushback_ticks,
-                    config.sword_self_pushback,
-                    config.sword_self_pushback_ticks,
-                ),
+                Self::Hammer => {
+                    (
+                        config.hammer_pushback,
+                        config.hammer_pushback_ticks,
+                        config.hammer_self_pushback,
+                        config.hammer_self_pushback_ticks,
+                    )
+                },
+                Self::Sword => {
+                    (
+                        config.sword_pushback,
+                        config.sword_pushback_ticks,
+                        config.sword_self_pushback,
+                        config.sword_self_pushback_ticks,
+                    )
+                },
             };
 
         PushbackValues {
@@ -88,6 +103,7 @@ pub enum PlayerRangedWeapon {
 #[derive(SystemParam)]
 pub struct CurrentWeapon<'w> {
     combat_style: Res<'w, PlayerCombatStyle>,
+    switch_style: Res<'w, PlayerSwitchStyle>,
     melee_weapon: Res<'w, PlayerMeleeWeapon>,
     ranged_weapon: Res<'w, PlayerRangedWeapon>,
 }
@@ -97,6 +113,7 @@ impl CurrentWeapon<'_> {
         self.combat_style.is_changed()
             || self.melee_weapon.is_changed()
             || self.ranged_weapon.is_changed()
+            || self.switch_style.is_changed()
     }
 
     pub fn get_anim_key(&self, action: &str) -> String {
@@ -130,6 +147,7 @@ fn initialize_resources(mut commands: Commands) {
     commands.insert_resource(PlayerMeleeWeapon::default());
     commands.insert_resource(PlayerRangedWeapon::default());
     commands.insert_resource(PlayerCombatStyle::default());
+    commands.insert_resource(PlayerSwitchStyle::default());
 }
 
 fn swap_combat_style(
@@ -141,6 +159,19 @@ fn swap_combat_style(
             *combat_style = match *combat_style {
                 PlayerCombatStyle::Ranged => PlayerCombatStyle::Melee,
                 PlayerCombatStyle::Melee => PlayerCombatStyle::Ranged,
+            };
+        }
+    }
+}
+fn swap_switch_style(
+    mut switch_style: ResMut<PlayerSwitchStyle>,
+    query: Query<&ActionState<PlayerAction>, With<Player>>,
+) {
+    for action_state in &query {
+        if action_state.just_pressed(&PlayerAction::SwapSwitchStyle) {
+            *switch_style = match *switch_style {
+                PlayerSwitchStyle::Auto => PlayerSwitchStyle::Manual,
+                PlayerSwitchStyle::Manual => PlayerSwitchStyle::Auto,
             };
         }
     }

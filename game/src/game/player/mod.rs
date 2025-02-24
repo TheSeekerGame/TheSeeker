@@ -20,14 +20,13 @@ use theseeker_engine::physics::{
     Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER,
 };
 
+use super::game_over::GameOver;
+use super::physics::Knockback;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
 use crate::game::pickups::DropTracker;
 use crate::game::xp_orbs::XpOrbPickup;
 use crate::prelude::*;
-
-use super::game_over::GameOver;
-use super::physics::Knockback;
 
 pub struct PlayerPlugin;
 
@@ -136,6 +135,7 @@ pub enum PlayerAction {
     Stealth,
     Fall,
     SwapCombatStyle,
+    SwapSwitchStyle,
     SwapMeleeWeapon,
     Interact,
     ToggleControlOverlay,
@@ -421,6 +421,10 @@ fn setup_player(
                     .with(
                         PlayerAction::SwapCombatStyle,
                         KeyCode::KeyH,
+                    )
+                    .with(
+                        PlayerAction::SwapSwitchStyle,
+                        KeyCode::KeyT,
                     )
                     .with(
                         PlayerAction::SwapCombatStyle,
