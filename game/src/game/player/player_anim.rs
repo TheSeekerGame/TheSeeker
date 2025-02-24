@@ -1,18 +1,19 @@
+use bevy::ecs::event::EventReader;
 use bevy::prelude::{DetectChanges, Ref};
+use leafwing_input_manager::prelude::ActionState;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::LinearVelocity;
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 use theseeker_engine::script::ScriptPlayer;
-use bevy::ecs::event::EventReader;
 
-use super::DashStrike;
+use super::{DashStrike, PlayerAction};
 use crate::appstate::AppState;
 use crate::game::gentstate::Facing;
 use crate::game::player::{
     Attacking, CanAttack, Dashing, Falling, HitFreezeTime, Idle, Jumping,
-    PlayerConfig, PlayerGfx, PlayerStateSet, Running, WallSlideTime, Whirling,
-    Passive, Passives, Player,
+    Passive, Passives, Player, PlayerConfig, PlayerGfx, PlayerStateSet,
+    Running, WallSlideTime, Whirling,
 };
 use crate::prelude::{
     in_state, Added, App, Has, IntoSystemConfigs, Local, Or, Plugin, Query,
@@ -20,8 +21,8 @@ use crate::prelude::{
 };
 
 use super::player_weapon::CurrentWeapon;
-use crate::game::xp_orbs::XpOrbPickup;
 use crate::game::attack::DamageInfo;
+use crate::game::xp_orbs::XpOrbPickup;
 
 /// play animations here, run after transitions
 pub struct PlayerAnimationPlugin;
@@ -43,7 +44,7 @@ impl Plugin for PlayerAnimationPlugin {
                 update_serpent_ring_slot.after(sprite_flip),
                 update_frenzied_attack_slot.after(update_serpent_ring_slot),
                 xp_orb_animation_handler,
-                player_damage_animation_handler
+                player_damage_animation_handler,
             )
                 .in_set(PlayerStateSet::Animation)
                 .after(PlayerStateSet::Transition)
@@ -153,31 +154,43 @@ fn player_attacking_animation(
     query: Query<
         (
             &Gent,
+            &ActionState<PlayerAction>,
             Has<Falling>,
             Has<Jumping>,
             Has<Running>,
             Option<&HitFreezeTime>,
             Ref<Attacking>,
         ),
-        Without<Whirling>,
+        (With<Player>, Without<Whirling>),
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     config: Res<PlayerConfig>,
     weapon: CurrentWeapon,
 ) {
-    for (gent, is_falling, is_jumping, is_running, hitfrozen, attacking) in
-        query.iter()
+    for (
+        gent,
+        player_action,
+        is_falling,
+        is_jumping,
+        is_running,
+        hitfrozen,
+        attacking,
+    ) in query.iter()
     {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             let hitfrozen = hitfrozen
                 .map(|f| f.0 < config.hitfreeze_ticks)
                 .unwrap_or(false);
             player.set_slot("AttackTransition", false);
+            player.set_slot("DownwardAttack", false);
             let basic_air_anim_key_str = &weapon.get_anim_key("BasicAir");
             let basic_run_anim_key_str = &weapon.get_anim_key("BasicRun");
             let basic_idle_anim_key_str = &weapon.get_anim_key("BasicIdle");
 
             if is_falling || is_jumping {
+                if player_action.pressed(&PlayerAction::Fall) {
+                    player.set_slot("DownwardAttack", true);
+                }
                 // TODO: These need a way to resume the new animation from the current frame index
                 // or specified offset
                 if player.current_key() != Some(basic_air_anim_key_str) {
@@ -323,7 +336,7 @@ fn update_frenzied_attack_slot(
 
 fn xp_orb_animation_handler(
     mut xp_events: EventReader<XpOrbPickup>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     let xp_event_occurred = !xp_events.is_empty();
     for mut anim in gfx_query.iter_mut() {
@@ -337,7 +350,7 @@ fn xp_orb_animation_handler(
 
 fn player_damage_animation_handler(
     mut damage_events: EventReader<DamageInfo>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     let damaged_event_occurred = !damage_events.is_empty();
     for mut anim in gfx_query.iter_mut() {

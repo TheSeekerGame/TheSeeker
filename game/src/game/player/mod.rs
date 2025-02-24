@@ -578,10 +578,6 @@ impl Dashing {
         self.dash_type == DashType::Downward
     }
 
-    pub fn is_horizontal_dash(&self) -> bool {
-        self.dash_type == DashType::Horizontal
-    }
-
     pub fn set_player_velocity(
         &self,
         velocity: &mut LinearVelocity,
@@ -701,6 +697,12 @@ pub struct CoyoteTime(f32);
 
 #[derive(Component, Default, Debug)]
 pub struct JumpCount(u8);
+
+impl JumpCount {
+    pub fn reset(&mut self) {
+        self.0 = 2;
+    }
+}
 
 /// Indicates that sliding is tracked for this entity
 #[derive(Component, Default, Debug)]
