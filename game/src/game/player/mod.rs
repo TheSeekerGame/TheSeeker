@@ -1,11 +1,10 @@
+mod player_action;
 mod player_anim;
 mod player_behaviour;
 pub mod player_weapon;
 use bevy::utils::hashbrown::HashMap;
 use leafwing_input_manager::action_state::ActionState;
-use leafwing_input_manager::axislike::VirtualAxis;
-use leafwing_input_manager::input_map::InputMap;
-use leafwing_input_manager::{Actionlike, InputManagerBundle};
+use player_action::PlayerActionPlugin;
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
 use player_weapon::PlayerWeaponPlugin;
@@ -15,7 +14,6 @@ use strum_macros::EnumIter;
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
-use theseeker_engine::input::InputManagerPlugin;
 use theseeker_engine::physics::{
     Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER,
 };
@@ -27,6 +25,11 @@ use crate::game::gentstate::*;
 use crate::game::pickups::DropTracker;
 use crate::game::xp_orbs::XpOrbPickup;
 use crate::prelude::*;
+
+use super::game_over::GameOver;
+use super::physics::Knockback;
+
+pub use player_action::PlayerAction;
 
 pub struct PlayerPlugin;
 
@@ -66,7 +69,7 @@ impl Plugin for PlayerPlugin {
                 .chain(),
         )
         .add_plugins((
-            InputManagerPlugin::<PlayerAction>::default(),
+            PlayerActionPlugin,
             PlayerBehaviorPlugin,
             PlayerTransitionPlugin,
             PlayerAnimationPlugin,
@@ -385,60 +388,7 @@ fn setup_player(
                 current: config.max_health,
                 max: config.max_health,
             },
-            // have to use builder here *i think* because of different types between keycode and
-            // axis
-            InputManagerBundle::<PlayerAction> {
-                action_state: ActionState::default(),
-                input_map: InputMap::default()
-                    .with(PlayerAction::Jump, KeyCode::Space)
-                    .with(PlayerAction::Jump, KeyCode::KeyW)
-                    .with(PlayerAction::Jump, KeyCode::ArrowUp)
-                    .with(PlayerAction::Fall, KeyCode::ArrowDown)
-                    .with(PlayerAction::Fall, KeyCode::KeyS)
-                    .with(
-                        PlayerAction::Move,
-                        VirtualAxis::from_keys(KeyCode::KeyA, KeyCode::KeyD),
-                    )
-                    .with(
-                        PlayerAction::Move,
-                        VirtualAxis::from_keys(
-                            KeyCode::ArrowLeft,
-                            KeyCode::ArrowRight,
-                        ),
-                    )
-                    .with(PlayerAction::Attack, KeyCode::Digit1)
-                    .with(PlayerAction::Attack, KeyCode::KeyJ)
-                    .with(PlayerAction::Dash, KeyCode::KeyK)
-                    .with(PlayerAction::Dash, KeyCode::Digit2)
-                    .with(PlayerAction::Whirl, KeyCode::KeyL)
-                    .with(PlayerAction::Whirl, KeyCode::Digit3)
-                    .with(
-                        PlayerAction::Stealth,
-                        KeyCode::Semicolon,
-                    )
-                    .with(PlayerAction::Stealth, KeyCode::Digit4)
-                    .with(
-                        PlayerAction::SwapCombatStyle,
-                        KeyCode::KeyH,
-                    )
-                    .with(
-                        PlayerAction::SwapSwitchStyle,
-                        KeyCode::KeyT,
-                    )
-                    .with(
-                        PlayerAction::SwapCombatStyle,
-                        KeyCode::Backquote,
-                    )
-                    .with(
-                        PlayerAction::SwapMeleeWeapon,
-                        KeyCode::KeyG,
-                    )
-                    .with(PlayerAction::Interact, KeyCode::KeyF)
-                    .with(
-                        PlayerAction::ToggleControlOverlay,
-                        KeyCode::KeyC,
-                    ),
-            },
+            PlayerAction::input_manager_bundle(),
             // bundling things up because we reached max tuple
             (
                 Falling,
