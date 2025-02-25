@@ -1,11 +1,9 @@
-use leafwing_input_manager::{
-    axislike::AxisType,
-    prelude::{
-        Actionlike, InputMap, SingleAxis, VirtualAxis,
-        WithAxisProcessingPipelineExt,
-    },
-    InputManagerBundle,
+use leafwing_input_manager::axislike::AxisType;
+use leafwing_input_manager::prelude::{
+    Actionlike, InputMap, SingleAxis, VirtualAxis,
+    WithAxisProcessingPipelineExt,
 };
+use leafwing_input_manager::InputManagerBundle;
 use theseeker_engine::input::InputManagerPlugin;
 
 use crate::prelude::*;
@@ -28,6 +26,7 @@ pub enum PlayerAction {
     Stealth,
     Fall,
     SwapCombatStyle,
+    SwapSwitchStyle,
     SwapMeleeWeapon,
     Interact,
     ToggleControlOverlay,
@@ -54,6 +53,7 @@ impl PlayerAction {
             (Self::Stealth, KeyCode::Digit4),
             (Self::Stealth, KeyCode::Semicolon),
             (Self::SwapCombatStyle, KeyCode::KeyH),
+            (Self::SwapSwitchStyle, KeyCode::KeyT),
             (
                 Self::SwapCombatStyle,
                 KeyCode::Backquote,
@@ -110,6 +110,10 @@ impl PlayerAction {
             (
                 Self::SwapCombatStyle,
                 GamepadButtonType::LeftTrigger,
+            ),
+            (
+                Self::SwapSwitchStyle,
+                GamepadButtonType::Mode,
             ),
             (
                 Self::SwapMeleeWeapon,

@@ -4,6 +4,7 @@ mod player_behaviour;
 pub mod player_weapon;
 use bevy::utils::hashbrown::HashMap;
 use leafwing_input_manager::action_state::ActionState;
+pub use player_action::PlayerAction;
 use player_action::PlayerActionPlugin;
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
@@ -25,11 +26,6 @@ use crate::game::gentstate::*;
 use crate::game::pickups::DropTracker;
 use crate::game::xp_orbs::XpOrbPickup;
 use crate::prelude::*;
-
-use super::game_over::GameOver;
-use super::physics::Knockback;
-
-pub use player_action::PlayerAction;
 
 pub struct PlayerPlugin;
 
@@ -126,22 +122,6 @@ pub struct Player;
 #[derive(Component)]
 pub struct PlayerGfx {
     pub e_gent: Entity,
-}
-
-#[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
-pub enum PlayerAction {
-    Move,
-    Jump,
-    Attack,
-    Dash,
-    Whirl,
-    Stealth,
-    Fall,
-    SwapCombatStyle,
-    SwapSwitchStyle,
-    SwapMeleeWeapon,
-    Interact,
-    ToggleControlOverlay,
 }
 
 #[derive(Component, Debug, Deref, DerefMut)]
