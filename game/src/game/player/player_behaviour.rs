@@ -15,13 +15,14 @@ use theseeker_engine::script::ScriptPlayer;
 
 use super::arc_attack::{Arrow, Projectile};
 use super::player_weapon::{
-    PlayerCombatStyle, PlayerMeleeWeapon, PushbackValues,
+    PlayerCombatStyle, PlayerMeleeWeapon, PlayerSwitchStyle, PushbackValues,
 };
 use super::{
     dash_icon_fx, player_dash_fx, AttackBundle, CanStealth, DashIcon,
     DashStrike, DashType, JumpCount, Knockback, Passives, PlayerStats,
     Pushback, StatType, Stealthing, Whirling,
 };
+use crate::camera::CameraShake;
 use crate::game::attack::{Attack, SelfPushback, Stealthed};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
@@ -31,14 +32,13 @@ use crate::game::pickups::{
 };
 use crate::game::player::{
     Attacking, CanAttack, CanDash, CoyoteTime, Dashing, Falling, Grounded,
-    HitFreezeTime, Idle, Jumping, Player, PlayerAction, PlayerConfig,
-    PlayerGfx, PlayerStateSet, Running, WallSlideTime, WhirlAbility,
+    HitFreezeTime, Idle, Jumping, Passive, Player, PlayerAction, PlayerConfig,
+    PlayerGfx, PlayerStatMod, PlayerStateSet, Running, WallSlideTime,
+    WhirlAbility,
 };
 use crate::prelude::*;
 use crate::ui::popup::{PopupTimer, PopupUi};
 use crate::StateDespawnMarker;
-use crate::{camera::CameraShake, game::player::PlayerStatMod};
-use crate::game::player::Passive;
 
 /// Player behavior systems.
 /// Do stuff here in states and add transitions to other states by pushing
@@ -1197,9 +1197,11 @@ fn player_attack(
     >,
     mut commands: Commands,
     config: Res<PlayerConfig>,
-    combat_style: Res<PlayerCombatStyle>,
+    mut combat_style: ResMut<PlayerCombatStyle>,
+    switch_style: Res<PlayerSwitchStyle>,
     melee_weapon: Res<PlayerMeleeWeapon>,
     time: Res<GameTime>,
+    spatial_query: Res<PhysicsWorld>,
 ) {
     for (
         entity,
@@ -1216,6 +1218,23 @@ fn player_attack(
     ) in query.iter_mut()
     {
         if attacking.ticks == 0 {
+            if matches!(*switch_style, PlayerSwitchStyle::Auto) {
+                let collider = Collider::empty(InteractionGroups::new(
+                    PLAYER_ATTACK,
+                    ENEMY_HURT,
+                ));
+                let intersections = spatial_query.intersect(
+                    transform.translation.xy(),
+                    collider.0.shape(),
+                    collider.0.collision_groups().with_filter(ENEMY_HURT),
+                    None,
+                );
+                *combat_style = if intersections.is_empty() {
+                    PlayerCombatStyle::Ranged
+                } else {
+                    PlayerCombatStyle::Melee
+                };
+            }
             let attack = match *combat_style {
                 PlayerCombatStyle::Ranged => {
                     let mut animation: ScriptPlayer<SpriteAnimation> =
@@ -1259,8 +1278,8 @@ fn player_attack(
                             },
                             Projectile { vel },
                             Collider::cuboid(
-                                //TODO: temp fix of extending collider length to account for
-                                //tunneling
+                                // TODO: temp fix of extending collider length to account for
+                                // tunneling
                                 arrow_length,
                                 3.0,
                                 InteractionGroups::new(
@@ -1294,20 +1313,24 @@ fn player_attack(
                         pushback,
                         pushback_ticks,
                     ) = match *melee_weapon {
-                        PlayerMeleeWeapon::Hammer => (
-                            config.hammer_attack_damage,
-                            config.hammer_self_pushback,
-                            config.hammer_self_pushback_ticks,
-                            config.hammer_pushback,
-                            config.hammer_pushback_ticks,
-                        ),
-                        PlayerMeleeWeapon::Sword => (
-                            config.sword_attack_damage,
-                            config.sword_self_pushback,
-                            config.sword_self_pushback_ticks,
-                            config.sword_pushback,
-                            config.sword_pushback_ticks,
-                        ),
+                        PlayerMeleeWeapon::Hammer => {
+                            (
+                                config.hammer_attack_damage,
+                                config.hammer_self_pushback,
+                                config.hammer_self_pushback_ticks,
+                                config.hammer_pushback,
+                                config.hammer_pushback_ticks,
+                            )
+                        },
+                        PlayerMeleeWeapon::Sword => {
+                            (
+                                config.sword_attack_damage,
+                                config.sword_self_pushback,
+                                config.sword_self_pushback_ticks,
+                                config.sword_pushback,
+                                config.sword_pushback_ticks,
+                            )
+                        },
                     };
 
                     // Slow the player down when they attack with the Hammer
@@ -1413,7 +1436,7 @@ pub fn player_whirl(
             &PlayerStatMod,
             Has<Stealthing>,
             &Gent,
-            &Passives
+            &Passives,
         ),
         (
             With<Player>,
@@ -1472,27 +1495,40 @@ pub fn player_whirl(
                 // For Sword: default = 16, if (SerpentRing or FrenziedAttack) active then 12
                 // For Hammer: default = 24, if (SerpentRing or FrenziedAttack) active then 18
                 let lifetime = if *melee_weapon == PlayerMeleeWeapon::Hammer {
-                    if passives.contains(&Passive::SerpentRing) || passives.contains(&Passive::FrenziedAttack) {
+                    if passives.contains(&Passive::SerpentRing)
+                        || passives.contains(&Passive::FrenziedAttack)
+                    {
                         18
                     } else {
                         24
                     }
                 } else {
-                    if passives.contains(&Passive::SerpentRing) || passives.contains(&Passive::FrenziedAttack) {
+                    if passives.contains(&Passive::SerpentRing)
+                        || passives.contains(&Passive::FrenziedAttack)
+                    {
                         12
                     } else {
                         16
                     }
                 };
 
-                let damage = if *melee_weapon == PlayerMeleeWeapon::Hammer { 51.0 } else { 33.0 } * stat_mod.attack;
+                let damage = if *melee_weapon == PlayerMeleeWeapon::Hammer {
+                    51.0
+                } else {
+                    33.0
+                } * stat_mod.attack;
                 let new_attack = commands
                     .spawn((
                         AttackBundle {
                             attack: Attack::new(lifetime, entity, damage),
-                            collider: Collider::empty(InteractionGroups::new(PLAYER_ATTACK, ENEMY_HURT)),
+                            collider: Collider::empty(InteractionGroups::new(
+                                PLAYER_ATTACK,
+                                ENEMY_HURT,
+                            )),
                         },
-                        TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+                        TransformBundle::from_transform(Transform::from_xyz(
+                            0.0, 0.0, 0.0,
+                        )),
                         AnimationCollider(gent.e_gfx),
                     ))
                     .set_parent(entity)

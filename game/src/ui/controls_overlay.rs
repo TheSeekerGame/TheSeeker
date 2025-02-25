@@ -3,8 +3,7 @@ use bevy::prelude::*;
 use bevy::utils;
 use leafwing_input_manager::prelude::ActionState;
 
-use super::popup::PopupTimer;
-use super::popup::PopupUi;
+use super::popup::{PopupTimer, PopupUi};
 use super::AppState;
 use crate::game::player::PlayerAction;
 
@@ -122,6 +121,10 @@ fn spawn_control_overlay(mut commands: Commands) {
                     row.control_icon("`");
                     row.text(" or ");
                     row.control_icon("L1");
+                });
+                container.row().with_children(|row| {
+                    row.text("Toggle Autoswap Weapon: ");
+                    row.control_icon("T");
                 });
                 container.row().with_children(|row| {
                     row.text("Swap Melee Weapon: ");

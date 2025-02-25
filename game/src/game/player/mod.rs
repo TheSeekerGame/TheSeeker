@@ -4,6 +4,7 @@ mod player_behaviour;
 pub mod player_weapon;
 use bevy::utils::hashbrown::HashMap;
 use leafwing_input_manager::action_state::ActionState;
+pub use player_action::PlayerAction;
 use player_action::PlayerActionPlugin;
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
@@ -18,16 +19,13 @@ use theseeker_engine::physics::{
     Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER,
 };
 
+use super::game_over::GameOver;
+use super::physics::Knockback;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
 use crate::game::pickups::DropTracker;
 use crate::game::xp_orbs::XpOrbPickup;
 use crate::prelude::*;
-
-use super::game_over::GameOver;
-use super::physics::Knockback;
-
-pub use player_action::PlayerAction;
 
 pub struct PlayerPlugin;
 
