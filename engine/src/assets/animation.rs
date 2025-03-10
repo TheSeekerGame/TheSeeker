@@ -88,14 +88,14 @@ pub enum SpriteAnimationScriptAction {
         /// Use this bookmark
         to_frame_bookmark: Option<String>,
         /// The frame index
-        frame_index: Option<FrameId>,
+        frame_index: Option<OneOrMany<FrameId>>,
     },
     /// Change the next frame to be displayed, after `ticks_per_frame` elapses.
     SetFrameNext {
         /// Use this bookmark
         to_frame_bookmark: Option<String>,
         /// The frame index
-        frame_index: Option<FrameId>,
+        frame_index: Option<OneOrMany<FrameId>>,
     },
     /// Set sprite colorization
     SetSpriteColor {

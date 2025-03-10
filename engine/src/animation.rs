@@ -1,5 +1,7 @@
 use bevy::ecs::system::lifetimeless::*;
 use bevy::ecs::system::SystemParam;
+use std::cell::RefCell;
+use std::thread_local;
 
 use crate::assets::animation::*;
 use crate::assets::script::*;
@@ -7,6 +9,11 @@ use crate::data::OneOrMany;
 use crate::prelude::*;
 use crate::script::common::ExtendedScriptTracker;
 use crate::script::*;
+
+// Thread-local storage for the matched frame index
+thread_local! {
+    static MATCHED_FRAME_INDEX: RefCell<Option<usize>> = RefCell::new(None);
+}
 
 pub struct SpriteAnimationPlugin;
 
@@ -125,6 +132,11 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
         _action_id: ActionId,
         (q_self,): &mut <Self::ShouldRunParam as SystemParam>::Item<'_, '_>,
     ) -> Result<(), ScriptUpdateResult> {
+        // Reset the matched index at the start
+        MATCHED_FRAME_INDEX.with(|cell| {
+            *cell.borrow_mut() = None;
+        });
+
         if let Some(oldanim_index) = tracker.carryover.frame {
             if let Some(lt) = &self.if_oldanim_frame_lt {
                 if oldanim_index >= *lt {
@@ -152,12 +164,26 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
                         if oldanim_index != *f {
                             return Err(ScriptUpdateResult::NormalRun);
                         }
+                        // For single values, always use matched index 0
+                        MATCHED_FRAME_INDEX.with(|cell| {
+                            *cell.borrow_mut() = Some(0);
+                        });
                     },
-                    OneOrMany::Many(f) => {
-                        for f in f.iter() {
-                            if oldanim_index != *f {
-                                return Err(ScriptUpdateResult::NormalRun);
+                    OneOrMany::Many(frames) => {
+                        // Check if oldanim_index matches any frame in the array
+                        let mut found = false;
+                        for (idx, &f) in frames.iter().enumerate() {
+                            if oldanim_index == f {
+                                found = true;
+                                // Store which index in the array matched
+                                MATCHED_FRAME_INDEX.with(|cell| {
+                                    *cell.borrow_mut() = Some(idx);
+                                });
+                                break;
                             }
+                        }
+                        if !found {
+                            return Err(ScriptUpdateResult::NormalRun);
                         }
                     },
                 }
@@ -258,6 +284,7 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
+        
         Ok(())
     }
 }
@@ -295,9 +322,24 @@ impl ScriptAction for SpriteAnimationScriptAction {
                         .as_ref()
                         .or(actionparams.frame_bookmark.as_ref()),
                 );
-                tracker.set_next_frame(
-                    frame_index.unwrap_or_default() + bm_offset,
-                );
+                
+                // Get the matched index from thread local
+                let matched_idx = MATCHED_FRAME_INDEX.with(|cell| *cell.borrow());
+                
+                // Use the matched index to select the right frame index
+                let index = match frame_index {
+                    Some(indices) => {
+                        let index = if let Some(idx) = matched_idx {
+                            indices.get_at_index(idx).unwrap_or_default()
+                        } else {
+                            indices.get_at_index(0).unwrap_or_default()
+                        };
+                        index
+                    },
+                    None => FrameId::default(),
+                };
+                
+                tracker.set_next_frame(index + bm_offset);
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetFrameNow {
@@ -309,13 +351,29 @@ impl ScriptAction for SpriteAnimationScriptAction {
                         .as_ref()
                         .or(actionparams.frame_bookmark.as_ref()),
                 );
-                let index = frame_index.unwrap_or_default() + bm_offset;
-                atlas.index = index.as_sprite_index();
-                tracker.set_auto_next_frame(index);
+                
+                // Get the matched index from thread local
+                let matched_idx = MATCHED_FRAME_INDEX.with(|cell| *cell.borrow());
+                
+                // Use the matched index to select the right frame index
+                let index = match frame_index {
+                    Some(indices) => {
+                        let index = if let Some(idx) = matched_idx {
+                            indices.get_at_index(idx).unwrap_or_default()
+                        } else {
+                            indices.get_at_index(0).unwrap_or_default()
+                        };
+                        index
+                    },
+                    None => FrameId::default(),
+                };
+                
+                atlas.index = (index + bm_offset).as_sprite_index();
+                tracker.set_auto_next_frame(index + bm_offset);
                 if tracker.ticks_remain == 0 {
                     tracker.ticks_remain = tracker.ticks_per_frame;
                 }
-                if let Some(actions) = tracker.frame_actions.get(&index) {
+                if let Some(actions) = tracker.frame_actions.get(&(index + bm_offset)) {
                     tracker.q_extra.extend(
                         actions
                             .iter()
@@ -323,7 +381,7 @@ impl ScriptAction for SpriteAnimationScriptAction {
                     );
                 }
                 for (quant, action_id) in &tracker.framequant_actions {
-                    if quant.check(index.as_sprite_index() as i64) {
+                    if quant.check(atlas.index as i64) {
                         tracker.q_extra.push(QueuedAction {
                             timing,
                             action: *action_id,

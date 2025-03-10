@@ -76,169 +76,21 @@ run_at_frame = [15]
 action = "SetFrameNext"
 frame_index = 15
 
-# if coming from another attack, pick up where we left off
-# From run
+# Transition from SwordBasicRun - consolidated into a single mapping
 [[script]]
 run_on_playback_control = "Start"
 if_previous_script_key = "anim.player.SwordBasicRun"
-if_oldanim_frame_was = 1
+if_oldanim_frame_was = [1, 2, 3, 4, 5, 6, 7, 8]
 action = "SetFrameNow"
-frame_index = 1
+frame_index = [1, 2, 3, 4, 6, 7, 8, 9]
 
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicRun"
-if_oldanim_frame_was = 2
-action = "SetFrameNow"
-frame_index = 2
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicRun"
-if_oldanim_frame_was = 3
-action = "SetFrameNow"
-frame_index = 3
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicRun"
-if_oldanim_frame_was = 4
-action = "SetFrameNow"
-frame_index = 4
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicRun"
-if_oldanim_frame_was = 5
-action = "SetFrameNow"
-frame_index = 6
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicRun"
-if_oldanim_frame_was = 6
-action = "SetFrameNow"
-frame_index = 7
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicRun"
-if_oldanim_frame_was = 7
-action = "SetFrameNow"
-frame_index = 8
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicRun"
-if_oldanim_frame_was = 8
-action = "SetFrameNow"
-frame_index = 9
-
-# From idle
+# Transition from SwordBasicIdle - consolidated into a single mapping
 [[script]]
 run_on_playback_control = "Start"
 if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 1
+if_oldanim_frame_was = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 action = "SetFrameNow"
-frame_index = 1
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 2
-action = "SetFrameNow"
-frame_index = 2
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 3
-action = "SetFrameNow"
-frame_index = 3
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 4
-action = "SetFrameNow"
-frame_index = 4
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 5
-action = "SetFrameNext"
-frame_index = 5
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 6
-action = "SetFrameNow"
-frame_index = 6
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 7
-action = "SetFrameNow"
-frame_index = 7
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 8
-action = "SetFrameNow"
-frame_index = 8
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 9
-action = "SetFrameNow"
-frame_index = 9
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 10
-action = "SetFrameNext"
-frame_index = 10
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 11
-action = "SetFrameNow"
-frame_index = 11
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 12
-action = "SetFrameNow"
-frame_index = 12
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 13
-action = "SetFrameNow"
-frame_index = 13
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 14
-action = "SetFrameNow"
-frame_index = 14
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 15
-action = "SetFrameNext"
-frame_index = 15
+frame_index = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]
 
 # Support left/right flipping
 [[script]]

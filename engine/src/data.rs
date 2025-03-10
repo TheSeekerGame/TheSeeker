@@ -323,12 +323,48 @@ impl FromStr for Quant {
     }
 }
 
-#[derive(Debug, Clone)]
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(untagged)]
-pub enum OneOrMany<T> {
+pub enum OneOrMany<T> 
+where 
+    T: Clone,
+{
     Single(T),
     Many(Vec<T>),
+}
+
+impl<T> Default for OneOrMany<T>
+where
+    T: Clone + Default,
+{
+    fn default() -> Self {
+        Self::Single(T::default())
+    }
+}
+
+impl<T> OneOrMany<T>
+where
+    T: Clone,
+{
+    /// Get a specific item from the OneOrMany collection
+    /// 
+    /// If this is a Single value, returns that value regardless of index
+    /// If this is a Many value, returns the item at the specified index if it exists,
+    /// otherwise returns the first item (or None if the vector is empty)
+    pub fn get_at_index(&self, index: usize) -> Option<T> {
+        match self {
+            Self::Single(value) => Some(value.clone()),
+            Self::Many(values) => {
+                if values.is_empty() {
+                    None
+                } else if index < values.len() {
+                    Some(values[index].clone())
+                } else {
+                    Some(values[0].clone())
+                }
+            }
+        }
+    }
 }
 
 #[cfg(test)]
