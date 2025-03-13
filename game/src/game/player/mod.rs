@@ -51,11 +51,13 @@ impl Plugin for PlayerPlugin {
             GameTickUpdate,
             on_xp_heal.after(PlayerStateSet::Behavior),
         );
-        // app.add_systems(GameTickUpdate, apply_vitality_overclock);
-        // app.add_systems(
-        //     GameTickUpdate,
-        //     update_serpentring_health,
-        // );
+        app.add_systems(
+            GameTickUpdate,
+            (
+                apply_vitality_overclock,
+                update_serpentring_health,
+            ),
+        );
         app.add_systems(Startup, load_dash_asset);
         app.add_systems(
             GameTickUpdate,
