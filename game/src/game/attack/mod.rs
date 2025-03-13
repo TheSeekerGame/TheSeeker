@@ -15,7 +15,7 @@ use super::gentstate::{Dead, Facing};
 use super::physics::Knockback;
 use super::player::player_weapon::CurrentWeapon;
 use super::player::{
-    on_crit_cooldown_reduce, on_hit_exit_stealthing,
+    on_crit_cooldown_reduce, on_crit_heal, on_hit_exit_stealthing,
     on_stealth_hit_cooldown_reset, Passive, Passives, Player, PlayerConfig,
     PlayerGfx, PlayerStateSet, StatusModifier,
 };
@@ -50,6 +50,7 @@ impl Plugin for AttackPlugin {
                     on_hit_self_pushback,
                     on_hit_lifesteal,
                     on_crit_cooldown_reduce,
+                    on_crit_heal,
                     on_stealth_hit_cooldown_reset,
                     on_hit_exit_stealthing,
                 )
@@ -259,8 +260,14 @@ pub fn determine_attack_targets(
 
 // could switch to command/component based approach for attack modifications
 pub fn apply_attack_modifications(
-    mut attack_query: Query<(Entity, &mut Attack, Has<Crit>, Has<Hit>), Without<Gent>>,
-    mut attacker_query: Query<(Option<&mut Crits>, Option<&Passives>), With<Gent>>,
+    mut attack_query: Query<
+        (Entity, &mut Attack, Has<Crit>, Has<Hit>),
+        Without<Gent>,
+    >,
+    mut attacker_query: Query<
+        (Option<&mut Crits>, Option<&Passives>),
+        With<Gent>,
+    >,
     mut commands: Commands,
 ) {
     for (entity, mut attack, is_crit, has_hit) in attack_query.iter_mut() {
@@ -269,7 +276,9 @@ pub fn apply_attack_modifications(
             continue;
         }
         // if there is an attacker, apply relevant buffs
-        if let Ok((maybe_crits, maybe_passives)) = attacker_query.get_mut(attack.attacker) {
+        if let Ok((maybe_crits, maybe_passives)) =
+            attacker_query.get_mut(attack.attacker)
+        {
             if let Some(passives) = maybe_passives {
                 // Existing IceDagger passive check
                 if passives.contains(&Passive::IceDagger) {
@@ -277,7 +286,8 @@ pub fn apply_attack_modifications(
                 }
                 // <-- New Pack Killer effect:
                 if passives.contains(&Passive::PackKiller) {
-                    let bonus_multiplier = 1.0 + (attack.target_set.len() as f32 * 0.30);
+                    let bonus_multiplier =
+                        1.0 + (attack.target_set.len() as f32 * 0.30);
                     attack.damage *= bonus_multiplier;
                 }
             }
@@ -597,17 +607,25 @@ fn track_crits(mut query: Query<(&mut Crits, Option<&Passives>, &Health)>) {
                 crits.next_hit_is_critical = true;
             }
             if passives.contains(&Passive::DeadlyFeather)
-                && (crits.hit_count % 5 == 0 || crits.hit_count % 7 == 0 || crits.hit_count % 11 == 0|| crits.hit_count % 13 == 0)
+                && (crits.hit_count % 5 == 0
+                    || crits.hit_count % 7 == 0
+                    || crits.hit_count % 11 == 0
+                    || crits.hit_count % 13 == 0)
             {
                 crits.next_hit_is_critical = true;
             }
             if passives.contains(&Passive::ObsidianNecklace)
-                && (crits.hit_count % 23 == 0 || crits.hit_count % 29 == 0 || crits.hit_count % 31 == 0)
+                && (crits.hit_count % 23 == 0
+                    || crits.hit_count % 29 == 0
+                    || crits.hit_count % 31 == 0)
             {
                 crits.next_hit_is_critical = true;
             }
             if passives.contains(&Passive::RabbitsFoot)
-                && (crits.hit_count % 37 == 0 || crits.hit_count % 41 == 0 || crits.hit_count % 43 == 0|| crits.hit_count % 47 == 0)
+                && (crits.hit_count % 37 == 0
+                    || crits.hit_count % 41 == 0
+                    || crits.hit_count % 43 == 0
+                    || crits.hit_count % 47 == 0)
             {
                 crits.next_hit_is_critical = true;
             }

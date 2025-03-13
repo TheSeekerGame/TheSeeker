@@ -51,8 +51,11 @@ impl Plugin for PlayerPlugin {
             GameTickUpdate,
             on_xp_heal.after(PlayerStateSet::Behavior),
         );
-        app.add_systems(GameTickUpdate, on_crit_heal);
-        app.add_systems(GameTickUpdate, apply_vitality_overclock);
+        // app.add_systems(GameTickUpdate, apply_vitality_overclock);
+        // app.add_systems(
+        //     GameTickUpdate,
+        //     update_serpentring_health,
+        // );
         app.add_systems(Startup, load_dash_asset);
         app.add_systems(
             GameTickUpdate,
@@ -83,11 +86,6 @@ impl Plugin for PlayerPlugin {
             debug_player_states
                 .run_if(in_state(GameState::Playing))
                 .after(PlayerStateSet::Transition),
-        );
-
-        app.add_systems(
-            GameTickUpdate,
-            update_serpentring_health,
         );
     }
 }
@@ -1597,30 +1595,26 @@ fn track_hits(
     }
 }
 
+//on gain passive event?
 fn update_serpentring_health(
-    query: Query<(&Passives, Option<&Grounded>), With<Player>>,
-    mut health_q: Query<&mut Health, With<Player>>,
+    mut query: Query<(&mut Health, &Passives), With<Player>>,
     config: Res<PlayerConfig>,
 ) {
-    if let Ok((passives, grounded)) = query.get_single() {
-        if let Ok(mut health) = health_q.get_single_mut() {
-            if passives.contains(&Passive::SerpentRing) {
-                // Halve the max health when grounded.
-                let new_max = ((config.max_health as f32) / 4.0) as u32;
-                health.max = new_max;
-                // Ensure current health does not exceed the new maximum.
-                if health.current > new_max {
-                    health.current = new_max;
-                }
-            } else {
-                health.max = config.max_health as u32;
+    if let Ok((mut health, passives)) = query.get_single_mut() {
+        if passives.contains(&Passive::SerpentRing) {
+            // Halve the max health when grounded.
+            let new_max = ((config.max_health as f32) / 2.0) as u32;
+            health.max = new_max;
+            // Ensure current health does not exceed the new maximum.
+            if health.current > new_max {
+                health.current = new_max;
             }
         }
     }
 }
 
 /// When an attack hit is critical, heal the attacker if they have CriticalRegeneration.
-fn on_crit_heal(
+pub fn on_crit_heal(
     attack_query: Query<&Attack, (With<Crit>, Added<Hit>)>,
     mut player_query: Query<(&Passives, &mut Health), With<Player>>,
 ) {
@@ -1638,30 +1632,21 @@ fn on_crit_heal(
 
 /// Increases player's attack and applies constant health degeneration.
 fn apply_vitality_overclock(
-    mut query: Query<
-        (
-            &Passives,
-            &mut Health,
-            &mut PlayerStatMod,
-        ),
-        With<Player>,
-    >,
+    mut query: Query<(&Passives, &mut Health), With<Player>>,
     mut tick: Local<u32>,
 ) {
     *tick += 1;
-    for (passives, mut health, mut stat_mod) in query.iter_mut() {
+    for (passives, mut health) in query.iter_mut() {
         if passives.contains(&Passive::VitalityOverclock) {
-            let mut deg_rate = 0;
-
-            if passives.contains(&Passive::SerpentRing) {
-                deg_rate = 40
+            let deg_rate = if passives.contains(&Passive::SerpentRing) {
+                40
             } else {
-                deg_rate = 20
-            }
+                20
+            };
             // Every n ticks (depending on deg_tick rate), apply the health degeneration.
             if *tick % deg_rate == 0 && health.current > 1 {
                 let mut deg = 1;
-                health.current = health.current.saturating_sub(deg);
+                health.current = health.current.saturating_sub(deg).max(1);
             }
         }
     }

@@ -1,4 +1,7 @@
 use bevy::sprite::{Sprite, SpriteSheetBundle};
+
+//TODO: remove, remove passive check in jumps
+use crate::game::player::Passive;
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
@@ -962,8 +965,11 @@ fn player_grounded(
         passives,
     ) in query.iter_mut()
     {
-        let ray_cast = ray_cast_info.cast(&spatial_query, &position, Some(entity));
-        let falling_toi = ray_cast.iter().find(|x| x.1.toi > GROUNDED_THRESHOLD + 0.01);
+        let ray_cast =
+            ray_cast_info.cast(&spatial_query, &position, Some(entity));
+        let falling_toi = ray_cast
+            .iter()
+            .find(|x| x.1.toi > GROUNDED_THRESHOLD + 0.01);
         let is_falling = falling_toi.is_some();
         let time_of_impact = falling_toi.map_or(0.0, |x| x.1.toi);
 
@@ -990,7 +996,11 @@ fn player_grounded(
         }
 
         if action_state.just_pressed(&PlayerAction::Jump) {
-            let allowed_jumps = if passives.contains(&Passive::RabbitsFoot) { 3 } else { 2 };
+            let allowed_jumps = if passives.contains(&Passive::RabbitsFoot) {
+                3
+            } else {
+                2
+            };
             if jump_count.0 < allowed_jumps {
                 jump_count.0 += 1;
                 transitions.push(Grounded::new_transition(Jumping));
@@ -1036,9 +1046,13 @@ fn player_falling(
     {
         let fall_accel = config.fall_accel;
         let mut falling = true;
-        if let Some((_, toi)) = hits.cast(&spatial_query, &transform, Some(entity)) {
+        if let Some((_, toi)) =
+            hits.cast(&spatial_query, &transform, Some(entity))
+        {
             // if we are ~touching the ground
-            if (toi.toi + velocity.y * (1.0 / time.hz) as f32) < GROUNDED_THRESHOLD {
+            if (toi.toi + velocity.y * (1.0 / time.hz) as f32)
+                < GROUNDED_THRESHOLD
+            {
                 transitions.push(Falling::new_transition(Grounded));
                 velocity.y = 0.0;
                 transform.translation.y =
@@ -1053,7 +1067,12 @@ fn player_falling(
         }
         if falling {
             if action_state.just_pressed(&PlayerAction::Jump) {
-                let allowed_jumps = if passives.contains(&Passive::RabbitsFoot) { 3 } else { 2 };
+                let allowed_jumps = if passives.contains(&Passive::RabbitsFoot)
+                {
+                    3
+                } else {
+                    2
+                };
                 if jump_count.0 < allowed_jumps {
                     velocity.y = 0.0;
                     jump_count.0 += 1;
@@ -1064,7 +1083,10 @@ fn player_falling(
                 velocity.y /= 1.2;
             }
             velocity.y -= fall_accel;
-            velocity.y = velocity.y.clamp(-config.max_fall_vel, config.jump_vel_init);
+            velocity.y = velocity.y.clamp(
+                -config.max_fall_vel,
+                config.jump_vel_init,
+            );
         }
     }
 }
