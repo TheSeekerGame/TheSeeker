@@ -10,7 +10,7 @@ range_melee_deaggro = 70.0
 range_ranged_melee = 29.0
 range_ranged_aggro = 100.0
 range_ranged_ranged = 100.0
-range_nearby = 20.0
+range_nearby = 50.0
 
 walking_min_time = 24.0
 walking_max_time = 300.0

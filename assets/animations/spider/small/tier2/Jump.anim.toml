@@ -13,7 +13,7 @@ frame_start = 1
 [[script]]
 # Needs run condition here instead of the 'run at frame'
 # Has to be triggered by jump state start
-run_at_frame = 3
+run_on_slot_enable = "jump"
 action = "SetFrameNow"
 frame_index = 3
 
@@ -28,7 +28,7 @@ frame_index = 4
 [[script]]
 # Needs run condition here instead of the 'run at frame'
 # Has to be triggered by fall state start
-run_at_frame = 8
+run_on_slot_enable = "fall"
 action = "SetFrameNow"
 frame_index = 8
 
@@ -37,7 +37,6 @@ frame_index = 8
 run_at_frame = 12
 action = "SetFrameNext"
 frame_index = 9
-
 
 
 # Support left/right flipping
@@ -49,4 +48,3 @@ flip_x = true
 run_on_slot_enable = "DirectionRight"
 action = "SetSpriteFlip"
 flip_x = false
-

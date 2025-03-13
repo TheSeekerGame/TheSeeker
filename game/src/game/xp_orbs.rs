@@ -70,7 +70,7 @@ fn spawn_orbs_on_death(
 
             commands.spawn((
                 LinearVelocity(vel + init_vel),
-                XpOrb { init_timer: 4.0 },
+                XpOrb { init_timer: 1.0 },
                 SpriteBundle {
                     texture: asset_server.load("fx/xporb.png"),
                     sprite: Sprite {

@@ -15,7 +15,7 @@ use super::gentstate::{Dead, Facing};
 use super::physics::Knockback;
 use super::player::player_weapon::CurrentWeapon;
 use super::player::{
-    on_crit_cooldown_reduce, on_hit_exit_stealthing,
+    on_crit_cooldown_reduce, on_crit_heal, on_hit_exit_stealthing,
     on_stealth_hit_cooldown_reset, Passive, Passives, Player, PlayerConfig,
     PlayerGfx, PlayerStateSet, StatusModifier,
 };
@@ -50,6 +50,7 @@ impl Plugin for AttackPlugin {
                     on_hit_self_pushback,
                     on_hit_lifesteal,
                     on_crit_cooldown_reduce,
+                    on_crit_heal,
                     on_stealth_hit_cooldown_reset,
                     on_hit_exit_stealthing,
                 )
@@ -278,24 +279,24 @@ pub fn apply_attack_modifications(
         if let Ok((maybe_crits, maybe_passives)) =
             attacker_query.get_mut(attack.attacker)
         {
-            // passives
             if let Some(passives) = maybe_passives {
-                // backstab
-                // check this later on application of damage for each enemy
+                // Existing IceDagger passive check
                 if passives.contains(&Passive::IceDagger) {
                     commands.entity(entity).insert(Backstab);
                 }
+                // <-- New Pack Killer effect:
+                if passives.contains(&Passive::PackKiller) {
+                    let bonus_multiplier =
+                        1.0 + (attack.target_set.len() as f32 * 0.30);
+                    attack.damage *= bonus_multiplier;
+                }
             }
-            // TODO: attack should keep its original damage and modify only the multipliers
-            // crit multiplier
-            //
             if let Some(mut crit) = maybe_crits {
                 if crit.next_hit_is_critical && !is_crit {
                     commands.entity(entity).insert(Crit);
                     attack.damage *= crit.crit_damage_multiplier;
                     crit.next_hit_is_critical = false;
                 }
-
                 // increment hit count the first time we hit something with an attack
                 if !has_hit {
                     crit.hit_count += 1;
@@ -332,6 +333,7 @@ pub fn apply_attack_damage(
     >,
     mut damage_events: EventWriter<DamageInfo>,
     mut commands: Commands,
+    player_passives: Query<&Passives, With<Player>>,
 ) {
     for (
         a_entity,
@@ -389,6 +391,14 @@ pub fn apply_attack_damage(
                 // apply player defense modifier if it exists
                 if let Some(statmod) = maybe_player_statmod {
                     damage /= statmod.defense;
+                }
+
+                // If the target is the player and has ProtectiveSpirit, cap damage to 1/3 of max health.
+                if let Ok(passives) = player_passives.get(t_entity) {
+                    if passives.contains(&Passive::ProtectiveSpirit) {
+                        let max_allowed = (health.max as f32) / 3.0;
+                        damage = damage.min(max_allowed);
+                    }
                 }
 
                 // apply damage to the targets health
@@ -512,7 +522,7 @@ fn on_hit_lifesteal(
     for (attack, is_crit) in query.iter() {
         if let Ok(mut health) = health_query.get_mut(attack.attacker) {
             // heal by 100 percent or 20 percent max health
-            let stealth_lifesteal = if is_crit { 1. } else { 0.2 };
+            let stealth_lifesteal = if is_crit { 0.24 } else { 0.2 };
             health.current = u32::min(
                 health.current.saturating_add(
                     (stealth_lifesteal * health.max as f32) as u32,
@@ -592,7 +602,30 @@ fn track_crits(mut query: Query<(&mut Crits, Option<&Passives>, &Health)>) {
         if let Some(passives) = maybe_passives {
             if passives.contains(&Passive::FlamingHeart)
                 && health.current < health.max / 4
-            // && (crits.hit_count % 1 == 0 || crits.hit_count % 2 == 0)
+                && (crits.hit_count % 2 == 0 || crits.hit_count % 3 == 0)
+            {
+                crits.next_hit_is_critical = true;
+            }
+            if passives.contains(&Passive::DeadlyFeather)
+                && (crits.hit_count % 5 == 0
+                    || crits.hit_count % 7 == 0
+                    || crits.hit_count % 11 == 0
+                    || crits.hit_count % 13 == 0)
+            {
+                crits.next_hit_is_critical = true;
+            }
+            if passives.contains(&Passive::ObsidianNecklace)
+                && (crits.hit_count % 23 == 0
+                    || crits.hit_count % 29 == 0
+                    || crits.hit_count % 31 == 0)
+            {
+                crits.next_hit_is_critical = true;
+            }
+            if passives.contains(&Passive::RabbitsFoot)
+                && (crits.hit_count % 37 == 0
+                    || crits.hit_count % 41 == 0
+                    || crits.hit_count % 43 == 0
+                    || crits.hit_count % 47 == 0)
             {
                 crits.next_hit_is_critical = true;
             }

@@ -114,6 +114,34 @@ pub fn load_pickup_assets(assets: Res<AssetServer>, mut commands: Commands) {
             Passive::FrenziedAttack,
             "items/passives/FrenziedAttack.png",
         ),
+        (
+            Passive::PackKiller,
+            "items/passives/PackKiller.png",
+        ),
+        (
+            Passive::DeadlyFeather,
+            "items/passives/DeadlyFeather.png",
+        ),
+        (
+            Passive::Sharpshooter,
+            "items/passives/Sharpshooter.png",
+        ),
+        (
+            Passive::ProtectiveSpirit,
+            "items/passives/ProtectiveSpirit.png",
+        ),
+        (
+            Passive::RabbitsFoot,
+            "items/passives/RabbitsFoot.png",
+        ),
+        (
+            Passive::CriticalRegeneration,
+            "items/passives/CriticalRegeneration.png",
+        ),
+        (
+            Passive::VitalityOverclock,
+            "items/passives/VitalityOverclock.png",
+        ),
     ];
 
     let seed_mappings: Vec<(PlanetarySeed, &str)> = vec![
@@ -387,7 +415,7 @@ impl DropTracker {
     }
 
     fn new(passive_count: usize) -> Self {
-        const SPAN: u32 = 10;
+        const SPAN: u32 = 5;
 
         let mut rng = rand::thread_rng();
 
