@@ -29,6 +29,7 @@ use super::physics::Knockback;
 use crate::game::enemy::Enemy;
 
 pub use player_action::PlayerAction;
+
 pub struct PlayerPlugin;
 
 impl Plugin for PlayerPlugin {
@@ -84,7 +85,10 @@ impl Plugin for PlayerPlugin {
                 .after(PlayerStateSet::Transition),
         );
 
-        app.add_systems(GameTickUpdate, update_serpentring_health);
+        app.add_systems(
+            GameTickUpdate,
+            update_serpentring_health,
+        );
     }
 }
 
@@ -129,7 +133,6 @@ pub struct Player;
 pub struct PlayerGfx {
     pub e_gent: Entity,
 }
-
 
 #[derive(Component, Debug, Deref, DerefMut)]
 pub struct Passives {
@@ -403,9 +406,6 @@ fn setup_player(
                 current: config.max_health,
                 max: config.max_health,
             },
-            // have to use builder here *i think* because of different types between keycode and
-            // axis
-        
             PlayerAction::input_manager_bundle(),
             // bundling things up because we reached max tuple
             (
@@ -614,10 +614,6 @@ impl Dashing {
         self.dash_type == DashType::Downward
     }
 
-    pub fn is_horizontal_dash(&self) -> bool {
-        self.dash_type == DashType::Horizontal
-    }
-
     pub fn set_player_velocity(
         &self,
         velocity: &mut LinearVelocity,
@@ -737,6 +733,12 @@ pub struct CoyoteTime(f32);
 
 #[derive(Component, Default, Debug)]
 pub struct JumpCount(u8);
+
+impl JumpCount {
+    pub fn reset(&mut self) {
+        self.0 = 2;
+    }
+}
 
 /// Indicates that sliding is tracked for this entity
 #[derive(Component, Default, Debug)]
@@ -1184,7 +1186,21 @@ fn player_update_passive_buffs(
     )>,
     enemy_q: Query<&GlobalTransform, With<Enemy>>,
 ) {
-    for (passives, vel, transform, enemies_nearby, buff_tick, mut stat_mod, health, grounded, is_stealth, idle, running, jumping) in query.iter_mut() {
+    for (
+        passives,
+        vel,
+        transform,
+        enemies_nearby,
+        buff_tick,
+        mut stat_mod,
+        health,
+        grounded,
+        is_stealth,
+        idle,
+        running,
+        jumping,
+    ) in query.iter_mut()
+    {
         let mut attack = 1.;
         let mut defense = 1.;
         let mut speed = 1.;
@@ -1516,10 +1532,14 @@ pub fn on_hit_exit_stealthing(
     config: Res<PlayerConfig>,
 ) {
     for attack in query.iter() {
-        if let Ok((gent, mut transitions)) = attacker_query.get_mut(attack.attacker) {
+        if let Ok((gent, mut transitions)) =
+            attacker_query.get_mut(attack.attacker)
+        {
             let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
             sprite.color = sprite.color.with_a(1.0);
-            transitions.push(Stealthing::new_transition(CanStealth::new(&config)));
+            transitions.push(Stealthing::new_transition(
+                CanStealth::new(&config),
+            ));
         }
     }
 }
@@ -1585,7 +1605,6 @@ fn update_serpentring_health(
     if let Ok((passives, grounded)) = query.get_single() {
         if let Ok(mut health) = health_q.get_single_mut() {
             if passives.contains(&Passive::SerpentRing) {
-            
                 // Halve the max health when grounded.
                 let new_max = ((config.max_health as f32) / 4.0) as u32;
                 health.max = new_max;
@@ -1606,7 +1625,9 @@ fn on_crit_heal(
     mut player_query: Query<(&Passives, &mut Health), With<Player>>,
 ) {
     for attack in attack_query.iter() {
-        if let Ok((passives, mut health)) = player_query.get_mut(attack.attacker) {
+        if let Ok((passives, mut health)) =
+            player_query.get_mut(attack.attacker)
+        {
             if passives.contains(&Passive::CriticalRegeneration) {
                 // Heal 2 points, capped at player's max health.
                 health.current = (health.current + 24).min(health.max);
@@ -1617,20 +1638,25 @@ fn on_crit_heal(
 
 /// Increases player's attack and applies constant health degeneration.
 fn apply_vitality_overclock(
-    mut query: Query<(&Passives, &mut Health, &mut PlayerStatMod), With<Player>>,
+    mut query: Query<
+        (
+            &Passives,
+            &mut Health,
+            &mut PlayerStatMod,
+        ),
+        With<Player>,
+    >,
     mut tick: Local<u32>,
 ) {
     *tick += 1;
     for (passives, mut health, mut stat_mod) in query.iter_mut() {
         if passives.contains(&Passive::VitalityOverclock) {
-
             let mut deg_rate = 0;
 
-            if  passives.contains(&Passive::SerpentRing) {
+            if passives.contains(&Passive::SerpentRing) {
                 deg_rate = 40
             } else {
                 deg_rate = 20
-
             }
             // Every n ticks (depending on deg_tick rate), apply the health degeneration.
             if *tick % deg_rate == 0 && health.current > 1 {

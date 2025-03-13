@@ -12,7 +12,4 @@
     "ui.mainmenu.background": File (
         path: "ui/mainmenu/background.png"
     ),
-    "ui.mainmenu.logo": File (
-        path: "ui/mainmenu/logo.png"
-    ),
 })

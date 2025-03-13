@@ -8,7 +8,7 @@ use theseeker_engine::time::GameTickUpdate;
 use crate::game::player::{Player, PlayerAction};
 use crate::prelude::{App, AppState, Plugin, Query, ResMut, Resource, With};
 
-use super::{PlayerConfig, PlayerStateSet};
+use super::{Passive, Passives, PlayerConfig, PlayerStateSet};
 
 pub(crate) struct PlayerWeaponPlugin;
 
@@ -53,6 +53,39 @@ pub enum PlayerMeleeWeapon {
 }
 
 impl PlayerMeleeWeapon {
+    /// Returns the attack collider lifetime based on melee weapon and passives:
+    /// For Sword: default = 16, if (SerpentRing or FrenziedAttack) active then 12
+    /// For Hammer: default = 24, if (SerpentRing or FrenziedAttack) active then 18
+    pub fn attack_lifetime(&self, passives: &Passives) -> u32 {
+        let has_serpent_ring_or_frenzied_attack = passives
+            .contains(&Passive::SerpentRing)
+            || passives.contains(&Passive::FrenziedAttack);
+
+        match self {
+            Self::Hammer => {
+                if has_serpent_ring_or_frenzied_attack {
+                    18
+                } else {
+                    24
+                }
+            },
+            Self::Sword => {
+                if has_serpent_ring_or_frenzied_attack {
+                    12
+                } else {
+                    16
+                }
+            },
+        }
+    }
+
+    pub fn base_damage(&self) -> f32 {
+        match self {
+            Self::Hammer => 51.0,
+            Self::Sword => 33.0,
+        }
+    }
+
     pub fn pushback_values(&self, config: &PlayerConfig) -> PushbackValues {
         let (pushback, pushback_ticks, self_pushback, self_pushback_ticks) =
             match self {

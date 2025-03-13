@@ -22,7 +22,9 @@ use super::{
     DashStrike, DashType, JumpCount, Knockback, Passives, PlayerStats,
     Pushback, StatType, Stealthing, Whirling,
 };
-use crate::game::attack::{Attack, SelfPushback, Stealthed};
+use crate::game::attack::{
+    Attack, DownwardAttack, Hit, SelfPushback, Stealthed,
+};
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::{Facing, TransitionQueue, Transitionable};
 use crate::game::pickups::{
@@ -38,7 +40,6 @@ use crate::prelude::*;
 use crate::ui::popup::{PopupTimer, PopupUi};
 use crate::StateDespawnMarker;
 use crate::{camera::CameraShake, game::player::PlayerStatMod};
-use crate::game::player::Passive;
 
 /// Player behavior systems.
 /// Do stuff here in states and add transitions to other states by pushing
@@ -57,7 +58,13 @@ impl Plugin for PlayerBehaviorPlugin {
                     add_attack,
                     player_stealth,
                     player_whirl_charge.before(player_whirl),
-                    player_whirl.before(player_attack),
+                    (
+                        player_whirl,
+                        bow_auto_aim.after(player_move).run_if(
+                            resource_equals(PlayerCombatStyle::Ranged),
+                        ),
+                    )
+                        .before(player_attack),
                     player_attack.run_if(any_with_component::<Attacking>),
                     player_restore_velocity
                         .after(player_attack)
@@ -82,16 +89,11 @@ impl Plugin for PlayerBehaviorPlugin {
                         player_sliding.before(player_jump),
                     )
                         .run_if(any_with_component::<Falling>),
+                    reset_player_jump_on_downward_attack.after(player_falling),
                     crate::game::physics::knockback
                         .run_if(any_with_component::<Knockback>)
                         .before(player_jump)
                         .after(player_sliding),
-                    bow_auto_aim
-                        .after(player_move)
-                        .before(player_attack)
-                        .run_if(resource_equals(
-                            PlayerCombatStyle::Ranged,
-                        )),
                 )
                     .in_set(PlayerStateSet::Behavior)
                     .before(update_sprite_colliders),
@@ -109,6 +111,17 @@ impl Plugin for PlayerBehaviorPlugin {
                 .chain()
                 .run_if(in_state(AppState::InGame)),
         );
+    }
+}
+
+fn reset_player_jump_on_downward_attack(
+    mut p_query: Query<&mut JumpCount, With<Player>>,
+    query: Query<&Attack, (Added<Hit>, With<DownwardAttack>)>,
+) {
+    for attack in query.iter() {
+        if let Ok(mut jump_count) = p_query.get_mut(attack.attacker) {
+            jump_count.reset();
+        }
     }
 }
 
@@ -1186,6 +1199,7 @@ fn player_attack(
             &ActionState<PlayerAction>,
             &PlayerStatMod,
             Has<Stealthing>,
+            Has<Grounded>,
         ),
         (With<Player>, Without<Whirling>),
     >,
@@ -1207,6 +1221,7 @@ fn player_attack(
         action_state,
         stat_mod,
         stealthed,
+        grounded,
     ) in query.iter_mut()
     {
         if attacking.ticks == 0 {
@@ -1312,32 +1327,43 @@ fn player_attack(
                         );
                     }
 
-                    commands
-                        .spawn((
-                            TransformBundle::from_transform(
-                                Transform::from_xyz(0.0, 0.0, 0.0),
-                            ),
-                            AnimationCollider(gent.e_gfx),
-                            // TODO: ? ColliderMeta
-                            Collider::empty(InteractionGroups::new(
-                                PLAYER_ATTACK,
-                                ENEMY_HURT,
-                            )),
-                            Attack::new(16, entity, damage * stat_mod.attack),
-                            SelfPushback(Knockback::new(
-                                Vec2::new(
-                                    self_pushback * -facing.direction(),
-                                    0.,
-                                ),
-                                self_pushback_ticks,
-                            )),
-                            Pushback(Knockback::new(
+                    let is_attacking_downwards =
+                        !grounded && action_state.pressed(&PlayerAction::Fall);
+                    let self_knockback_strength = if is_attacking_downwards {
+                        Vec2::new(0.0, self_pushback * 2.0)
+                    } else {
+                        Vec2::new(self_pushback * -facing.direction(), 0.)
+                    };
+                    let mut attack_entity_commands = commands.spawn((
+                        TransformBundle::from_transform(Transform::from_xyz(
+                            0.0, 0.0, 0.0,
+                        )),
+                        AnimationCollider(gent.e_gfx),
+                        // TODO: ? ColliderMeta
+                        Collider::empty(InteractionGroups::new(
+                            PLAYER_ATTACK,
+                            ENEMY_HURT,
+                        )),
+                        Attack::new(16, entity, damage * stat_mod.attack),
+                        SelfPushback(Knockback::new(
+                            self_knockback_strength,
+                            self_pushback_ticks,
+                        )),
+                    ));
+                    attack_entity_commands.set_parent(entity);
+
+                    if !is_attacking_downwards {
+                        attack_entity_commands.insert(Pushback(
+                            Knockback::new(
                                 Vec2::new(facing.direction() * pushback, 0.),
                                 pushback_ticks,
-                            )),
-                        ))
-                        .set_parent(entity)
-                        .id()
+                            ),
+                        ));
+                    } else {
+                        attack_entity_commands.insert(DownwardAttack);
+                    }
+
+                    attack_entity_commands.id()
                 },
             };
 
@@ -1407,7 +1433,7 @@ pub fn player_whirl(
             &PlayerStatMod,
             Has<Stealthing>,
             &Gent,
-            &Passives
+            &Passives,
         ),
         (
             With<Player>,
@@ -1462,31 +1488,20 @@ pub fn player_whirl(
                 }
             // if there is no attack, spawn a new one
             } else {
-                // Determine collider lifetime based on melee weapon and passives:
-                // For Sword: default = 16, if (SerpentRing or FrenziedAttack) active then 12
-                // For Hammer: default = 24, if (SerpentRing or FrenziedAttack) active then 18
-                let lifetime = if *melee_weapon == PlayerMeleeWeapon::Hammer {
-                    if passives.contains(&Passive::SerpentRing) || passives.contains(&Passive::FrenziedAttack) {
-                        18
-                    } else {
-                        24
-                    }
-                } else {
-                    if passives.contains(&Passive::SerpentRing) || passives.contains(&Passive::FrenziedAttack) {
-                        12
-                    } else {
-                        16
-                    }
-                };
-
-                let damage = if *melee_weapon == PlayerMeleeWeapon::Hammer { 51.0 } else { 33.0 } * stat_mod.attack;
+                let lifetime = melee_weapon.attack_lifetime(passives);
+                let damage = melee_weapon.base_damage() * stat_mod.attack;
                 let new_attack = commands
                     .spawn((
                         AttackBundle {
                             attack: Attack::new(lifetime, entity, damage),
-                            collider: Collider::empty(InteractionGroups::new(PLAYER_ATTACK, ENEMY_HURT)),
+                            collider: Collider::empty(InteractionGroups::new(
+                                PLAYER_ATTACK,
+                                ENEMY_HURT,
+                            )),
                         },
-                        TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+                        TransformBundle::from_transform(Transform::from_xyz(
+                            0.0, 0.0, 0.0,
+                        )),
                         AnimationCollider(gent.e_gfx),
                     ))
                     .set_parent(entity)

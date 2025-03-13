@@ -53,8 +53,6 @@ pub struct UiAssets {
 pub struct MainMenuAssets {
     #[asset(key = "ui.mainmenu.background")]
     pub background: Handle<Image>,
-    #[asset(key = "ui.mainmenu.logo")]
-    pub logo: Handle<Image>,
 }
 
 #[derive(AssetCollection, Resource)]
