@@ -1,6 +1,5 @@
 #![cfg_attr(feature = "release", windows_subsystem = "windows")]
 #![allow(unused_mut)]
-
 // FIXME: temporary, to reduce noise during the 0.15 upgrade
 #![allow(warnings)]
 
@@ -122,16 +121,17 @@ fn main() {
         LdtkPlugin,
         bevy_fluent::FluentPlugin,
         // iyes_bevy_extras::d2::WorldCursorPlugin,
-        ProgressPlugin::new::<AppState>()
-            .with_state_transition(AppState::AssetsLoading, AppState::MainMenu)
+        ProgressPlugin::<AppState>::new()
+            .with_state_transition(
+                AppState::AssetsLoading,
+                AppState::MainMenu,
+            )
             .with_asset_tracking(),
         PhysicsPlugin,
     ));
 
     #[cfg(feature = "iyes_perf_ui")]
-    app.add_plugins((
-        iyes_perf_ui::PerfUiPlugin,
-    ));
+    app.add_plugins((iyes_perf_ui::PerfUiPlugin,));
 
     // our stuff
     app.add_plugins((
