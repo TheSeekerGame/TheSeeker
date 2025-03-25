@@ -34,7 +34,7 @@ pub struct YakGfx {
 pub struct YakGfxBundle {
     marker: YakGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteSheetBundle,
+    sprite: SpriteBundle,
     animation: SpriteAnimationBundle,
 }
 
@@ -61,7 +61,7 @@ pub fn setup_yak(
                     pixel_aligned: false,
                     gent: e_gent,
                 },
-                sprite: SpriteSheetBundle {
+                sprite: SpriteBundle {
                     transform: *xf_gent,
                     ..Default::default()
                 },

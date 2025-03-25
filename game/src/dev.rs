@@ -103,7 +103,7 @@ fn cli_spawn_anim(In(args): In<Vec<String>>, world: &mut World) {
     player.play_key(args[0].as_str());
 
     world.spawn((
-        SpriteSheetBundle {
+        SpriteBundle {
             transform: Transform::from_xyz(x, y, 101.0),
             ..default()
         },

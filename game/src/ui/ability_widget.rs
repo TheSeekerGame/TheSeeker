@@ -61,8 +61,8 @@ impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
                         let handle =
                             ui_materials.add(ability_cooldown::Material {
                                 factor: 0.3,
-                                background_color: Color::rgba(0.0, 0.0, 0.0, 0.0),
-                                filled_color: Color::rgba(0.25, 0.25, 0.0, 0.75),
+                                background_color: Color::rgba(0.0, 0.0, 0.0, 0.0).into(),
+                                filled_color: Color::rgba(0.25, 0.25, 0.0, 0.75).into(),
                             });
                         w.entity_mut(entity).insert(handle);
                         // Make the bar go from bottom to top
