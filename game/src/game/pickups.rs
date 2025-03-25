@@ -216,41 +216,25 @@ impl Command for SpawnPickupCommand {
                     Name::new("PassiveDescription"),
                     PassiveDescriptionNode,
                     PassiveEntity(entity),
-                    TextBundle {
-                        text: Text {
-                            sections: vec![
-                                TextSection::new(
-                                    passive.name(),
-                                    TextStyle {
-                                        font_size: 24.0,
-                                        ..Default::default()
-                                    },
-                                ),
-                                TextSection::from("\n"),
-                                TextSection::new(
-                                    passive.description(),
-                                    TextStyle {
-                                        font_size: 24.0,
-                                        ..Default::default()
-                                    },
-                                ),
-                            ],
-                            justify: JustifyText::Center,
-                            linebreak_behavior: LineBreak::WordBoundary,
-                        },
-                        style: Style {
-                            max_width: Val::Percent(33.0),
-                            ..Default::default()
-                        },
-                        global_transform: GlobalTransform::from_translation(
-                            Vec3::new(pos.x, pos.y, 50.0),
-                        ),
-                        background_color: BackgroundColor::from(
-                            Color::BLACK.with_a(0.75),
-                        ),
-                        visibility: Visibility::Hidden,
+                    Text::new(format!(
+                        "{}\n{}",
+                        passive.name(),
+                        passive.description(),
+                    )),
+                    TextFont::from_font_size(24.0),
+                    TextLayout::new(
+                        JustifyText::Center,
+                        LineBreak::WordBoundary,
+                    ),
+                    Node {
+                        max_width: Val::Percent(33.0),
                         ..Default::default()
                     },
+                    GlobalTransform::from_translation(Vec3::new(
+                        pos.x, pos.y, 50.0,
+                    )),
+                    BackgroundColor::from(Color::BLACK.with_alpha(0.75)),
+                    Visibility::Hidden,
                     StateDespawnMarker,
                 ));
             },
@@ -517,7 +501,7 @@ fn spawn_pickups_on_death(
             let seed_id = drop_tracker.drop_random_seed(&seed_category);
 
             if let Some(seed_id) = seed_id {
-                commands.add(SpawnPickupCommand {
+                commands.queue(SpawnPickupCommand {
                     pos: translation,
                     p_type: PickupType::Seed(seed_category, seed_id),
                 });
@@ -541,7 +525,7 @@ fn spawn_pickups_on_death(
 
                 if let Some(passive) = passives.drop_random() {
                     println!("DROPPING PASSIVE");
-                    commands.add(SpawnPickupCommand {
+                    commands.queue(SpawnPickupCommand {
                         pos: translation,
                         p_type: PickupType::PassiveDrop(passive),
                     });
@@ -556,7 +540,7 @@ fn display_passives_description(
     mut passive_descriptions: Query<
         (
             &PassiveEntity,
-            &Node,
+            &ComputedNode,
             &mut GlobalTransform,
             &mut Visibility,
         ),
@@ -607,7 +591,7 @@ fn display_passives_description(
                 },
             ) {
                 *description_visibility = Visibility::Visible;
-                if let Some(pickup_viewport_pos) = camera.world_to_viewport(
+                if let Ok(pickup_viewport_pos) = camera.world_to_viewport(
                     camera_transform,
                     pickup_transform.translation,
                 ) {
