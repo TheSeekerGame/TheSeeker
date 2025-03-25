@@ -1,11 +1,4 @@
-use leafwing_input_manager::{
-    axislike::AxisType,
-    prelude::{
-        Actionlike, InputMap, SingleAxis, VirtualAxis,
-        WithAxisProcessingPipelineExt,
-    },
-    InputManagerBundle,
-};
+use leafwing_input_manager::{prelude::*, InputManagerBundle};
 use theseeker_engine::input::InputManagerPlugin;
 
 use crate::prelude::*;
@@ -65,60 +58,43 @@ impl PlayerAction {
                 KeyCode::KeyC,
             ),
         ])
-        .with_multiple([
-            (
-                Self::Move,
-                VirtualAxis::from_keys(KeyCode::KeyA, KeyCode::KeyD),
-            ),
-            (
-                Self::Move,
-                VirtualAxis::from_keys(KeyCode::ArrowLeft, KeyCode::ArrowRight),
-            ),
-        ])
-        .with(
+        .with_axis(
             Self::Move,
-            VirtualAxis::horizontal_dpad(),
+            VirtualAxis::new(KeyCode::KeyA, KeyCode::KeyD),
+        )
+        .with_axis(
+            Self::Move,
+            VirtualAxis::new(KeyCode::ArrowLeft, KeyCode::ArrowRight),
+        )
+        .with_axis(Self::Move, VirtualAxis::dpad_x())
+        .with_axis(
+            Self::Move,
+            GamepadControlAxis::new(GamepadAxis::LeftStickX),
+        )
+        .with_axis(
+            Self::Fall,
+            GamepadControlAxis::new(GamepadAxis::LeftStickY)
+                .with_bounds(-1.0, 0.0),
         )
         .with_multiple([
-            (
-                Self::Move,
-                SingleAxis::new(AxisType::Gamepad(
-                    GamepadAxisType::LeftStickX,
-                )),
-            ),
-            (
-                Self::Fall,
-                SingleAxis::new(AxisType::Gamepad(
-                    GamepadAxisType::LeftStickY,
-                ))
-                .with_bounds(-1.0, 0.0),
-            ),
-        ])
-        .with_multiple([
-            (Self::Fall, GamepadButtonType::DPadDown),
-            (
-                Self::Jump,
-                GamepadButtonType::LeftTrigger2,
-            ),
-            (Self::Attack, GamepadButtonType::West),
-            (
-                Self::Dash,
-                GamepadButtonType::RightTrigger2,
-            ),
-            (Self::Whirl, GamepadButtonType::South),
-            (Self::Stealth, GamepadButtonType::East),
+            (Self::Fall, GamepadButton::DPadDown),
+            (Self::Jump, GamepadButton::LeftTrigger2),
+            (Self::Attack, GamepadButton::West),
+            (Self::Dash, GamepadButton::RightTrigger2),
+            (Self::Whirl, GamepadButton::South),
+            (Self::Stealth, GamepadButton::East),
             (
                 Self::SwapCombatStyle,
-                GamepadButtonType::LeftTrigger,
+                GamepadButton::LeftTrigger,
             ),
             (
                 Self::SwapMeleeWeapon,
-                GamepadButtonType::RightTrigger,
+                GamepadButton::RightTrigger,
             ),
-            (Self::Interact, GamepadButtonType::North),
+            (Self::Interact, GamepadButton::North),
             (
                 Self::ToggleControlOverlay,
-                GamepadButtonType::Start,
+                GamepadButton::Start,
             ),
         ])
     }
