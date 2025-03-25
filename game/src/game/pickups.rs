@@ -1,6 +1,6 @@
 use bevy::{
-    ecs::system::Command, prelude::*, text::BreakLineOn,
-    transform::TransformSystem, ui::UiSystem, utils::hashbrown::HashMap,
+    prelude::*, text::LineBreak, transform::TransformSystem, ui::UiSystem,
+    utils::hashbrown::HashMap,
 };
 use rand::Rng;
 use strum::IntoEnumIterator;
@@ -205,7 +205,7 @@ impl Command for SpawnPickupCommand {
                         PickupDrop::new(self.p_type),
                         SpriteBundle {
                             transform,
-                            texture: texture_handle.clone(),
+                            sprite: texture_handle.clone().into(),
                             ..default()
                         },
                         StateDespawnMarker,
@@ -236,7 +236,7 @@ impl Command for SpawnPickupCommand {
                                 ),
                             ],
                             justify: JustifyText::Center,
-                            linebreak_behavior: BreakLineOn::WordBoundary,
+                            linebreak_behavior: LineBreak::WordBoundary,
                         },
                         style: Style {
                             max_width: Val::Percent(33.0),
@@ -266,7 +266,7 @@ impl Command for SpawnPickupCommand {
                         transform: Transform::from_translation(Vec3::new(
                             pos.x, pos.y, 50.0,
                         )),
-                        texture: texture_handle.clone(),
+                        sprite: texture_handle.clone().into(),
                         ..default()
                     },
                 ));
