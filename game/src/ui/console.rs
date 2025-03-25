@@ -1,4 +1,5 @@
 use bevy::color::palettes;
+use bevy::input::keyboard::{Key, KeyboardInput};
 
 use crate::assets::UiAssets;
 use crate::prelude::*;
@@ -52,27 +53,33 @@ fn toggle_console(
                     },
                 ))
                 .id();
-            let prompt_prefix = commands.spawn((
-                Text("~ ".into()),
-                TextFont {
-                    font: ui_assets.unwrap().font_bold.clone(),
-                    font_size: 24.0,
-                    ..Default::default()
-                },
-                TextColor(palettes::css::RED.into()),
-            ));
-            let prompt = commands.spawn((
-                UiConsolePrompt(console),
-                UiConsolePromptHistoryEntry(None),
-                Text("".into()),
-                TextFont {
-                    font: ui_assets.unwrap().font_regular.clone(),
-                    font_size: 16.0,
-                    ..Default::default()
-                },
-                TextColor(Color::BLACK),
-            )).id();
-            commands.entity(console).push_children(&[prompt_prefix, prompt]);
+            let prompt_prefix = commands
+                .spawn((
+                    Text("~ ".into()),
+                    TextFont {
+                        font: ui_assets.as_ref().unwrap().font_bold.clone(),
+                        font_size: 24.0,
+                        ..Default::default()
+                    },
+                    TextColor(palettes::css::RED.into()),
+                ))
+                .id();
+            let prompt = commands
+                .spawn((
+                    UiConsolePrompt(console),
+                    UiConsolePromptHistoryEntry(None),
+                    Text("".into()),
+                    TextFont {
+                        font: ui_assets.as_ref().unwrap().font_regular.clone(),
+                        font_size: 16.0,
+                        ..Default::default()
+                    },
+                    TextColor(Color::BLACK),
+                ))
+                .id();
+            commands
+                .entity(console)
+                .add_children(&[prompt_prefix, prompt]);
             debug!("Console spawned.");
         } else {
             // despawn console
@@ -87,7 +94,7 @@ fn toggle_console(
 /// Implement a simple "console" to type commands in
 fn console_text_input(
     mut commands: Commands,
-    mut evr_char: EventReader<ReceivedCharacter>,
+    mut evr_char: EventReader<KeyboardInput>,
     kbd: Res<ButtonInput<KeyCode>>,
     mut query: Query<(
         &mut Text,
@@ -153,7 +160,15 @@ fn console_text_input(
     }
     for ev in evr_char.read() {
         for (mut text, mut hisentry, _) in &mut query {
-            text.0.push(ev.char.chars().next().unwrap());
+            match &ev.logical_key {
+                Key::Character(character) => {
+                    text.0.push(character.chars().next().unwrap());
+                },
+                Key::Space => {
+                    text.0.push(' ');
+                },
+                _ => {},
+            }
             hisentry.0 = None;
         }
     }
