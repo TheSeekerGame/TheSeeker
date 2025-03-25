@@ -1,4 +1,8 @@
-use bevy::reflect::{DynamicEnum, DynamicVariant};
+use bevy::{
+    ecs::query::QueryFilter,
+    reflect::{DynamicEnum, DynamicVariant},
+    state::commands,
+};
 
 use crate::prelude::*;
 
@@ -61,4 +65,13 @@ fn cli_appstate(
 }
 pub fn restart(mut next_state: ResMut<NextState<AppState>>) {
     next_state.set(AppState::InGame);
+}
+
+fn despawn_all_recursive<F: QueryFilter>(
+    mut commands: Commands,
+    q: Query<Entity, F>,
+) {
+    for entity in &q {
+        commands.entity(entity).despawn_recursive();
+    }
 }
