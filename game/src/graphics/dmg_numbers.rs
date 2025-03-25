@@ -41,30 +41,35 @@ fn instance(
 
     for damage_info in damage_events.read() {
         // Try the enemy query first:
-        let (transform, collider, text_color) = if let Ok((transform, collider)) =
-            enemy_query.get(damage_info.target)
-        {
-            (
-                transform,
-                collider,
-                if damage_info.crit && damage_info.stealthed {
-                    palettes::css::PURPLE.into()
-                } else if damage_info.crit {
-                    (palettes::css::YELLOW * 1.1).into()
-                } else if damage_info.stealthed {
-                    palettes::css::PINK.into()
-                } else {
-                    Color::WHITE
-                },
-            )
-        } else if let Ok((transform, collider)) =
-            player_query.get(damage_info.target)
-        {
-            // For player, force red color
-            (transform, collider, palettes::css::RED.into())
-        } else {
-            continue;
-        };
+        let (transform, collider, text_color) =
+            if let Ok((transform, collider)) =
+                enemy_query.get(damage_info.target)
+            {
+                (
+                    transform,
+                    collider,
+                    if damage_info.crit && damage_info.stealthed {
+                        palettes::css::PURPLE.into()
+                    } else if damage_info.crit {
+                        (palettes::css::YELLOW * 1.1).into()
+                    } else if damage_info.stealthed {
+                        palettes::css::PINK.into()
+                    } else {
+                        Color::WHITE
+                    },
+                )
+            } else if let Ok((transform, collider)) =
+                player_query.get(damage_info.target)
+            {
+                // For player, force red color
+                (
+                    transform,
+                    collider,
+                    palettes::css::RED.into(),
+                )
+            } else {
+                continue;
+            };
 
         let mut world_position = transform.translation();
 
@@ -72,9 +77,14 @@ fn instance(
         world_position += match collider {
             Some(collider) => {
                 let above_hb_offset = 11.0;
-                let collider_height = collider.0.compute_aabb().half_extents().y;
-                Vec3::new(1.0, collider_height + above_hb_offset, 0.0)
-            }
+                let collider_height =
+                    collider.0.compute_aabb().half_extents().y;
+                Vec3::new(
+                    1.0,
+                    collider_height + above_hb_offset,
+                    0.0,
+                )
+            },
             None => Vec3::ZERO,
         };
 
@@ -108,7 +118,7 @@ fn instance(
 
 fn update_number(
     mut commands: Commands,
-    mut dmg_numer_q: Query<(
+    mut dmg_number_q: Query<(
         Entity,
         &mut DmgNumber,
         &mut Node,
@@ -122,7 +132,8 @@ fn update_number(
     };
     let max_time = 6.0;
 
-    for (entity, mut dmg_number, mut style, mut text_color) in dmg_numer_q.iter_mut()
+    for (entity, mut dmg_number, mut style, mut text_color) in
+        dmg_number_q.iter_mut()
     {
         // This way the floating text position is dependent on the gametick time,
         // so if the game is paused, the floating numbers will pause as well.
@@ -139,7 +150,7 @@ fn update_number(
 
         // Fades the floating number out after waiting 4 seconds
         let a = text_color
-            .a()
+            .alpha()
             .lerp(
                 0.0,
                 (elapsed_time as f32 - 1.0) / (max_time - 1.0),
