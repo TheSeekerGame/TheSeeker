@@ -1,26 +1,16 @@
-use iyes_ui::prelude::OnClick;
-use sickle_ui::ui_builder::{UiBuilderExt, UiRoot};
-use sickle_ui::ui_style::{
-    SetNodeAlignItemsExt, SetNodeJustifyContentsExt, SetNodePositionTypeExt,
-    SetNodeTopExt, SetNodeWidthExt,
-};
-use sickle_ui::widgets::prelude::*;
+use bevy::core::Name;
+use bevy::hierarchy::BuildChildren;
 use theseeker_engine::prelude::{
-    in_state, resource_exists, Color, GameTickUpdate, GameTime, Resource,
+    in_state, resource_exists, Button, Color, GameTickUpdate, GameTime,
+    Resource,
 };
 
 use crate::camera::MainCamera;
 use crate::game::attack::KillCount;
 use crate::game::player::PlayerStateSet;
 use crate::gamestate::GameState;
-use crate::prelude::{
-    default, AlignItems, App, AppState, AssetServer, BackgroundColor, Commands,
-    Component, Entity, FlexDirection, IntoSystemConfigs, JustifyContent,
-    NodeBundle, Plugin, PositionType, Query, Res, ResMut, StateDespawnMarker,
-    Style, TargetCamera, TextBundle, TextStyle, Time, Update, Val, With,
-    ZIndex,
-};
-use crate::ui::button;
+use crate::locale::L10nKey;
+use crate::prelude::*;
 
 use super::pickups::DropTracker;
 
@@ -59,7 +49,7 @@ pub fn update_fade_in(
     for (entity, mut bg_color, mut fade_in) in query.iter_mut() {
         fade_in.progress += time.delta_secs() * 0.5;
         fade_in.progress = fade_in.progress.clamp(0.0, 1.0);
-        bg_color.0.set_a(fade_in.progress * 0.77); // Max alpha of 0.77
+        bg_color.0.set_alpha(fade_in.progress * 0.77); // Max alpha of 0.77
         if fade_in.progress >= 1.0 {
             commands.entity(entity).remove::<FadeIn>();
         }
@@ -81,106 +71,119 @@ pub fn on_game_over(
         return;
     };
 
-    commands.ui_builder(UiRoot).container(
-        (
-            NodeBundle {
-                style: Style {
-                    width: Val::Percent(100.0),
-                    height: Val::Percent(100.0),
-                    flex_direction: FlexDirection::Column,
-                    ..default()
-                },
-                background_color: BackgroundColor(Color::Rgba {
-                    red: 0.0,
-                    green: 0.0,
-                    blue: 0.0,
-                    alpha: 0.0,
-                }),
-                // This ensures we draw the ui above all other uis
-                z_index: ZIndex::Global(i32::MAX - 1000),
+    commands.spawn((
+        Node {
+            width: Val::Percent(100.0),
+            height: Val::Percent(100.0),
+            flex_direction: FlexDirection::Column,
+            ..default()
+        },
+        BackgroundColor(Color::srgba_u8(0, 0, 0, 0)),
+        // This ensures we draw the ui above all other uis
+        GlobalZIndex(i32::MAX - 1000),
+        FadeIn { progress: 0.0 },
+        TargetCamera(cam_e),
+        StateDespawnMarker,
+    ));
+
+    commands
+        .spawn((
+            Name::new("Game Over UI"),
+            Node {
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.),
+                flex_direction: FlexDirection::Column,
+                position_type: PositionType::Absolute,
+                top: Val::Percent(20.0),
+                justify_content: JustifyContent::FlexStart,
+                align_items: AlignItems::Center,
+
                 ..default()
             },
-            FadeIn { progress: 0.0 },
-            TargetCamera(cam_e),
+            GlobalZIndex(i32::MAX - 999),
             StateDespawnMarker,
-        ),
-        |_| {},
-    );
+        ))
+        .with_children(|column| {
+            let mut style = TextFont {
+                font: asset_server.load("font/Tektur-Regular.ttf"),
+                font_size: 42.0,
+                ..Default::default()
+            };
 
-    commands.ui_builder(UiRoot).column(|column| {
-        column.insert(ZIndex::Global(i32::MAX - 999));
-        column.insert(StateDespawnMarker);
-        column
-            .style()
-            .position_type(PositionType::Absolute)
-            .top(Val::Percent(20.0))
-            .justify_content(JustifyContent::FlexStart)
-            .align_items(AlignItems::Center)
-            .width(Val::Percent(100.0));
-        column.named("Game Over UI");
-
-        let mut style = TextStyle {
-            font: asset_server.load("font/Tektur-Regular.ttf"),
-            font_size: 42.0,
-            color: Default::default(),
-        };
-
-        column.spawn(TextBundle::from_section(
-            "GAME OVER",
-            style.clone(),
-        ));
-        // Spacer
-        column.spawn(NodeBundle {
-            style: Style {
+            column.spawn((Text::new("GAME OVER"), style.clone()));
+            // Spacer
+            column.spawn(Node {
                 height: Val::Percent(10.0),
                 ..default()
-            },
-            ..default()
-        });
+            });
 
-        style.font_size = 24.0;
-        column.spawn(TextBundle::from_section(
-            "You were killed by an Ice Crawler",
-            style.clone(),
-        ));
-        column.spawn(TextBundle::from_section(
-            format!("Kills: {}", kill_count.0),
-            style.clone(),
-        ));
-        let score = (kill_count.0 as f64 / time.time_in_seconds()) * 100.0;
-        column.spawn(TextBundle::from_section(
-            format!("Score: {}", score as u32),
-            style.clone(),
-        ));
-
-        column.spawn(NodeBundle {
-            style: Style {
-                height: Val::Percent(10.0),
-                ..default()
-            },
-            ..default()
-        });
-
-        column.row(|row| {
-            row.style().justify_content(JustifyContent::Center);
-            button(
-                row,
-                OnClick::new().cli("AppState MainMenu"),
-                "Abandon Planet?",
-                style.clone(),
-            );
-            row.spawn(TextBundle::from_section(
-                "|",
+            style.font_size = 24.0;
+            column.spawn((
+                Text::new("You were killed by an Ice Crawler"),
                 style.clone(),
             ));
-            button(
-                row,
-                OnClick::new().cli("AppState Restart"),
-                "New Expedition!",
+            column.spawn((
+                Text::new(format!("Kills: {}", kill_count.0)),
                 style.clone(),
-            );
+            ));
+            let score = (kill_count.0 as f64 / time.time_in_seconds()) * 100.0;
+            column.spawn((
+                Text::new(format!("Score: {}", score as u32)),
+                style.clone(),
+            ));
+
+            column.spawn(Node {
+                height: Val::Percent(10.0),
+                ..default()
+            });
+
+            column
+                .spawn(Node {
+                    width: Val::Percent(100.),
+                    align_items: AlignItems::Center,
+                    justify_content: JustifyContent::Center,
+                    ..default()
+                })
+                .with_children(|row| {
+                    // TODO: Add behavior to buttons
+                    row.spawn((
+                        Button,
+                        Node {
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            padding: UiRect::all(Val::Px(4.0)),
+                            margin: UiRect::all(Val::Px(4.0)),
+                            ..Default::default()
+                        },
+                        BackgroundColor(Color::NONE),
+                    ))
+                    .with_child((
+                        L10nKey("Abandon Planet?".to_owned()),
+                        Text::new("Abandon Planet?"),
+                        style.clone(),
+                    ));
+
+                    row.spawn((Text::new("|"), style.clone()));
+
+                    row.spawn((
+                        Button,
+                        Node {
+                            justify_content: JustifyContent::Center,
+                            align_items: AlignItems::Center,
+                            padding: UiRect::all(Val::Px(4.0)),
+                            margin: UiRect::all(Val::Px(4.0)),
+                            ..Default::default()
+                        },
+                        BackgroundColor(Color::NONE),
+                    ))
+                    .with_child((
+                        L10nKey("New Expedition!".to_owned()),
+                        Text::new("New Expedition!"),
+                        style.clone(),
+                    ));
+                });
         });
-    });
+
     kill_count.0 = 0;
 
     // TODO: Move this to some less obscure system that resets game state.
