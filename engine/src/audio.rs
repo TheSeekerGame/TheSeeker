@@ -28,7 +28,7 @@ fn setup_precisionmixer(
             controller: controller.clone(),
         },
         AudioSourceBundle {
-            source: handle,
+            source: AudioPlayer(handle),
             ..Default::default()
         },
     ));

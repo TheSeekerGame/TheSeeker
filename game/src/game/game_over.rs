@@ -57,7 +57,7 @@ pub fn update_fade_in(
     )>,
 ) {
     for (entity, mut bg_color, mut fade_in) in query.iter_mut() {
-        fade_in.progress += time.delta_seconds() * 0.5;
+        fade_in.progress += time.delta_secs() * 0.5;
         fade_in.progress = fade_in.progress.clamp(0.0, 1.0);
         bg_color.0.set_a(fade_in.progress * 0.77); // Max alpha of 0.77
         if fade_in.progress >= 1.0 {

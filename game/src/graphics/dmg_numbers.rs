@@ -1,3 +1,4 @@
+use bevy::color::palettes;
 use bevy::prelude::*;
 use theseeker_engine::physics::Collider;
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
@@ -47,11 +48,11 @@ fn instance(
                 transform,
                 collider,
                 if damage_info.crit && damage_info.stealthed {
-                    Color::PURPLE
+                    palettes::css::PURPLE.into()
                 } else if damage_info.crit {
-                    Color::YELLOW * 1.1
+                    (palettes::css::YELLOW * 1.1).into()
                 } else if damage_info.stealthed {
-                    Color::PINK
+                    palettes::css::PINK.into()
                 } else {
                     Color::WHITE
                 },
@@ -60,7 +61,7 @@ fn instance(
             player_query.get(damage_info.target)
         {
             // For player, force red color
-            (transform, collider, Color::RED)
+            (transform, collider, palettes::css::RED.into())
         } else {
             continue;
         };
@@ -87,20 +88,19 @@ fn instance(
                 game_time.tick() as f64 / game_time.hz
                     + game_time.last_update().as_secs_f64(),
             ),
-            TextBundle::from_section(
-                format!("{:.1}", damage_info.amount), // round to 1 decimal place
-                TextStyle {
-                    font: asset_server.load("font/Tektur-Regular.ttf"),
-                    font_size: 42.0,
-                    color: text_color,
-                },
-            )
-            .with_style(Style {
+            Text(format!("{:.1}", damage_info.amount)),
+            TextColor(text_color),
+            TextFont {
+                font: asset_server.load("font/Tektur-Regular.ttf"),
+                font_size: 42.0,
+                ..Default::default()
+            },
+            Node {
                 position_type: PositionType::Absolute,
                 left: Val::Px(screen_position.x),
                 top: Val::Px(screen_position.y),
                 ..default()
-            }),
+            },
             StateDespawnMarker,
         ));
     }
@@ -111,8 +111,8 @@ fn update_number(
     mut dmg_numer_q: Query<(
         Entity,
         &mut DmgNumber,
-        &mut Style,
-        &mut Text,
+        &mut Node,
+        &mut TextColor,
     )>,
     q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
     game_time: Res<GameTime>,
@@ -122,9 +122,8 @@ fn update_number(
     };
     let max_time = 6.0;
 
-    for (entity, mut dmg_number, mut style, mut text) in dmg_numer_q.iter_mut()
+    for (entity, mut dmg_number, mut style, mut text_color) in dmg_numer_q.iter_mut()
     {
-        let text_style = &mut text.sections[0].style;
         // This way the floating text position is dependent on the gametick time,
         // so if the game is paused, the floating numbers will pause as well.
         let elapsed_time = game_time.tick() as f64 / game_time.hz
@@ -139,8 +138,7 @@ fn update_number(
             .unwrap();
 
         // Fades the floating number out after waiting 4 seconds
-        let a = text_style
-            .color
+        let a = text_color
             .a()
             .lerp(
                 0.0,
@@ -148,12 +146,7 @@ fn update_number(
             )
             .clamp(0.0, 1.0);
 
-        text_style.color = Color::rgba(
-            text_style.color.r(),
-            text_style.color.g(),
-            text_style.color.b(),
-            a,
-        );
+        text_color.set_alpha(a);
 
         style.left = Val::Px(screen_position.x);
         style.top = Val::Px(screen_position.y);

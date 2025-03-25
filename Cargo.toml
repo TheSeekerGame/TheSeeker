@@ -5,42 +5,57 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# [patch."https://github.com/TheSeekerGame/seek_ecs_tilemap"]
-# seek_ecs_tilemap = { path = "../seek_ecs_tilemap" }
+[patch."https://github.com/TheSeekerGame/seek_ecs_tilemap"]
+seek_ecs_tilemap = { path = "../seek_ecs_tilemap" }
 
 [patch.crates-io]
-# bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_ecs = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_asset = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_xpbd_2d = { git = "https://github.com/TheSeekerGame/bevy_xpbd", branch = "TheSeeker" }
-
-bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_asset = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_core = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_core_pipeline = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_ecs = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_gizmos = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_hierarchy = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_input = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_math = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_pbr = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_reflect = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_render = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_sprite = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_text = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_time = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_transform = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_ui = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_window = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_winit = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
+bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_a11y = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_animation = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_asset = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_audio = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_color = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_core = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_core_pipeline = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_derive = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_dev_tools = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_diagnostic = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_dylib = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_ecs = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_encase_derive = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_gilrs = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_gizmos = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_gltf = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_hierarchy = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_image = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_input = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_internal = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_macro_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_math = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_mesh = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_mikktspace = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_pbr = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_picking = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_ptr = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_reflect = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_remote = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_render = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_scene = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_sprite = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_state = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_tasks = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_text = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_time = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_transform = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_ui = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_window = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
+bevy_winit = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 
 [patch."https://github.com/IyesGames/iyes_cli"]
-iyes_cli = { git = "https://github.com/TheSeekerGame/iyes_cli", branch = "seeker" }
+iyes_cli = { git = "https://github.com/TheSeekerGame/iyes_cli", branch = "seeker-015" }
 
 [lib]
 name = "theseeker_engine"
@@ -73,88 +88,80 @@ debug = false
 
 # Random little libraries
 [dependencies]
-anyhow = "1.0.79"
-derive_more = "0.99.17"
-directories = "5.0.1"
-enum-iterator = "1.5.0"
+anyhow = "1.0.97"
+derive_more = {version = "2.0.1", features = ["full"]}
+directories = "6.0.0"
+enum-iterator = "2.1.0"
 enum-map = "2.7.3"
 fluent_content = "0.0.5"
-glam = "0.25.0"
-rand = "0.8.5"
-serde_with = "3.6.1"
-thiserror = "1.0.56"
-toml = "0.8.10"
-unic-langid = "0.9.4"
+glam = "0.30.0"
+rand = "0.9.0"
+serde_with = "3.12.0"
+thiserror = "2.0.12"
+toml = "0.8.20"
+unic-langid = "0.9.5"
 ran = "2.0.1"            #for lighter weight/easier use random noise then using rand
-rodio = "0.17.3"
+rodio = "0.19.0"
 cpal = "0.15.3"
-strum = "0.26"
-strum_macros = "0.26"
+strum = "0.27"
+strum_macros = "0.27"
 
-bevy_egui = "0.27"
-bevy-inspector-egui = "0.24"
-bevy_fluent = "0.9.0"
+bevy_egui = "0.33"
+bevy-inspector-egui = "0.30"
+bevy_fluent = "0.11.0"
 
 # This specific rev was working main on may 28th.
 # needed for moveble forcefields not availible in 0.10
 # (also has some wgsl fixes)
-bevy_hanabi = { git = "https://github.com/djeedai/bevy_hanabi", rev = "cabb3cb", default-features = false, features = [
-  "3d",
-] }
-smallvec = "1.13.2"
+bevy_hanabi = "0.14"
+smallvec = "1.14.0"
 
-bevy_sprite3d = "2.8"
-iyes_perf_ui = { version = "0.2.3", optional = true }
+bevy_sprite3d = "4.0"
+iyes_perf_ui = { version = "0.4.0", optional = true }
 num_cpus = "1.16.0"
 
 [dependencies.serde]
-version = "1.0.196"
+version = "1.0.219"
 features = ["derive"]
 
 [dependencies.bevy]
-version = "0.13"
+version = "0.15"
 default-features = true
 features = ["flac", "jpeg", "wayland"]
 
 [dependencies.bevy_asset_loader]
-version = "0.20"
+version = "0.22"
 features = ["2d", "progress_tracking", "standard_dynamic_assets"]
 
 [dependencies.bevy_common_assets]
-version = "0.10"
+version = "0.12"
 features = ["toml", "ron"]
 
 [dependencies.bevy_ecs_ldtk]
-version = "0.9.17"
 git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
+branch = "bevy015"
 
 [dependencies.seek_ecs_tilemap]
 git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
+branch = "bevy015"
 features = ["default", "use_3d_pipeline", "background_tiles"]
 
-[dependencies.iyes_bevy_extras]
-git = "https://github.com/IyesGames/iyes_bevy_extras"
-rev = "3b016ca6e2c3dc4b0cae1b037f0ae25c48ca0878"
-features = ["2d"]
+# [dependencies.iyes_bevy_extras]
+# git = "https://github.com/IyesGames/iyes_bevy_extras"
+# branch = "seeker-015"
+# features = ["2d"]
 
 [dependencies.iyes_cli]
 git = "https://github.com/IyesGames/iyes_cli"
 
 [dependencies.iyes_progress]
-version = "0.11"
+version = "0.13.1"
 features = ["assets"]
 
-[dependencies.iyes_ui]
-git = "https://github.com/IyesGames/iyes_ui"
-rev = "2a0314386f807715de619246c54bbfe7dbc09bea"
-features = ["iyes_cli"]
-
-[dependencies.sickle_ui]
-git = "https://github.com/TheSeekerGame/sickle_ui.git"
-
 [dependencies.leafwing-input-manager]
-git = "https://github.com/TheSeekerGame/leafwing-input-manager"
-branch = "fixed_update_0.13"
+version = "0.16"
+# git = "https://github.com/TheSeekerGame/leafwing-input-manager"
+# branch = "fixed_update_0.13"
 
 [dependencies.rapier2d]
 version = "0.18"

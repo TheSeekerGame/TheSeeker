@@ -1,5 +1,3 @@
-use bevy::ecs::component::SparseStorage;
-
 use crate::prelude::*;
 
 // todo make generic
@@ -96,11 +94,11 @@ impl Facing {
 /// Impl GentState for each state
 /// Impl Transitionable<T: GentState> for each state that that should be able to be transitioned
 /// from by a state
-pub trait GentState: Component<Storage = SparseStorage> {}
+pub trait GentState: Component {}
 
 /// A GenericState has a blanket Transitionable impl for any GentState,
 /// it will remove itself on transition
-pub trait GenericState: Component<Storage = SparseStorage> {}
+pub trait GenericState: Component {}
 
 impl<T: GentState, N: GentState + GenericState> Transitionable<T> for N {
     type Removals = (N, Idle);

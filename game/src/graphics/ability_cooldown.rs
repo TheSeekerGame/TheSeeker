@@ -16,9 +16,9 @@ pub struct Material {
     #[uniform(0)]
     pub factor: f32,
     #[uniform(1)]
-    pub background_color: Color,
+    pub background_color: LinearRgba,
     #[uniform(2)]
-    pub filled_color: Color,
+    pub filled_color: LinearRgba,
 }
 
 impl UiMaterial for Material {

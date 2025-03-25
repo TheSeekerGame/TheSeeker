@@ -79,33 +79,21 @@ pub struct SpriteShapeMap {
 #[rustfmt::skip]
 pub fn update_sprite_colliders(
     shape_map: Res<SpriteShapeMap>,
-    mut q_sprite: Query<
-        (
-            &Handle<Image>,
-            &TextureAtlas,
-            &Sprite,
-        ),
-        (
-            Or<(
-                Changed<Handle<Image>>,
-                Changed<TextureAtlas>,
-            )>,
-        ),
-    >,
+    mut q_sprite: Query<&Sprite, Changed<Sprite>>,
     mut q_collider: Query<(&mut Collider, &AnimationCollider)>,
 ) {
     for (mut collider, anim_entity) in &mut q_collider {
         match q_sprite.get(anim_entity.0) {
-            Ok((h_image, atlas, sprite)) => {
+            Ok(sprite) => {
                 let Some(shapes_i) = shape_map
                     .map
-                    .get(&h_image.id())
+                    .get(&sprite.image.id())
                     .expect("Sprite image not found in collider map!")
-                    .get(atlas.index)
+                    .get(sprite.texture_atlas.as_ref().unwrap().index)
                 else {
                     println!(
-                        "er finding collider associated with image {}",
-                        atlas.index
+                        "error finding collider associated with image {}",
+                        sprite.texture_atlas.as_ref().unwrap().index
                     );
                     continue;
                 };
@@ -187,7 +175,7 @@ pub struct ShapeCaster {
     pub shape: SharedShape,
     /// Offsets the origin of the shape cast from the transform
     pub origin: Vec2,
-    pub direction: Direction2d,
+    pub direction: Dir2,
     pub max_toi: f32,
     pub interaction: InteractionGroups,
 }
@@ -235,7 +223,7 @@ impl PhysicsWorld {
     pub fn shape_cast(
         &self,
         origin: Vec2,
-        direction: Direction2d,
+        direction: Dir2,
         shape: &dyn Shape,
         max_toi: f32,
         interaction: InteractionGroups,
@@ -516,10 +504,12 @@ pub fn debug_colliders(
             let half_extents =
                 Vec2::new(cube.half_extents.x, cube.half_extents.y);
             collider_gizmos.rect(
-                pos.extend(0.0002),
-                Quat::from_rotation_z(rotation - PI),
+                Isometry3d::new(
+                    pos.extend(0.0002),
+                    Quat::from_rotation_z(rotation - PI),
+                ),
                 half_extents * 2.0,
-                Color::GREEN,
+                Color::srgb(0.0, 1.0, 0.0),
             );
         }
         if let Some(convex) = collider.shared_shape().as_convex_polygon() {
@@ -533,7 +523,7 @@ pub fn debug_colliders(
                 collider_gizmos.line(
                     Vec2::new(pos.x + start.x, pos.y + start.y).extend(0.0002),
                     Vec2::new(pos.x + end.x, pos.y + end.y).extend(0.0002),
-                    Color::GREEN,
+                    Color::srgb(0.0, 1.0, 0.0),
                 );
             }
         }

@@ -1322,7 +1322,7 @@ fn player_update_stats_mod(
         sprite.color = modifier.effect_col;
 
         // TODO: switch to ticks
-        modifier.time_remaining -= time.delta_seconds();
+        modifier.time_remaining -= time.delta_secs();
 
         if modifier.time_remaining < 0. {
             commands.entity(entity).remove::<StatusModifier>();

@@ -10,17 +10,10 @@ use bevy::input::{ButtonState, InputSystem};
 use bevy::prelude::{PostUpdate, PreUpdate};
 use bevy::reflect::TypePath;
 use leafwing_input_manager::action_state::{ActionData, ActionState};
-use leafwing_input_manager::axislike::{
-    AxisType, DualAxis, DualAxisData, MouseMotionAxisType, MouseWheelAxisType,
-    SingleAxis, VirtualAxis, VirtualDPad,
-};
-use leafwing_input_manager::buttonlike::{
-    MouseMotionDirection, MouseWheelDirection,
-};
 use leafwing_input_manager::clashing_inputs::ClashStrategy;
 use leafwing_input_manager::input_map::InputMap;
 use leafwing_input_manager::input_processing::*;
-use leafwing_input_manager::user_input::{InputKind, Modifier, UserInput};
+use leafwing_input_manager::user_input::UserInput;
 use leafwing_input_manager::Actionlike;
 
 use crate::time::GameTickPost;
@@ -124,40 +117,40 @@ impl<A: Actionlike + TypePath> Plugin for InputManagerPlugin<A> {
             swap_to_update::<A>.in_set(GameTickSet::Post),
         );
 
-        app.register_type::<ActionState<A>>()
-            .register_type::<InputMap<A>>()
-            .register_type::<UserInput>()
-            .register_type::<InputKind>()
-            .register_type::<ActionData>()
-            .register_type::<Modifier>()
-            .register_type::<ActionState<A>>()
-            .register_type::<VirtualDPad>()
-            .register_type::<VirtualAxis>()
-            .register_type::<SingleAxis>()
-            .register_type::<DualAxis>()
-            .register_type::<AxisType>()
-            .register_type::<MouseWheelAxisType>()
-            .register_type::<MouseMotionAxisType>()
-            .register_type::<DualAxisData>()
-            .register_type::<ButtonState>()
-            .register_type::<MouseWheelDirection>()
-            .register_type::<MouseMotionDirection>()
-            // Processors
-            .register_type::<AxisProcessor>()
-            .register_type::<AxisBounds>()
-            .register_type::<AxisExclusion>()
-            .register_type::<AxisDeadZone>()
-            .register_type::<DualAxisProcessor>()
-            .register_type::<DualAxisInverted>()
-            .register_type::<DualAxisSensitivity>()
-            .register_type::<DualAxisBounds>()
-            .register_type::<DualAxisExclusion>()
-            .register_type::<DualAxisDeadZone>()
-            .register_type::<CircleBounds>()
-            .register_type::<CircleExclusion>()
-            .register_type::<CircleDeadZone>()
-            // Resources
-            .init_resource::<ClashStrategy>();
+        // app.register_type::<ActionState<A>>();
+        // app.register_type::<InputMap<A>>();
+        // app.register_type::<UserInput>();
+        // app.register_type::<InputKind>();
+        // app.register_type::<ActionData>();
+        // app.register_type::<Modifier>();
+        // app.register_type::<ActionState<A>>();
+        // app.register_type::<VirtualDPad>();
+        // app.register_type::<VirtualAxis>();
+        // app.register_type::<SingleAxis>();
+        // app.register_type::<DualAxis>();
+        // app.register_type::<AxisType>();
+        // app.register_type::<MouseWheelAxisType>();
+        // app.register_type::<MouseMotionAxisType>();
+        // app.register_type::<DualAxisData>();
+        // app.register_type::<ButtonState>();
+        // app.register_type::<MouseWheelDirection>();
+        // app.register_type::<MouseMotionDirection>();
+        // Processors
+        // app.register_type::<AxisProcessor>();
+        // app.register_type::<AxisBounds>();
+        // app.register_type::<AxisExclusion>();
+        // app.register_type::<AxisDeadZone>();
+        // app.register_type::<DualAxisProcessor>();
+        // app.register_type::<DualAxisInverted>();
+        // app.register_type::<DualAxisSensitivity>();
+        // app.register_type::<DualAxisBounds>();
+        // app.register_type::<DualAxisExclusion>();
+        // app.register_type::<DualAxisDeadZone>();
+        // app.register_type::<CircleBounds>();
+        // app.register_type::<CircleExclusion>();
+        // app.register_type::<CircleDeadZone>();
+        // Resources
+        // app.init_resource::<ClashStrategy>();
     }
 }
 
