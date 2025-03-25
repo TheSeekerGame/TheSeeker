@@ -36,7 +36,7 @@ use bevy::render::render_resource::{
     TextureSampleType, VertexState,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice};
-use bevy::render::texture::FallbackImageZero;
+use bevy::render::texture::{FallbackImageZero, GpuImage};
 use bevy::render::view::{
     ViewDepthTexture, ViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms,
 };
