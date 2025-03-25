@@ -26,65 +26,51 @@ fn spawn_mainmenu(
     let e_menu_root = commands
         .spawn((
             StateDespawnMarker,
-            NodeBundle {
-                background_color: BackgroundColor(Color::rgb(0.0, 0.0, 0.0)),
-                style: Style {
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(0.),
-                    right: Val::Px(0.),
-                    top: Val::Px(0.),
-                    bottom: Val::Px(0.),
-                    flex_direction: FlexDirection::Column,
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::SpaceEvenly,
-                    ..Default::default()
-                },
+            Node {
+                position_type: PositionType::Absolute,
+                left: Val::Px(0.),
+                right: Val::Px(0.),
+                top: Val::Px(0.),
+                bottom: Val::Px(0.),
+                flex_direction: FlexDirection::Column,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::SpaceEvenly,
                 ..Default::default()
             },
+            BackgroundColor(Color::rgb(0.0, 0.0, 0.0)),
         ))
         .id();
     let e_logo_image = commands
-        .spawn((ImageBundle {
-            style: Style {
-                ..Default::default()
-            },
-            image: UiImage {
-                texture: menuassets.background.clone(),
-                ..Default::default()
-            },
-            ..Default::default()
-        },))
+        .spawn(ImageNode::new(
+            menuassets.background.clone(),
+        ))
         .id();
     let e_menu_wrapper = commands
-        .spawn((NodeBundle {
-            style: Style {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                ..Default::default()
-            },
+        .spawn(Node {
+            flex_direction: FlexDirection::Column,
+            align_items: AlignItems::Center,
+            justify_content: JustifyContent::Center,
             ..Default::default()
-        },))
+        })
         .id();
 
     let e_butt_play = spawn_menuentry(
         &mut commands,
         &uiassets,
-        OnClick::new().cli("AppState InGame"),
+        // OnClick::new().cli("AppState InGame"),
         "mainmenu-entry-play",
     );
     let e_butt_exit = spawn_menuentry(
         &mut commands,
         &uiassets,
-        OnClick::new().cli("exit"),
+        // OnClick::new().cli("exit"),
         "mainmenu-entry-exit",
     );
 
     commands
         .entity(e_menu_root)
-        .push_children(&[e_logo_image, e_menu_wrapper]);
-    commands.entity(e_menu_wrapper).push_children(&[
-        e_butt_play,
-        e_butt_exit,
-    ]);
+        .add_children(&[e_logo_image, e_menu_wrapper]);
+    commands
+        .entity(e_menu_wrapper)
+        .add_children(&[e_butt_play, e_butt_exit]);
 }
