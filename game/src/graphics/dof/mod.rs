@@ -43,7 +43,6 @@ use bevy::render::render_graph::{
     NodeRunError, RenderGraphApp as _, RenderGraphContext, RenderLabel,
     ViewNode, ViewNodeRunner,
 };
-use bevy::render::render_phase::RenderPhase;
 use bevy::render::render_resource::binding_types::{
     sampler, texture_2d, texture_depth_2d, texture_depth_2d_multisampled,
     uniform_buffer,
@@ -59,7 +58,7 @@ use bevy::render::render_resource::{
     TextureUsages,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice};
-use bevy::render::texture::{BevyDefault, CachedTexture, TextureCache};
+use bevy::render::texture::{CachedTexture, TextureCache};
 use bevy::render::view::{
     prepare_view_targets, ExtractedView, Msaa, ViewDepthTexture, ViewTarget,
     ViewUniform, ViewUniformOffset, ViewUniforms,
@@ -820,7 +819,7 @@ pub fn prepare_depth_of_field_global_bind_group(
         Some("depth of field global bind group"),
         &global_bind_group_layout.layout,
         &BindGroupEntries::sequential((
-            dof_settings_uniforms,                           // `dof_params`
+            dof_settings_uniforms, // `dof_params`
             &global_bind_group_layout.color_texture_sampler, // `color_texture_sampler`
         )),
     ));
@@ -1090,26 +1089,24 @@ impl DepthOfFieldPipelines {
             DepthOfFieldPipelines::Bokeh {
                 pass_0: pass_0_pipeline,
                 pass_1: pass_1_pipeline,
-            } => {
-                [
-                    DepthOfFieldPipelineRenderInfo {
-                        pass_label: "depth of field pass (bokeh pass 0)",
-                        view_bind_group_label:
-                            "depth of field view bind group (bokeh pass 0)",
-                        pipeline: pass_0_pipeline,
-                        is_dual_input: false,
-                        is_dual_output: true,
-                    },
-                    DepthOfFieldPipelineRenderInfo {
-                        pass_label: "depth of field pass (bokeh pass 1)",
-                        view_bind_group_label:
-                            "depth of field view bind group (bokeh pass 1)",
-                        pipeline: pass_1_pipeline,
-                        is_dual_input: true,
-                        is_dual_output: false,
-                    },
-                ]
-            },
+            } => [
+                DepthOfFieldPipelineRenderInfo {
+                    pass_label: "depth of field pass (bokeh pass 0)",
+                    view_bind_group_label:
+                        "depth of field view bind group (bokeh pass 0)",
+                    pipeline: pass_0_pipeline,
+                    is_dual_input: false,
+                    is_dual_output: true,
+                },
+                DepthOfFieldPipelineRenderInfo {
+                    pass_label: "depth of field pass (bokeh pass 1)",
+                    view_bind_group_label:
+                        "depth of field view bind group (bokeh pass 1)",
+                    pipeline: pass_1_pipeline,
+                    is_dual_input: true,
+                    is_dual_output: false,
+                },
+            ],
         }
     }
 }
