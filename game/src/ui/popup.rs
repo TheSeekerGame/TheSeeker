@@ -53,103 +53,85 @@ impl<T: Spawn> PopupUi for T {
         self.spawn((
             Name::new("popup_root"),
             StateDespawnMarker,
-            NodeBundle {
-                style: Style {
-                    position_type: PositionType::Absolute,
-                    width: Val::Percent(100.0),
-                    height: Val::Percent(100.0),
-                    ..default()
-                },
-                visibility: Visibility::Hidden,
-                background_color: BackgroundColor(OVERLAY_COLOR),
+            Node {
+                position_type: PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
                 ..default()
             },
+            Visibility::Hidden,
+            BackgroundColor(OVERLAY_COLOR),
         ))
     }
 
     fn container(&mut self) -> EntityCommands {
         self.spawn((
             Name::new("popup_container"),
-            NodeBundle {
-                style: Style {
-                    position_type: PositionType::Absolute,
-                    margin: UiRect {
-                        left: Val::Percent(25.0),
-                        right: Val::Auto,
-                        top: Val::Auto,
-                        bottom: Val::Auto,
-                    },
-                    display: Display::Flex,
-                    flex_direction: FlexDirection::Column,
-                    padding: UiRect::axes(Val::Px(24.0), Val::Px(12.0)),
-                    ..default()
+            Node {
+                position_type: PositionType::Absolute,
+                margin: UiRect {
+                    left: Val::Percent(25.0),
+                    right: Val::Auto,
+                    top: Val::Auto,
+                    bottom: Val::Auto,
                 },
-                background_color: BackgroundColor(BACKGROUND_COLOR),
+                display: Display::Flex,
+                flex_direction: FlexDirection::Column,
+                padding: UiRect::axes(Val::Px(24.0), Val::Px(12.0)),
                 ..default()
             },
+            BackgroundColor(BACKGROUND_COLOR),
         ))
     }
 
     fn row(&mut self) -> EntityCommands {
         self.spawn((
             Name::new("popup_row"),
-            NodeBundle {
-                style: Style {
-                    display: Display::Flex,
-                    width: Val::Percent(100.0),
-                    height: Val::Auto,
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::Start,
-                    padding: UiRect::vertical(Val::Px(2.0)),
-                    ..default()
-                },
+            Node {
+                display: Display::Flex,
+                width: Val::Percent(100.0),
+                height: Val::Auto,
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Start,
+                padding: UiRect::vertical(Val::Px(2.0)),
                 ..default()
             },
         ))
     }
 
-    fn text(&mut self, value: impl Into<String>) -> EntityCommands {
+    fn text(&mut self, text: impl Into<String>) -> EntityCommands {
         self.spawn((
             Name::new("popup_text"),
-            TextBundle::from_section(
-                value,
-                TextStyle {
-                    font_size: 14.0,
-                    color: TEXT_COLOR,
-                    ..default()
-                },
-            ),
+            Text::new(text),
+            TextFont::from_font_size(14.0),
+            TextColor(TEXT_COLOR),
         ))
     }
 
-    fn control_icon(&mut self, value: impl Into<String>) -> EntityCommands {
+    fn control_icon(&mut self, text: impl Into<String>) -> EntityCommands {
         let mut entity = self.spawn((
             Name::new("popup_icon"),
-            NodeBundle {
-                style: Style {
-                    align_items: AlignItems::Center,
-                    justify_content: JustifyContent::Center,
-                    padding: UiRect::all(Val::Px(4.0)),
-                    min_width: Val::Px(20.0),
-                    ..default()
-                },
-                background_color: BackgroundColor(ICON_BACKGROUND_COLOR),
+            Node {
+                align_items: AlignItems::Center,
+                justify_content: JustifyContent::Center,
+                padding: UiRect::all(Val::Px(4.0)),
+                min_width: Val::Px(20.0),
                 ..default()
             },
+            BackgroundColor(ICON_BACKGROUND_COLOR),
         ));
 
-        entity.with_children(|node| {
-            node.spawn((
-                Name::new("popup_icon_text"),
-                TextBundle::from_section(
-                    value,
-                    TextStyle {
-                        font_size: 14.0,
-                        color: TEXT_COLOR,
-                        ..default()
-                    },
+        entity.with_children(|mut node| {
+            // TODO: Is this disambiguation correct?
+            crate::ui::Spawn::spawn(
+                node,
+                (
+                    Name::new("popup_icon_text"),
+                    Text::new(text),
+                    TextFont::from_font_size(14.0),
+                    TextColor(TEXT_COLOR),
                 ),
-            ));
+            );
         });
 
         entity
@@ -158,16 +140,13 @@ impl<T: Spawn> PopupUi for T {
     fn spacer(&mut self) -> EntityCommands {
         self.spawn((
             Name::new("popup_spacer"),
-            NodeBundle {
-                style: Style {
-                    height: Val::Px(2.0),
-                    width: Val::Percent(100.0),
-                    margin: UiRect::vertical(Val::Px(7.0)),
-                    ..default()
-                },
-                background_color: BackgroundColor(SPACER_COLOR),
+            Node {
+                height: Val::Px(2.0),
+                width: Val::Percent(100.0),
+                margin: UiRect::vertical(Val::Px(7.0)),
                 ..default()
             },
+            BackgroundColor(SPACER_COLOR),
         ))
     }
 
@@ -175,20 +154,17 @@ impl<T: Spawn> PopupUi for T {
         self.spawn((
             Name::new("popup"),
             Popup,
-            NodeBundle {
-                style: Style {
-                    margin: UiRect::new(
-                        Val::Auto,
-                        Val::Auto,
-                        Val::Percent(40.0),
-                        Val::Auto,
-                    ),
-                    padding: UiRect::axes(Val::Px(16.0), Val::Px(4.0)),
-                    ..default()
-                },
-                background_color: BackgroundColor(BACKGROUND_COLOR),
+            Node {
+                margin: UiRect::new(
+                    Val::Auto,
+                    Val::Auto,
+                    Val::Percent(40.0),
+                    Val::Auto,
+                ),
+                padding: UiRect::axes(Val::Px(16.0), Val::Px(4.0)),
                 ..default()
             },
+            BackgroundColor(BACKGROUND_COLOR),
             StateDespawnMarker,
         ))
     }
