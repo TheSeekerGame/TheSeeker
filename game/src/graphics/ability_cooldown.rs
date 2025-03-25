@@ -10,6 +10,7 @@ impl Plugin for AbilityCooldownPlugin {
     }
 }
 
+// TODO: Rename this to `AbilityCooldownMaterial` or similar to avoid naming clashes
 #[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
 pub struct Material {
     /// A number between `0` and `1` indicating how much of the bar should be filled.

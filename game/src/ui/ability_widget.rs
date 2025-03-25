@@ -1,10 +1,7 @@
 use std::f32::consts::PI;
 
 use bevy::ecs::system::{EntityCommand, EntityCommands};
-use sickle_ui::ui_builder::UiBuilder;
-use sickle_ui::ui_style::*;
-use sickle_ui::widgets::column::UiColumnExt;
-use sickle_ui::widgets::prelude::UiContainerExt;
+use bevy::sprite::Material2d;
 
 use crate::graphics::ability_cooldown;
 use crate::prelude::*;
@@ -12,80 +9,81 @@ use crate::prelude::*;
 #[derive(Component)]
 pub struct AbilityWidget;
 
-pub trait UiAbilityWidgetExt<'w, 's> {
-    fn ability_widget<'a, T: Component + Clone>(
-        &'a mut self,
-        config: AbilityWidgetConfig<T>,
-    ) -> UiBuilder<'w, 's, 'a, Entity>;
-}
+// FIXME: Rewrite without Sickle UI
+// pub trait UiAbilityWidgetExt<'w, 's> {
+//     fn ability_widget<'a, T: Component + Clone>(
+//         &'a mut self,
+//         config: AbilityWidgetConfig<T>,
+//     ) -> UiBuilder<'w, 's, 'a, Entity>;
+// }
 
-impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
-    /// Draws a 96.0x96.0 tile with a progress bar overlaid.
-    /// modify
-    fn ability_widget<'a, T: Component + Clone>(
-        &'a mut self,
-        config: AbilityWidgetConfig<T>,
-    ) -> UiBuilder<'w, 's, 'a, Entity> {
-        self.column(|column| {
-            column.style().justify_content(JustifyContent::Center);
-            column.container(
-                (
-                    ImageBundle::default(),
-                    AbilityWidget,
-                    config.tracking_component.clone(),
-                ),
-                |ability_card| {
-                    ability_card.named("ability");
-                    ability_card
-                        .style()
-                        .width(Val::Px(60.0))
-                        .height(Val::Px(60.0))
-                        .image(config.image_path);
-                },
-            );
-            column.container(
-                (
-                    MaterialNodeBundle::<ability_cooldown::Material>::default(),
-                    config.tracking_component,
-                ),
-                |ability_card| {
-                    let entity = ability_card.context();
-                    // Adds the progress bar material to the ui node
-                    // Someone tell me theres a better way then this. I mean it works at least
-                    ability_card.commands().add(move |w: &mut World| {
-                        let Some(mut ui_materials) =
-                            w.get_resource_mut::<Assets<ability_cooldown::Material>>()
-                        else {
-                            return;
-                        };
-                        let handle =
-                            ui_materials.add(ability_cooldown::Material {
-                                factor: 0.3,
-                                background_color: Color::rgba(0.0, 0.0, 0.0, 0.0).into(),
-                                filled_color: Color::rgba(0.25, 0.25, 0.0, 0.75).into(),
-                            });
-                        w.entity_mut(entity).insert(handle);
-                        // Make the bar go from bottom to top
-                        w.entity_mut(entity).insert(Transform::from_rotation(
-                            Quat::from_axis_angle(
-                                Vec3::Z,
-                                if config.dir_up { -1.0 } else { 1.0 }
-                                    * PI
-                                    * 0.5,
-                            ),
-                        ));
-                    });
-                    ability_card.named("ability");
-                    ability_card
-                        .style()
-                        .position_type(PositionType::Absolute)
-                        .width(Val::Px(60.0))
-                        .height(Val::Px(60.0));
-                },
-            );
-        })
-    }
-}
+// impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
+//     /// Draws a 96.0x96.0 tile with a progress bar overlaid.
+//     /// modify
+//     fn ability_widget<'a, T: Component + Clone>(
+//         &'a mut self,
+//         config: AbilityWidgetConfig<T>,
+//     ) -> UiBuilder<'w, 's, 'a, Entity> {
+//         self.column(|column| {
+//             column.style().justify_content(JustifyContent::Center);
+//             column.container(
+//                 (
+//                     ImageBundle::default(),
+//                     AbilityWidget,
+//                     config.tracking_component.clone(),
+//                 ),
+//                 |ability_card| {
+//                     ability_card.named("ability");
+//                     ability_card
+//                         .style()
+//                         .width(Val::Px(60.0))
+//                         .height(Val::Px(60.0))
+//                         .image(config.image_path);
+//                 },
+//             );
+//             column.container(
+//                 (
+//                     MaterialNodeBundle::<ability_cooldown::Material>::default(),
+//                     config.tracking_component,
+//                 ),
+//                 |ability_card| {
+//                     let entity = ability_card.context();
+//                     // Adds the progress bar material to the ui node
+//                     // Someone tell me theres a better way then this. I mean it works at least
+//                     ability_card.commands().add(move |w: &mut World| {
+//                         let Some(mut ui_materials) =
+//                             w.get_resource_mut::<Assets<ability_cooldown::Material>>()
+//                         else {
+//                             return;
+//                         };
+//                         let handle =
+//                             ui_materials.add(ability_cooldown::Material {
+//                                 factor: 0.3,
+//                                 background_color: Color::rgba(0.0, 0.0, 0.0, 0.0).into(),
+//                                 filled_color: Color::rgba(0.25, 0.25, 0.0, 0.75).into(),
+//                             });
+//                         w.entity_mut(entity).insert(handle);
+//                         // Make the bar go from bottom to top
+//                         w.entity_mut(entity).insert(Transform::from_rotation(
+//                             Quat::from_axis_angle(
+//                                 Vec3::Z,
+//                                 if config.dir_up { -1.0 } else { 1.0 }
+//                                     * PI
+//                                     * 0.5,
+//                             ),
+//                         ));
+//                     });
+//                     ability_card.named("ability");
+//                     ability_card
+//                         .style()
+//                         .position_type(PositionType::Absolute)
+//                         .width(Val::Px(60.0))
+//                         .height(Val::Px(60.0));
+//                 },
+//             );
+//         })
+//     }
+// }
 
 pub struct AbilityWidgetConfig<T: Component + Clone> {
     pub image_path: String,
@@ -113,7 +111,7 @@ impl EntityCommand for SetFactor {
     fn apply(self, entity: Entity, world: &mut World) {
         let Some(handle) = world
             .entity(entity)
-            .get::<Handle<ability_cooldown::Material>>()
+            .get::<MaterialNode<ability_cooldown::Material>>()
         else {
             return;
         };
@@ -136,6 +134,6 @@ pub trait AbilityWidgetCommands<'a> {
 
 impl<'a> AbilityWidgetCommands<'a> for EntityCommands<'a> {
     fn factor(&'a mut self, factor: f32) -> &'a mut EntityCommands<'a> {
-        self.add(SetFactor(factor))
+        self.queue(SetFactor(factor))
     }
 }

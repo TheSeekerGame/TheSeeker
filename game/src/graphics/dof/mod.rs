@@ -736,16 +736,17 @@ pub fn prepare_core_3d_depth_textures(
             Option<&DepthPrepass>,
             &Camera3d,
         ),
-        (
-            With<RenderPhase<Opaque3d>>,
-            With<RenderPhase<AlphaMask3d>>,
-            With<RenderPhase<Transmissive3d>>,
-            With<RenderPhase<Transparent3d>>,
-        ),
+        // FIXME: Review these query filters
+        // (
+        //     With<RenderPhase<Opaque3d>>,
+        //     With<RenderPhase<AlphaMask3d>>,
+        //     With<RenderPhase<Transmissive3d>>,
+        //     With<RenderPhase<Transparent3d>>,
+        // ),
     >,
 ) {
     let mut render_target_usage = HashMap::default();
-    for (_, camera, depth_prepass, camera_3d) in &views_3d {
+    for (_, camera, _, depth_prepass, camera_3d) in &views_3d {
         // Default usage required to write to the depth texture
         let mut usage: TextureUsages = camera_3d.depth_texture_usages.into();
         if depth_prepass.is_some() {
