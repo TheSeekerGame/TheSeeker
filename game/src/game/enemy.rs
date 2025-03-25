@@ -1,6 +1,6 @@
 #[cfg(feature = "dev")]
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
-use rand::distributions::Standard;
+use rand::distr::StandardUniform;
 use rapier2d::geometry::SharedShape;
 use rapier2d::parry::query::TOIStatus;
 use rapier2d::prelude::{Group, InteractionGroups};
@@ -1018,11 +1018,9 @@ fn aggro(
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if matches!(range, Range::Melee) {
                 match role {
-                    Role::Melee => {
-                        transitions.push(Waiting::new_transition(
-                            MeleeAttack::default(),
-                        ))
-                    },
+                    Role::Melee => transitions.push(Waiting::new_transition(
+                        MeleeAttack::default(),
+                    )),
                     Role::Ranged => {
                         velocity.x = 0.;
                         transitions.push(Waiting::new_transition(Defense));
@@ -1433,7 +1431,7 @@ fn falling(
                     enemy_anim.play_key(&format!(
                         "{}.Jump",
                         enemy_anim_prefix(role, tier)
-                    )); 
+                    ));
                 }
             }
         }
