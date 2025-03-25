@@ -1,4 +1,4 @@
-use bevy::render::camera::ClearColorConfig;
+use bevy::{color::palettes::css::GRAY, render::camera::ClearColorConfig};
 use iyes_progress::TrackedProgressSet;
 
 use crate::prelude::*;
@@ -40,50 +40,44 @@ fn setup_loadscreen(mut commands: Commands) {
     let container = commands
         .spawn((
             StateDespawnMarker,
-            NodeBundle {
-                background_color: BackgroundColor(Color::GRAY),
-                style: Style {
-                    width: Val::Auto,
-                    height: Val::Auto,
-                    position_type: PositionType::Absolute,
-                    bottom: Val::Percent(48.0),
-                    top: Val::Percent(48.0),
-                    left: Val::Percent(20.0),
-                    right: Val::Percent(20.0),
-                    padding: UiRect::all(Val::Px(2.0)),
-                    flex_direction: FlexDirection::Column,
-                    justify_content: JustifyContent::Center,
-                    ..Default::default()
-                },
+            Node {
+                width: Val::Auto,
+                height: Val::Auto,
+                position_type: PositionType::Absolute,
+                bottom: Val::Percent(48.0),
+                top: Val::Percent(48.0),
+                left: Val::Percent(20.0),
+                right: Val::Percent(20.0),
+                padding: UiRect::all(Val::Px(2.0)),
+                flex_direction: FlexDirection::Column,
+                justify_content: JustifyContent::Center,
                 ..Default::default()
             },
+            BackgroundColor::from(GRAY),
         ))
         .id();
 
     let inner = commands
         .spawn((
             LoadingProgressIndicator,
-            NodeBundle {
-                background_color: BackgroundColor(Color::WHITE),
-                style: Style {
-                    width: Val::Percent(0.0),
-                    height: Val::Percent(100.0),
-                    ..Default::default()
-                },
+            Node {
+                width: Val::Percent(0.0),
+                height: Val::Percent(100.0),
                 ..Default::default()
             },
+            BackgroundColor(Color::WHITE),
         ))
         .id();
 
-    commands.entity(container).push_children(&[inner]);
+    commands.entity(container).add_children(&[inner]);
 }
 
 fn update_loading_pct(
-    mut q: Query<&mut Style, With<LoadingProgressIndicator>>,
+    mut q: Query<&mut Node, With<LoadingProgressIndicator>>,
     progress: Res<ProgressCounter>,
 ) {
     let progress: f32 = progress.progress().into();
-    for mut style in q.iter_mut() {
-        style.width = Val::Percent(progress * 100.0);
+    for mut node in q.iter_mut() {
+        node.width = Val::Percent(progress * 100.0);
     }
 }
