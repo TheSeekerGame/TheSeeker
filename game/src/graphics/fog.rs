@@ -1,4 +1,3 @@
-use bevy::prelude::shape::Quad;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 use bevy::sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle};
 
@@ -58,9 +57,9 @@ pub fn setup_fog(
             FogLayer,
             MaterialMesh2dBundle {
                 mesh: meshes
-                    .add(Mesh::from(Quad::new(Vec2::splat(
-                        1000.0,
-                    ))))
+                    .add(Mesh::from(Rectangle::from_size(
+                        Vec2::splat(1000.0),
+                    )))
                     .into(),
                 transform: Transform::default()
                     .with_scale(Vec3::splat(1.0))
