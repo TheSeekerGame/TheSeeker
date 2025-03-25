@@ -11,6 +11,7 @@ impl Plugin for AppStatesPlugin {
         for state in enum_iterator::all::<AppState>() {
             app.add_systems(
                 OnExit(state),
+                // FIXME: vendor helper from iyes_bevy_extras?
                 despawn_all_recursive::<With<StateDespawnMarker>>,
             );
         }
