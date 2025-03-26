@@ -124,7 +124,9 @@ fn main() {
         ProgressPlugin::<AppState>::new()
             .with_state_transition(
                 AppState::AssetsLoading,
-                AppState::MainMenu,
+                // FIXME: fix main menu and re-enable state here
+                AppState::InGame,
+                // AppState::MainMenu,
             )
             .with_asset_tracking(),
         PhysicsPlugin,

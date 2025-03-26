@@ -298,9 +298,9 @@ fn player_move(
         let ground_friction = 0.7;
         let stealth_boost = get_stealth_boost(is_stealth);
         let controllable = !is_dash_strike;
-        let direction = action_state.value(&PlayerAction::Move);
-        let new_vel = if action_state.just_pressed(&PlayerAction::Move)
-            && action_state.value(&PlayerAction::Move) != 0.0
+        let direction = action_state.clamped_value(&PlayerAction::Move);
+        // let new_vel = if action_state.just_pressed(&PlayerAction::Move) &&
+        let new_vel = if action_state.clamped_value(&PlayerAction::Move) != 0.0
             && controllable
         {
             velocity.x
@@ -309,27 +309,28 @@ fn player_move(
                     * ground_friction
                     * stealth_boost
                     * stat_mod.speed
-        } else if action_state.pressed(&PlayerAction::Move)
-            && action_state.value(&PlayerAction::Move) != 0.0
-            && controllable
-        {
-            velocity.x
-                + accel
-                    * direction
-                    * ground_friction
-                    * stealth_boost
-                    * stat_mod.speed
+        // } else if action_state.pressed(&PlayerAction::Move)
+        //     && action_state.clamped_value(&PlayerAction::Move) != 0.0
+        //     && controllable
+        // {
+        //     velocity.x
+        //         + accel
+        //             * direction
+        //             * ground_friction
+        //             * stealth_boost
+        //             * stat_mod.speed
         } else {
             // de-acceleration profile
             if is_grounded {
                 velocity.x + ground_friction * -velocity.x
             } else {
                 // airtime de-acceleration profile
-                if action_state.just_released(&PlayerAction::Move) {
+                // if action_state.just_released(&PlayerAction::Move) {
+                if direction == 0. {
                     velocity.x
                         + initial_accel
                             * 0.5
-                            * action_state.value(&PlayerAction::Move)
+                            * action_state.clamped_value(&PlayerAction::Move)
                 } else {
                     let max_vel = velocity.x.abs();
                     (velocity.x + accel * -velocity.x.signum())
@@ -1115,10 +1116,7 @@ pub fn player_sliding(
         mut jump_count,
     ) in query.iter_mut()
     {
-        let mut direction: f32 = 0.0;
-        if action_state.pressed(&PlayerAction::Move) {
-            direction = action_state.value(&PlayerAction::Move);
-        }
+        let direction = action_state.clamped_value(&PlayerAction::Move);
         if wall_slide_time.sliding(&config) {
             jump_count.0 = 1;
         }

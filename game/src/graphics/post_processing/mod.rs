@@ -29,7 +29,7 @@ impl Plugin for PostProcessingPlugin {
         app.add_plugins((
             DarknessPlugin,
             VignettePlugin,
-            FloaterPlugin,
+            // FloaterPlugin,
         ));
     }
 }

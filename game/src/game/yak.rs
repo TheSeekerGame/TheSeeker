@@ -62,6 +62,10 @@ pub fn setup_yak(
                     gent: e_gent,
                 },
                 sprite: SpriteBundle {
+                    sprite: Sprite {
+                        texture_atlas: Some(TextureAtlas::default()),
+                        ..default()
+                    },
                     transform: *xf_gent,
                     ..Default::default()
                 },

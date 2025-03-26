@@ -1,5 +1,5 @@
 use leafwing_input_manager::{prelude::*, InputManagerBundle};
-use theseeker_engine::input::InputManagerPlugin;
+// use theseeker_engine::input::InputManagerPlugin;
 
 use crate::prelude::*;
 
@@ -13,6 +13,7 @@ impl Plugin for PlayerActionPlugin {
 
 #[derive(Actionlike, PartialEq, Eq, Clone, Copy, Hash, Debug, Reflect)]
 pub enum PlayerAction {
+    #[actionlike(Axis)]
     Move,
     Jump,
     Attack,
@@ -58,10 +59,11 @@ impl PlayerAction {
                 KeyCode::KeyC,
             ),
         ])
-        .with_axis(
-            Self::Move,
-            VirtualAxis::new(KeyCode::KeyA, KeyCode::KeyD),
-        )
+        .with_axis(Self::Move, VirtualAxis::ad())
+        // .with_axis(
+        //     Self::Move,
+        //     VirtualAxis::new(KeyCode::KeyA, KeyCode::KeyD),
+        // )
         .with_axis(
             Self::Move,
             VirtualAxis::new(KeyCode::ArrowLeft, KeyCode::ArrowRight),
@@ -71,11 +73,12 @@ impl PlayerAction {
             Self::Move,
             GamepadControlAxis::new(GamepadAxis::LeftStickX),
         )
-        .with_axis(
-            Self::Fall,
-            GamepadControlAxis::new(GamepadAxis::LeftStickY)
-                .with_bounds(-1.0, 0.0),
-        )
+        // FIXME: should fall be an axis? if so we have to specifiy it in enum
+        // .with_axis(
+        //     Self::Fall,
+        //     GamepadControlAxis::new(GamepadAxis::LeftStickY)
+        //         .with_bounds(-1.0, 0.0),
+        // )
         .with_multiple([
             (Self::Fall, GamepadButton::DPadDown),
             (Self::Jump, GamepadButton::LeftTrigger2),

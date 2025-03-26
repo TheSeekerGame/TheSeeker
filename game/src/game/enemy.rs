@@ -488,6 +488,10 @@ fn setup_enemy(
                     gent: e_gent,
                 },
                 sprite: SpriteBundle {
+                    sprite: Sprite {
+                        texture_atlas: Some(TextureAtlas::default()),
+                        ..default()
+                    },
                     transform: *xf_gent,
                     ..Default::default()
                 },
@@ -505,6 +509,10 @@ fn setup_enemy(
                     gent: e_gent,
                 },
                 sprite: SpriteBundle {
+                    sprite: Sprite {
+                        texture_atlas: Some(TextureAtlas::default()),
+                        ..default()
+                    },
                     transform: xf_gent.with_translation(Vec3::new(0., 0., 1.)),
                     ..Default::default()
                 },

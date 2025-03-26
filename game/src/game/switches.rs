@@ -113,6 +113,10 @@ fn setup_switches(
                     gent: e_gent,
                 },
                 sprite: SpriteBundle {
+                    sprite: Sprite {
+                        texture_atlas: Some(TextureAtlas::default()),
+                        ..default()
+                    },
                     transform: *xf_gent,
                     ..Default::default()
                 },
@@ -142,6 +146,10 @@ fn setup_puzzles(
                     gent: e_gent,
                 },
                 sprite: SpriteBundle {
+                    sprite: Sprite {
+                        texture_atlas: Some(TextureAtlas::default()),
+                        ..default()
+                    },
                     transform: *xf_gent,
                     visibility: Visibility::Hidden,
                     ..Default::default()
