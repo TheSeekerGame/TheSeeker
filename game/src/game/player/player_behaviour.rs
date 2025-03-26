@@ -250,11 +250,7 @@ fn player_idle(
 ) {
     for (action_state, mut transitions) in query.iter_mut() {
         // check for direction input
-        let mut direction: f32 = 0.0;
-        if action_state.pressed(&PlayerAction::Move) {
-            direction = action_state.value(&PlayerAction::Move);
-        }
-        if direction != 0.0 {
+        if action_state.clamped_value(&PlayerAction::Move) != 0.0 {
             transitions.push(Idle::new_transition(Running));
         }
     }
@@ -299,6 +295,7 @@ fn player_move(
         let stealth_boost = get_stealth_boost(is_stealth);
         let controllable = !is_dash_strike;
         let direction = action_state.clamped_value(&PlayerAction::Move);
+        // FIXME: lwim new version wont allow just_pressed for Axis
         // let new_vel = if action_state.just_pressed(&PlayerAction::Move) &&
         let new_vel = if action_state.clamped_value(&PlayerAction::Move) != 0.0
             && controllable
@@ -420,13 +417,9 @@ fn player_run(
     >,
 ) {
     for (action_state, mut transitions) in q_gent.iter_mut() {
-        let mut direction: f32 = 0.0;
-        if action_state.pressed(&PlayerAction::Move) {
-            direction = action_state.value(&PlayerAction::Move);
-        }
-        // should it account for decel and only transition to idle when player stops completely?
-        // shouldnt be able to transition to idle if we also jump
-        if direction == 0.0 && action_state.released(&PlayerAction::Jump) {
+        if action_state.clamped_value(&PlayerAction::Move) == 0.0
+            && action_state.released(&PlayerAction::Jump)
+        {
             transitions.push(Running::new_transition(Idle));
         }
     }
@@ -1058,7 +1051,7 @@ fn player_falling(
                 velocity.y = 0.0;
                 transform.translation.y =
                     transform.translation.y - toi.toi + GROUNDED_THRESHOLD;
-                if action_state.pressed(&PlayerAction::Move) {
+                if action_state.clamped_value(&PlayerAction::Move) != 0.0 {
                     transitions.push(Falling::new_transition(Running));
                 } else {
                     transitions.push(Falling::new_transition(Idle));
