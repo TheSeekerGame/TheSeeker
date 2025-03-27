@@ -12,8 +12,8 @@ impl Plugin for DevPlugin {
         app.add_systems(
             Last,
             debug_progress
-                .run_if(resource_exists::<ProgressCounter>)
-                .after(iyes_progress::TrackedProgressSet),
+                .run_if(resource_exists::<ProgressTracker<AppState>>)
+                .after(iyes_progress::CheckProgressSet), // .after(iyes_progress::TrackedProgressSet),
         );
         app.add_systems(
             GameTickUpdate,
@@ -35,9 +35,9 @@ impl Plugin for DevPlugin {
     }
 }
 
-fn debug_progress(counter: Res<ProgressCounter>) {
-    let progress = counter.progress();
-    let progress_full = counter.progress_complete();
+fn debug_progress(counter: Res<ProgressTracker<AppState>>) {
+    let progress = counter.get_global_progress();
+    let progress_full = counter.get_global_combined_progress();
     trace!(
         "Progress: {}/{}; Full Progress: {}/{}",
         progress.done,
@@ -103,7 +103,7 @@ fn cli_spawn_anim(In(args): In<Vec<String>>, world: &mut World) {
     player.play_key(args[0].as_str());
 
     world.spawn((
-        SpriteSheetBundle {
+        SpriteBundle {
             transform: Transform::from_xyz(x, y, 101.0),
             ..default()
         },

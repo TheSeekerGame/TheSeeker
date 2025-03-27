@@ -36,7 +36,7 @@ use bevy::render::render_resource::{
     TextureSampleType, VertexState,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice};
-use bevy::render::texture::FallbackImageZero;
+use bevy::render::texture::{FallbackImageZero, GpuImage};
 use bevy::render::view::{
     ViewDepthTexture, ViewTarget, ViewUniform, ViewUniformOffset, ViewUniforms,
 };
@@ -84,8 +84,8 @@ impl Plugin for FloaterPlugin {
                 &FLOATER_SAMPLES_Y.to_string(),
             );
 
-        app.world.resource_mut::<Assets<_>>().insert(
-            FLOATER_SHADER_HANDLE,
+        app.world_mut().resource_mut::<Assets<_>>().insert(
+            &FLOATER_SHADER_HANDLE,
             Shader::from_wgsl(
                 shader_str,
                 Path::new(file!())
@@ -98,7 +98,7 @@ impl Plugin for FloaterPlugin {
 
         app.register_type::<FloaterSettings>();
 
-        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             warn!("Failed to get render app for FloaterPlugin");
             return;
         };
@@ -133,7 +133,7 @@ impl Plugin for FloaterPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
 
@@ -243,7 +243,7 @@ impl<const BACKGROUND: bool> ViewNode for FloaterPostProcessNode<BACKGROUND> {
         let pipeline_cache = world.resource::<PipelineCache>();
         let view_uniforms = world.resource::<ViewUniforms>();
         let globals_buffer = world.resource::<GlobalsBuffer>();
-        let render_assets = world.resource::<RenderAssets<Image>>();
+        let render_assets = world.resource::<RenderAssets<GpuImage>>();
 
         let (
             Some(pipeline),
@@ -379,6 +379,7 @@ impl FromWorld for FloaterPipeline {
             .resource_mut::<PipelineCache>()
             .queue_compute_pipeline(ComputePipelineDescriptor {
                 label: Some("floater_prepass_pipeline".into()),
+                zero_initialize_workgroup_memory: false,
                 layout: vec![layout.clone()],
                 shader: compute_shader,
                 shader_defs: vec![],
@@ -394,6 +395,7 @@ impl FromWorld for FloaterPipeline {
             .resource_mut::<PipelineCache>()
             .queue_render_pipeline(RenderPipelineDescriptor {
                 label: Some("floater_post_process_pipeline".into()),
+                zero_initialize_workgroup_memory: false,
                 layout: vec![layout.clone()],
                 vertex: VertexState {
                     shader: render_shader.clone(),

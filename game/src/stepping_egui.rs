@@ -32,7 +32,7 @@ impl Plugin for SteppingEguiPlugin {
 
         // create & insert dedicated stepping schedule
         app.init_schedule(SteppingSchedule);
-        let mut order = app.world.resource_mut::<MainScheduleOrder>();
+        let mut order = app.world_mut().resource_mut::<MainScheduleOrder>();
         order.insert_after(PreUpdate, SteppingSchedule);
 
         // create & configure the stepping resource

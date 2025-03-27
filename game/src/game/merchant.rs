@@ -42,7 +42,7 @@ impl Plugin for MerchantPlugin {
                     )>()),
                 (
                     player_enters_merchant_range.run_if(
-                        any_added_component::<MerchantInPlayerRange>.and_then(
+                        any_matching::<Added<MerchantInPlayerRange>>().and(
                             not(any_with_component::<MerchantNonInteractable>),
                         ),
                     ),
@@ -69,7 +69,7 @@ impl Plugin for MerchantPlugin {
                         >)),
                     spawn_merchant_dialog_text
                         .after(spawn_merchant_dialog_ui)
-                        .run_if(any_added_component::<MerchantDialogueBox>),
+                        .run_if(any_matching::<Added<MerchantDialogueBox>>()),
                     update_dialog_background.before(advance_dialog),
                     handle_finished_dialogue_stage.before(advance_dialog),
                     advance_dialog.after(spawn_merchant_dialog_text).run_if(
@@ -83,9 +83,7 @@ impl Plugin for MerchantPlugin {
                     ),
                 )
                     .after(player_in_merchant_range)
-                    .run_if(on_event::<
-                        MerchantDialogueInteractionEvent,
-                    >()),
+                    .run_if(on_event::<MerchantDialogueInteractionEvent>),
             )
                 .run_if(
                     in_state(GameState::Playing)
@@ -112,7 +110,7 @@ pub struct MerchantGfx {
 pub struct MerchantGfxBundle {
     marker: MerchantGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteSheetBundle,
+    sprite: SpriteBundle,
     animation: SpriteAnimationBundle,
 }
 
@@ -211,7 +209,11 @@ pub fn setup_merchant(
                     pixel_aligned: false,
                     gent: e_gent,
                 },
-                sprite: SpriteSheetBundle {
+                sprite: SpriteBundle {
+                    sprite: Sprite {
+                        texture_atlas: Some(TextureAtlas::default()),
+                        ..default()
+                    },
                     transform: *xf_gent,
                     ..Default::default()
                 },
@@ -330,7 +332,7 @@ fn spawn_merchant_dialog_ui(
     };
     let viewport_size = camera.logical_viewport_size().unwrap_or_default();
     let image_size = images
-        .get(dialog_assets.vagrant_background.clone_weak())
+        .get(&dialog_assets.vagrant_background)
         .map(|image| image.size_f32())
         .unwrap_or_default();
     let viewport_position = Vec2::new(
@@ -343,17 +345,12 @@ fn spawn_merchant_dialog_ui(
 
     commands.spawn((
         MerchantDialogueBox,
-        SpriteSheetBundle {
-            sprite: Sprite {
-                custom_size: Some(image_size * 0.5),
-                ..Default::default()
-            },
-            texture: dialog_assets.vagrant_background.clone(),
-            transform: Transform::from_translation(
-                dialog_position.extend(500.0),
-            ),
+        Sprite {
+            image: dialog_assets.vagrant_background.clone(),
+            custom_size: Some(image_size * 0.5),
             ..Default::default()
         },
+        Transform::from_translation(dialog_position.extend(500.0)),
         StateDespawnMarker,
     ));
 }
@@ -387,29 +384,23 @@ fn spawn_merchant_dialog_text(
 
     commands.spawn((
         MerchantDialogueText,
-        SpriteSheetBundle {
-            sprite: Sprite {
-                custom_size: Some(image_size * 0.5),
-                ..Default::default()
-            },
-            transform: Transform::from_translation(text_position.extend(501.0)),
+        Transform::from_translation(text_position.extend(501.0)),
+        Sprite {
+            custom_size: Some(image_size * 0.5),
             ..Default::default()
         },
     ));
 }
 
 fn advance_dialog(
-    mut text_query: Query<
-        (&mut Sprite, &mut Handle<Image>),
-        With<MerchantDialogueText>,
-    >,
+    mut text_query: Query<&mut Sprite, With<MerchantDialogueText>>,
     mut dialogue_current_step: ResMut<MerchantDialogueCurrentStep>,
     dialogue_asset_handles: Res<DialogueAssetHandles>,
     dialogue_stage: Res<MerchantDialogueStage>,
     images: Res<Assets<Image>>,
 ) {
     if dialogue_current_step.0 <= dialogue_stage.last_step() {
-        for (mut sprite, mut image) in &mut text_query {
+        for mut sprite in &mut text_query {
             let default_handle = Handle::default();
             let image_handle = dialogue_asset_handles
                 .get_handle(&dialogue_current_step.0)
@@ -420,7 +411,7 @@ fn advance_dialog(
                 .unwrap_or_default();
 
             sprite.custom_size = Some(image_size * 0.5);
-            *image = image_handle.clone();
+            sprite.image = image_handle.clone();
         }
         dialogue_current_step.0 += 1;
     }
@@ -477,12 +468,13 @@ fn restore_merchant_interactability(
 }
 
 fn update_dialog_background(
-    mut query: Query<&mut Handle<Image>, With<MerchantDialogueBox>>,
+    mut query: Query<&mut Sprite, With<MerchantDialogueBox>>,
     dialogue_current_step: Res<MerchantDialogueCurrentStep>,
     dialog_assets: Res<DialogAssets>,
 ) {
-    if let Ok(mut image) = query.get_single_mut() {
-        *image = if MR_SNAFFLES_DIALOGS.contains(&dialogue_current_step.0) {
+    if let Ok(mut sprite) = query.get_single_mut() {
+        sprite.image = if MR_SNAFFLES_DIALOGS.contains(&dialogue_current_step.0)
+        {
             dialog_assets.mr_snaffles_background.clone()
         } else {
             dialog_assets.vagrant_background.clone()

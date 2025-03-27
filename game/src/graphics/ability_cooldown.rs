@@ -10,15 +10,16 @@ impl Plugin for AbilityCooldownPlugin {
     }
 }
 
+// TODO: Rename this to `AbilityCooldownMaterial` or similar to avoid naming clashes
 #[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
 pub struct Material {
     /// A number between `0` and `1` indicating how much of the bar should be filled.
     #[uniform(0)]
     pub factor: f32,
     #[uniform(1)]
-    pub background_color: Color,
+    pub background_color: LinearRgba,
     #[uniform(2)]
-    pub filled_color: Color,
+    pub filled_color: LinearRgba,
 }
 
 impl UiMaterial for Material {

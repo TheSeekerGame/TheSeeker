@@ -73,7 +73,7 @@ impl Plugin for DarknessPlugin {
         ));
 
         // We need to get the render app from the main app
-        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             warn!(
                 "Failed to get render app for DarknessPlugin {}:{}",
                 file!(),
@@ -123,7 +123,7 @@ impl Plugin for DarknessPlugin {
 
     fn finish(&self, app: &mut App) {
         // We need to get the render app from the main app
-        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
 
@@ -178,10 +178,10 @@ fn _darkness_dynamics(
         // curve/tweening in the future.
         if intensity < 0.3 {
             setting.lantern =
-                setting.lantern.lerp(1.0, time.delta_seconds() * 0.9);
+                setting.lantern.lerp(1.0, time.delta_secs() * 0.9);
         } else if intensity > 0.3 {
             setting.lantern =
-                setting.lantern.lerp(0.0, time.delta_seconds() * 0.9);
+                setting.lantern.lerp(0.0, time.delta_secs() * 0.9);
         }
 
         // Set the intensity.
@@ -209,10 +209,10 @@ fn _darkness_parallax(
     for (entity, paralax) in parallaxed_bgs.iter() {
         let light_multiplier = 1.0 / (paralax.depth * 1.25).powi(2);
         let final_mult = light_multiplier.lerp(1.0, settings.bg_light_level);
-        let color = Color::rgb(1.0, 1.0, 1.0) * final_mult;
+        let color = Srgba::rgb(1.0, 1.0, 1.0) * final_mult;
         for descendant in children.iter_descendants(entity) {
             if let Ok(mut sprite) = sprites.get_mut(descendant) {
-                sprite.0 = color;
+                sprite.0 = color.into();
             };
         }
     }
@@ -394,6 +394,7 @@ impl FromWorld for DarknessPostProcessPipeline {
             // This will add the pipeline to the cache and queue it's creation
             .queue_render_pipeline(RenderPipelineDescriptor {
                 label: Some("darkness_post_process_pipeline".into()),
+                zero_initialize_workgroup_memory: false,
                 layout: vec![layout.clone()],
                 // This will setup a fullscreen triangle for the vertex state
                 vertex: fullscreen_shader_vertex_state(),

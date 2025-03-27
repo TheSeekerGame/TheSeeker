@@ -35,7 +35,7 @@ impl Plugin for VignettePlugin {
 
         app.register_type::<VignetteSettings>();
 
-        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             warn!("Failed to get render app for VignettePlugin");
             return;
         };
@@ -57,7 +57,7 @@ impl Plugin for VignettePlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             return;
         };
 
@@ -224,6 +224,7 @@ impl FromWorld for VignettePostProcessPipeline {
             .resource_mut::<PipelineCache>()
             .queue_render_pipeline(RenderPipelineDescriptor {
                 label: Some("darkness_post_process_pipeline".into()),
+                zero_initialize_workgroup_memory: false,
                 layout: vec![layout.clone()],
                 vertex: fullscreen_shader_vertex_state(),
                 fragment: Some(FragmentState {

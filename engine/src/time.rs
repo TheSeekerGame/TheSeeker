@@ -54,7 +54,7 @@ pub trait GameTimeAppExt {
 
 impl GameTimeAppExt for App {
     fn add_gametick_event<T: Event>(&mut self) -> &mut Self {
-        if !self.world.contains_resource::<Events<T>>() {
+        if !self.world().contains_resource::<Events<T>>() {
             self.init_resource::<Events<T>>();
             self.add_systems(
                 GameTickUpdate,

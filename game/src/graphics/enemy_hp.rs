@@ -79,7 +79,7 @@ fn instance(
             commands
                 .spawn((
                     NodeBundle {
-                        style: Style {
+                        node: Node {
                             width: Val::Px(60.0),
                             height: Val::Px(10.0),
                             padding: UiRect::horizontal(Val::Px(2.0)),
@@ -96,16 +96,16 @@ fn instance(
                 .with_children(|parent| {
                     parent.spawn((
                         MaterialNodeBundle {
-                            style: Style {
+                            node: Node {
                                 width: Val::Percent(100.0),
                                 height: Val::Percent(200.0),
                                 align_self: AlignSelf::Center,
                                 ..default()
                             },
-                            material: material.add(Material {
+                            material: MaterialNode(material.add(Material {
                                 health: 1.0,
                                 damage: 1.0,
-                            }),
+                            })),
                             ..default()
                         },
                         Bar { parent: entity },
@@ -128,13 +128,15 @@ fn update_positions(
         (&GlobalTransform, Option<&Collider>),
         (With<Health>, With<Enemy>),
     >,
-    mut hp_root_q: Query<(&Root, &mut Style)>,
+    mut hp_root_q: Query<(&Root, &mut Node)>,
     mut camera_q: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
 ) -> Result<()> {
     let (camera_transform, camera) = camera_q.get_single()?;
 
     for (hp_root, mut style) in hp_root_q.iter_mut() {
-        let (global_transform, collider) = enemy_q.get(hp_root.parent)?;
+        let Ok((global_transform, collider)) = enemy_q.get(hp_root.parent) else {
+            continue;
+        };
         let mut world_position = global_transform.translation();
 
         // Makes the health bar float above the collider, if it exists
@@ -149,9 +151,7 @@ fn update_positions(
 
         let screen_position = camera
             .world_to_viewport(camera_transform, world_position)
-            .ok_or(anyhow!(
-                "Unable to get screen position from camera."
-            ))?;
+            .map_err(|_| anyhow!("Unable to get screen position from camera."))?;
 
         let width = match style.width {
             Val::Px(value) => value,
@@ -173,14 +173,16 @@ fn update_hp(
     enemy_q: Query<&Health, With<Enemy>>,
     mut hp_bar_q: Query<(
         &Bar,
-        &Handle<Material>,
+        &MaterialNode<Material>,
         &mut DamageAnimation,
     )>,
     mut material: ResMut<Assets<Material>>,
 ) -> Result<()> {
-    for (hp_bar, handle, mut damage_animation) in &mut hp_bar_q {
-        let health = enemy_q.get(hp_bar.parent)?;
-        let material = material.get_mut(handle).ok_or(anyhow!(
+    for (hp_bar, matnode, mut damage_animation) in &mut hp_bar_q {
+        let Ok(health) = enemy_q.get(hp_bar.parent) else {
+            continue;
+        };
+        let material = material.get_mut(&matnode.0).ok_or(anyhow!(
             "Enemy health bar material not found"
         ))?;
 
@@ -214,9 +216,11 @@ fn tick_damage_animation(
 fn update_visibility(
     enemy_q: Query<Ref<Health>, With<Enemy>>,
     mut hp_root_q: Query<(&Root, &mut Visibility)>,
-) -> Result<()> {
+) {
     for (hp_bar, mut visibility) in hp_root_q.iter_mut() {
-        let health = enemy_q.get(hp_bar.parent)?;
+        let Ok(health) = enemy_q.get(hp_bar.parent) else {
+            continue;
+        };
         if health.is_changed() {
             if health.current == health.max {
                 *visibility = Visibility::Hidden
@@ -225,7 +229,6 @@ fn update_visibility(
             }
         }
     }
-    Ok(())
 }
 
 fn despawn(

@@ -17,7 +17,7 @@ impl Plugin for LocalePlugin {
         app.add_systems(
             Update,
             init_l10n
-                .track_progress()
+                .track_progress::<AppState>()
                 .run_if(in_state(AppState::AssetsLoading)),
         );
         app.add_systems(
@@ -120,9 +120,9 @@ fn resolve_l10n(
     // closure for updating UI text
     let fn_update = |text: &mut Mut<Text>, key: &L10nKey| {
         if let Some(string) = l10n.content(&key.0) {
-            text.sections[0].value = string;
+            text.0 = string;
         } else {
-            text.sections[0].value = key.0.clone();
+            text.0 = key.0.clone();
         }
     };
 

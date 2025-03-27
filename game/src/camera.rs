@@ -146,6 +146,8 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
             max_circle_of_confusion_diameter: 68.8,
             max_depth: 500.0,
         },
+        // FIXME: complained about duplicate msaa component, where else is it added?
+        // Msaa::Off,
         BloomSettings::OLD_SCHOOL,
         // DarknessSettings {
         //     bg_light_level: 1.0,
@@ -203,7 +205,7 @@ fn camera_rig_follow_player(
     } else {
         rig.camera_position = rig.camera_position.lerp(
             rig.target,
-            time.delta_seconds() * rig.move_speed,
+            time.delta_secs() * rig.move_speed,
         );
     }
 }

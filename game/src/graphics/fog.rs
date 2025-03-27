@@ -1,4 +1,3 @@
-use bevy::prelude::shape::Quad;
 use bevy::render::render_resource::{AsBindGroup, ShaderRef};
 use bevy::sprite::{Material2d, Material2dPlugin, MaterialMesh2dBundle};
 
@@ -58,19 +57,19 @@ pub fn setup_fog(
             FogLayer,
             MaterialMesh2dBundle {
                 mesh: meshes
-                    .add(Mesh::from(Quad::new(Vec2::splat(
-                        1000.0,
-                    ))))
+                    .add(Mesh::from(Rectangle::from_size(
+                        Vec2::splat(1000.0),
+                    )))
                     .into(),
                 transform: Transform::default()
                     .with_scale(Vec3::splat(1.0))
                     .with_translation(Vec3::new(0.0, 0.0, z)),
-                material: materials.add(FogMaterial {
+                material: MeshMaterial2d(materials.add(FogMaterial {
                     depth,
                     alpha,
-                    color: Color::rgba(0.87, 0.86, 1.0, alpha),
+                    color: Color::srgba(0.87, 0.86, 1.0, alpha).into(),
                     emitter1: Vec4::new(0.0, 400.0, 50.0, 0.0),
-                }),
+                })),
                 ..default()
             },
             StateDespawnMarker,
@@ -91,7 +90,7 @@ pub fn update_fog(
     mut fog_bundle_query: Query<
         (
             &mut Transform,
-            &Handle<FogMaterial>,
+            &MeshMaterial2d<FogMaterial>,
             &mut Visibility,
         ),
         With<FogLayer>,
@@ -150,7 +149,7 @@ struct FogMaterial {
     #[uniform(0)]
     alpha: f32,
     #[uniform(0)]
-    color: Color,
+    color: LinearRgba,
     #[uniform(0)]
     /// x, y, are the coordinates of the emitter;
     /// z is distance

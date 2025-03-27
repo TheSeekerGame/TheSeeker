@@ -1,4 +1,7 @@
-use bevy::prelude::*;
+use bevy::{
+    color::palettes::css::{RED, WHITE},
+    prelude::*,
+};
 use rand::Rng;
 use theseeker_engine::{
     physics::LinearVelocity,
@@ -39,7 +42,7 @@ fn spawn_orbs_on_death(
     enemy_q: Query<&GlobalTransform, (With<Enemy>, Added<Dead>)>,
     player_q: Query<&Passives, With<Player>>,
     mut commands: Commands,
-    asset_server: Res<AssetServer>
+    asset_server: Res<AssetServer>,
 ) {
     let size = Vec2::splat(2.0);
 
@@ -60,20 +63,20 @@ fn spawn_orbs_on_death(
             let vel = pos * 0.25;
             let color: Color = if let Ok(passives) = player_q.get_single() {
                 if passives.contains(&Passive::Bloodstone) {
-                    Color::RED
+                    RED.into()
                 } else {
-                    Color::WHITE
+                    WHITE.into()
                 }
             } else {
-                Color::WHITE
+                WHITE.into()
             };
 
             commands.spawn((
                 LinearVelocity(vel + init_vel),
                 XpOrb { init_timer: 1.0 },
                 SpriteBundle {
-                    texture: asset_server.load("fx/xporb.png"),
                     sprite: Sprite {
+                        image: asset_server.load("fx/xporb.png"),
                         color,
                         custom_size: Some(size),
                         ..default()
@@ -111,7 +114,7 @@ fn update_orbs_vel(
 
     for (entity, mut tr, mut vel, xp_orb, mut sprite) in query.iter_mut() {
         if passives.contains(&Passive::Bloodstone) {
-            sprite.color = Color::RED;
+            sprite.color = RED.into();
         }
 
         if xp_orb.init_timer > 0.0 {

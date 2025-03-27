@@ -26,9 +26,9 @@ pub struct Material {
     #[uniform(0)]
     pub factor: f32,
     #[uniform(1)]
-    pub background_color: Color,
+    pub background_color: LinearRgba,
     #[uniform(2)]
-    pub filled_color: Color,
+    pub filled_color: LinearRgba,
 }
 
 impl UiMaterial for Material {
@@ -39,16 +39,16 @@ impl UiMaterial for Material {
 
 fn update_hp(
     player_q: Query<&Health, With<Player>>,
-    mut hp_bar_q: Query<(&Bar, &Handle<Material>)>,
+    mut hp_bar_q: Query<(&Bar, &MaterialNode<Material>)>,
     mut material: ResMut<Assets<Material>>,
 ) {
-    for (hp_bar, material_handle) in hp_bar_q.iter() {
+    for (hp_bar, materialnode) in hp_bar_q.iter() {
         if let Ok(health) = player_q.get(hp_bar.0) {
-            if let Some(mat) = material.get_mut(material_handle) {
+            if let Some(mat) = material.get_mut(&materialnode.0) {
                 mat.factor = 1.0 * (health.current as f32 / health.max as f32)
             }
         } else {
-            if let Some(mat) = material.get_mut(material_handle) {
+            if let Some(mat) = material.get_mut(&materialnode.0) {
                 mat.factor = 0.0;
             }
         }
@@ -65,7 +65,7 @@ fn update_hp_vignette(
         if health_percentage <= 0.25 {
             let bpm = 103.0;
             let frequency = bpm / 60.0; // Convert BPM to Hz
-            let elapsed = time.elapsed_seconds(); 
+            let elapsed = time.elapsed_secs();
             let time_cos = (elapsed * frequency * std::f32::consts::TAU).cos().abs(); // TAU = 2π
             for mut settings in query.iter_mut() {
                 let max_red = 255.0 / 255.0; 

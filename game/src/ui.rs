@@ -1,6 +1,4 @@
 use bevy::ecs::system::EntityCommands;
-use sickle_ui::ui_builder::UiBuilder;
-use sickle_ui::widgets::prelude::UiContainerExt;
 
 use crate::assets::UiAssets;
 use crate::locale::L10nKey;
@@ -23,7 +21,6 @@ pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(iyes_ui::UiExtrasPlugin);
         app.add_plugins((
             controls_overlay::plugin,
             popup::plugin,
@@ -42,23 +39,18 @@ impl Plugin for UiPlugin {
 fn spawn_menuentry(
     commands: &mut Commands,
     uiassets: &UiAssets,
-    behavior: OnClick,
     text: &'static str,
 ) -> Entity {
     let color_text = Color::WHITE;
 
     let butt = commands
         .spawn((
-            behavior,
-            ButtonBundle {
-                background_color: BackgroundColor(Color::NONE),
-                style: Style {
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    padding: UiRect::all(Val::Px(4.0)),
-                    margin: UiRect::all(Val::Px(4.0)),
-                    ..Default::default()
-                },
+            BackgroundColor(Color::NONE),
+            Node {
+                justify_content: JustifyContent::Center,
+                align_items: AlignItems::Center,
+                padding: UiRect::all(Val::Px(4.0)),
+                margin: UiRect::all(Val::Px(4.0)),
                 ..Default::default()
             },
         ))
@@ -67,21 +59,17 @@ fn spawn_menuentry(
     let text = commands
         .spawn((
             L10nKey(text.to_owned()),
-            TextBundle {
-                text: Text::from_section(
-                    text,
-                    TextStyle {
-                        color: color_text,
-                        font_size: 32.0,
-                        font: uiassets.font_regular.clone(),
-                    },
-                ),
+            Text(text.into()),
+            TextColor(color_text),
+            TextFont {
+                font: uiassets.font_regular.clone(),
+                font_size: 32.0,
                 ..Default::default()
             },
         ))
         .id();
 
-    commands.entity(butt).push_children(&[text]);
+    commands.entity(butt).add_children(&[text]);
 
     butt
 }
@@ -95,38 +83,38 @@ fn spawn_menuentry(
 ///     style.clone(),
 /// );
 /// ```
-pub fn button<'w, 's, 'a>(
-    parent: &'a mut UiBuilder<'w, 's, '_, Entity>,
-    behavior: OnClick,
-    text: &'static str,
-    style: TextStyle,
-) -> UiBuilder<'w, 's, 'a, Entity> {
-    parent.container(
-        (
-            behavior,
-            ButtonBundle {
-                background_color: BackgroundColor(Color::NONE),
-                style: Style {
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    padding: UiRect::all(Val::Px(4.0)),
-                    margin: UiRect::all(Val::Px(4.0)),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-        ),
-        |button| {
-            button.spawn((
-                L10nKey(text.to_owned()),
-                TextBundle {
-                    text: Text::from_section(text, style),
-                    ..Default::default()
-                },
-            ));
-        },
-    )
-}
+// pub fn button<'w, 's, 'a>(
+//     parent: &'a mut UiBuilder<'w, 's, '_, Entity>,
+//     behavior: OnClick,
+//     text: &'static str,
+//     style: TextStyle,
+// ) -> UiBuilder<'w, 's, 'a, Entity> {
+//     parent.container(
+//         (
+//             behavior,
+//             ButtonBundle {
+//                 background_color: BackgroundColor(Color::NONE),
+//                 style: Style {
+//                     justify_content: JustifyContent::Center,
+//                     align_items: AlignItems::Center,
+//                     padding: UiRect::all(Val::Px(4.0)),
+//                     margin: UiRect::all(Val::Px(4.0)),
+//                     ..Default::default()
+//                 },
+//                 ..Default::default()
+//             },
+//         ),
+//         |button| {
+//             button.spawn((
+//                 L10nKey(text.to_owned()),
+//                 TextBundle {
+//                     text: Text::from_section(text, style),
+//                     ..Default::default()
+//                 },
+//             ));
+//         },
+//     )
+// }
 
 trait Spawn {
     fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands;
@@ -140,6 +128,6 @@ impl Spawn for Commands<'_, '_> {
 
 impl Spawn for ChildBuilder<'_> {
     fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
-        ChildBuilder::spawn(self, bundle)
+        theseeker_engine::prelude::ChildBuild::spawn(self, bundle)
     }
 }

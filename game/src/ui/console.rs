@@ -1,3 +1,6 @@
+use bevy::color::palettes;
+use bevy::input::keyboard::{Key, KeyboardInput};
+
 use crate::assets::UiAssets;
 use crate::prelude::*;
 
@@ -37,54 +40,46 @@ fn toggle_console(
             let console = commands
                 .spawn((
                     UiConsole,
-                    NodeBundle {
-                        style: Style {
-                            position_type: PositionType::Absolute,
-                            bottom: Val::Percent(5.0),
-                            left: Val::Percent(5.0),
-                            top: Val::Auto,
-                            right: Val::Auto,
-                            padding: UiRect::all(Val::Px(8.0)),
-                            align_items: AlignItems::Center,
-                            ..Default::default()
-                        },
-                        background_color: BackgroundColor(Color::BEIGE),
+                    BackgroundColor(palettes::css::BEIGE.into()),
+                    Node {
+                        position_type: PositionType::Absolute,
+                        bottom: Val::Percent(5.0),
+                        left: Val::Percent(5.0),
+                        top: Val::Auto,
+                        right: Val::Auto,
+                        padding: UiRect::all(Val::Px(8.0)),
+                        align_items: AlignItems::Center,
                         ..Default::default()
                     },
                 ))
                 .id();
-            let prompt_style = if let Some(ui_assets) = &ui_assets {
-                TextStyle {
-                    font: ui_assets.font_bold.clone(),
-                    font_size: 24.0,
-                    color: Color::RED,
-                }
-            } else {
-                TextStyle::default()
-            };
-            let input_style = if let Some(ui_assets) = &ui_assets {
-                TextStyle {
-                    font: ui_assets.font_regular.clone(),
-                    font_size: 16.0,
-                    color: Color::BLACK,
-                }
-            } else {
-                TextStyle::default()
-            };
+            let prompt_prefix = commands
+                .spawn((
+                    Text("~ ".into()),
+                    TextFont {
+                        font: ui_assets.as_ref().unwrap().font_bold.clone(),
+                        font_size: 24.0,
+                        ..Default::default()
+                    },
+                    TextColor(palettes::css::RED.into()),
+                ))
+                .id();
             let prompt = commands
                 .spawn((
                     UiConsolePrompt(console),
                     UiConsolePromptHistoryEntry(None),
-                    TextBundle {
-                        text: Text::from_sections([
-                            TextSection::new("~ ", prompt_style),
-                            TextSection::new("", input_style),
-                        ]),
+                    Text("".into()),
+                    TextFont {
+                        font: ui_assets.as_ref().unwrap().font_regular.clone(),
+                        font_size: 16.0,
                         ..Default::default()
                     },
+                    TextColor(Color::BLACK),
                 ))
                 .id();
-            commands.entity(console).push_children(&[prompt]);
+            commands
+                .entity(console)
+                .add_children(&[prompt_prefix, prompt]);
             debug!("Console spawned.");
         } else {
             // despawn console
@@ -99,7 +94,7 @@ fn toggle_console(
 /// Implement a simple "console" to type commands in
 fn console_text_input(
     mut commands: Commands,
-    mut evr_char: EventReader<ReceivedCharacter>,
+    mut evr_char: EventReader<KeyboardInput>,
     kbd: Res<ButtonInput<KeyCode>>,
     mut query: Query<(
         &mut Text,
@@ -117,8 +112,8 @@ fn console_text_input(
     }
     if kbd.just_pressed(KeyCode::Enter) {
         for (text, _, prompt) in &query {
-            history.0.push(text.sections[1].value.clone());
-            commands.run_clicommand(&text.sections[1].value);
+            history.0.push(text.0.clone());
+            commands.run_cli(&text.0);
             commands.entity(prompt.0).despawn_recursive();
         }
         evr_char.clear();
@@ -126,10 +121,10 @@ fn console_text_input(
     }
     if kbd.just_pressed(KeyCode::Backspace) {
         for (mut text, mut hisentry, prompt) in &mut query {
-            if text.sections[1].value.is_empty() {
+            if text.0.is_empty() {
                 commands.entity(prompt.0).despawn_recursive();
             }
-            text.sections[1].value.pop();
+            text.0.pop();
             hisentry.0 = None;
         }
         evr_char.clear();
@@ -141,11 +136,11 @@ fn console_text_input(
                 if *i > 0 {
                     *i -= 1;
                 }
-                text.sections[1].value = history.0[*i].clone();
+                text.0 = history.0[*i].clone();
             } else {
                 let i = history.0.len() - 1;
                 hisentry.0 = Some(i);
-                text.sections[1].value = history.0[i].clone();
+                text.0 = history.0[i].clone();
             }
         }
         evr_char.clear();
@@ -157,7 +152,7 @@ fn console_text_input(
                 if *i < history.0.len() - 1 {
                     *i += 1;
                 }
-                text.sections[1].value = history.0[*i].clone();
+                text.0 = history.0[*i].clone();
             }
         }
         evr_char.clear();
@@ -165,7 +160,15 @@ fn console_text_input(
     }
     for ev in evr_char.read() {
         for (mut text, mut hisentry, _) in &mut query {
-            text.sections[1].value.push(ev.char.chars().next().unwrap());
+            match &ev.logical_key {
+                Key::Character(character) => {
+                    text.0.push(character.chars().next().unwrap());
+                },
+                Key::Space => {
+                    text.0.push(' ');
+                },
+                _ => {},
+            }
             hisentry.0 = None;
         }
     }

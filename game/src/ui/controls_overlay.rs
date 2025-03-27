@@ -21,8 +21,8 @@ pub(super) fn plugin(app: &mut App) {
     )
     .add_systems(
         OnTransition {
-            from: AppState::MainMenu,
-            to: AppState::InGame,
+            exited: AppState::MainMenu,
+            entered: AppState::InGame,
         },
         spawn_control_hint,
     )

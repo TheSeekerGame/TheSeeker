@@ -124,7 +124,7 @@ fn attack_particles_setup(
     // By default the asset spawns the particles at Z=0.
     let spawner = Spawner::rate(1000.0.into());
     let effect = effects.add(
-        EffectAsset::new(vec![4096], spawner, writer.finish())
+        EffectAsset::new(4096, spawner, writer.finish())
             .with_name("2d")
             .init(init_pos)
             .init(modded_pos)
@@ -132,11 +132,11 @@ fn attack_particles_setup(
             .init(init_age)
             .init(init_lifetime)
             .render(SizeOverLifetimeModifier {
-                gradient: Gradient::constant(Vec2::splat(1.0)),
+                // FIXME: switched Vec2 spat to Vec3
+                gradient: Gradient::constant(Vec3::splat(1.0)),
                 screen_space_size: false,
             })
-            .render(ColorOverLifetimeModifier { gradient })
-        //.with_alpha_mode(AlphaMode::Mask(ExprWriter::new().lit(0.001).expr())),
+            .render(ColorOverLifetimeModifier { gradient }), //.with_alpha_mode(AlphaMode::Mask(ExprWriter::new().lit(0.001).expr())),
     );
 
     commands.insert_resource(ArcParticleEffectHandle(effect.clone()));
@@ -150,18 +150,17 @@ impl crate::graphics::particles_util::BuildParticles for EntityCommands<'_> {
         &mut self,
         handle: Handle<EffectAsset>,
     ) -> &mut Self {
-        self.with_children(|builder| {
-            builder
-                .spawn((
-                    ParticleEffectBundle {
-                        // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
-                        effect: ParticleEffect::new(handle.clone()),
-                        ..default()
-                    },
-                    SystemLifetime(MAX_LIFETIME),
-                ))
-                .insert(Name::new("projectile_particles"));
-        })
+        self.with_child(
+            ((
+                ParticleEffectBundle {
+                    // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
+                    effect: ParticleEffect::new(handle.clone()),
+                    ..default()
+                },
+                SystemLifetime(MAX_LIFETIME),
+                Name::new("projectile_particles"),
+            )),
+        )
     }
 }
 
