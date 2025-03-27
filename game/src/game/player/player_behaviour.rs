@@ -1276,6 +1276,10 @@ fn player_attack(
                         .spawn((
                             Arrow,
                             SpriteBundle {
+                                sprite: Sprite {
+                                    texture_atlas: Some(TextureAtlas::default()),
+                                    ..default()
+                                },
                                 transform: arrow_transform,
                                 ..Default::default()
                             },
