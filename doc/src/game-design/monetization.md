@@ -1,24 +1,41 @@
 # Monetization
 
-The core ideas behind the Monetization strategy for this game are:
-- minimizing middle-men (Kickstarter, Steam, Publishers, etc)
-- decoupling monetization from the design process (no profit oriented design decisions)
-- not monetizing the gameplay itself (FOSS), but instead monetizing 'prestige' and 'identity' (being able to show you supported something cool, and being a part of an exclusive club)
-- maximizing freedom from legal paperwork
-- maximizing creative flexibility (no strict deadlines, flexible work hours, ability for many people to contribute as much or as little as they want and be easily compensated)
 
-This game is not only meant to be an interesting project on the game-design front itself, but also an experiment with a completely new way of work/organization.
+The Seeker is an entirely Open Source game, and as such does not have any traditional form of monetization.
 
+That being said, there are 2 ways in which you can support the project, to help speed up and enhance the development progress:
+- GitHub Donations
+- Digital Collectibles (Ordinals)
+<br><br>
 
-Based on these goals, we chose the following monetization strategy:
-- The game will be developed as a fully open sourced project.
-- As we create new assets (art, music, or even code) we turn them into digital collectibles using the Ordinals protocol.
-- These assets have no impact on the game itself (the game is fully off-line) but instead function as a kind of 'digital autographs' from the creators, while also having artistic and collectible value.
-- By owning one of these collectibles you will be able to show that you supported this project at a very early stage, and if the popularity of this game grows, chances are the value of these collectibles will grow as well.
-- It can be seen as similar to an aspiring football player selling a limited quantity of balls with their autographs on them when they are just starting out their career, and if they become a famous player, those signature balls will have immense value.
-- In our case there's also a possibility of giving the owners of these collectibles special perks similar to the perks you see in Kickstarter campaigns. For example being able to design custom creatures/npcs for the game, being able to have private talks with the team, being mentioned in game credits or in game itself, getting access to early releases, etc. By owning one of our collectibles you become a part of an exclusive club with special perks.
-- The collectible items will be sold directly for Bitcoin, and contributors will be mostly paid directly in Bitcoin. There's also an option to be paid in the collectibles themselves, which is a bit similar to being paid in company stocks (you can profit more directly from the success of the project instead of just from your work hours alone)
-- The beauty of this design is that all profits from collectible sales go directly to us, without some corporation in the middle taking a big cut. With typical crowdfunded games you have to deal with both the crowdfunding platform cut (Kickstarter), and then once you release the game the marketplace cut (Steam) which ends up being a very significant amount of your fanbase's money going to completely unrelated entities..
-- It will also make the game much more accessible - since we're not monetizing the game itself, anyone will be able to play it regardless of their financial situation.
-- This approach also gives us a lot of flexibility - there's no deadline we need to hit in order to get some singular big sale event. We release collectibles as we go, and we adjust our scope based on how much funding we get. People can also freely join and leave the project and be paid per contribution.
+**GitHub Donations**
 
+This one is quite straightforward, you can donate to our project here:
+[DONATIONS](https://github.com/sponsors/TheSeekerGame)
+
+100% of the proceeds from donations will be used to improve the game.
+
+Once we reach a comfortable threshold of donations we'll be able to also focus more on benefitting the broader game dev community through (for example) nicely packaged asset packs, level editor, bevy plugins, modding tools, tutorials, etc.
+
+Donating will also give you some additional perks like the ability to put you name in our game credits. You can read more about this on our donations page.
+<br><br>
+
+**Digital Collectibles**
+
+We use the [Ordinals](https://docs.ordinals.com/) protocol to create some really unique collectibles directly on Bitcoin.
+They are created purely because it is really fun to create them, and since the Ordinals protocol is highly focused on nerdy details, there's a lot of inspirational synergy with our mathematically inspired game.
+
+They don't have any gatekeeping / P2W function in our game (we can't possibly do that, it's all open source).
+
+We are not creating a crypto game, you can view our collectibles as just 'nerdy digital merch'.
+
+We *might* do a light integration of collectibles with our game, in the form of *environmental interaction*. For example, if you own a collectible version of a vagrant merchant, you will be able to determine that position of that merchant in the game world (where local game clients can *opt-in* to do a basic api call to check some blockchain data that determines the merchant's position). This could lead to exciting community interactions without any P2W or gatekeeping of content.
+
+You can view our current list of collecibles here:
+[COLLECTIBLES](https://linktr.ee/theseekergame)
+
+From the perspective of project support, buying one of our collectibles is pretty much the same as donating, except here you also get something cool to commemorate your contribution.
+
+Since we also pay all contributors directly in Bitcoin (it's much easier and more inclusive) funds from collectible sales also spare us some conversion + platform fees. It's very p2p in that way.
+
+Ordinals also offer very easy integration with Discord, where bots can be used to detect ownership of collectibles and automatically assign special roles that unlock access to private channels - this could be used as a great Patreon replacement, where our supporters can chat with us and suggest ideas more directly, while we don't have to rely on any 3rd party platform taking a large cut. Again, going back to the p2p idea.
