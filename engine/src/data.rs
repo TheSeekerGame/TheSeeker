@@ -21,8 +21,8 @@ pub fn deserialize_color_rgbhex<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Color, D::Error> {
     let s: String = Deserialize::deserialize(deserializer)?;
-    match Color::hex(&s) {
-        Ok(color) => Ok(color),
+    match Srgba::hex(&s) {
+        Ok(srgba) => Ok(srgba.into()),
         Err(e) => {
             error!(
                 "Color must be specified as RGBA Hex syntax. {:?} is invalid: {}",
@@ -37,7 +37,7 @@ pub fn serialize_color_rgbhex<S: Serializer>(
     value: &Color,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    let [r, g, b, a] = value.as_rgba_u8();
+    let [r, g, b, a] = value.to_srgba().to_u8_array();
     let s = if a != 255 {
         format!("#{:02x}{:02x}{:02x}{:02x}", r, g, b, a)
     } else {
@@ -48,12 +48,12 @@ pub fn serialize_color_rgbhex<S: Serializer>(
 
 impl From<Color> for ColorRepr {
     fn from(value: Color) -> Self {
-        if let Color::Lcha {
+        if let Color::Lcha(Lcha {
             lightness,
             chroma,
             hue,
             alpha,
-        } = value
+        }) = value
         {
             if alpha != 1.0 {
                 ColorRepr::Lcha([lightness, chroma, hue, alpha])
@@ -70,20 +70,10 @@ impl From<ColorRepr> for Color {
     fn from(value: ColorRepr) -> Self {
         match value {
             ColorRepr::Lcha([l, c, h, a]) => {
-                Color::Lcha {
-                    lightness: l,
-                    chroma: c,
-                    hue: h,
-                    alpha: a,
-                }
+                Color::lcha(l, c, h, a)
             },
             ColorRepr::Lch([l, c, h]) => {
-                Color::Lcha {
-                    lightness: l,
-                    chroma: c,
-                    hue: h,
-                    alpha: 1.0,
-                }
+                Color::lch(l, c, h)
             },
             ColorRepr::RGBHex(color) => color,
         }

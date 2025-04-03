@@ -42,10 +42,11 @@ pub struct WallBundle {
 /// 4. spawn colliders for each rectangle
 pub fn spawn_wall_collision(
     mut commands: Commands,
-    wall_query: Query<(&GridCoords, &LdtkParent), Added<Wall>>,
+    // FIXME: LdtkParent was added in our custom bevy_ecs_ldtk, is it no longer needed?
+    wall_query: Query<(&GridCoords, &Parent), Added<Wall>>,
     parent_query: Query<&Parent, Without<Wall>>,
     level_query: Query<(Entity, &LevelIid)>,
-    ldtk_projects: Query<&Handle<LdtkProject>>,
+    ldtk_projects: Query<&LdtkProjectHandle>,
     ldtk_project_assets: Res<Assets<LdtkProject>>,
 ) {
     /// Represents a wide wall that is 1 tile tall
@@ -82,7 +83,7 @@ pub fn spawn_wall_collision(
         // An intgrid tile's direct parent will be a layer entity, not the level entity
         // To get the level entity, you need the tile's grandparent.
         // This is where parent_query comes in.
-        if let Ok(grandparent) = parent_query.get(parent.0) {
+        if let Ok(grandparent) = parent_query.get(parent.get()) {
             level_to_wall_locations
                 .entry(grandparent.get())
                 .or_default()

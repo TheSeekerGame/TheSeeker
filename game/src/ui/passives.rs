@@ -23,12 +23,9 @@ fn spawn_passive_ui_container(mut commands: Commands) {
     commands.spawn((
         Name::new("PassivesUi"),
         PassivesUiNode,
-        NodeBundle {
-            style: Style {
-                padding: UiRect::all(Val::Px(8.0)),
-                row_gap: Val::Px(2.0),
-                ..Default::default()
-            },
+        Node {
+            padding: UiRect::all(Val::Px(8.0)),
+            row_gap: Val::Px(2.0),
             ..Default::default()
         },
         StateDespawnMarker,
@@ -53,15 +50,14 @@ fn display_passives(
                     if let Some(handle) =
                         pickup_assets.get_passive_handle(passive)
                     {
-                        builder.spawn(ImageBundle {
-                            image: UiImage::new(handle.clone()),
-                            style: Style {
+                        builder.spawn((
+                            ImageNode::new(handle.clone()),
+                            Node {
                                 width: Val::Px(64.0),
                                 height: Val::Px(64.0),
                                 ..Default::default()
                             },
-                            ..Default::default()
-                        });
+                        ));
                     }
                 });
             },

@@ -17,7 +17,7 @@ impl Plugin for ScriptPlugin {
         app.configure_sets(
             GameTickUpdate,
             (
-                ScriptSet::Init.after(AssetsSet::ResolveKeys),
+                ScriptSet::Init,//.after(AssetsSet::ResolveKeys),
                 ScriptSet::Run.after(ScriptSet::Init),
             ),
         );

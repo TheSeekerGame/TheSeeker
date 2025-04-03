@@ -1,4 +1,4 @@
-use bevy::sprite::{Sprite, SpriteSheetBundle};
+use bevy::sprite::Sprite;
 
 //TODO: remove, remove passive check in jumps
 use crate::game::player::Passive;
@@ -145,11 +145,11 @@ pub fn player_stealth(
         let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
         if stealthing.is_added() {
             // turn player stealth
-            sprite.color = sprite.color.with_a(0.5);
+            sprite.color = sprite.color.with_alpha(0.5);
         } else {
             stealthing.duration += 1.0 / time.hz as f32;
             if stealthing.duration > config.stealth_duration {
-                sprite.color = sprite.color.with_a(1.);
+                sprite.color = sprite.color.with_alpha(1.);
 
                 stealthing.duration = 0.0;
                 transitions.push(Stealthing::new_transition(
@@ -181,7 +181,7 @@ pub fn player_can_stealth(
         // Return to base sprite color when exiting stealth
         if can_stealth.is_added() {
             let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
-            sprite.color = sprite.color.with_a(1.0);
+            sprite.color = sprite.color.with_alpha(1.0);
         }
         if action_state.just_pressed(&PlayerAction::Stealth) {
             if can_stealth.remaining_cooldown <= 0.0 {
@@ -250,11 +250,7 @@ fn player_idle(
 ) {
     for (action_state, mut transitions) in query.iter_mut() {
         // check for direction input
-        let mut direction: f32 = 0.0;
-        if action_state.pressed(&PlayerAction::Move) {
-            direction = action_state.value(&PlayerAction::Move);
-        }
-        if direction != 0.0 {
+        if action_state.clamped_value(&PlayerAction::Move) != 0.0 {
             transitions.push(Idle::new_transition(Running));
         }
     }
@@ -298,9 +294,10 @@ fn player_move(
         let ground_friction = 0.7;
         let stealth_boost = get_stealth_boost(is_stealth);
         let controllable = !is_dash_strike;
-        let direction = action_state.value(&PlayerAction::Move);
-        let new_vel = if action_state.just_pressed(&PlayerAction::Move)
-            && action_state.value(&PlayerAction::Move) != 0.0
+        let direction = action_state.clamped_value(&PlayerAction::Move);
+        // FIXME: lwim new version wont allow just_pressed for Axis
+        // let new_vel = if action_state.just_pressed(&PlayerAction::Move) &&
+        let new_vel = if action_state.clamped_value(&PlayerAction::Move) != 0.0
             && controllable
         {
             velocity.x
@@ -309,27 +306,28 @@ fn player_move(
                     * ground_friction
                     * stealth_boost
                     * stat_mod.speed
-        } else if action_state.pressed(&PlayerAction::Move)
-            && action_state.value(&PlayerAction::Move) != 0.0
-            && controllable
-        {
-            velocity.x
-                + accel
-                    * direction
-                    * ground_friction
-                    * stealth_boost
-                    * stat_mod.speed
+        // } else if action_state.pressed(&PlayerAction::Move)
+        //     && action_state.clamped_value(&PlayerAction::Move) != 0.0
+        //     && controllable
+        // {
+        //     velocity.x
+        //         + accel
+        //             * direction
+        //             * ground_friction
+        //             * stealth_boost
+        //             * stat_mod.speed
         } else {
             // de-acceleration profile
             if is_grounded {
                 velocity.x + ground_friction * -velocity.x
             } else {
                 // airtime de-acceleration profile
-                if action_state.just_released(&PlayerAction::Move) {
+                // if action_state.just_released(&PlayerAction::Move) {
+                if direction == 0. {
                     velocity.x
                         + initial_accel
                             * 0.5
-                            * action_state.value(&PlayerAction::Move)
+                            * action_state.clamped_value(&PlayerAction::Move)
                 } else {
                     let max_vel = velocity.x.abs();
                     (velocity.x + accel * -velocity.x.signum())
@@ -419,13 +417,9 @@ fn player_run(
     >,
 ) {
     for (action_state, mut transitions) in q_gent.iter_mut() {
-        let mut direction: f32 = 0.0;
-        if action_state.pressed(&PlayerAction::Move) {
-            direction = action_state.value(&PlayerAction::Move);
-        }
-        // should it account for decel and only transition to idle when player stops completely?
-        // shouldnt be able to transition to idle if we also jump
-        if direction == 0.0 && action_state.released(&PlayerAction::Jump) {
+        if action_state.clamped_value(&PlayerAction::Move) == 0.0
+            && action_state.released(&PlayerAction::Jump)
+        {
             transitions.push(Running::new_transition(Idle));
         }
     }
@@ -739,7 +733,7 @@ pub fn player_collisions(
         // check with the new velocity and position, the y might clip the player through the roof
         // of the corner.
         // if we are not moving, we can not shapecast in direction of movement
-        while let Ok(shape_dir) = Direction2d::new(projected_velocity) {
+        while let Ok(shape_dir) = Dir2::new(projected_velocity) {
             if let Some((e, first_hit)) = spatial_query.shape_cast(
                 possible_pos,
                 shape_dir,
@@ -1057,7 +1051,7 @@ fn player_falling(
                 velocity.y = 0.0;
                 transform.translation.y =
                     transform.translation.y - toi.toi + GROUNDED_THRESHOLD;
-                if action_state.pressed(&PlayerAction::Move) {
+                if action_state.clamped_value(&PlayerAction::Move) != 0.0 {
                     transitions.push(Falling::new_transition(Running));
                 } else {
                     transitions.push(Falling::new_transition(Idle));
@@ -1115,10 +1109,7 @@ pub fn player_sliding(
         mut jump_count,
     ) in query.iter_mut()
     {
-        let mut direction: f32 = 0.0;
-        if action_state.pressed(&PlayerAction::Move) {
-            direction = action_state.value(&PlayerAction::Move);
-        }
+        let direction = action_state.clamped_value(&PlayerAction::Move);
         if wall_slide_time.sliding(&config) {
             jump_count.0 = 1;
         }
@@ -1284,7 +1275,11 @@ fn player_attack(
                     commands
                         .spawn((
                             Arrow,
-                            SpriteSheetBundle {
+                            SpriteBundle {
+                                sprite: Sprite {
+                                    texture_atlas: Some(TextureAtlas::default()),
+                                    ..default()
+                                },
                                 transform: arrow_transform,
                                 ..Default::default()
                             },

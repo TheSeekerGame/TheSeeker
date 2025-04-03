@@ -525,7 +525,7 @@ impl ScriptActionParams for CommonScriptParams {
             return Err(ScriptUpdateResult::NormalRun);
         }
         if let Some(rng_pct) = &self.rng_pct {
-            let mut rng = thread_rng();
+            let mut rng = rand::thread_rng();
             if !rng.gen_bool((*rng_pct as f64 / 100.0).clamp(0.0, 1.0)) {
                 return Err(ScriptUpdateResult::NormalRun);
             }
@@ -568,7 +568,7 @@ impl ScriptAction for CommonScriptAction {
         match self {
             CommonScriptAction::RunCli { cli } => {
                 for cli in cli.iter() {
-                    commands.run_clicommand(cli);
+                    commands.run_cli(cli);
                 }
                 ScriptUpdateResult::NormalRun
             },
@@ -619,7 +619,7 @@ impl ScriptAction for CommonScriptAction {
                     .collect();
                 if let Some(sound) = sounds.choose(&mut rand::thread_rng()) {
                     let e = commands.spawn(AudioBundle {
-                        source: sound.clone(),
+                        source: AudioPlayer(sound.clone()),
                         settings: PlaybackSettings {
                             mode: if r#loop.unwrap_or(false) {
                                 PlaybackMode::Loop

@@ -1,5 +1,7 @@
 #![cfg_attr(feature = "release", windows_subsystem = "windows")]
 #![allow(unused_mut)]
+// FIXME: temporary, to reduce noise during the 0.15 upgrade
+#![allow(warnings)]
 
 /// Custom prelude, for stuff we'd like to access all over the codebase
 /// Use in every file. :)
@@ -96,16 +98,15 @@ fn main() {
     let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
         filter: "info,wgpu_core=warn,wgpu_hal=warn,iyes_progress=trace,theseeker_game=trace,theseeker_engine=trace".into(),
         level: bevy::log::Level::TRACE,
-        update_subscriber: None,
+        ..Default::default()
     });
     #[cfg(not(feature = "dev"))]
     let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
         filter: "info,wgpu_core=warn,wgpu_hal=warn,theseeker_game=info,theseeker_engine=info"
             .into(),
         level: bevy::log::Level::INFO,
-        update_subscriber: None,
+        ..Default::default()
     });
-    app.insert_resource(Msaa::Off);
     app.add_plugins(bevy_plugins);
 
     // configure our app states
@@ -119,17 +120,20 @@ fn main() {
     app.add_plugins((
         LdtkPlugin,
         bevy_fluent::FluentPlugin,
-        iyes_bevy_extras::d2::WorldCursorPlugin,
-        ProgressPlugin::new(AppState::AssetsLoading)
-            .track_assets()
-            .continue_to(AppState::MainMenu),
+        // iyes_bevy_extras::d2::WorldCursorPlugin,
+        ProgressPlugin::<AppState>::new()
+            .with_state_transition(
+                AppState::AssetsLoading,
+                // FIXME: fix main menu and re-enable state here
+                AppState::InGame,
+                // AppState::MainMenu,
+            )
+            .with_asset_tracking(),
         PhysicsPlugin,
     ));
 
     #[cfg(feature = "iyes_perf_ui")]
-    app.add_plugins((
-        iyes_perf_ui::PerfUiPlugin,
-    ));
+    app.add_plugins((iyes_perf_ui::PerfUiPlugin,));
 
     // our stuff
     app.add_plugins((

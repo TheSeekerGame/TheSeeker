@@ -1,6 +1,7 @@
 #[cfg(feature = "dev")]
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
-use rand::distributions::Standard;
+use rand::distr::StandardUniform;
+use rand::thread_rng;
 use rapier2d::geometry::SharedShape;
 use rapier2d::parry::query::TOIStatus;
 use rapier2d::prelude::{Group, InteractionGroups};
@@ -57,15 +58,15 @@ impl Plugin for EnemyPlugin {
     }
 }
 
-pub fn debug_enemy(world: &World, query: Query<Entity, With<Gent>>) {
-    for entity in query.iter() {
-        let components = world.inspect_entity(entity);
-        println!("enemy");
-        for component in components.iter() {
-            println!("{:?}", component.name());
-        }
-    }
-}
+// pub fn debug_enemy(world: &World, query: Query<Entity, With<Gent>>) {
+//     for entity in query.iter() {
+//         let components = world.inspect_entity(entity);
+//         println!("enemy");
+//         for component in components.iter() {
+//             println!("{:?}", component.name());
+//         }
+//     }
+// }
 
 #[derive(Resource, Debug, Default)]
 struct EnemyConfig {
@@ -116,7 +117,7 @@ fn load_enemy_config(
     // the Added match arm fires before preloaded updates with the asset key; as a result
     // you can't tell what specific DynamicConfig loaded in like that.
     if !*initialized_config {
-        if let Some(cfg) = cfgs.get(cfg_handle.clone()) {
+        if let Some(cfg) = cfgs.get(&cfg_handle) {
             update_enemy_config(&mut enemy_config, cfg);
         }
         *initialized_config = true;
@@ -252,7 +253,7 @@ pub struct Enemy;
 pub struct EnemyGfxBundle {
     marker: EnemyGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteSheetBundle,
+    sprite: SpriteBundle,
     animation: SpriteAnimationBundle,
 }
 
@@ -260,7 +261,7 @@ pub struct EnemyGfxBundle {
 pub struct EnemyEffectsGfxBundle {
     marker: EnemyEffectGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteSheetBundle,
+    sprite: SpriteBundle,
     animation: SpriteAnimationBundle,
 }
 
@@ -453,7 +454,7 @@ fn setup_enemy(
                     ),
                     shapecast: ShapeCaster {
                         shape: SharedShape::cuboid(22.0, 10.0),
-                        direction: Direction2d::NEG_Y,
+                        direction: Dir2::NEG_Y,
                         origin: Vec2::new(0.0, -2.0),
                         max_toi: 0.0,
                         interaction: InteractionGroups {
@@ -486,7 +487,11 @@ fn setup_enemy(
                     pixel_aligned: false,
                     gent: e_gent,
                 },
-                sprite: SpriteSheetBundle {
+                sprite: SpriteBundle {
+                    sprite: Sprite {
+                        texture_atlas: Some(TextureAtlas::default()),
+                        ..default()
+                    },
                     transform: *xf_gent,
                     ..Default::default()
                 },
@@ -503,7 +508,11 @@ fn setup_enemy(
                     pixel_aligned: false,
                     gent: e_gent,
                 },
-                sprite: SpriteSheetBundle {
+                sprite: SpriteBundle {
+                    sprite: Sprite {
+                        texture_atlas: Some(TextureAtlas::default()),
+                        ..default()
+                    },
                     transform: xf_gent.with_translation(Vec3::new(0., 0., 1.)),
                     ..Default::default()
                 },
@@ -702,7 +711,7 @@ pub enum Tier {
     Three = 9,
 }
 
-impl Distribution<Role> for Standard {
+impl Distribution<Role> for StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Role {
         let index: u8 = rng.gen_range(0..=1);
         match index {
@@ -1018,11 +1027,9 @@ fn aggro(
                 transitions.push(Aggroed::new_transition(Patrolling));
             } else if matches!(range, Range::Melee) {
                 match role {
-                    Role::Melee => {
-                        transitions.push(Waiting::new_transition(
-                            MeleeAttack::default(),
-                        ))
-                    },
+                    Role::Melee => transitions.push(Waiting::new_transition(
+                        MeleeAttack::default(),
+                    )),
                     Role::Ranged => {
                         velocity.x = 0.;
                         transitions.push(Waiting::new_transition(Defense));
@@ -1355,7 +1362,7 @@ fn falling(
         if matches!(*nav, Navigation::Falling { .. }) {
             if let Some((e, toi)) = spatial_query.shape_cast(
                 transform.translation.xy(),
-                Direction2d::new_unchecked(Vec2::new(0., -1.)),
+                Dir2::new_unchecked(Vec2::new(0., -1.)),
                 collider.0.shape(),
                 GROUNDED_THRESHOLD,
                 InteractionGroups {
@@ -1413,7 +1420,7 @@ fn falling(
             if spatial_query
                 .shape_cast(
                     transform.translation.xy(),
-                    Direction2d::new_unchecked(Vec2::new(0., -1.)),
+                    Dir2::new_unchecked(Vec2::new(0., -1.)),
                     collider.0.shape(),
                     GROUNDED_THRESHOLD
                         + collider.0.shape().compute_local_aabb().extents()[1]
@@ -1433,7 +1440,7 @@ fn falling(
                     enemy_anim.play_key(&format!(
                         "{}.Jump",
                         enemy_anim_prefix(role, tier)
-                    )); 
+                    ));
                 }
             }
         }
@@ -1667,7 +1674,7 @@ fn move_collide(
         // Simplified version of the player collisions
         // If the enemy encounters a collision with the player, wall or edge of platform, it sets
         // the Navigation component to Navigation::Blocked
-        while let Ok(shape_dir) = Direction2d::new(linear_velocity.0) {
+        while let Ok(shape_dir) = Dir2::new(linear_velocity.0) {
             if let Some((_entity, first_hit)) = spatial_query.shape_cast(
                 transform.translation.xy(),
                 shape_dir,
@@ -1848,7 +1855,7 @@ impl Plugin for EnemyAnimationPlugin {
                     .after(EnemyStateSet::Transition)
                     .run_if(in_state(AppState::InGame)),
                 enemy_hit_sfx_gfx
-                    .run_if(on_event::<DamageInfo>())
+                    .run_if(on_event::<DamageInfo>)
                     .in_set(RespondToDamageInfoSet),
             ),
         );

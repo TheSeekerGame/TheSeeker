@@ -3,6 +3,7 @@ use std::marker::PhantomData;
 use bevy::asset::{Asset, UntypedAssetId};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
+use bevy::state::state::FreelyMutableState;
 use bevy_common_assets::toml::TomlAssetPlugin;
 use rapier2d::geometry::SharedShape;
 use rapier2d::prelude::Point;
@@ -14,11 +15,11 @@ pub mod animation;
 pub mod config;
 pub mod script;
 
-pub struct AssetsPlugin<S: States> {
+pub struct AssetsPlugin<S: FreelyMutableState> {
     pub loading_state: S,
 }
 
-impl<S: States> Plugin for AssetsPlugin<S> {
+impl<S: FreelyMutableState> Plugin for AssetsPlugin<S> {
     fn build(&self, app: &mut App) {
         // add custom asset types
         app.add_plugins((
@@ -28,23 +29,13 @@ impl<S: States> Plugin for AssetsPlugin<S> {
             ]),
             TomlAssetPlugin::<self::config::DynamicConfig>::new(&["cfg.toml"]),
         ));
-        // dynamic key resolvers for whatever we need
-        // we want to be able to do things per-game-tick, so put this in `GameTickUpdate`
-        app.add_systems(
-            GameTickUpdate,
-            (
-                resolve_asset_keys::<self::script::Script>,
-                resolve_asset_keys::<self::animation::SpriteAnimation>,
-            )
-                .in_set(AssetsSet::ResolveKeys),
-        );
 
         // asset preloading
         app.init_resource::<PreloadedAssets>();
         app.add_systems(
             Update,
-            watch_preload_dynamic_collections
-                .track_progress()
+            watch_preload_dynamic_collections::<S>
+                .track_progress::<S>()
                 .run_if(in_state(self.loading_state.clone()))
                 // NOTE: this is "after" on purpose; we want to check readiness of assets
                 // even though we might be adding more handles for tracking
@@ -57,59 +48,6 @@ impl<S: States> Plugin for AssetsPlugin<S> {
                 populate_collider_map.after(finalize_preloaded_dynamic_assets),
             ),
         );
-    }
-}
-
-/// Use this for system ordering relative to assets
-/// (within the `GameTickUpdate` schedule)
-#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum AssetsSet {
-    /// This is when `AssetKey` gets resolved to `Handle`
-    ResolveKeys,
-}
-
-/// Component for when we want to use a dynamic asset key string to refer to an asset
-/// on an entity, instead of a handle.
-#[derive(Component, Clone, Debug, PartialEq, Eq)]
-pub struct AssetKey<T: Asset> {
-    pub key: String,
-    pub _pd: PhantomData<T>,
-}
-
-impl<T: Asset> AssetKey<T> {
-    pub fn new(key: &str) -> Self {
-        Self {
-            key: key.to_owned(),
-            _pd: PhantomData,
-        }
-    }
-}
-
-impl<T: Asset> From<&str> for AssetKey<T> {
-    fn from(value: &str) -> Self {
-        Self::new(value)
-    }
-}
-
-impl<T: Asset> From<&String> for AssetKey<T> {
-    fn from(value: &String) -> Self {
-        Self::new(value.as_str())
-    }
-}
-
-/// System that detects `AssetKey` components on entities and inserts `Handle`.
-///
-/// This happens in `GameTickUpdate`, so it is possible to spawn and resolve
-/// things every game tick.
-pub fn resolve_asset_keys<T: Asset>(
-    mut commands: Commands,
-    preloaded: Res<PreloadedAssets>,
-    q_key: Query<(Entity, &AssetKey<T>), Without<Handle<T>>>,
-) {
-    for (e, key) in &q_key {
-        if let Some(handle) = preloaded.get_single_asset::<T>(&key.key) {
-            commands.entity(e).insert(handle);
-        }
     }
 }
 
@@ -174,12 +112,12 @@ impl PreloadedAssets {
 
 /// Detects any "dynamic assets", as they get discovered by `bevy_asset_loader`,
 /// and preloads the things we want preloaded.
-fn watch_preload_dynamic_collections(
+fn watch_preload_dynamic_collections<S: FreelyMutableState>(
     dynamic_ass: Res<DynamicAssets>,
-    mut assets_progress: ResMut<AssetsLoading>,
+    mut assets_progress: ResMut<AssetsLoading<S>>,
     mut assets_preloaded: ResMut<PreloadedAssets>,
     ass: Res<AssetServer>,
-    progress: Res<ProgressCounter>,
+    progress: Res<ProgressTracker<S>>,
     mut done: Local<bool>,
 ) -> HiddenProgress {
     if dynamic_ass.is_changed() {
@@ -192,7 +130,7 @@ fn watch_preload_dynamic_collections(
 
             for handle in asset.load(&ass) {
                 assets_preloaded.handles.insert(handle.clone());
-                assets_progress.add(handle);
+                assets_progress.add(&handle);
             }
 
             // reserve an entry in our map for later
@@ -205,7 +143,7 @@ fn watch_preload_dynamic_collections(
 
     // hold on until everything else (non-hidden progress) is done,
     // and then complete ourselves to allow the iyes_progress to transition
-    let progress = progress.progress(); // NOTE: not including hidden
+    let progress = progress.get_global_progress(); // NOTE: not including hidden
     if progress.done >= progress.total {
         *done = true;
     }
@@ -331,9 +269,9 @@ fn populate_collider_map(
                         && pixel[3] == 255
                     {
                         collider_points.push(Point::new(
-                            (0.5 + x as f32 - min.x) - size.x * 0.5,
+                            (0.5 + x as f32 - min.x as f32) - size.x as f32 * 0.5,
                             // the siz.y - flips it on y since texture coords are inverted y
-                            size.y - ((0.5 + y as f32 - min.y) + size.y * 0.5),
+                            size.y as f32 - ((0.5 + y as f32 - min.y as f32) + size.y as f32 * 0.5),
                         ));
                         // Overwrites it with an empty color
                         pixel.copy_from_slice(&[0, 0, 0, 0]);

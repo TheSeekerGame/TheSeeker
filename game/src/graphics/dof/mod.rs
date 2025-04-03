@@ -43,7 +43,6 @@ use bevy::render::render_graph::{
     NodeRunError, RenderGraphApp as _, RenderGraphContext, RenderLabel,
     ViewNode, ViewNodeRunner,
 };
-use bevy::render::render_phase::RenderPhase;
 use bevy::render::render_resource::binding_types::{
     sampler, texture_2d, texture_depth_2d, texture_depth_2d_multisampled,
     uniform_buffer,
@@ -59,7 +58,7 @@ use bevy::render::render_resource::{
     TextureUsages,
 };
 use bevy::render::renderer::{RenderContext, RenderDevice};
-use bevy::render::texture::{BevyDefault, CachedTexture, TextureCache};
+use bevy::render::texture::{CachedTexture, TextureCache};
 use bevy::render::view::{
     prepare_view_targets, ExtractedView, Msaa, ViewDepthTexture, ViewTarget,
     ViewUniform, ViewUniformOffset, ViewUniforms,
@@ -223,7 +222,7 @@ impl Plugin for DepthOfFieldPlugin {
             DepthOfFieldUniform,
         >::default());
 
-        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             error!("couldn't get render app!");
             return;
         };
@@ -281,7 +280,7 @@ impl Plugin for DepthOfFieldPlugin {
     }
 
     fn finish(&self, app: &mut App) {
-        let Ok(render_app) = app.get_sub_app_mut(RenderApp) else {
+        let Some(render_app) = app.get_sub_app_mut(RenderApp) else {
             error!("couldn't get render app in  finish!");
             return;
         };
@@ -636,7 +635,6 @@ impl FromWorld for DepthOfFieldGlobalBindGroupLayout {
 pub fn prepare_depth_of_field_view_bind_group_layouts(
     mut commands: Commands,
     view_targets: Query<(Entity, &DepthOfFieldSettings)>,
-    msaa: Res<Msaa>,
     render_device: Res<RenderDevice>,
 ) {
     for (view, dof_settings) in view_targets.iter() {
@@ -647,11 +645,7 @@ pub fn prepare_depth_of_field_view_bind_group_layouts(
                 ShaderStages::FRAGMENT,
                 (
                     uniform_buffer::<ViewUniform>(true),
-                    if *msaa != Msaa::Off {
-                        texture_depth_2d_multisampled()
-                    } else {
-                        texture_depth_2d()
-                    },
+                    texture_depth_2d(),
                     texture_2d(TextureSampleType::Float { filterable: true }),
                 ),
             ),
@@ -668,11 +662,7 @@ pub fn prepare_depth_of_field_view_bind_group_layouts(
                         ShaderStages::FRAGMENT,
                         (
                             uniform_buffer::<ViewUniform>(true),
-                            if *msaa != Msaa::Off {
-                                texture_depth_2d_multisampled()
-                            } else {
-                                texture_depth_2d()
-                            },
+                            texture_depth_2d(),
                             texture_2d(TextureSampleType::Float {
                                 filterable: true,
                             }),
@@ -737,25 +727,26 @@ pub fn configure_depth_of_field_view_targets_2(
 pub fn prepare_core_3d_depth_textures(
     mut commands: Commands,
     mut texture_cache: ResMut<TextureCache>,
-    msaa: Res<Msaa>,
     render_device: Res<RenderDevice>,
     views_3d: Query<
         (
             Entity,
             &ExtractedCamera,
+            &Msaa,
             Option<&DepthPrepass>,
             &Camera3d,
         ),
-        (
-            With<RenderPhase<Opaque3d>>,
-            With<RenderPhase<AlphaMask3d>>,
-            With<RenderPhase<Transmissive3d>>,
-            With<RenderPhase<Transparent3d>>,
-        ),
+        // FIXME: Review these query filters
+        // (
+        //     With<RenderPhase<Opaque3d>>,
+        //     With<RenderPhase<AlphaMask3d>>,
+        //     With<RenderPhase<Transmissive3d>>,
+        //     With<RenderPhase<Transparent3d>>,
+        // ),
     >,
 ) {
     let mut render_target_usage = HashMap::default();
-    for (_, camera, depth_prepass, camera_3d) in &views_3d {
+    for (_, camera, _, depth_prepass, camera_3d) in &views_3d {
         // Default usage required to write to the depth texture
         let mut usage: TextureUsages = camera_3d.depth_texture_usages.into();
         if depth_prepass.is_some() {
@@ -769,7 +760,7 @@ pub fn prepare_core_3d_depth_textures(
     }
 
     let mut textures = HashMap::default();
-    for (entity, camera, _, camera_3d) in &views_3d {
+    for (entity, camera, msaa, _, camera_3d) in &views_3d {
         let Some(physical_target_size) = camera.physical_target_size else {
             continue;
         };
@@ -829,7 +820,7 @@ pub fn prepare_depth_of_field_global_bind_group(
         Some("depth of field global bind group"),
         &global_bind_group_layout.layout,
         &BindGroupEntries::sequential((
-            dof_settings_uniforms,                           // `dof_params`
+            dof_settings_uniforms, // `dof_params`
             &global_bind_group_layout.color_texture_sampler, // `color_texture_sampler`
         )),
     ));
@@ -879,16 +870,16 @@ pub fn prepare_depth_of_field_pipelines(
     mut commands: Commands,
     pipeline_cache: Res<PipelineCache>,
     mut pipelines: ResMut<SpecializedRenderPipelines<DepthOfFieldPipeline>>,
-    msaa: Res<Msaa>,
     global_bind_group_layout: Res<DepthOfFieldGlobalBindGroupLayout>,
     view_targets: Query<(
         Entity,
         &ExtractedView,
+        &Msaa,
         &DepthOfFieldSettings,
         &ViewDepthOfFieldBindGroupLayouts,
     )>,
 ) {
-    for (entity, view, dof_settings, view_bind_group_layouts) in
+    for (entity, view, msaa, dof_settings, view_bind_group_layouts) in
         view_targets.iter()
     {
         let dof_pipeline = DepthOfFieldPipeline {
@@ -1004,6 +995,7 @@ impl SpecializedRenderPipeline for DepthOfFieldPipeline {
 
         RenderPipelineDescriptor {
             label: Some("depth of field pipeline".into()),
+            zero_initialize_workgroup_memory: false,
             layout,
             push_constant_ranges: vec![],
             vertex: fullscreen_shader_vertex_state(),
@@ -1028,10 +1020,9 @@ impl SpecializedRenderPipeline for DepthOfFieldPipeline {
 /// Extracts all [`DepthOfFieldSettings`] components into the render world.
 fn extract_depth_of_field_settings(
     mut commands: Commands,
-    msaa: Extract<Res<Msaa>>,
     mut query: Extract<Query<(Entity, &DepthOfFieldSettings)>>,
 ) {
-    if **msaa != Msaa::Off && !depth_textures_are_supported() {
+    if !depth_textures_are_supported() {
         info_once!(
             "Disabling depth of field on this platform because depth textures aren't available"
         );
@@ -1099,26 +1090,24 @@ impl DepthOfFieldPipelines {
             DepthOfFieldPipelines::Bokeh {
                 pass_0: pass_0_pipeline,
                 pass_1: pass_1_pipeline,
-            } => {
-                [
-                    DepthOfFieldPipelineRenderInfo {
-                        pass_label: "depth of field pass (bokeh pass 0)",
-                        view_bind_group_label:
-                            "depth of field view bind group (bokeh pass 0)",
-                        pipeline: pass_0_pipeline,
-                        is_dual_input: false,
-                        is_dual_output: true,
-                    },
-                    DepthOfFieldPipelineRenderInfo {
-                        pass_label: "depth of field pass (bokeh pass 1)",
-                        view_bind_group_label:
-                            "depth of field view bind group (bokeh pass 1)",
-                        pipeline: pass_1_pipeline,
-                        is_dual_input: true,
-                        is_dual_output: false,
-                    },
-                ]
-            },
+            } => [
+                DepthOfFieldPipelineRenderInfo {
+                    pass_label: "depth of field pass (bokeh pass 0)",
+                    view_bind_group_label:
+                        "depth of field view bind group (bokeh pass 0)",
+                    pipeline: pass_0_pipeline,
+                    is_dual_input: false,
+                    is_dual_output: true,
+                },
+                DepthOfFieldPipelineRenderInfo {
+                    pass_label: "depth of field pass (bokeh pass 1)",
+                    view_bind_group_label:
+                        "depth of field view bind group (bokeh pass 1)",
+                    pipeline: pass_1_pipeline,
+                    is_dual_input: true,
+                    is_dual_output: false,
+                },
+            ],
         }
     }
 }

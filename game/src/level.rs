@@ -45,9 +45,11 @@ fn game_level_init(mut commands: Commands, preloaded: Res<PreloadedAssets>) {
 
     commands.spawn((
         LdtkWorldBundle {
-            ldtk_handle: preloaded
-                .get_single_asset("level.01")
-                .expect("Expected asset key 'level.01'"),
+            ldtk_handle: LdtkProjectHandle {
+                handle: preloaded
+                    .get_single_asset("level.01")
+                    .expect("Expected asset key 'level.01'"),
+            },
             ..Default::default()
         },
         StateDespawnMarker,

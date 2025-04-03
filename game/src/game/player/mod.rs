@@ -66,15 +66,15 @@ impl Plugin for PlayerPlugin {
             .after(PlayerStateSet::Transition)
             .run_if(in_state(AppState::InGame)),
         );
-        app.add_systems(
-            OnEnter(GameState::Paused),
-            (
-                debug_player,
-                crate::game::enemy::debug_enemy,
-            )
-                .chain(),
-        )
-        .add_plugins((
+        // app.add_systems(
+        //     OnEnter(GameState::Paused),
+        //     (
+        //         debug_player,
+        //         crate::game::enemy::debug_enemy,
+        //     )
+        //         .chain(),
+        // )
+        app.add_plugins((
             PlayerActionPlugin,
             PlayerBehaviorPlugin,
             PlayerTransitionPlugin,
@@ -119,7 +119,7 @@ pub struct PlayerGentBundle {
 pub struct PlayerGfxBundle {
     marker: PlayerGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteSheetBundle,
+    sprite: SpriteBundle,
     animation: SpriteAnimationBundle,
 }
 
@@ -339,14 +339,14 @@ fn debug_player_states(
 }
 
 // fn debug_player(world: &World, query: Query<Entity, With<PlayerGfx>>) {
-fn debug_player(world: &World, query: Query<Entity, With<Player>>) {
-    for entity in query.iter() {
-        let components = world.inspect_entity(entity);
-        for component in components.iter() {
-            println!("{:?}", component.name());
-        }
-    }
-}
+// fn debug_player(world: &World, query: Query<Entity, With<Player>>) {
+//     for entity in query.iter() {
+//         let components = world.inspect_entity(entity);
+//         for component in components.iter() {
+//             println!("{:?}", component.name());
+//         }
+//     }
+// }
 
 fn setup_player(
     mut q: Query<(&mut Transform, Entity, &Parent), Added<PlayerBlueprint>>,
@@ -391,7 +391,7 @@ fn setup_player(
                         .clone(),
                         origin: Vec2::new(0.0, 0.0),
                         max_toi: f32::MAX,
-                        direction: Direction2d::NEG_Y,
+                        direction: Dir2::NEG_Y,
                         interaction: InteractionGroups {
                             memberships: PLAYER,
                             filter: GROUND,
@@ -443,7 +443,11 @@ fn setup_player(
                 pixel_aligned: false,
                 gent: e_gent,
             },
-            sprite: SpriteSheetBundle {
+            sprite: SpriteBundle {
+                sprite: Sprite {
+                    texture_atlas: Some(TextureAtlas::default()),
+                    ..default()
+                },
                 transform: *xf_gent,
                 ..Default::default()
             },
@@ -949,7 +953,7 @@ fn load_player_config(
     // the Added match arm fires before preloaded updates with the asset key; as a result
     // you can't tell what specific DynamicConfig loaded in like that.
     if !*initialized_config {
-        if let Some(cfg) = cfgs.get(cfg_handle.clone()) {
+        if let Some(cfg) = cfgs.get(&cfg_handle) {
             update_player_config(&mut player_config, cfg);
         }
         *initialized_config = true;
@@ -1068,8 +1072,7 @@ impl StatusModifier {
             ],
             scalar: vec![0.5],
             delta: vec![],
-            //            effect_col: Color::hex("C2C9C9").unwrap(),
-            effect_col: Color::hex("7aa7ff").unwrap(), /* For More Visible Effect */
+            effect_col: Srgba::hex("7aa7ff").unwrap().into(), /* For More Visible Effect */
             time_remaining: 2.0,
         }
     }
@@ -1322,7 +1325,7 @@ fn player_update_stats_mod(
         sprite.color = modifier.effect_col;
 
         // TODO: switch to ticks
-        modifier.time_remaining -= time.delta_seconds();
+        modifier.time_remaining -= time.delta_secs();
 
         if modifier.time_remaining < 0. {
             commands.entity(entity).remove::<StatusModifier>();
@@ -1359,13 +1362,13 @@ pub fn load_dash_asset(
     let dash_tex: Handle<Image> =
         assets.load("animations/player/movement/Dash.png");
     let dash_layout =
-        TextureAtlasLayout::from_grid(Vec2::new(96.0, 96.0), 1, 1, None, None);
+        TextureAtlasLayout::from_grid(UVec2::new(96, 96), 1, 1, None, None);
     let dash_layout_handle = texture_atlas_layouts.add(dash_layout);
 
     let dash_down_tex: Handle<Image> =
         assets.load("animations/player/sword/DashDownSheet.png");
     let dash_down_layout =
-        TextureAtlasLayout::from_grid(Vec2::new(48.0, 48.0), 6, 1, None, None);
+        TextureAtlasLayout::from_grid(UVec2::new(48, 48), 6, 1, None, None);
     let dash_down_layout_handle = texture_atlas_layouts.add(dash_down_layout);
 
     commands.insert_resource(DashIconAssetHandle {
@@ -1425,14 +1428,16 @@ pub fn player_dash_fx(
         };
 
         commands.spawn((
-            SpriteSheetBundle {
+            SpriteBundle {
                 sprite: Sprite {
+                    image: tex,
+                    texture_atlas: Some(atlas),
                     flip_x: facing.direction() < 0.,
                     ..default()
                 },
                 transform: Transform::from_translation(pos),
-                texture: tex.clone(),
-                atlas,
+                // texture: tex.clone(),
+                // atlas,
                 ..default()
             },
             DashIcon {
@@ -1457,7 +1462,7 @@ pub fn dash_icon_fx(
         if r >= 1.0 {
             commands.entity(entity).despawn();
         } else {
-            sprite.color.set_a((1.0 - r) * icon.init_a);
+            sprite.color.set_alpha((1.0 - r) * icon.init_a);
         }
     }
 }
@@ -1536,7 +1541,7 @@ pub fn on_hit_exit_stealthing(
             attacker_query.get_mut(attack.attacker)
         {
             let mut sprite = sprites.get_mut(gent.e_gfx).unwrap();
-            sprite.color = sprite.color.with_a(1.0);
+            sprite.color = sprite.color.with_alpha(1.0);
             transitions.push(Stealthing::new_transition(
                 CanStealth::new(&config),
             ));

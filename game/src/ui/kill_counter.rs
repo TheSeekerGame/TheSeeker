@@ -1,12 +1,9 @@
-use sickle_ui::ui_builder::{UiBuilderExt, UiRoot};
-use sickle_ui::ui_commands::SetTextExt;
-use sickle_ui::ui_style::*;
-use sickle_ui::widgets::prelude::*;
-
 use crate::appstate::AppState;
 use crate::camera::MainCamera;
 use crate::game::attack::KillCount;
 use crate::prelude::*;
+
+use super::popup::PopupUi;
 
 pub struct KillCounterPlugin;
 
@@ -16,7 +13,10 @@ impl Plugin for KillCounterPlugin {
             OnEnter(AppState::InGame),
             spawn_killcounter.after(crate::camera::setup_main_camera),
         );
-        app.add_systems(GameTickUpdate, update_counter);
+        app.add_systems(
+            GameTickUpdate,
+            update_counter.run_if(resource_changed::<KillCount>),
+        );
     }
 }
 
@@ -32,48 +32,35 @@ fn spawn_killcounter(
         return;
     };
 
-    commands.ui_builder(UiRoot).container(
-        (
-            NodeBundle {
-                style: Style {
-                    position_type: PositionType::Absolute,
-                    flex_direction: FlexDirection::Row,
-                    right: Val::Px(20.0),
-                    top: Val::Px(20.0),
-                    ..default()
-                },
+    commands
+        .spawn((
+            Node {
+                position_type: PositionType::Absolute,
+                flex_direction: FlexDirection::Row,
+                right: Val::Px(20.0),
+                top: Val::Px(20.0),
                 ..default()
             },
             TargetCamera(cam_e),
             StateDespawnMarker,
-        ),
-        |row| {
-            let style = TextStyle {
+        ))
+        .with_children(|row| {
+            let font = TextFont {
                 font: asset_server.load("font/Tektur-Regular.ttf"),
                 font_size: 32.0,
-                color: Default::default(),
+                ..Default::default()
             };
-            row.spawn(TextBundle::from_section(
-                format!("Kills: "),
-                style.clone(),
-            ));
-            row.spawn((
-                KillCounterUi,
-                TextBundle::from_section(format!("_"), style.clone()),
-            ));
-        },
-    );
+            row.spawn((Text::new("Kills: "), font.clone()));
+            row.spawn((KillCounterUi, Text::new("_"), font));
+        });
 }
 
 pub fn update_counter(
     mut commands: Commands,
+    mut query: Query<(Entity, &mut Text), With<KillCounterUi>>,
     kill_count: Res<KillCount>,
-    query: Query<(Entity, &Text), With<KillCounterUi>>,
 ) {
-    for (entity, text) in query.iter() {
-        commands.entity(entity).set_text(
-            format!("{}", kill_count.0),
-            Some(text.sections[0].style.clone()),
-        );
+    for (entity, mut text) in query.iter_mut() {
+        text.0 = format!("{}", kill_count.0);
     }
 }
