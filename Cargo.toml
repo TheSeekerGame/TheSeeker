@@ -138,10 +138,8 @@ version = "0.12"
 features = ["toml", "ron"]
 
 [dependencies.bevy_ecs_ldtk]
-version = "0.11"
-# FIXME: switch back to our ecs_ldtk
-# git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
-# branch = "bevy015"
+git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
+branch = "bevy015"
 
 [dependencies.seek_ecs_tilemap]
 git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
