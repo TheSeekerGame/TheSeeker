@@ -1,5 +1,6 @@
-use leafwing_input_manager::{prelude::*, InputManagerBundle};
-// use theseeker_engine::input::InputManagerPlugin;
+use leafwing_input_manager::prelude::*;
+// use leafwing_input_manager::{prelude::*, InputManagerBundle};
+use theseeker_engine::input::InputManagerPlugin;
 
 use crate::prelude::*;
 

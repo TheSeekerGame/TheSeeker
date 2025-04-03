@@ -6,13 +6,27 @@ use std::fmt::Debug;
 
 use bevy::app::{App, Plugin, Update};
 use bevy::ecs::prelude::*;
+use bevy::input::gamepad::GamepadButton;
+use bevy::input::keyboard::KeyCode;
+use bevy::input::mouse::*;
 use bevy::input::{ButtonState, InputSystem};
 use bevy::prelude::{PostUpdate, PreUpdate};
 use bevy::reflect::TypePath;
-use leafwing_input_manager::action_state::{ActionData, ActionState};
+use leafwing_input_manager::action_state::{
+    ActionData, ActionState, ButtonData,
+};
 use leafwing_input_manager::clashing_inputs::ClashStrategy;
 use leafwing_input_manager::input_map::InputMap;
 use leafwing_input_manager::input_processing::*;
+use leafwing_input_manager::plugin::CentralInputStorePlugin;
+use leafwing_input_manager::prelude::updating::CentralInputStore;
+use leafwing_input_manager::prelude::{
+    AxislikeChord, ButtonlikeChord, DualAxislikeChord, GamepadControlAxis,
+    GamepadControlDirection, GamepadStick, ModifierKey, MouseMove,
+    MouseMoveAxis, MouseMoveDirection, MouseScroll, MouseScrollAxis,
+    MouseScrollDirection, RegisterUserInput, TripleAxislikeChord, VirtualAxis,
+    VirtualDPad, VirtualDPad3D,
+};
 use leafwing_input_manager::user_input::UserInput;
 use leafwing_input_manager::Actionlike;
 
@@ -63,9 +77,15 @@ impl<A: Actionlike> Default for InputManagerPlugin<A> {
     }
 }
 
-impl<A: Actionlike + TypePath> Plugin for InputManagerPlugin<A> {
+impl<A: Actionlike + TypePath + bevy::reflect::GetTypeRegistration> Plugin
+    for InputManagerPlugin<A>
+{
     fn build(&self, app: &mut App) {
         use leafwing_input_manager::systems::*;
+
+        if !app.is_plugin_added::<CentralInputStorePlugin>() {
+            app.add_plugins(CentralInputStorePlugin);
+        }
 
         // Main schedule
         app.add_systems(
@@ -117,40 +137,61 @@ impl<A: Actionlike + TypePath> Plugin for InputManagerPlugin<A> {
             swap_to_update::<A>.in_set(GameTickSet::Post),
         );
 
-        // app.register_type::<ActionState<A>>();
-        // app.register_type::<InputMap<A>>();
-        // app.register_type::<UserInput>();
-        // app.register_type::<InputKind>();
-        // app.register_type::<ActionData>();
-        // app.register_type::<Modifier>();
-        // app.register_type::<ActionState<A>>();
-        // app.register_type::<VirtualDPad>();
-        // app.register_type::<VirtualAxis>();
-        // app.register_type::<SingleAxis>();
-        // app.register_type::<DualAxis>();
-        // app.register_type::<AxisType>();
-        // app.register_type::<MouseWheelAxisType>();
-        // app.register_type::<MouseMotionAxisType>();
-        // app.register_type::<DualAxisData>();
-        // app.register_type::<ButtonState>();
-        // app.register_type::<MouseWheelDirection>();
-        // app.register_type::<MouseMotionDirection>();
+        // #[cfg(feature = "mouse")]
+        app.register_buttonlike_input::<MouseButton>()
+            .register_buttonlike_input::<MouseMoveDirection>()
+            .register_buttonlike_input::<MouseButton>()
+            .register_axislike_input::<MouseMoveAxis>()
+            .register_dual_axislike_input::<MouseMove>()
+            .register_buttonlike_input::<MouseScrollDirection>()
+            .register_axislike_input::<MouseScrollAxis>()
+            .register_dual_axislike_input::<MouseScroll>();
+
+        // #[cfg(feature = "keyboard")]
+        app.register_buttonlike_input::<KeyCode>()
+            .register_buttonlike_input::<ModifierKey>();
+
+        // #[cfg(feature = "gamepad")]
+        app.register_buttonlike_input::<GamepadControlDirection>()
+            .register_axislike_input::<GamepadControlAxis>()
+            .register_dual_axislike_input::<GamepadStick>()
+            .register_buttonlike_input::<GamepadButton>();
+
+        // Virtual Axes
+        app.register_axislike_input::<VirtualAxis>()
+            .register_dual_axislike_input::<VirtualDPad>()
+            .register_triple_axislike_input::<VirtualDPad3D>();
+
+        // Chords
+        app.register_buttonlike_input::<ButtonlikeChord>()
+            .register_axislike_input::<AxislikeChord>()
+            .register_dual_axislike_input::<DualAxislikeChord>()
+            .register_triple_axislike_input::<TripleAxislikeChord>();
+
+        // General-purpose reflection
+        app.register_type::<ActionState<A>>()
+            .register_type::<InputMap<A>>()
+            .register_type::<ButtonData>()
+            .register_type::<ActionState<A>>()
+            .register_type::<CentralInputStore>();
+
         // Processors
-        // app.register_type::<AxisProcessor>();
-        // app.register_type::<AxisBounds>();
-        // app.register_type::<AxisExclusion>();
-        // app.register_type::<AxisDeadZone>();
-        // app.register_type::<DualAxisProcessor>();
-        // app.register_type::<DualAxisInverted>();
-        // app.register_type::<DualAxisSensitivity>();
-        // app.register_type::<DualAxisBounds>();
-        // app.register_type::<DualAxisExclusion>();
-        // app.register_type::<DualAxisDeadZone>();
-        // app.register_type::<CircleBounds>();
-        // app.register_type::<CircleExclusion>();
-        // app.register_type::<CircleDeadZone>();
+        app.register_type::<AxisProcessor>()
+            .register_type::<AxisBounds>()
+            .register_type::<AxisExclusion>()
+            .register_type::<AxisDeadZone>()
+            .register_type::<DualAxisProcessor>()
+            .register_type::<DualAxisInverted>()
+            .register_type::<DualAxisSensitivity>()
+            .register_type::<DualAxisBounds>()
+            .register_type::<DualAxisExclusion>()
+            .register_type::<DualAxisDeadZone>()
+            .register_type::<CircleBounds>()
+            .register_type::<CircleExclusion>()
+            .register_type::<CircleDeadZone>();
+
         // Resources
-        // app.init_resource::<ClashStrategy>();
+        app.init_resource::<ClashStrategy>();
     }
 }
 
