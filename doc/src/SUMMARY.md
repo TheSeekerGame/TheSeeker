@@ -8,6 +8,7 @@
     - [Gameplay / Mechanics](./game-design/game-mechanics.md)
         - [Active Skills](./game-design/game-mechanics/active-skills.md)
         - [Passive Skills](./game-design/game-mechanics/passive-skills.md)
+        - [Weapons & Crafting](./game-design/game-mechanics/weapons-and-crafting.md)
         - [Platforming](./game-design/game-mechanics/platforming.md)
         - [Creatures / Ecosystem](./game-design/game-mechanics/creatures-ecosystem.md)
 - [Development Policies](./policy.md)
