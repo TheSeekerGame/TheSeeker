@@ -934,6 +934,11 @@ pub struct PlayerConfig {
 
     /// How many kills to trigger a passive gain
     passive_gain_rate: u32,
+
+    /// Add on-kill screen shake fields
+    pub on_kill_screenshake_strength: f32,
+    pub on_kill_screenshake_duration_secs: f32,
+    pub on_kill_screenshake_frequency: f32,
 }
 
 fn load_player_config(
@@ -1020,6 +1025,9 @@ fn update_player_config(config: &mut PlayerConfig, cfg: &DynamicConfig) {
     update_field(&mut errors, &cfg.0, "hammer_on_hit_screenshake_strength", |val| config.hammer_on_hit_screenshake_strength = val);
     update_field(&mut errors, &cfg.0, "hammer_on_hit_screenshake_duration_secs", |val| config.hammer_on_hit_screenshake_duration_secs = val);
     update_field(&mut errors, &cfg.0, "hammer_on_hit_screenshake_frequency", |val| config.hammer_on_hit_screenshake_frequency = val);
+    update_field(&mut errors, &cfg.0, "on_kill_screenshake_strength", |val| config.on_kill_screenshake_strength = val);
+    update_field(&mut errors, &cfg.0, "on_kill_screenshake_duration_secs", |val| config.on_kill_screenshake_duration_secs = val);
+    update_field(&mut errors, &cfg.0, "on_kill_screenshake_frequency", |val| config.on_kill_screenshake_frequency = val);
     update_field(&mut errors, &cfg.0, "passive_gain_rate", |val| config.passive_gain_rate = val as u32);
 
     for error in errors{

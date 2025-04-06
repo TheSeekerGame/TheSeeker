@@ -22,8 +22,8 @@ pub struct GraphicsFxPlugin;
 
 impl Plugin for GraphicsFxPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(DepthOfFieldPlugin);
-        app.add_plugins(PostProcessingPlugin);
+        // app.add_plugins(DepthOfFieldPlugin); // Commented out to disable Depth of Field
+        app.add_plugins(PostProcessingPlugin); // Commented out to disable post-processing
         app.add_plugins(DmgNumbersPlugin);
         app.add_plugins(PlayerHpBarPlugin);
         app.add_plugins(EnemyHpBarPlugin);

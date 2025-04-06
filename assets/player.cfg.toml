@@ -146,5 +146,10 @@ hammer_on_hit_screenshake_strength = 1.35
 hammer_on_hit_screenshake_duration_secs = 0.2
 hammer_on_hit_screenshake_frequency = 2.5
 
+# On-kill configuration values for camera screen shake
+on_kill_screenshake_strength = 2.0
+on_kill_screenshake_duration_secs = 0.2
+on_kill_screenshake_frequency = 2.2
+
 # Number of kills to trigger passive gain
 passive_gain_rate = 10.0

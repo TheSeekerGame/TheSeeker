@@ -42,42 +42,42 @@ fn attack_particles_setup(
     // Create a color gradient for the particles
     let mut gradient = Gradient::new();
     let r = 1.0 / 8.0;
-    // set w to 5 on the first one for fun
+    // Increase brightness for bloom effect
     gradient.add_key(
         r * 0.0,
-        Vec4::new(0.643, 0.753, 0.773, 1.0),
+        Vec4::new(4.0, 4.0, 4.0, 1.0), // Brighter start
     );
     gradient.add_key(
         r * 3.0,
-        Vec4::new(0.643, 0.753, 0.773, 1.),
+        Vec4::new(4.0, 4.0, 4.0, 1.0), // Brighter mid
     );
     gradient.add_key(
         r * 3.0,
-        Vec4::new(0.761, 0.827, 0.851, 1.),
+        Vec4::new(4.0, 4.0, 4.0, 1.0), // Brighter mid transition
     );
     gradient.add_key(
         r * 4.0,
-        Vec4::new(0.761, 0.827, 0.851, 1.),
+        Vec4::new(4.0, 4.0, 4.0, 1.0),
     );
     gradient.add_key(
         r * 4.0,
-        Vec4::new(0.925, 0.965, 0.98, 1.0),
+        Vec4::new(5.0, 5.0, 5.0, 1.0), // Even brighter peak
     );
     gradient.add_key(
         r * 6.0,
-        Vec4::new(0.925, 0.965, 0.98, 1.0),
+        Vec4::new(5.0, 5.0, 5.0, 1.0),
     );
     gradient.add_key(
         r * 6.0,
-        Vec4::new(0.761, 0.827, 0.851, 1.),
+        Vec4::new(4.0, 4.0, 4.0, 1.0), // Fade start
     );
     gradient.add_key(
         r * 7.0,
-        Vec4::new(0.761, 0.827, 0.851, 1.),
+        Vec4::new(4.0, 4.0, 4.0, 1.0),
     );
     gradient.add_key(
         r * 8.0,
-        Vec4::new(0.761, 0.827, 0.851, 0.),
+        Vec4::new(0.761, 0.827, 0.851, 0.0), // Fade out completely (no bloom needed)
     );
 
     let writer = ExprWriter::new();

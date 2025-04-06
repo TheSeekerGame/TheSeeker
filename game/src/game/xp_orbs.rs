@@ -15,6 +15,10 @@ use crate::{
 
 use super::{enemy::Enemy, gentstate::Dead, player::Player};
 
+// Define bright HDR colors for bloom
+const BRIGHT_WHITE: Color = Color::rgb(3.0, 3.0, 3.0);
+const BRIGHT_RED: Color = Color::rgb(4.0, 1.0, 1.0);
+
 pub struct XpPlugin;
 impl Plugin for XpPlugin {
     fn build(&self, app: &mut App) {
@@ -61,14 +65,15 @@ fn spawn_orbs_on_death(
             .clamp_length_max(POS_RADIUS);
             let orb_position = enemy_pos + pos;
             let vel = pos * 0.25;
+            // Use bright colors for initial spawn
             let color: Color = if let Ok(passives) = player_q.get_single() {
                 if passives.contains(&Passive::Bloodstone) {
-                    RED.into()
+                    BRIGHT_RED
                 } else {
-                    WHITE.into()
+                    BRIGHT_WHITE
                 }
             } else {
-                WHITE.into()
+                BRIGHT_WHITE
             };
 
             commands.spawn((
@@ -113,8 +118,11 @@ fn update_orbs_vel(
     let p_pos = p.translation().truncate();
 
     for (entity, mut tr, mut vel, xp_orb, mut sprite) in query.iter_mut() {
+        // Update color based on passive, using bright colors
         if passives.contains(&Passive::Bloodstone) {
-            sprite.color = RED.into();
+            sprite.color = BRIGHT_RED;
+        } else {
+            sprite.color = BRIGHT_WHITE; // Ensure it's bright white if no bloodstone
         }
 
         if xp_orb.init_timer > 0.0 {
