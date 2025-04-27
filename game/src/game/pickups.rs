@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     attack::KillCount,
-    enemy::{dead, Enemy, Tier},
+    enemy::{dead, Enemy},
     gentstate::Dead,
     player::{Passive, Passives, Player},
 };
@@ -437,7 +437,7 @@ impl DropTracker {
 fn spawn_pickups_on_death(
     mut kill_count: ResMut<KillCount>,
     mut drop_tracker: ResMut<DropTracker>,
-    enemy_q: Query<(&GlobalTransform, &Tier), (With<Enemy>, Added<Dead>)>,
+    enemy_q: Query<&GlobalTransform, (With<Enemy>, Added<Dead>)>,
     mut p_query: Query<&mut Passives, With<Player>>,
     mut commands: Commands,
 ) {
@@ -446,78 +446,10 @@ fn spawn_pickups_on_death(
         return;
     };
 
-    for (tr, tier) in enemy_q.iter() {
+    for tr in enemy_q.iter() {
         let translation = tr.translation();
 
         println!("PRE-DROPPING PASSIVE");
-
-        let mut rng = rand::thread_rng();
-
-        let seed_roll = rng.gen_range(0.0..1.0);
-
-        println!("seed roll: {}", seed_roll);
-
-        let seed_category: Option<PlanetarySeed> = match tier {
-            Tier::Base => {
-                if seed_roll < 0.001 {
-                    Some(PlanetarySeed::CategoryC)
-                } else if seed_roll < 0.005 {
-                    Some(PlanetarySeed::CategoryA)
-                } else {
-                    None
-                }
-            },
-            Tier::Two => {
-                if seed_roll < 0.0007 {
-                    Some(PlanetarySeed::CategoryD)
-                } else if seed_roll < 0.003 {
-                    Some(PlanetarySeed::CategoryB)
-                } else if seed_roll < 0.006 {
-                    Some(PlanetarySeed::CategoryC)
-                } else if seed_roll < 0.012 {
-                    Some(PlanetarySeed::CategoryA)
-                } else {
-                    None
-                }
-            },
-            Tier::Three => {
-                if seed_roll < 0.0005 {
-                    Some(PlanetarySeed::CategoryE)
-                } else if seed_roll < 0.001 {
-                    Some(PlanetarySeed::CategoryD)
-                } else if seed_roll < 0.005 {
-                    Some(PlanetarySeed::CategoryB)
-                } else if seed_roll < 0.01 {
-                    Some(PlanetarySeed::CategoryC)
-                } else if seed_roll < 0.1 {
-                    Some(PlanetarySeed::CategoryA)
-                } else {
-                    None
-                }
-            },
-        };
-
-        if let Some(seed_category) = seed_category {
-            let seed_id = drop_tracker.drop_random_seed(&seed_category);
-
-            if let Some(seed_id) = seed_id {
-                commands.queue(SpawnPickupCommand {
-                    pos: translation,
-                    p_type: PickupType::Seed(seed_category, seed_id),
-                });
-            }
-        }
-
-        // category A 1/1000 drop chance
-        // all tiers
-        // category C 1/2000 drop chance
-        // all tiers
-        // category B 1/5000 drop chance
-        // Tiers 2 and 3
-        // category D 1/10000 drop chance
-        // Tiers 2 and 3
-        // category E 1/100000 drop chance
-        // Tier 3 only
 
         if let Some(milestone) = drop_tracker.get_passive_progress() {
             if kill_count.0 >= *milestone {

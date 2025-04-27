@@ -135,3 +135,42 @@ pub struct Dead {
 // #[component(storage = "SparseSet")]
 // pub struct Hitstun;
 // impl GentState for Hitstun {}
+
+
+
+#[derive(Component, Default, Debug)]
+#[component(storage = "SparseSet")]
+pub struct Patrolling;
+impl GentState for Patrolling {}
+// Patrolling needs custom transition logic later (Patrolling -> Aggroed),
+// so we don't implement GenericState for it yet.
+
+#[derive(Component, Default, Debug)]
+#[component(storage = "SparseSet")]
+pub struct Chasing;
+impl GentState for Chasing {}
+impl GenericState for Chasing {} // Uses default transition removal
+
+#[derive(Component, Default, Debug)]
+#[component(storage = "SparseSet")]
+pub struct Attacking; // Renamed from RangedAttack state in old code
+impl GentState for Attacking {}
+impl GenericState for Attacking {} // Uses default transition removal
+
+#[derive(Component, Default, Debug)]
+#[component(storage = "SparseSet")]
+pub struct Defending; // Renamed from Defense state in old code
+impl GentState for Defending {}
+impl GenericState for Defending {} // Uses default transition removal
+
+#[derive(Component, Default, Debug)]
+#[component(storage = "SparseSet")]
+pub struct Dying; // This replaces the old Dead state component logic
+impl GentState for Dying {}
+// Dying might need specific cleanup later, so no GenericState yet.
+
+#[derive(Component, Default, Debug)]
+#[component(storage = "SparseSet")]
+pub struct Decaying; // Replaces the old Decay component logic
+impl GentState for Decaying {}
+// Decaying likely leads to despawn, no GenericState needed.
