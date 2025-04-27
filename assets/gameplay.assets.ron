@@ -16,3 +16,6 @@
     ),
     */
 })
+
+// Enemy archetypes are loaded per-file by `EnemyArchetypeHandle::key()`.
+// No dynamic-asset stanza needed here.

@@ -1,4 +1,3 @@
-[RangedSpider]
 health            = 100
 movement_speed    = 20
 vision_range      = 100
@@ -12,9 +11,10 @@ walk_time_max     = 300
 state_init = "Patrolling"
 
 # state specific animation keys
-anim.Idle        = "anim.spider.Idle"
-anim.Walk        = "anim.spider.Walk"
-anim.Ranged      = "anim.spider.RangedAttack"
-anim.Defend      = "anim.spider.Defense"
-anim.Die         = "anim.spider.Death"
-anim.Decay       = "anim.spider.Decay"
+[anim]
+Idle   = "anim.spider.Idle"
+Walk   = "anim.spider.Walk"
+Ranged = "anim.spider.RangedAttack"
+Defend = "anim.spider.Defense"
+Die    = "anim.spider.Death"
+Decay  = "anim.spider.Decay" 

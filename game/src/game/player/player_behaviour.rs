@@ -11,7 +11,7 @@ use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
     into_vec2, update_sprite_colliders, AnimationCollider, Collider,
-    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_HURT, ENEMY_INSIDE,
+    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_HURT,
     GROUND, PLAYER, PLAYER_ATTACK,
 };
 use theseeker_engine::script::ScriptPlayer;
@@ -791,15 +791,7 @@ pub fn player_collisions(
                         // if we are already inside, modify the enemies collision group and add
                         // Inside so next frame we dont collide with them
                         TOIStatus::Penetrating => {
-                            collider.0.set_collision_groups(
-                                InteractionGroups {
-                                    memberships: ENEMY_INSIDE,
-                                    filter: Group::all(),
-                                },
-                            );
-                            commands
-                                .entity(enemy)
-                                .insert(crate::game::enemy::Inside);
+                            // No-op comment
                         },
                         // maybe failed never happens?
                         TOIStatus::Failed => {

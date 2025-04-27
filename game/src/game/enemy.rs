@@ -13,7 +13,7 @@ use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
     into_vec2, update_sprite_colliders, AnimationCollider, Collider,
     LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK,
-    ENEMY_INSIDE, GROUND, PLAYER, SENSOR,
+    GROUND, PLAYER, SENSOR,
 };
 use theseeker_engine::script::ScriptPlayer;
 
@@ -30,6 +30,10 @@ use crate::prelude::*;
 use crate::game::gentstate::{Patrolling, Chasing, Defending};
 use crate::game::gentstate::Transitionable;
 
+// Handle to the archetype asset used during spawning
+use crate::game::enemy::archetype::EnemyArchetypeHandle;
+use crate::game::enemy::archetype::apply_enemy_archetype;
+
 pub struct EnemyPlugin;
 pub mod archetype;
 pub mod components;
@@ -42,7 +46,7 @@ impl Plugin for EnemyPlugin {
         use crate::game::enemy::archetype::EnemyArchetypeAsset;
 
         app.init_asset::<EnemyArchetypeAsset>();
-        app.add_plugins(TomlAssetPlugin::<EnemyArchetypeAsset>::new(&["archetypes.toml"]));
+        app.add_plugins(TomlAssetPlugin::<EnemyArchetypeAsset>::new(&["*.arch.toml"]));
 
         app.add_systems(
             GameTickUpdate,
@@ -59,6 +63,23 @@ impl Plugin for EnemyPlugin {
             EnemyTransitionPlugin,
             EnemyAnimationPlugin,
         ));
+
+        // ------------------------------------------------------------------
+        // Phase-2: convert handle-only entities into full enemies once the
+        // archetype asset is available.
+        // ------------------------------------------------------------------
+
+        // Handle any entities already present at startup (e.g. placed in LDtk)
+        app.add_systems(Startup, apply_enemy_archetype);
+
+        // And handle ones spawned during gameplay (e.g. from spawners)
+        app.add_systems(
+            GameTickUpdate,
+            apply_enemy_archetype
+                .before(EnemyStateSet::Behavior)
+                .run_if(in_state(AppState::InGame)),
+        );
+
         app.register_type::<Range>();
         app.register_type::<Navigation>();
     }
@@ -195,6 +216,7 @@ fn spawn_enemies(
     >,
     player_query: Query<&Transform, (Without<Enemy>, With<Player>)>,
     mut commands: Commands,
+    asset_server: Res<AssetServer>,
 ) {
     let p_transform = player_query.get_single();
     for (transform, mut spawner) in spawner_q.iter_mut() {
@@ -239,18 +261,12 @@ fn spawn_enemies(
                     } else {
                         true
                     } {
-                        let mut ranged_role = 0;
                         for slot in spawner.slots.iter_mut() {
-                            // generate a random roll, max 2 per spawner
-                            let role = Role::Ranged;
-                            if ranged_role < 2 {
-                                ranged_role += 1;
-                            };
                             let e = commands
                                 .spawn((
-                                    EnemyBlueprintBundle::default(),
-                                    role,
                                     TransformBundle::from_transform(*transform),
+                                    Role::Ranged,
+                                    EnemyArchetypeHandle::key("RangedSpider", &asset_server),
                                 ))
                                 .id();
                             slot.enemy = Some(e);
@@ -425,9 +441,7 @@ impl Plugin for EnemyBehaviorPlugin {
                     .run_if(in_state(AppState::InGame))
                     .in_set(EnemyStateSet::Behavior)
                     .before(update_sprite_colliders),
-                (move_collide, remove_inside)
-                    .chain()
-                    .in_set(EnemyStateSet::Collisions),
+                move_collide.in_set(EnemyStateSet::Collisions),
             ),
         );
     }
@@ -527,12 +541,6 @@ enum Range {
 
 #[derive(Component, Debug, Deref)]
 struct Target(Option<Entity>);
-
-/// Component that indicates that the player is inside of this enemy,
-/// and has its usual collision layer membership modified to ENEMY_INSIDE
-/// it is removed once the player stops intersecting in the remove_inside system
-#[derive(Component)]
-pub struct Inside;
 
 /// Component added to Decaying enemy
 /// not a GentState because it shouldnt transition to or from anything else
@@ -1154,34 +1162,6 @@ fn move_collide(
         transform.translation = (transform.translation.xy()
             + projected_velocity * (1.0 / time.hz as f32))
             .extend(z);
-    }
-}
-
-fn remove_inside(
-    mut query: Query<
-        (Entity, &GlobalTransform, &mut Collider),
-        (With<Inside>, With<Enemy>),
-    >,
-    mut commands: Commands,
-    spatial_query: Res<PhysicsWorld>,
-) {
-    for (entity, transform, mut collider) in query.iter_mut() {
-        let intersections = spatial_query.intersect(
-            transform.translation().xy(),
-            collider.0.shape(),
-            InteractionGroups {
-                memberships: ENEMY_INSIDE,
-                filter: PLAYER,
-            },
-            Some(entity),
-        );
-        if intersections.is_empty() {
-            collider.0.set_collision_groups(InteractionGroups {
-                memberships: ENEMY,
-                filter: Group::all(),
-            });
-            commands.entity(entity).remove::<Inside>();
-        }
     }
 }
 
