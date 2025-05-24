@@ -141,8 +141,7 @@ features = ["toml", "ron"]
 path = "deps/bevy_ecs_ldtk-bevy015"
 
 [dependencies.seek_ecs_tilemap]
-git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
-branch = "bevy015"
+path = "deps/seek_ecs_tilemap-bevy015"
 features = ["default", "use_3d_pipeline", "background_tiles"]
 
 # [dependencies.iyes_bevy_extras]
