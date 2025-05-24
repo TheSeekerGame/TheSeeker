@@ -143,7 +143,7 @@ branch = "bevy015"
 
 [dependencies.seek_ecs_tilemap]
 git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
-branch = "bevy015"
+branch = "optimization_attempt"
 features = ["default", "use_3d_pipeline", "background_tiles"]
 
 # [dependencies.iyes_bevy_extras]
