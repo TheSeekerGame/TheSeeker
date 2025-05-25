@@ -136,26 +136,8 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
             // TODO: manage this from somewhere
             limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
         },
-        // Needed so that depth buffers are stored so depth of field works
-        DepthPrepass,
-        DepthOfFieldSettings {
-            mode: DepthOfFieldMode::Bokeh,
-            focal_distance: 0.25,
-            sensor_height: 0.008,
-            aperture_f_stops: 1.0,
-            max_circle_of_confusion_diameter: 68.8,
-            max_depth: 500.0,
-        },
-        // FIXME: complained about duplicate msaa component, where else is it added?
+        // Depth prepass / depth of field disabled for performance
         // Msaa::Off,
-        BloomSettings::OLD_SCHOOL,
-        // DarknessSettings {
-        //     bg_light_level: 1.0,
-        //     lantern_position: Default::default(),
-        //     lantern: 0.0,
-        //     lantern_color: Vec3::new(0.965, 0.882, 0.678),
-        //     bg_light_color: Vec3::new(0.761, 0.773, 0.8),
-        // },
         VignetteSettings::default(),
         FloaterSettings::default(),
         Name::new("MainCamera"),

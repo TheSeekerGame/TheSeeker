@@ -43,6 +43,64 @@ pub mod graphics;
 mod parallax;
 mod tilemap_staticify;
 
+// -----------------------------------------------------------------------------
+//  Screenshot suppression
+// -----------------------------------------------------------------------------
+// Bevy 0.15 always adds the `prepare_screenshots` render-time system.  That
+// system is effectively dormant unless `Screenshot` entities exist, but some
+// helper code (or the user hitting the *Print Screen* key) can spawn them at
+// runtime and cause a noticeable frame hitch when the read-back happens.
+//
+// We completely opt-out by removing such entities as soon as they appear.
+use bevy::render::view::screenshot::Screenshot;
+use bevy_ecs_ldtk::prelude::Respawn;
+use bevy_ecs_ldtk::systems;
+
+struct SuppressScreenshotsPlugin;
+
+impl Plugin for SuppressScreenshotsPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(Update, |mut commands: Commands, shots: Query<Entity, With<Screenshot>>| {
+            for e in &shots {
+                commands.entity(e).despawn();
+            }
+        });
+    }
+}
+
+// -----------------------------------------------------------------------------
+//  Disable LDtk live-update respawns
+// -----------------------------------------------------------------------------
+
+/// The `bevy_ecs_ldtk` fork tags the LDtk world entity with `Respawn` whenever
+/// the project file on disk changes (hot-reload over a websocket / file-watch).
+/// That in turn kicks off an expensive full-level despawn / respawn that causes
+/// multi-millisecond stalls.  In-game we don't need live editing, so we simply
+/// strip the marker as soon as it appears.
+
+struct DisableLdtkApiPlugin;
+
+impl Plugin for DisableLdtkApiPlugin {
+    fn build(&self, app: &mut App) {
+        fn strip_respawn_markers(
+            mut commands: Commands,
+            respawns: Query<Entity, With<Respawn>>,
+        ) {
+            for e in &respawns {
+                commands.entity(e).remove::<Respawn>();
+            }
+        }
+
+        // Remove the `Respawn` component right after `process_ldtk_assets` runs
+        // (which is also in `PreUpdate`). This prevents the costly despawn /
+        // respawn path from ever triggering.
+        app.add_systems(
+            PreUpdate,
+            strip_respawn_markers.after(systems::process_ldtk_assets),
+        );
+    }
+}
+
 fn main() {
     let mut app = App::new();
     app.insert_resource(ClearColor(Color::BLACK));
@@ -108,6 +166,9 @@ fn main() {
         level: bevy::log::Level::INFO,
         ..Default::default()
     });
+
+    // Disable 3-D PBR (lighting etc.)
+    let bevy_plugins = bevy_plugins.disable::<bevy::pbr::PbrPlugin>();
     app.add_plugins(bevy_plugins);
 
     // configure our app states
@@ -153,6 +214,8 @@ fn main() {
         crate::game::GameplayPlugin,
         crate::gamestate::GameStatePlugin,
         crate::graphics::GraphicsFxPlugin,
+        SuppressScreenshotsPlugin,
+        DisableLdtkApiPlugin,
     ));
 
     #[cfg(feature = "dev")]
