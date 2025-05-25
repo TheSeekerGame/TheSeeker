@@ -50,9 +50,10 @@ impl Plugin for LdtkPlugin {
             .init_non_send_resource::<app::LdtkIntCellMap>()
             .init_resource::<resources::LdtkSettings>()
             .add_event::<resources::LevelEvent>()
+            .add_systems(PreUpdate, systems::process_ldtk_assets)
             .add_systems(
                 PreUpdate,
-                (systems::process_ldtk_assets, systems::process_ldtk_levels),
+                systems::process_ldtk_levels.run_if(systems::has_pending_levels),
             )
             .add_systems(
                 ProcessLdtkApi,

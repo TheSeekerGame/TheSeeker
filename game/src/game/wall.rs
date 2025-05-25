@@ -45,7 +45,7 @@ pub fn spawn_wall_collision(
     // FIXME: LdtkParent was added in our custom bevy_ecs_ldtk, is it no longer needed?
     wall_query: Query<(&GridCoords, &Parent), Added<Wall>>,
     parent_query: Query<&Parent, Without<Wall>>,
-    level_query: Query<(Entity, &LevelIid)>,
+    level_query: Query<(Entity, &LevelIid, &Transform)>,
     ldtk_projects: Query<&LdtkProjectHandle>,
     ldtk_project_assets: Res<Assets<LdtkProject>>,
 ) {
@@ -91,7 +91,7 @@ pub fn spawn_wall_collision(
         }
     });
 
-    level_query.iter().for_each(|(level_entity, level_iid)| {
+    level_query.iter().for_each(|(level_entity, level_iid, level_transform)| {
         if let Some(level_walls) = level_to_wall_locations.get(&level_entity) {
             let ldtk_project = ldtk_project_assets
                 .get(ldtk_projects.single())
@@ -168,40 +168,34 @@ pub fn spawn_wall_collision(
                 prev_row = current_row;
             }
 
-            commands.entity(level_entity).with_children(|level| {
-                // Spawn colliders for every rectangle..
-                // Making the collider a child of the level serves two purposes:
-                // 1. Adjusts the transforms to be relative to the level for free
-                // 2. the colliders will be despawned automatically when levels unload
-                for wall_rect in wall_rects {
-                    level.spawn((
-                        Collider::cuboid(
-                            (wall_rect.right as f32 - wall_rect.left as f32
-                                + 1.)
-                                * grid_size as f32,
-                            (wall_rect.top as f32 - wall_rect.bottom as f32
-                                + 1.)
-                                * grid_size as f32,
-                            InteractionGroups {
-                                memberships: GROUND,
-                                // TODO: layers, player and enemy ... and ranged attacks?
-                                filter: Group::all(),
-                            },
-                        ),
-                        Transform::from_xyz(
-                            (wall_rect.left + wall_rect.right + 1) as f32
-                                * grid_size as f32
-                                / 2.,
-                            (wall_rect.bottom + wall_rect.top + 1) as f32
-                                * grid_size as f32
-                                / 2.,
-                            10.,
-                        ),
-                        GlobalTransform::default(),
-                        StateDespawnMarker,
-                    ));
-                }
-            });
+            // Spawn colliders for every rectangle at *world-space* positions.
+            // We add the level entity's translation so that the rectangles keep their
+            // correct offset without relying on parenting.
+            for wall_rect in wall_rects {
+                let local_translation = Vec3::new(
+                    (wall_rect.left + wall_rect.right + 1) as f32 * grid_size as f32 / 2.,
+                    (wall_rect.bottom + wall_rect.top + 1) as f32 * grid_size as f32 / 2.,
+                    10.,
+                );
+
+                let world_translation = local_translation + level_transform.translation;
+
+                commands.spawn((
+                    Collider::cuboid(
+                        (wall_rect.right as f32 - wall_rect.left as f32 + 1.)
+                            * grid_size as f32,
+                        (wall_rect.top as f32 - wall_rect.bottom as f32 + 1.)
+                            * grid_size as f32,
+                        InteractionGroups {
+                            memberships: GROUND,
+                            filter: Group::all(),
+                        },
+                    ),
+                    Transform::from_translation(world_translation),
+                    GlobalTransform::default(),
+                    StateDespawnMarker,
+                ));
+            }
         }
     });
 }

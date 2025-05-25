@@ -353,7 +353,7 @@ impl TilemapChunks {
     /// Sub-chunks are always 64x64 * 8 bytes (TextureFormat::Rg32Uint)
     pub(crate) const SUBCHUNK_DATA_LEN: usize = 64 * 64 * 8;
 
-    pub(crate) fn init(&mut self, map_size: UVec2, chunk_size: UVec2) {
+    pub fn init(&mut self, map_size: UVec2, chunk_size: UVec2) {
         assert!(chunk_size.x <= 2048 && chunk_size.y <= 2048);
         self.chunk_size = chunk_size.min(map_size);
         self.n_chunks.x = map_size.x.div_ceil(self.chunk_size.x);
@@ -368,7 +368,7 @@ impl TilemapChunks {
             dirty_bitmap: Box::new([u32::MAX; 32]),
         }));
     }
-    pub(crate) fn set_tiledata_at(
+    pub fn set_tiledata_at(
         &mut self,
         pos: &TilePos,
         index: &TileTextureIndex,
@@ -438,14 +438,14 @@ impl TilemapChunks {
             }
         }
     }
-    pub(crate) fn texture_size(&self) -> Extent3d {
+    pub fn texture_size(&self) -> Extent3d {
         Extent3d {
             width: self.n_subchunks.x * 64,
             height: self.n_subchunks.y * 64,
             depth_or_array_layers: self.n_chunks.y * self.n_chunks.x,
         }
     }
-    pub(crate) fn clear_all_dirty_bitmaps(&mut self) {
+    pub fn clear_all_dirty_bitmaps(&mut self) {
         for chunk in self.chunks.iter_mut() {
             chunk.dirty_bitmap = default();
         }

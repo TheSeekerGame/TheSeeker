@@ -50,7 +50,7 @@ type Transparent = Transparent2d;
 pub struct TileMapRendererPlugin;
 impl Plugin for TileMapRendererPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(PostUpdate, update_tilemap_chunks.run_if(has_dirty_tiles));
+        app.add_systems(PostUpdate, update_tilemap_chunks.run_if(need_tilemap_update));
         load_internal_asset!(
             app,
             TILE_MAP_SHADER_HANDLE,
@@ -81,6 +81,12 @@ impl Plugin for TileMapRendererPlugin {
                     queue_tilemaps.in_set(RenderSet::Queue),
                 ),
             );
+
+        // Add the dirty-tile tracking resource and systems.
+        app.insert_resource(DirtyTiles::default());
+
+        // First, observe component changes early in the frame.
+        app.add_systems(PreUpdate, mark_dirty_tiles);
     }
 
     fn finish(&self, app: &mut App) {
@@ -399,10 +405,19 @@ impl SpecializedRenderPipeline for TilemapPipeline {
     }
 }
 
-/// Run-criteria that returns `true` when any tile entity had a relevant component **added** or
-/// **changed** this frame.  When `false`, the expensive `update_tilemap_chunks` system is skipped
-/// entirely, eliminating per-frame overhead for static maps.
-fn has_dirty_tiles(
+/// A simple resource used as a flag to signal that some tile entity had
+/// a render-relevant component change this frame.  When `true` we must
+/// run `update_tilemap_chunks`; after the update the flag is reset to
+/// `false` so that subsequent frames skip the expensive system.
+#[derive(Resource, Default)]
+struct DirtyTiles(pub bool);
+
+/// System that observes tile component changes and flips the `DirtyTiles` flag.
+/// **No iteration over the entire map**: Bevy only visits entities whose components were
+/// Added/Changed thanks to the query filter.
+fn mark_dirty_tiles(
+    mut flag: ResMut<DirtyTiles>,
+    // The query itself does nothing with the items – just being non-empty is enough.
     q_dirty: Query<(), Or<(
         Added<TileTextureIndex>,
         Changed<TileTextureIndex>,
@@ -410,11 +425,24 @@ fn has_dirty_tiles(
         Changed<TileFlip>,
         Changed<TileVisible>,
     )>>,
+) {
+    if !q_dirty.is_empty() {
+        flag.0 = true;
+    }
+}
+
+/// Run-criteria: returns true when either the DirtyTiles flag is set *or* any `TilemapChunks`
+/// component was just added (first frame for a tilemap entity).  Ensures that chunk buffers are
+/// always initialised, while avoiding useless per-frame work once the map is static.
+fn need_tilemap_update(
+    dirty: Res<DirtyTiles>,
+    q_new_maps: Query<(), Added<TilemapChunks>>, 
 ) -> bool {
-    !q_dirty.is_empty()
+    dirty.0 || !q_new_maps.is_empty()
 }
 
 fn update_tilemap_chunks(
+    mut dirty: ResMut<DirtyTiles>,
     mut q_map: Query<(&mut TilemapChunks, &TilemapSize)>,
     q_tile: Query<(
         &TilemapId,
@@ -462,6 +490,9 @@ fn update_tilemap_chunks(
         // we can unconditionally write the new data to the chunk without further checks.
         chunks.set_tiledata_at(pos, index, color, flip, vis);
     }
+
+    // Mark the map as clean again so that following frames skip the system.
+    dirty.0 = false;
 }
 
 fn extract_tilemaps(

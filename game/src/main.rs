@@ -41,6 +41,7 @@ mod ui;
 mod dev;
 pub mod graphics;
 mod parallax;
+mod tilemap_staticify;
 
 fn main() {
     let mut app = App::new();
@@ -148,6 +149,7 @@ fn main() {
         crate::camera::CameraPlugin,
         crate::level::LevelManagerPlugin,
         crate::parallax::ParallaxPlugin,
+        crate::tilemap_staticify::TilemapStaticifyPlugin,
         crate::game::GameplayPlugin,
         crate::gamestate::GameStatePlugin,
         crate::graphics::GraphicsFxPlugin,

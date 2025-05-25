@@ -428,3 +428,12 @@ pub fn fire_level_transformed_events(
         writer.send(LevelEvent::Transformed(id));
     }
 }
+
+/// Run-criteria: returns true when there are newly-spawned or respawn-tagged levels that still
+/// need to be processed by [`process_ldtk_levels`].  When `false` the expensive spawning logic is
+/// skipped for static frames.
+pub fn has_pending_levels(
+    q: Query<(), Or<(Added<LevelIid>, With<Respawn>)>>, 
+) -> bool {
+    !q.is_empty()
+}
