@@ -138,12 +138,10 @@ version = "0.12"
 features = ["toml", "ron"]
 
 [dependencies.bevy_ecs_ldtk]
-git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
-branch = "bevy015"
+path = "dependencies/bevy_ecs_ldtk-bevy015"
 
 [dependencies.seek_ecs_tilemap]
-git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
-branch = "bevy015"
+path = "dependencies/seek_ecs_tilemap-bevy015"
 features = ["default", "use_3d_pipeline", "background_tiles"]
 
 # [dependencies.iyes_bevy_extras]
