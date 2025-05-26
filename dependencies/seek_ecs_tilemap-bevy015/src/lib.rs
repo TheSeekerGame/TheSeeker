@@ -2,6 +2,8 @@ use bevy::prelude::*;
 
 /// A module which contains tilemap components.
 pub mod map;
+/// A module which contains parallax configuration.
+pub mod parallax;
 #[cfg(feature = "render")]
 pub(crate) mod render;
 /// A module which contains tile components.
@@ -9,6 +11,7 @@ pub mod tiles;
 
 pub use crate::map::TilemapBundle;
 use crate::map::TilesetTexture;
+pub use crate::parallax::TilemapParallaxConfig;
 
 pub struct TilemapPlugin;
 
@@ -36,7 +39,7 @@ impl Plugin for TilemapPlugin {
             .register_type::<TileStorage>()
             .register_type::<TilePosOld>();
 
-        app.add_plugins((crate::map::plugin, crate::tiles::plugin));
+        app.add_plugins((crate::map::plugin, crate::tiles::plugin, crate::parallax::plugin));
         #[cfg(feature = "render")]
         app.add_plugins((
             //crate::chunk::plugin,

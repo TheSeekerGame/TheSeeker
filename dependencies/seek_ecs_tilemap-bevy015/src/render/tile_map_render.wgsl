@@ -21,6 +21,8 @@ struct TilemapInfo {
     grid_size: vec2<f32>,
     n_tiles_per_chunk: vec2<u32>,
     n_chunks: vec2<u32>,
+    parallax_scale: vec2<f32>,
+    origin: vec2<f32>,
 }
 
 @group(0) @binding(0) var<uniform> view: View;
@@ -125,8 +127,24 @@ fn vertex(input: VertexInput) -> VertexOutput {
         tile_vertex_model.y * tilemap_info.tile_size.y + tile_trans.y,
         0.0, 1.0
     );
-    let vertex_world =
+    var vertex_world =
         affine3_to_square(tilemap_info.transform_affine) * vertex_model;
+    
+    // Apply parallax offset based on camera position relative to origin
+    // Mathematical formula:
+    // - Original CPU formula: final_pos = origin + (camera_pos - origin) * parallax_scale
+    // - This moves the layer slower when scale < 1, creating the parallax effect
+    // - Scale = 1.0: normal world movement (no parallax)
+    // - Scale = 0.0: fixed to camera (infinite distance)
+    // - Scale = 0.5: moves at half camera speed (classic parallax)
+    //
+    // The offset we apply to the vertex position is:
+    // offset = (camera_pos - origin) * (1 - parallax_scale)
+    let camera_to_origin = view.world_position.xy - tilemap_info.origin;
+    let parallax_offset = camera_to_origin * (vec2<f32>(1.0, 1.0) - tilemap_info.parallax_scale);
+    vertex_world.x += parallax_offset.x;
+    vertex_world.y += parallax_offset.y;
+    
     let vertex_clip = view.clip_from_world * vertex_world;
 
     output.position = vertex_clip;

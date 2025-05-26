@@ -15,7 +15,7 @@
 
 use seek_ecs_tilemap::tiles::TilePos;
 
-use crate::parallax::{Parallax, ParallaxOffset};
+use crate::parallax::ParallaxLayer;
 use crate::prelude::*;
 
 pub struct LevelManagerPlugin;
@@ -128,7 +128,7 @@ fn attach_parallax(
     mut query: Query<
         (Entity, &LayerMetadata, &mut Transform),
         (
-            Without<Parallax>,
+            Without<ParallaxLayer>,
             Without<OtherBackround>,
             Without<MainBackround>,
         ),
@@ -136,19 +136,31 @@ fn attach_parallax(
 ) {
     for (entity, layer_metadata, mut transform) in query.iter_mut() {
         let mut use_parallax = true;
-        let amount = match &*layer_metadata.identifier {
-            "Background" => 0.4,
-            "TundraBackground" => 0.4,
-            "FarBackground" => 0.3,
-            "TundraFarBackground" => 0.3,
-            "MiddleBackground" => 0.2,
-            "TundraMiddleBackground" => 0.2,
-            "NearBackground" => 0.1,
-            "TundraNearBackground" => 0.1,
+        // Convert from depth-based (0 = camera, 1 = normal, >1 = background)
+        // to scale-based (1 = normal, 0 = fixed, <1 = slower movement)
+        // The formula is: scale = 1 / (1 + amount)
+        // This gives us the inverse relationship we need
+        let (parallax_scale, z_offset) = match &*layer_metadata.identifier {
+            "Background" | "TundraBackground" => {
+                // depth 1.4 -> scale ~0.71
+                (Vec2::splat(1.0 / 1.4), 0.4)
+            },
+            "FarBackground" | "TundraFarBackground" => {
+                // depth 1.3 -> scale ~0.77
+                (Vec2::splat(1.0 / 1.3), 0.3)
+            },
+            "MiddleBackground" | "TundraMiddleBackground" => {
+                // depth 1.2 -> scale ~0.83
+                (Vec2::splat(1.0 / 1.2), 0.2)
+            },
+            "NearBackground" | "TundraNearBackground" => {
+                // depth 1.1 -> scale ~0.91
+                (Vec2::splat(1.0 / 1.1), 0.1)
+            },
             "Main" => {
                 commands.entity(entity).insert(MainBackround);
                 use_parallax = false;
-                -transform.translation.z * 0.000001
+                (Vec2::ONE, -transform.translation.z * 0.000001)
             },
             "Entities" => {
                 commands.entity(entity).try_insert(StateDespawnMarker);
@@ -157,30 +169,24 @@ fn attach_parallax(
             _ => {
                 commands.entity(entity).insert(OtherBackround);
                 use_parallax = false;
-                -transform.translation.z * 0.000001
+                (Vec2::ONE, -transform.translation.z * 0.000001)
             },
         };
 
         println!(
-            "{:?}: {amount}",
-            layer_metadata.identifier
+            "{:?}: parallax_scale = {:?}, z_offset = {}",
+            layer_metadata.identifier,
+            parallax_scale,
+            z_offset
         );
         commands.entity(entity).try_insert(StateDespawnMarker);
 
-        transform.translation.z = 0.0 - amount;
+        transform.translation.z = 0.0 - z_offset;
 
         if use_parallax {
-            commands.entity(entity).insert((
-                Parallax {
-                    depth: 1.0 + amount,
-                },
-                ParallaxOffset(Vec2::new(
-                    (layer_metadata.c_wid * layer_metadata.grid_size) as f32
-                        * 0.5,
-                    (layer_metadata.c_hei * layer_metadata.grid_size) as f32
-                        * 0.5,
-                )),
-            ));
+            commands.entity(entity).insert(ParallaxLayer {
+                scale: parallax_scale,
+            });
         }
     }
 }

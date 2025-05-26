@@ -11,7 +11,7 @@ use bevy::ecs::entity::EntityHashMap;
 use bevy::ecs::query::{QueryItem, ROQueryItem};
 use bevy::ecs::system::lifetimeless::{Read, SRes};
 use bevy::ecs::system::{SystemParamItem, SystemState};
-use bevy::math::{Affine3, FloatOrd};
+use bevy::math::{Affine3, Affine3A, FloatOrd};
 use bevy::prelude::*;
 use bevy::render::extract_component::{ExtractComponent, ExtractComponentPlugin};
 use bevy::render::mesh::{PrimitiveTopology};
@@ -41,6 +41,12 @@ use std::time::Duration;
 
 use crate::render::texture_array::{create_texture_array, update_texture_array};
 use crate::{map::*, tiles::*};
+use crate::parallax::TilemapParallaxConfig;
+
+// Import ParallaxConfig - Note: This creates a dependency on the game crate
+// In a real implementation, this should be made more generic
+#[cfg(feature = "parallax")]
+use crate::parallax::ParallaxConfig;
 
 #[cfg(feature = "use_3d_pipeline")]
 type Transparent = Transparent3d;
@@ -106,6 +112,8 @@ struct ExtractedTilemap {
     tile_size: TilemapTileSize,
     grid_size: TilemapGridSize,
     texture: Option<ExtractedTileset>,
+    parallax_scale: Vec2,
+    origin: Vec2,
 }
 
 pub(crate) struct ExtractedTileset {
@@ -233,15 +241,19 @@ struct GpuTilemap {
     view_bind_group: BindGroup,
     tilemap_bind_group: BindGroup,
     tileset_bind_group: Option<BindGroup>,
+    last_affine: Affine3A,
+    last_parallax_scale: Vec2,
 }
 
 #[derive(ShaderType, Clone)]
 struct TilemapInfo {
-    transform: [Vec4; 3],
+    transform_affine: [Vec4; 3],
     tile_size: Vec2,
     grid_size: Vec2,
     n_tiles_per_chunk: UVec2,
     n_chunks: UVec2,
+    parallax_scale: Vec2,
+    origin: Vec2,
 }
 
 #[derive(Resource)]
@@ -446,14 +458,17 @@ fn update_tilemap_chunks(
 }
 
 fn extract_tilemaps(
+    tilemap_config: Extract<Res<TilemapParallaxConfig>>,
     tilemap_query: Extract<
         Query<(
+            Entity,
             RenderEntity,
             &ViewVisibility,
             &GlobalTransform,
             &TilemapChunks,
             &TilemapTileSize,
             &TilemapGridSize,
+            &TilemapSize,
         )>,
     >,
     mut render_query: Query<&mut ExtractedTilemap>,
@@ -463,25 +478,45 @@ fn extract_tilemaps(
     for removed in removed.read() {
         commands.entity(removed).remove::<ExtractedTilemap>();
     }
-    for (entity, view_visibility, transform, chunks, tile_size, grid_size) in tilemap_query.iter() {
+    for (main_entity, render_entity, view_visibility, transform, chunks, tile_size, grid_size, map_size) in tilemap_query.iter() {
         // TODO: in order for this to actually work, we need a system in the
         // main world that knows how to do frustum culling for tilemaps
         if !view_visibility.get() {
             // continue;
         }
 
-        if let Ok(mut extracted) = render_query.get_mut(entity) {
+        // Get parallax scale from config, defaulting to Vec2::ONE
+        let parallax_scale = tilemap_config
+            .parallax_scales
+            .get(&main_entity)
+            .copied()
+            .unwrap_or(Vec2::ONE);
+
+        // Calculate the center of the tilemap in world space
+        // This serves as the origin for parallax calculations
+        let tilemap_size_world = Vec2::new(
+            map_size.x as f32 * grid_size.x,
+            map_size.y as f32 * grid_size.y,
+        );
+        let tilemap_center_local = tilemap_size_world * 0.5;
+        let origin = transform.transform_point(tilemap_center_local.extend(0.0)).xy();
+
+        if let Ok(mut extracted) = render_query.get_mut(render_entity) {
             // Transfer all "dirty" parts of the chunks here.
             extracted.transform = transform.clone();
             extracted.chunks.copy_dirty(chunks);
+            extracted.parallax_scale = parallax_scale;
+            extracted.origin = origin;
         } else {
             // otherwise copy all chunks, since it's the first time.
-            commands.entity(entity).insert(ExtractedTilemap {
+            commands.entity(render_entity).insert(ExtractedTilemap {
                 transform: transform.clone(),
                 chunks: chunks.clone(),
                 tile_size: *tile_size,
                 grid_size: *grid_size,
                 texture: None,
+                parallax_scale,
+                origin,
             });
         }
     }
@@ -523,19 +558,47 @@ fn prepare_tilemaps(
         }
 
         if let Some(mut prepared) = prepared {
-            // Texture already exists in GPU memory.
-            // Update it with any dirty data!
-            prepared.gpu_chunks.copy_dirty(&queue, &extracted.chunks);
-            // Tilemap Uniform already exists,
-            // but we need to update the data in the buffer.
-            prepared.tilemap_uniform.set(TilemapInfo {
-                transform: Affine3::from(&extracted.transform.affine()).to_transpose(),
-                tile_size: extracted.tile_size.into(),
-                grid_size: extracted.grid_size.into(),
-                n_tiles_per_chunk: extracted.chunks.chunk_size,
-                n_chunks: extracted.chunks.n_chunks,
-            });
-            prepared.tilemap_uniform.write_buffer(&device, &queue);
+            // Tilemap already exists in GPU memory.
+            // Check what needs updating based on change detection.
+            
+            // Check if any chunks have dirty data
+            let chunks_changed = extracted.chunks.chunks.iter()
+                .any(|chunk| chunk.dirty_bitmap.iter().any(|&mask| mask != 0));
+            
+            let current_affine = extracted.transform.affine();
+            // Compare affine matrices element by element
+            let transform_changed = {
+                let a = current_affine.to_cols_array();
+                let b = prepared.last_affine.to_cols_array();
+                a.iter().zip(b.iter()).any(|(a, b)| (a - b).abs() > f32::EPSILON)
+            };
+            
+            let parallax_changed = (extracted.parallax_scale - prepared.last_parallax_scale)
+                .abs()
+                .max_element() > f32::EPSILON;
+
+            // Update chunks if needed
+            if chunks_changed {
+                prepared.gpu_chunks.copy_dirty(&queue, &extracted.chunks);
+            }
+
+            // Update uniform if transform or parallax changed
+            if transform_changed || parallax_changed {
+                prepared.tilemap_uniform.set(TilemapInfo {
+                    transform_affine: Affine3::from(&current_affine).to_transpose(),
+                    tile_size: extracted.tile_size.into(),
+                    grid_size: extracted.grid_size.into(),
+                    n_tiles_per_chunk: extracted.chunks.chunk_size,
+                    n_chunks: extracted.chunks.n_chunks,
+                    parallax_scale: extracted.parallax_scale,
+                    origin: extracted.origin,
+                });
+                prepared.tilemap_uniform.write_buffer(&device, &queue);
+                
+                // Update last state for change detection
+                prepared.last_affine = current_affine;
+                prepared.last_parallax_scale = extracted.parallax_scale;
+            }
             // Bind Groups already exist and don't need changing.
 
             if prepared.tileset_bind_group.is_none() && extracted.texture.is_some() {
@@ -564,11 +627,13 @@ fn prepare_tilemaps(
             extracted.chunks.clear_all_dirty_bitmaps();
             // Setup the tilemap uniform
             let tilemap_info = TilemapInfo {
-                transform: Affine3::from(&extracted.transform.affine()).to_transpose(),
+                transform_affine: Affine3::from(&extracted.transform.affine()).to_transpose(),
                 tile_size: extracted.tile_size.into(),
                 grid_size: extracted.grid_size.into(),
                 n_tiles_per_chunk: extracted.chunks.chunk_size,
                 n_chunks: extracted.chunks.n_chunks,
+                parallax_scale: extracted.parallax_scale,
+                origin: extracted.origin,
             };
             let mut tilemap_uniform = UniformBuffer::from(tilemap_info);
             tilemap_uniform.set_label(Some("tilemap_uniform"));
@@ -603,6 +668,8 @@ fn prepare_tilemaps(
                     view_bind_group,
                     tilemap_bind_group,
                     tileset_bind_group,
+                    last_affine: extracted.transform.affine(),
+                    last_parallax_scale: extracted.parallax_scale,
                 },
             );
         }

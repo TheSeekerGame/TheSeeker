@@ -25,7 +25,7 @@ use glam::FloatExt;
 
 use crate::camera::MainCamera;
 use crate::game::player::Player;
-use crate::parallax::Parallax;
+use crate::parallax::ParallaxLayer;
 
 /// To use this plugin add it to your app, and make sure the [`DarknessSettings`] component is added
 /// to the camera:
@@ -197,17 +197,31 @@ fn _darkness_dynamics(
 /// Currently only applies to [`bevy_ecs_tilemap::tiles::TileColor`]'s
 /// Might need modifications if we draw other things in the backround and
 /// want it to work with darkness properly.
+///
+/// TODO: Consider caching the tile entity relationships to avoid querying
+/// descendants every frame. This could be done by storing tile entities
+/// in a component on the parallax layer entity when tiles are spawned.
 fn _darkness_parallax(
     settings: Query<&DarknessSettings>,
-    parallaxed_bgs: Query<(Entity, &Parallax)>,
+    parallaxed_bgs: Query<(Entity, &ParallaxLayer)>,
     children: Query<&Children>,
     mut sprites: Query<&mut seek_ecs_tilemap::tiles::TileColor>,
 ) {
     let Some(settings) = settings.iter().next() else {
         return;
     };
-    for (entity, paralax) in parallaxed_bgs.iter() {
-        let light_multiplier = 1.0 / (paralax.depth * 1.25).powi(2);
+    for (entity, parallax) in parallaxed_bgs.iter() {
+        // Convert scale-based parallax to depth for lighting calculation
+        // scale = 1.0 means no parallax (depth = 1.0)
+        // scale = 0.0 means fixed to screen (depth = infinity, but we cap it)
+        // For intermediate values, we use depth = 1.0 / scale
+        let depth = if parallax.scale.x > 0.01 {
+            1.0 / parallax.scale.x
+        } else {
+            10.0 // Cap depth for very small scales to avoid extreme darkening
+        };
+        
+        let light_multiplier = 1.0 / (depth * 1.25).powi(2);
         let final_mult = light_multiplier.lerp(1.0, settings.bg_light_level);
         let color = Srgba::rgb(1.0, 1.0, 1.0) * final_mult;
         for descendant in children.iter_descendants(entity) {
