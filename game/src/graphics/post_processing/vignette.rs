@@ -22,7 +22,7 @@ use bevy::render::renderer::{RenderContext, RenderDevice};
 use bevy::render::view::ViewTarget;
 use bevy::render::RenderApp;
 
-use super::darkness::DarknessPostProcessLabel;
+// use super::darkness::DarknessPostProcessLabel;
 
 pub(crate) struct VignettePlugin;
 
@@ -48,8 +48,8 @@ impl Plugin for VignettePlugin {
             .add_render_graph_edges(
                 core_3d::graph::Core3d,
                 (
-                    // We want vignette on top of everything else
-                    DarknessPostProcessLabel,
+                    // Run vignette after the main pass
+                    core_3d::graph::Node3d::MainOpaquePass,
                     VignettePostProcessLabel,
                     core_3d::graph::Node3d::EndMainPassPostProcessing,
                 ),
@@ -232,7 +232,7 @@ impl FromWorld for VignettePostProcessPipeline {
                     shader_defs: vec![],
                     entry_point: "fragment".into(),
                     targets: vec![Some(ColorTargetState {
-                        format: TextureFormat::Rgba16Float,
+                        format: TextureFormat::bevy_default(),
                         blend: None,
                         write_mask: ColorWrites::ALL,
                     })],

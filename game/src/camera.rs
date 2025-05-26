@@ -2,13 +2,13 @@
 
 use std::f32::consts::PI;
 
-use bevy::core_pipeline::bloom::BloomSettings;
-use bevy::core_pipeline::prepass::DepthPrepass;
-use bevy::core_pipeline::tonemapping::Tonemapping;
+// use bevy::core_pipeline::bloom::BloomSettings;
+// use bevy::core_pipeline::prepass::DepthPrepass;
+// use bevy::core_pipeline::tonemapping::Tonemapping;
 use ran::ran_f64_range;
 
 use crate::game::player::Player;
-use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
+// use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
 use crate::graphics::post_processing::floaters::FloaterSettings;
 // use crate::graphics::post_processing::darkness::DarknessSettings;
 use crate::graphics::post_processing::vignette::VignetteSettings;
@@ -103,20 +103,20 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
 
     let mut camera = Camera2dBundle {
         camera: Camera {
-            hdr: true,
+            hdr: false,  // Changed to false since we're not using HDR effects
             ..default()
         },
-        tonemapping: Tonemapping::None,
+        // tonemapping: Tonemapping::None,
         ..default()
     };
     camera.projection.scale = PROJECTION_SCALE;
 
     let mut camera3d = Camera3dBundle {
         camera: Camera {
-            hdr: true,
+            hdr: false,  // Changed to false since we're not using HDR effects
             ..default()
         },
-        tonemapping: Tonemapping::None,
+        // tonemapping: Tonemapping::None,
         ..default()
     };
 
@@ -137,18 +137,18 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
             limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
         },
         // Needed so that depth buffers are stored so depth of field works
-        DepthPrepass,
-        DepthOfFieldSettings {
-            mode: DepthOfFieldMode::Bokeh,
-            focal_distance: 0.25,
-            sensor_height: 0.008,
-            aperture_f_stops: 1.0,
-            max_circle_of_confusion_diameter: 68.8,
-            max_depth: 500.0,
-        },
+        // DepthPrepass,
+        // DepthOfFieldSettings {
+        //     mode: DepthOfFieldMode::Bokeh,
+        //     focal_distance: 0.25,
+        //     sensor_height: 0.008,
+        //     aperture_f_stops: 1.0,
+        //     max_circle_of_confusion_diameter: 68.8,
+        //     max_depth: 500.0,
+        // },
         // FIXME: complained about duplicate msaa component, where else is it added?
         // Msaa::Off,
-        BloomSettings::OLD_SCHOOL,
+        // BloomSettings::OLD_SCHOOL,
         // DarknessSettings {
         //     bg_light_level: 1.0,
         //     lantern_position: Default::default(),

@@ -4,12 +4,12 @@ pub mod vignette;
 
 use bevy::asset::load_internal_asset;
 use bevy::prelude::*;
-use darkness::DarknessPlugin;
+// use darkness::DarknessPlugin;
 use floaters::FloaterPlugin;
 use vignette::VignettePlugin;
 
 pub const PERLIN_3D_SHADER_HANDLE: Handle<Shader> =
-    Handle::weak_from_u128(307185293026626584719943815439941085085);
+    Handle::weak_from_u128(307185293026626584719943815439941085);
 
 pub struct PostProcessingPlugin;
 
@@ -27,7 +27,7 @@ impl Plugin for PostProcessingPlugin {
         );
 
         app.add_plugins((
-            DarknessPlugin,
+            // DarknessPlugin,
             VignettePlugin,
             // FloaterPlugin,
         ));

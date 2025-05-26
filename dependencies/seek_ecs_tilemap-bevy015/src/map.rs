@@ -327,6 +327,9 @@ pub struct TilemapChunks {
     /// 2D number of 64x64 sub-chunks per chunk.
     /// (This determines the texture size)
     pub(crate) n_subchunks: UVec2,
+    /// Total count of dirty subchunks across all chunks.
+    /// This allows for quick early-out when nothing needs updating.
+    pub(crate) dirty_count: u32,
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -367,6 +370,8 @@ impl TilemapChunks {
             data: vec![0; chunk_data_size],
             dirty_bitmap: Box::new([u32::MAX; 32]),
         }));
+        // Calculate initial dirty count - all subchunks are dirty
+        self.dirty_count = n_chunks as u32 * self.n_subchunks.x * self.n_subchunks.y;
     }
     pub(crate) fn set_tiledata_at(
         &mut self,
@@ -398,7 +403,14 @@ impl TilemapChunks {
             | ((flip.x as u8) << 1)
             | ((flip.y as u8) << 2)
             | ((flip.d as u8) << 3);
-        chunk.dirty_bitmap[subchunk_y as usize] |= 1 << subchunk_x;
+        
+        // Update dirty bitmap and count
+        let subchunk_mask = 1 << subchunk_x;
+        let was_dirty = chunk.dirty_bitmap[subchunk_y as usize] & subchunk_mask != 0;
+        if !was_dirty {
+            chunk.dirty_bitmap[subchunk_y as usize] |= subchunk_mask;
+            self.dirty_count += 1;
+        }
     }
 
     /// Transfers dirty data efficiently from `source` to `self`
@@ -415,6 +427,9 @@ impl TilemapChunks {
         debug_assert_eq!(self.chunk_size, source.chunk_size);
         debug_assert_eq!(self.n_chunks, source.n_chunks);
         debug_assert_eq!(self.n_subchunks, source.n_subchunks);
+
+        // Copy the dirty count
+        self.dirty_count = source.dirty_count;
 
         for (dst_chunk, src_chunk) in self.chunks.iter_mut().zip(source.chunks.iter()) {
             *dst_chunk.dirty_bitmap = *src_chunk.dirty_bitmap;
@@ -449,6 +464,7 @@ impl TilemapChunks {
         for chunk in self.chunks.iter_mut() {
             chunk.dirty_bitmap = default();
         }
+        self.dirty_count = 0;
     }
 }
 

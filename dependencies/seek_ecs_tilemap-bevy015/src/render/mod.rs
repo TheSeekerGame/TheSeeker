@@ -561,9 +561,8 @@ fn prepare_tilemaps(
             // Tilemap already exists in GPU memory.
             // Check what needs updating based on change detection.
             
-            // Check if any chunks have dirty data
-            let chunks_changed = extracted.chunks.chunks.iter()
-                .any(|chunk| chunk.dirty_bitmap.iter().any(|&mask| mask != 0));
+            // Check if any chunks have dirty data using the dirty count
+            let chunks_changed = extracted.chunks.dirty_count > 0;
             
             let current_affine = extracted.transform.affine();
             // Compare affine matrices element by element
@@ -815,6 +814,11 @@ impl GpuTilemapChunks {
         }
     }
     fn copy_dirty(&self, queue: &RenderQueue, chunks: &TilemapChunks) {
+        // Early exit if nothing is dirty
+        if chunks.dirty_count == 0 {
+            return;
+        }
+        
         for (z, chunk) in chunks.chunks.iter().enumerate() {
             let mut data_start = 0;
             for (sc_y, row_bitmap) in chunk
