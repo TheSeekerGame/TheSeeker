@@ -3,13 +3,12 @@
 use std::f32::consts::PI;
 
 use bevy::core_pipeline::bloom::BloomSettings;
-use bevy::core_pipeline::prepass::DepthPrepass;
 use bevy::core_pipeline::tonemapping::Tonemapping;
 use ran::ran_f64_range;
 
 use crate::game::player::Player;
-use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
-use crate::graphics::post_processing::floaters::FloaterSettings;
+
+
 // use crate::graphics::post_processing::darkness::DarknessSettings;
 use crate::graphics::post_processing::vignette::VignetteSettings;
 use crate::level::MainBackround;
@@ -55,7 +54,7 @@ impl Plugin for CameraPlugin {
 /// For spawning the main gameplay camera
 #[derive(Bundle)]
 struct MainCameraBundle {
-    camera: Camera3dBundle,
+    camera: Camera2dBundle,
     limits: GameViewLimits,
     marker: MainCamera,
     despawn: StateDespawnMarker,
@@ -111,41 +110,18 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
     };
     camera.projection.scale = PROJECTION_SCALE;
 
-    let mut camera3d = Camera3dBundle {
-        camera: Camera {
-            hdr: true,
-            ..default()
-        },
-        tonemapping: Tonemapping::None,
-        ..default()
-    };
-
-    camera3d.projection = Projection::Orthographic(camera.projection);
-    camera3d.transform = camera.transform;
-    camera3d.frustum = camera.frustum;
-    camera3d.transform.translation.z = 0.25;
-
     // TODO make tilemap write to depth buffer somehow.
     // bring up in meeting!
 
     commands.spawn((
         MainCameraBundle {
-            camera: camera3d,
+            camera: camera,
             marker: MainCamera,
             despawn: StateDespawnMarker,
             // TODO: manage this from somewhere
             limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
         },
-        // Needed so that depth buffers are stored so depth of field works
-        DepthPrepass,
-        DepthOfFieldSettings {
-            mode: DepthOfFieldMode::Bokeh,
-            focal_distance: 0.25,
-            sensor_height: 0.008,
-            aperture_f_stops: 1.0,
-            max_circle_of_confusion_diameter: 68.8,
-            max_depth: 500.0,
-        },
+
         // FIXME: complained about duplicate msaa component, where else is it added?
         // Msaa::Off,
         BloomSettings::OLD_SCHOOL,
@@ -157,7 +133,6 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         //     bg_light_color: Vec3::new(0.761, 0.773, 0.8),
         // },
         VignetteSettings::default(),
-        FloaterSettings::default(),
         Name::new("MainCamera"),
     ));
 }
@@ -213,7 +188,7 @@ fn camera_rig_follow_player(
 /// Camera updates the camera position to smoothly interpolate to the
 /// rig location. also applies camera shake, and limits camera within the level boundaries
 pub(crate) fn update_camera(
-    mut camera_query: Query<(&mut Transform, &Projection), With<MainCamera>>,
+    mut camera_query: Query<(&mut Transform, &OrthographicProjection), With<MainCamera>>,
     rig: Res<CameraRig>,
     backround_query: Query<
         (&LayerMetadata, &Transform),
@@ -221,12 +196,8 @@ pub(crate) fn update_camera(
     >,
     camera_shake: Option<Res<CameraShake>>,
 ) {
-    let Ok((mut camera_transform, projection)) = camera_query.get_single_mut()
+    let Ok((mut camera_transform, ortho_projection)) = camera_query.get_single_mut()
     else {
-        return;
-    };
-
-    let Projection::Orthographic(ortho_projection) = projection else {
         return;
     };
 

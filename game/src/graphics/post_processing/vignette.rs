@@ -1,4 +1,4 @@
-use bevy::core_pipeline::core_3d;
+use bevy::core_pipeline::core_2d;
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 use bevy::ecs::query::QueryItem;
 use bevy::prelude::*;
@@ -22,8 +22,6 @@ use bevy::render::renderer::{RenderContext, RenderDevice};
 use bevy::render::view::ViewTarget;
 use bevy::render::RenderApp;
 
-use super::darkness::DarknessPostProcessLabel;
-
 pub(crate) struct VignettePlugin;
 
 impl Plugin for VignettePlugin {
@@ -42,16 +40,15 @@ impl Plugin for VignettePlugin {
 
         render_app
             .add_render_graph_node::<ViewNodeRunner<VignettePostProcessNode>>(
-                core_3d::graph::Core3d,
+                core_2d::graph::Core2d,
                 VignettePostProcessLabel,
             )
             .add_render_graph_edges(
-                core_3d::graph::Core3d,
+                core_2d::graph::Core2d,
                 (
                     // We want vignette on top of everything else
-                    DarknessPostProcessLabel,
                     VignettePostProcessLabel,
-                    core_3d::graph::Node3d::EndMainPassPostProcessing,
+                    core_2d::graph::Node2d::EndMainPassPostProcessing,
                 ),
             );
     }

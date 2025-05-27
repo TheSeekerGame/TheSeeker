@@ -17,6 +17,7 @@ use bevy::ecs::schedule::ExecutorKind;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
 use theseeker_engine::physics::PhysicsPlugin;
+use bevy_ecs_tilemap::prelude::*;
 
 use crate::prelude::*;
 
@@ -114,10 +115,11 @@ fn main() {
 
     // and custom "engine"
     app.add_plugins(theseeker_engine::EnginePlugins);
-    // app.add_plugin(Sprite3dPlugin);
+
 
     // external plugins
     app.add_plugins((
+        TilemapPlugin,
         LdtkPlugin,
         bevy_fluent::FluentPlugin,
         // iyes_bevy_extras::d2::WorldCursorPlugin,

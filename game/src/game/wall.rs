@@ -188,7 +188,7 @@ pub fn spawn_wall_collision(
                                 filter: Group::all(),
                             },
                         ),
-                        Transform::from_xyz(
+                        Transform::from_translation(Vec3::new(
                             (wall_rect.left + wall_rect.right + 1) as f32
                                 * grid_size as f32
                                 / 2.,
@@ -196,7 +196,7 @@ pub fn spawn_wall_collision(
                                 * grid_size as f32
                                 / 2.,
                             10.,
-                        ),
+                        )),
                         GlobalTransform::default(),
                         StateDespawnMarker,
                     ));

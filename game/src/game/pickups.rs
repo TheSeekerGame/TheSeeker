@@ -197,7 +197,7 @@ impl Command for SpawnPickupCommand {
         match self.p_type.clone() {
             PickupType::PassiveDrop(passive) => {
                 let texture_handle = handles.passive_map.get(&passive).unwrap();
-                let transform = Transform::from_xyz(pos.x, pos.y, 50.0);
+                let transform = Transform::from_translation(Vec3::new(pos.x, pos.y, 0.0));
 
                 let entity = world
                     .spawn((
@@ -600,11 +600,11 @@ fn display_passives_description(
                     let y_offset =
                         description_node.size().y + ADDITIONAL_Y_OFFSET;
 
-                    *description_transform = GlobalTransform::from_xyz(
+                    *description_transform = GlobalTransform::from_translation(Vec3::new(
                         pickup_viewport_pos.x,
                         pickup_viewport_pos.y - y_offset,
-                        description_transform.translation().z,
-                    );
+                        0.0,
+                    ));
                 }
             }
         },

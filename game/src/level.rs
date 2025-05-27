@@ -13,7 +13,7 @@
 //! Any of the stuff that actually *happens* within the map when you
 //! play the game, doesn't belong here. Put that stuff under [`crate::game`].
 
-use seek_ecs_tilemap::tiles::TilePos;
+use bevy_ecs_tilemap::tiles::TilePos;
 
 use crate::parallax::{Parallax, ParallaxOffset};
 use crate::prelude::*;
@@ -30,7 +30,6 @@ impl Plugin for LevelManagerPlugin {
             game_level_init,
         );
         app.add_systems(Update, attach_parallax);
-        app.add_systems(Update, hide_level_0);
         app.add_systems(
             Update,
             add_despawn_marker_to_entity::<TilePos>,

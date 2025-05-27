@@ -659,7 +659,7 @@ fn add_dash_strike_collider(
 
     let attack = commands
         .spawn((
-            TransformBundle::from_transform(Transform::from_xyz(0.0, 0.0, 0.0)),
+            TransformBundle::from_transform(Transform::from_translation(Vec3::new(0.0, 0.0, 0.0))),
             AnimationCollider(gent.e_gfx),
             // TODO: ? ColliderMeta
             Collider::empty(InteractionGroups::new(
@@ -1352,9 +1352,9 @@ fn player_attack(
                         Vec2::new(self_pushback * -facing.direction(), 0.)
                     };
                     let mut attack_entity_commands = commands.spawn((
-                        TransformBundle::from_transform(Transform::from_xyz(
+                        TransformBundle::from_transform(Transform::from_translation(Vec3::new(
                             0.0, 0.0, 0.0,
-                        )),
+                        ))),
                         AnimationCollider(gent.e_gfx),
                         // TODO: ? ColliderMeta
                         Collider::empty(InteractionGroups::new(
@@ -1516,9 +1516,9 @@ pub fn player_whirl(
                                 ENEMY_HURT,
                             )),
                         },
-                        TransformBundle::from_transform(Transform::from_xyz(
+                        TransformBundle::from_transform(Transform::from_translation(Vec3::new(
                             0.0, 0.0, 0.0,
-                        )),
+                        ))),
                         AnimationCollider(gent.e_gfx),
                     ))
                     .set_parent(entity)

@@ -1,6 +1,5 @@
 pub mod ability_cooldown;
 mod dmg_numbers;
-pub mod dof;
 pub mod enemy_hp;
 mod fog;
 pub(crate) mod particles_util;
@@ -13,7 +12,6 @@ use post_processing::PostProcessingPlugin;
 
 use crate::graphics::ability_cooldown::AbilityCooldownPlugin;
 use crate::graphics::dmg_numbers::DmgNumbersPlugin;
-use crate::graphics::dof::DepthOfFieldPlugin;
 use crate::graphics::enemy_hp::EnemyHpBarPlugin;
 use crate::graphics::player_hp::PlayerHpBarPlugin;
 use crate::prelude::*;
@@ -22,7 +20,6 @@ pub struct GraphicsFxPlugin;
 
 impl Plugin for GraphicsFxPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(DepthOfFieldPlugin);
         app.add_plugins(PostProcessingPlugin);
         app.add_plugins(DmgNumbersPlugin);
         app.add_plugins(PlayerHpBarPlugin);
