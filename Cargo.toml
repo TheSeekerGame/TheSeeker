@@ -5,9 +5,6 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
-# [patch."https://github.com/TheSeekerGame/seek_ecs_tilemap"]
-# seek_ecs_tilemap = { path = "../seek_ecs_tilemap" }
-
 [patch.crates-io]
 bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 bevy_a11y = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
