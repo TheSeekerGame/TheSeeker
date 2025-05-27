@@ -27,7 +27,6 @@ impl Projectile {
         gravity: f32,
     ) -> Option<Self> {
         let result = solve_ballistic_arc(start, max_speed, target, gravity);
-        println!("result: {result:?}");
         if result.2 != 0 {
             // use the arc that has the bigger y component
             if result.0.y > result.1.y {

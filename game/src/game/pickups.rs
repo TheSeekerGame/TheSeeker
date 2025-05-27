@@ -390,11 +390,6 @@ impl Default for DropTracker {
 
 impl DropTracker {
     fn get_passive_progress(&self) -> Option<&u32> {
-        println!(
-            "{};{:?}",
-            self.progress, self.passive_rolls
-        );
-
         self.passive_rolls.get(self.progress)
     }
 
@@ -408,8 +403,6 @@ impl DropTracker {
         for i in 0..passive_count {
             rolls.push(SPAN * i as u32 + rng.gen_range(1..SPAN));
         }
-
-        println!("DROP ROLLS: {:?}", rolls);
 
         Self {
             progress: 0,
@@ -449,13 +442,7 @@ fn spawn_pickups_on_death(
     for (tr, tier) in enemy_q.iter() {
         let translation = tr.translation();
 
-        println!("PRE-DROPPING PASSIVE");
-
-        let mut rng = rand::thread_rng();
-
-        let seed_roll = rng.gen_range(0.0..1.0);
-
-        println!("seed roll: {}", seed_roll);
+        let seed_roll = rand::thread_rng().gen_range(0.0..1.0);
 
         let seed_category: Option<PlanetarySeed> = match tier {
             Tier::Base => {
@@ -508,23 +495,11 @@ fn spawn_pickups_on_death(
             }
         }
 
-        // category A 1/1000 drop chance
-        // all tiers
-        // category C 1/2000 drop chance
-        // all tiers
-        // category B 1/5000 drop chance
-        // Tiers 2 and 3
-        // category D 1/10000 drop chance
-        // Tiers 2 and 3
-        // category E 1/100000 drop chance
-        // Tier 3 only
-
         if let Some(milestone) = drop_tracker.get_passive_progress() {
             if kill_count.0 >= *milestone {
                 drop_tracker.progress += 1;
 
                 if let Some(passive) = passives.drop_random() {
-                    println!("DROPPING PASSIVE");
                     commands.queue(SpawnPickupCommand {
                         pos: translation,
                         p_type: PickupType::PassiveDrop(passive),

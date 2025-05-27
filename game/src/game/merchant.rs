@@ -176,9 +176,7 @@ pub fn setup_merchant(
     mut commands: Commands,
 ) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
-        println!("added merchant");
         xf_gent.translation.z = 13.0 * 0.000001;
-        println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn_empty().id();
         commands

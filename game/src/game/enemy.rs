@@ -1371,29 +1371,20 @@ fn falling(
                 },
                 Some(entity),
             ) {
-                // println!("coll {toi:?}");
-                // If we are not a player
-                if players.get(e).is_err() {
-                    // If we are close to the ground
-                    if velocity.y < 0. && toi.witness2[1] < 0. {
-                        println!(
-                            "hit ground {toi:?} {} {:?}",
-                            transform.translation, velocity
-                        );
-                        *nav = Navigation::Grounded;
-                        transform.translation.y =
-                            transform.translation.y - toi.witness2[1] - toi.toi
-                                + GROUND_BUFFER;
-                        velocity.y = 0.;
-                        if let Ok(mut enemy_anim) =
-                            gfx_query.get_mut(gent.e_gfx)
-                        {
-                            enemy_anim.play_key(&format!(
-                                "{}.Chase",
-                                enemy_anim_prefix(role, tier)
-                            ));
-                        }
-                        continue;
+                // If we are close to the ground
+                if velocity.y < 0. && toi.witness2[1] < 0. {
+                    *nav = Navigation::Grounded;
+                    transform.translation.y =
+                        transform.translation.y - toi.witness2[1] - toi.toi
+                            + GROUND_BUFFER;
+                    velocity.y = 0.;
+                    if let Ok(mut enemy_anim) =
+                        gfx_query.get_mut(gent.e_gfx)
+                    {
+                        enemy_anim.play_key(&format!(
+                            "{}.Chase",
+                            enemy_anim_prefix(role, tier)
+                        ));
                     }
                 }
             }
@@ -1402,19 +1393,12 @@ fn falling(
                     *nav = Navigation::Falling { jumping: false };
                 }
             }
-            match *nav {
-                Navigation::Falling { jumping: true } => {
-                    velocity.y -= enemy_config.jump_accel;
-                },
-                Navigation::Falling { jumping: false } => {
-                    velocity.y -= enemy_config.fall_accel;
-                },
-                _ => unreachable!(),
-            }
-
+            *nav = Navigation::Falling { jumping: false };
             if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
-                enemy_anim.set_slot("jump", velocity.y > 0.);
-                enemy_anim.set_slot("fall", velocity.y < 0.);
+                enemy_anim.play_key(&format!(
+                    "{}.Jump",
+                    enemy_anim_prefix(role, tier)
+                ));
             }
         } else if matches!(*nav, Navigation::Grounded) {
             if spatial_query
@@ -1434,7 +1418,6 @@ fn falling(
                 )
                 .is_none()
             {
-                println!("refalling");
                 *nav = Navigation::Falling { jumping: false };
                 if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
                     enemy_anim.play_key(&format!(
@@ -1584,7 +1567,6 @@ fn chasing(
                             .get(p_entity)
                             .expect("Wasnt targeting player");
                         if ptrans.translation.y < trans.translation.y {
-                            println!("fall off {trans:?}");
                             velocity.y = enemy_config.fall_y_velocity;
                             *nav = Navigation::Falling { jumping: false };
                             if let Ok(mut enemy_anim) =
@@ -1601,7 +1583,6 @@ fn chasing(
                             //     * (ptrans.translation.x - trans.translation.x)
                             //         .signum();
                         } else {
-                            println!("jump {}", trans.translation);
                             velocity.y = enemy_config.jump_y_velocity;
                             if let Ok(mut enemy_anim) =
                                 gfx_query.get_mut(gent.e_gfx)

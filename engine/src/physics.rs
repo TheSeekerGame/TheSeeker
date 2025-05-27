@@ -356,9 +356,7 @@ impl PhysicsWorld {
                 Ok(e) => Some(e),
                 Err(e) => {
                     if result.user_data == 0 {
-                        println!("Warning! detected colider with no associated entity/user data!");
                     }
-                    println!("Warning Failed to find entity for collider!: tried entity: {} with col: {handle:?}", result.user_data);
                     None
                 },
             }

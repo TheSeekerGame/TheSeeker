@@ -16,9 +16,7 @@ bevy_color = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-spri
 bevy_core = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 bevy_core_pipeline = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 bevy_derive = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
-bevy_dev_tools = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 bevy_diagnostic = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
-bevy_dylib = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 bevy_ecs = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 bevy_encase_derive = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 bevy_gilrs = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
@@ -37,7 +35,6 @@ bevy_pbr = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite
 bevy_picking = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 bevy_ptr = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 bevy_reflect = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
-bevy_remote = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 bevy_render = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 bevy_scene = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }
 bevy_sprite = { git = "https://github.com/TheSeekerGame/bevy", branch = "015-sprite3d" }

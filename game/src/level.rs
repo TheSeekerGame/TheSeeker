@@ -160,12 +160,6 @@ fn attach_parallax(
             },
         };
 
-        println!(
-            "{:?}: {amount}",
-            layer_metadata.identifier
-        );
-        commands.entity(entity).try_insert(StateDespawnMarker);
-
         transform.translation.z = 0.0 - amount;
 
         if use_parallax {

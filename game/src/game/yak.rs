@@ -43,10 +43,8 @@ pub fn setup_yak(
     mut commands: Commands,
 ) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
-        println!("added yak");
         xf_gent.translation.z = 12.0 * 0.000001;
         xf_gent.translation.y += 5.0;
-        println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands
             .entity(e_gent)

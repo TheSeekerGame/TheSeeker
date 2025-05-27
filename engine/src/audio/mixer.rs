@@ -330,14 +330,13 @@ impl Iterator for PrecisionMixer {
                 // if we are already late, we have to skip ahead into the source
                 let missed_by = self.sample_count - start_at_sample_number;
                 if missed_by > 0 {
-                    eprintln!("AUDIO MISSED BY {}", missed_by);
-                }
-                for _ in 0..(missed_by * source.channels() as i64) {
-                    if let Some(value) = source.next() {
-                        track.first_sample = value;
-                    } else {
-                        // the sound is already over before it even started playing ;)
-                        continue;
+                    for _ in 0..(missed_by * source.channels() as i64) {
+                        if let Some(value) = source.next() {
+                            track.first_sample = value;
+                        } else {
+                            // the sound is already over before it even started playing ;)
+                            continue;
+                        }
                     }
                 }
 
