@@ -120,11 +120,6 @@ pub enum PlaybackControl {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "action")]
 pub enum CommonScriptAction {
-    /// Run `CliCommand`s
-    RunCli {
-        /// A list of cli command strings to evaluate
-        cli: Vec<String>,
-    },
     /// Despawn entities
     DespawnEntity {
         /// If specified, lookup entities with the given label.

@@ -4,10 +4,6 @@ pub struct CliPlugin;
 
 impl Plugin for CliPlugin {
     fn build(&self, app: &mut App) {
-        app.register_clicommand_noargs("exit", cli_exit);
-        // app.register_clicommand_noargs("help", cli_help);
-        app.register_clicommand_args("hello", cli_hello_args);
-        app.register_clicommand_noargs("hello", cli_hello_noargs);
     }
 }
 
@@ -31,7 +27,7 @@ fn cli_hello_args(In(args): In<Vec<String>>) {
 //         clicommands.commands_noargs.capacity()
 //             + clicommands.commands_args.capacity(),
 //     );
-
+// 
 //     for noargscmd in clicommands.commands_noargs.keys() {
 //         if let Some(existing) = aggregate.get_mut(noargscmd.as_str()) {
 //             existing.0 = true;
@@ -39,7 +35,7 @@ fn cli_hello_args(In(args): In<Vec<String>>) {
 //             aggregate.insert(noargscmd.as_str(), (true, false));
 //         }
 //     }
-
+// 
 //     for argscmd in clicommands.commands_args.keys() {
 //         if let Some(existing) = aggregate.get_mut(argscmd.as_str()) {
 //             existing.1 = true;
@@ -47,10 +43,10 @@ fn cli_hello_args(In(args): In<Vec<String>>) {
 //             aggregate.insert(argscmd.as_str(), (false, true));
 //         }
 //     }
-
+// 
 //     let mut sorted: Vec<_> = aggregate.into_iter().collect();
 //     sorted.sort_unstable_by_key(|x| x.0);
-
+// 
 //     info!("List of registered CliCommands:");
 //     for (name, (is_noargs, is_args)) in sorted {
 //         info!(

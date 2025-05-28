@@ -20,7 +20,6 @@ impl Plugin for AppStatesPlugin {
             );
         }
         app.add_systems(OnEnter(AppState::Restart), restart);
-        app.register_clicommand_args("AppState", cli_appstate);
     }
 }
 
@@ -46,23 +45,6 @@ pub enum AppState {
 #[derive(Component)]
 pub struct StateDespawnMarker;
 
-/// CliCommand for switching state
-fn cli_appstate(
-    In(args): In<Vec<String>>,
-    mut next: ResMut<NextState<AppState>>,
-) {
-    if args.len() != 1 {
-        error!("\"appstate <Value>\"");
-        return;
-    }
-
-    let dyn_state = DynamicEnum::new(&args[0], DynamicVariant::Unit);
-    if let Some(state) = FromReflect::from_reflect(&dyn_state) {
-        next.set(state);
-    } else {
-        error!("Invalid app state: {}", args[0]);
-    }
-}
 pub fn restart(mut next_state: ResMut<NextState<AppState>>) {
     next_state.set(AppState::InGame);
 }

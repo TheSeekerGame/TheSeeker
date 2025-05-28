@@ -7,8 +7,6 @@ pub struct DevPlugin;
 
 impl Plugin for DevPlugin {
     fn build(&self, app: &mut App) {
-        app.register_clicommand_args("spawn_script", cli_spawn_script);
-        app.register_clicommand_args("spawn_anim", cli_spawn_anim);
         app.add_systems(
             Last,
             debug_progress
@@ -66,47 +64,5 @@ fn debug_spawn_player(mut commands: Commands) {
     commands.spawn((
         PlayerBlueprint,
         SpatialBundle { ..default() },
-    ));
-}
-
-fn cli_spawn_script(In(args): In<Vec<String>>, world: &mut World) {
-    use theseeker_engine::script::common::ScriptBundle;
-    use theseeker_engine::script::ScriptPlayer;
-
-    if args.len() != 1 {
-        error!("\"spawn_script <script_asset_key>\"");
-        return;
-    }
-    let mut player = ScriptPlayer::new();
-    player.play_key(args[0].as_str());
-    world.spawn(ScriptBundle { player });
-}
-
-fn cli_spawn_anim(In(args): In<Vec<String>>, world: &mut World) {
-    use theseeker_engine::animation::SpriteAnimationBundle;
-    use theseeker_engine::script::ScriptPlayer;
-
-    if args.len() != 1 && args.len() != 3 {
-        error!("\"spawn_anim <anim_asset_key> [<x> <y>]\"");
-        return;
-    }
-
-    let (mut x, mut y) = (0.0, 0.0);
-    if args.len() == 3 {
-        if let (Ok(xx), Ok(yy)) = (args[1].parse(), args[2].parse()) {
-            x = xx;
-            y = yy;
-        }
-    }
-
-    let mut player = ScriptPlayer::new();
-    player.play_key(args[0].as_str());
-
-    world.spawn((
-        SpriteBundle {
-            transform: Transform::from_xyz(x, y, 101.0),
-            ..default()
-        },
-        SpriteAnimationBundle { player },
     ));
 }

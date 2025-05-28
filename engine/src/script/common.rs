@@ -566,12 +566,6 @@ impl ScriptAction for CommonScriptAction {
         ): &mut <Self::Param as SystemParam>::Item<'_, '_>,
     ) -> ScriptUpdateResult {
         match self {
-            CommonScriptAction::RunCli { cli } => {
-                for cli in cli.iter() {
-                    commands.run_cli(cli);
-                }
-                ScriptUpdateResult::NormalRun
-            },
             CommonScriptAction::DespawnEntity { label } => {
                 if let Some(label) = label {
                     for e in elabels.iter_label_entities(label) {

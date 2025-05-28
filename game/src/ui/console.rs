@@ -113,7 +113,6 @@ fn console_text_input(
     if kbd.just_pressed(KeyCode::Enter) {
         for (text, _, prompt) in &query {
             history.0.push(text.0.clone());
-            commands.run_cli(&text.0);
             commands.entity(prompt.0).despawn_recursive();
         }
         evr_char.clear();

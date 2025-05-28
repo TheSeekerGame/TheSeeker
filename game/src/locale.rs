@@ -9,7 +9,6 @@ pub struct LocalePlugin;
 
 impl Plugin for LocalePlugin {
     fn build(&self, app: &mut App) {
-        app.register_clicommand_args("locale", cli_locale);
         app.insert_resource(
             Locale::new("en-US".parse().unwrap())
                 .with_default("en-US".parse().unwrap()),
@@ -37,29 +36,6 @@ pub struct L10nKey(pub String);
 
 #[derive(Resource)]
 pub struct Locales(HashSet<LanguageIdentifier>);
-
-fn cli_locale(
-    In(args): In<Vec<String>>,
-    mut locale: ResMut<Locale>,
-    locales: Res<Locales>,
-) {
-    if args.len() != 1 {
-        error!("\"locale <locale>\"");
-        return;
-    }
-    match args[0].parse::<LanguageIdentifier>() {
-        Ok(langid) => {
-            if locales.0.contains(&langid) {
-                locale.requested = langid;
-            } else {
-                error!("Unsupported locale: {:?}", args[0]);
-            }
-        },
-        Err(e) => {
-            error!("Invalid locale {:?}: {}", args[0], e);
-        },
-    }
-}
 
 #[derive(Resource)]
 pub struct LocalesFolder(Handle<LoadedFolder>);
@@ -138,3 +114,26 @@ fn resolve_l10n(
         }
     };
 }
+
+// fn cli_locale(
+//     In(args): In<Vec<String>>,
+//     mut locale: ResMut<Locale>,
+//     locales: Res<Locales>,
+// ) {
+//     if args.len() != 1 {
+//         error!("\"locale <locale>\"");
+//         return;
+//     }
+//     match args[0].parse::<LanguageIdentifier>() {
+//         Ok(langid) => {
+//             if locales.0.contains(&langid) {
+//                 locale.requested = langid;
+//             } else {
+//                 error!("Unsupported locale: {:?}", args[0]);
+//             }
+//         },
+//         Err(e) => {
+//             error!("Invalid locale {:?}: {}", args[0], e);
+//         },
+//     }
+// }

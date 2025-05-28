@@ -116,6 +116,12 @@ fn main() {
     // and custom "engine"
     app.add_plugins(theseeker_engine::EnginePlugins);
 
+    // Remove LDtk's default background
+    // (for some reason it was covering our parallax backgrounds)
+    app.insert_resource(LdtkSettings {
+        level_background: LevelBackground::Nonexistent,
+        ..Default::default()
+    });
 
     // external plugins
     app.add_plugins((
