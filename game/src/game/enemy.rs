@@ -1359,72 +1359,80 @@ fn falling(
         tier,
     ) in query.iter_mut()
     {
-        if matches!(*nav, Navigation::Falling { .. }) {
-            if let Some((e, toi)) = spatial_query.shape_cast(
-                transform.translation.xy(),
-                Dir2::new_unchecked(Vec2::new(0., -1.)),
-                collider.0.shape(),
-                GROUNDED_THRESHOLD,
-                InteractionGroups {
-                    memberships: ENEMY,
-                    filter: GROUND,
-                },
-                Some(entity),
-            ) {
-                // If we are close to the ground
-                if velocity.y < 0. && toi.witness2[1] < 0. {
-                    *nav = Navigation::Grounded;
-                    transform.translation.y =
-                        transform.translation.y - toi.witness2[1] - toi.toi
-                            + GROUND_BUFFER;
-                    velocity.y = 0.;
-                    if let Ok(mut enemy_anim) =
-                        gfx_query.get_mut(gent.e_gfx)
-                    {
-                        enemy_anim.play_key(&format!(
-                            "{}.Chase",
-                            enemy_anim_prefix(role, tier)
-                        ));
-                    }
-                }
-            }
-            if let Ok(ptrans) = players.get_single() {
-                if ptrans.translation.y < transform.translation.y {
-                    *nav = Navigation::Falling { jumping: false };
-                }
-            }
-            *nav = Navigation::Falling { jumping: false };
-            if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
-                enemy_anim.play_key(&format!(
-                    "{}.Jump",
-                    enemy_anim_prefix(role, tier)
-                ));
-            }
-        } else if matches!(*nav, Navigation::Grounded) {
-            if spatial_query
-                .shape_cast(
+        match *nav {
+            Navigation::Falling { jumping } => {
+                // Apply gravity consistently
+                velocity.y -= enemy_config.fall_accel;
+                
+                // Check for ground collision
+                if let Some((_, toi)) = spatial_query.shape_cast(
                     transform.translation.xy(),
                     Dir2::new_unchecked(Vec2::new(0., -1.)),
                     collider.0.shape(),
-                    GROUNDED_THRESHOLD
-                        + collider.0.shape().compute_local_aabb().extents()[1]
-                            / 2.
-                        + GROUND_BUFFER,
+                    GROUNDED_THRESHOLD,
                     InteractionGroups {
                         memberships: ENEMY,
                         filter: GROUND,
                     },
                     Some(entity),
-                )
-                .is_none()
-            {
-                *nav = Navigation::Falling { jumping: false };
+                ) {
+                    // If we are close to the ground
+                    if velocity.y < 0. && toi.witness2[1] < 0. {
+                        *nav = Navigation::Grounded;
+                        transform.translation.y =
+                            transform.translation.y - toi.witness2[1] - toi.toi
+                                + GROUND_BUFFER;
+                        velocity.y = 0.;
+                        if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
+                            enemy_anim.play_key(&format!(
+                                "{}.Chase",
+                                enemy_anim_prefix(role, tier)
+                            ));
+                        }
+                    }
+                }
+
+                // Update animation if needed
                 if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
                     enemy_anim.play_key(&format!(
                         "{}.Jump",
                         enemy_anim_prefix(role, tier)
                     ));
                 }
+            },
+            Navigation::Grounded => {
+                // Check if we're actually grounded
+                if spatial_query
+                    .shape_cast(
+                        transform.translation.xy(),
+                        Dir2::new_unchecked(Vec2::new(0., -1.)),
+                        collider.0.shape(),
+                        GROUNDED_THRESHOLD
+                            + collider.0.shape().compute_local_aabb().extents()[1]
+                                / 2.
+                            + GROUND_BUFFER,
+                        InteractionGroups {
+                            memberships: ENEMY,
+                            filter: GROUND,
+                        },
+                        Some(entity),
+                    )
+                    .is_none()
+                {
+                    // We're not actually on ground, transition to falling
+                    *nav = Navigation::Falling { jumping: false };
+                    // Initialize falling with zero velocity
+                    velocity.y = 0.0;
+                    if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
+                        enemy_anim.play_key(&format!(
+                            "{}.Jump",
+                            enemy_anim_prefix(role, tier)
+                        ));
+                    }
+                }
+            },
+            Navigation::Blocked => {
+                // No special handling needed for blocked state
             }
         }
     }
@@ -1779,18 +1787,21 @@ pub fn dead(
 
 /// Despawns the gent after enemy enters Decay state
 /// the gfx entity is despawned with a script action after the decay animation finishes playing
-///
-/// Also moves the Decay marker to the gfx entity so we can adjust the rate
 fn decay_despawn(
     query: Query<(Entity, &Gent), (With<Enemy>, With<Decay>)>,
     gfx_query: Query<Entity, With<EnemyGfx>>,
     mut commands: Commands,
 ) {
     for (entity, gent) in query.iter() {
+        // First detach the graphics entity from hierarchy
         if let Ok(gfx_entity) = gfx_query.get(gent.e_gfx) {
-            commands.entity(gfx_entity).insert(Decay);
+            commands.entity(gfx_entity)
+                .remove_parent()
+                .insert(Decay);
         }
-        commands.entity(entity).despawn_recursive();
+        
+        // Then despawn the main entity without recursion since graphics is detached
+        commands.entity(entity).despawn();
     }
 }
 
