@@ -13,7 +13,7 @@ impl Plugin for PostProcessingPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins((
             VignettePlugin,
-            // FloaterPlugin, // Disabled - uses 3D pipeline
+            // FloaterPlugin, // Disabled - relied on 3D pipeline
         ));
     }
 }

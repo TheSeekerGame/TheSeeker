@@ -1,7 +1,6 @@
 pub mod ability_cooldown;
 mod dmg_numbers;
 pub mod enemy_hp;
-mod fog;
 pub(crate) mod particles_util;
 pub mod player_hp;
 pub mod post_processing;
