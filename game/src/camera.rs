@@ -1,15 +1,16 @@
 //! Everything to do with the in-game camera(s)
 
-use std::f32::consts::PI;
 use ran::ran_f64_range;
+use std::f32::consts::PI;
 
 use crate::game::player::Player;
 
-
 // use crate::graphics::post_processing::darkness::DarknessSettings;
+use crate::graphics::post_processing::darkness::DarknessSettings;
 use crate::graphics::post_processing::vignette::VignetteSettings;
 use crate::level::MainBackround;
 use crate::prelude::*;
+use bevy::render::view::RenderLayers;
 
 const PROJECTION_SCALE: f32 = 1.0 / 5.0;
 
@@ -106,23 +107,22 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
 
     commands.spawn((
         MainCameraBundle {
-            camera: camera,
+            camera,
             marker: MainCamera,
             despawn: StateDespawnMarker,
             // TODO: manage this from somewhere
             limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
         },
-
         // FIXME: complained about duplicate msaa component, where else is it added?
         // Msaa::Off,
-        // DarknessSettings {
-        //     bg_light_level: 1.0,
-        //     lantern_position: Default::default(),
-        //     lantern: 0.0,
-        //     lantern_color: Vec3::new(0.965, 0.882, 0.678),
-        //     bg_light_color: Vec3::new(0.761, 0.773, 0.8),
-        // },
         VignetteSettings::default(),
+        DarknessSettings {
+            bg_light_level: 0.4,
+            darkness_intensity: 0.8,
+            _padding: Vec2::ZERO,
+        },
+        // Add render layers to see both default layer (0) and light source layer (1)
+        RenderLayers::from_layers(&[0, 1]),
         Name::new("MainCamera"),
     ));
 }
@@ -178,7 +178,10 @@ fn camera_rig_follow_player(
 /// Camera updates the camera position to smoothly interpolate to the
 /// rig location. also applies camera shake, and limits camera within the level boundaries
 pub(crate) fn update_camera(
-    mut camera_query: Query<(&mut Transform, &OrthographicProjection), With<MainCamera>>,
+    mut camera_query: Query<
+        (&mut Transform, &OrthographicProjection),
+        With<MainCamera>,
+    >,
     rig: Res<CameraRig>,
     backround_query: Query<
         (&LayerMetadata, &Transform),
@@ -186,7 +189,8 @@ pub(crate) fn update_camera(
     >,
     camera_shake: Option<Res<CameraShake>>,
 ) {
-    let Ok((mut camera_transform, ortho_projection)) = camera_query.get_single_mut()
+    let Ok((mut camera_transform, ortho_projection)) =
+        camera_query.get_single_mut()
     else {
         return;
     };
@@ -336,7 +340,7 @@ pub fn update_screen_shake(
 //         }
 //     }
 // }
-// 
+//
 // fn cli_camera_limits_noargs(q_cam: Query<&GameViewLimits, With<MainCamera>>) {
 //     if let Ok(limits) = q_cam.get_single() {
 //         info!(
@@ -347,7 +351,7 @@ pub fn update_screen_shake(
 //         error!("Game Camera not found!");
 //     }
 // }
-// 
+//
 // fn cli_camera_limits_args(
 //     In(args): In<Vec<String>>,
 //     mut q_cam: Query<&mut GameViewLimits, With<MainCamera>>,

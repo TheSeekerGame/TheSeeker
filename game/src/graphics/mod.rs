@@ -6,7 +6,7 @@ pub mod player_hp;
 pub mod post_processing;
 
 use bevy_hanabi::HanabiPlugin;
-// use post_processing::DarknessPlugin;
+use post_processing::darkness::DarknessPlugin;
 use post_processing::PostProcessingPlugin;
 
 use crate::graphics::ability_cooldown::AbilityCooldownPlugin;

@@ -13,6 +13,7 @@
 //! Any of the stuff that actually *happens* within the map when you
 //! play the game, doesn't belong here. Put that stuff under [`crate::game`].
 
+use bevy::render::view::RenderLayers;
 use bevy_ecs_tilemap::tiles::TilePos;
 
 use crate::parallax::{Parallax, ParallaxOffset};
@@ -163,7 +164,7 @@ fn attach_parallax(
         transform.translation.z = 0.0 - amount;
 
         if use_parallax {
-            commands.entity(entity).insert((
+            let mut components = (
                 Parallax {
                     depth: 1.0 + amount,
                 },
@@ -173,7 +174,20 @@ fn attach_parallax(
                     (layer_metadata.c_hei * layer_metadata.grid_size) as f32
                         * 0.5,
                 )),
-            ));
+            );
+
+            // Add light source layers to a special render layer
+            if matches!(
+                &*layer_metadata.identifier,
+                "Background" | "TundraBackground"
+            ) {
+                commands.entity(entity).insert((
+                    components,
+                    RenderLayers::layer(1), // Light source layer
+                ));
+            } else {
+                commands.entity(entity).insert(components);
+            }
         }
     }
 }
