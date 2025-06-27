@@ -72,14 +72,26 @@ pub struct LightSource;
 
 fn mark_light_source_layers(
     mut commands: Commands,
-    query: Query<(Entity, &Parallax), (Without<LightSource>, With<Parallax>)>,
+    all_parallax: Query<&Parallax>,
+    unmarked_parallax: Query<
+        (Entity, &Parallax),
+        (With<Parallax>, Without<LightSource>),
+    >,
 ) {
-    let max_depth = query
-        .iter()
-        .map(|(_, parallax)| parallax.depth)
-        .fold(0.0f32, |acc, depth| acc.max(depth));
+    if unmarked_parallax.is_empty() {
+        return;
+    }
 
-    for (entity, parallax) in query.iter() {
+    let max_depth = all_parallax
+        .iter()
+        .map(|p| p.depth)
+        .fold(f32::NEG_INFINITY, |a, b| a.max(b));
+
+    if max_depth == f32::NEG_INFINITY {
+        return;
+    }
+
+    for (entity, parallax) in &unmarked_parallax {
         if (parallax.depth - max_depth).abs() < 0.001 {
             commands
                 .entity(entity)

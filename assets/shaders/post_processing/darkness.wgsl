@@ -25,7 +25,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let pixel_size = 1.0 / vec2<f32>(textureDimensions(screen_texture, 0));
     
     // Parameters for the blur effect
-    let kernel_radius = 200; // How far the light spreads
+    let kernel_radius = 100; // How far the light spreads
     let kernel_step = 10;    // Step between samples for performance
     let sigma = 30.0;       // Controls the softness of the falloff (gradual)
 
@@ -46,27 +46,24 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
             // Apply the jitter to the sample position
             let sample_uv = in.uv + (offset + jitter) * pixel_size;
 
-            // Ensure we are sampling within the texture bounds
-            if (sample_uv.x >= 0.0 && sample_uv.x <= 1.0 && sample_uv.y >= 0.0 && sample_uv.y <= 1.0) {
-                let sample_color = textureSample(screen_texture, texture_sampler, sample_uv);
-                
-                // Check if the sampled pixel is a light source
-                let color_diff = abs(sample_color.rgb - target_light_color);
-                let max_diff = max(max(color_diff.r, color_diff.g), color_diff.b);
-                
-                // Use smoothstep to create a soft falloff around the light source color
-                // instead of a hard threshold. This further reduces sharp edges.
-                let threshold = 0.05;
-                let softness = 0.02;
-                let is_light = 1.0 - smoothstep(threshold - softness, threshold + softness, max_diff);
-                
-                // Weigh the light source by its distance using a Gaussian function
-                let dist = length(offset);
-                let weight = exp(-(dist * dist) / (2.0 * sigma * sigma));
-                
-                total_light += is_light * weight;
-                total_weight += weight;
-            }
+            let sample_color = textureSample(screen_texture, texture_sampler, sample_uv);
+            
+            // Check if the sampled pixel is a light source
+            let color_diff = abs(sample_color.rgb - target_light_color);
+            let max_diff = max(max(color_diff.r, color_diff.g), color_diff.b);
+            
+            // Use smoothstep to create a soft falloff around the light source color
+            // instead of a hard threshold. This further reduces sharp edges.
+            let threshold = 0.05;
+            let softness = 0.02;
+            let is_light = 1.0 - smoothstep(threshold - softness, threshold + softness, max_diff);
+            
+            // Weigh the light source by its distance using a Gaussian function
+            let dist = length(offset);
+            let weight = exp(-(dist * dist) / (2.0 * sigma * sigma));
+            
+            total_light += is_light * weight;
+            total_weight += weight;
         }
     }
 
