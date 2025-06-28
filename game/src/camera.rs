@@ -116,11 +116,7 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         // FIXME: complained about duplicate msaa component, where else is it added?
         // Msaa::Off,
         VignetteSettings::default(),
-        DarknessSettings {
-            bg_light_level: 0.4,
-            darkness_intensity: 0.8,
-            _padding: Vec2::ZERO,
-        },
+        DarknessSettings::default(),
         // Add render layers to see both default layer (0) and light source layer (1)
         RenderLayers::from_layers(&[0, 1]),
         Name::new("MainCamera"),

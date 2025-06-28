@@ -110,7 +110,7 @@ pub struct DarknessSettings {
 impl Default for DarknessSettings {
     fn default() -> Self {
         Self {
-            bg_light_level: 0.1,
+            bg_light_level: 0.3,
             darkness_intensity: 0.9,
             _padding: Vec2::ZERO,
         }

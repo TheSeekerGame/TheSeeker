@@ -22,9 +22,9 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let target_light_color = vec3<f32>(245.0/255.0, 250.0/255.0, 253.0/255.0);
     let pixel_size = 1.0 / vec2<f32>(textureDimensions(screen_texture, 0));
 
-    let kernel_radius = 75;
+    let kernel_radius = 200;
     let kernel_step = 10;
-    let sigma = 40.0;
+    let sigma = 100.0;
 
     var total_light = 0.0;
     var total_weight = 0.0;
