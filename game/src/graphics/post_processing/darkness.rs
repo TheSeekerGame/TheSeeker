@@ -25,6 +25,7 @@ use bevy::render::RenderApp;
 
 use crate::parallax::Parallax;
 use crate::StateDespawnMarker;
+use crate::game::player::PlayerGfx;
 
 pub(crate) struct DarknessPlugin;
 
@@ -77,9 +78,18 @@ fn mark_light_source_layers(
         (Entity, &Parallax),
         (With<Parallax>, Without<LightSource>),
     >,
+    // Mark player graphics as light sources
+    player_gfx: Query<Entity, (With<PlayerGfx>, Without<LightSource>)>,
 ) {
-    if unmarked_parallax.is_empty() {
+    if unmarked_parallax.is_empty() && player_gfx.is_empty() {
         return;
+    }
+
+    // Mark player graphics as light sources
+    for entity in &player_gfx {
+        commands
+            .entity(entity)
+            .insert((LightSource, RenderLayers::layer(1)));
     }
 
     let max_depth = all_parallax
