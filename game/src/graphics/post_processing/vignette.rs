@@ -42,15 +42,9 @@ impl Plugin for VignettePlugin {
             .add_render_graph_node::<ViewNodeRunner<VignettePostProcessNode>>(
                 core_2d::graph::Core2d,
                 VignettePostProcessLabel,
-            )
-            .add_render_graph_edges(
-                core_2d::graph::Core2d,
-                (
-                    // We want vignette on top of everything else
-                    VignettePostProcessLabel,
-                    core_2d::graph::Node2d::EndMainPassPostProcessing,
-                ),
             );
+            // Render graph edges are now managed by DarknessPlugin to ensure proper ordering:
+            // Main Pass → Darkness → Vignette → End Post-Processing
     }
 
     fn finish(&self, app: &mut App) {

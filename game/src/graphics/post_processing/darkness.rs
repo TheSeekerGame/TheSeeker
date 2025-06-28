@@ -25,6 +25,7 @@ use bevy::render::RenderApp;
 
 use crate::parallax::Parallax;
 use crate::StateDespawnMarker;
+use super::vignette::VignettePostProcessLabel;
 
 pub(crate) struct DarknessPlugin;
 
@@ -54,6 +55,8 @@ impl Plugin for DarknessPlugin {
                 (
                     core_2d::graph::Node2d::EndMainPass,
                     DarknessPostProcessLabel,
+                    VignettePostProcessLabel, // Ensure darkness runs before vignette
+                    core_2d::graph::Node2d::EndMainPassPostProcessing,
                 ),
             );
     }

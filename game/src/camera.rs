@@ -63,6 +63,10 @@ struct MainCameraBundle {
 #[derive(Component)]
 pub struct MainCamera;
 
+/// Marker component for the player camera (renders player on top of post-processing effects)
+#[derive(Component)]
+pub struct PlayerCamera;
+
 #[derive(Resource)]
 /// Tracks the target location of the camera, as well as internal state for interpolation.
 pub struct CameraRig {
@@ -99,7 +103,7 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         StateDespawnMarker,
     ));
 
-    // Main camera for world content with darkness processing
+    // Main camera for world content with darkness and vignette processing
     let mut main_camera = Camera2dBundle::default();
     main_camera.camera.hdr = true;
     main_camera.camera.order = 0; // Render first
@@ -122,7 +126,7 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         Name::new("MainCamera"),
     ));
 
-    // Player camera for rendering player on top without darkness
+    // Player camera for rendering player on top without post-processing effects
     let mut player_camera = Camera2dBundle::default();
     player_camera.camera.hdr = true;
     player_camera.camera.order = 1; // Render after main camera
@@ -135,6 +139,8 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         RenderLayers::layer(2),
         StateDespawnMarker,
         Name::new("PlayerCamera"),
+        // Add a marker component to make it easier to query
+        PlayerCamera,
     ));
 }
 
@@ -194,13 +200,13 @@ pub(crate) fn update_camera(
         With<MainCamera>,
     >,
     mut player_camera_query: Query<
-        &mut Transform,
-        (Without<MainCamera>, With<Camera2d>, With<RenderLayers>),
+        (&mut Transform, &mut OrthographicProjection),
+        (With<PlayerCamera>, Without<MainCamera>),
     >,
     rig: Res<CameraRig>,
     backround_query: Query<
         (&LayerMetadata, &Transform),
-        (With<MainBackround>, Without<MainCamera>, Without<Camera2d>),
+        (With<MainBackround>, Without<MainCamera>, Without<PlayerCamera>),
     >,
     camera_shake: Option<Res<CameraShake>>,
 ) {
@@ -214,7 +220,7 @@ pub(crate) fn update_camera(
     main_camera_transform.translation.x = rig.camera_position.x;
     main_camera_transform.translation.y = rig.camera_position.y;
 
-    // Store the final camera position after clamping
+    // Store the final camera position after clamping and effects
     let mut final_camera_position = main_camera_transform.translation;
 
     if let Ok((bg_layer, bg_transform)) = backround_query.get_single() {
@@ -242,9 +248,11 @@ pub(crate) fn update_camera(
         final_camera_position = main_camera_transform.translation;
     }
 
-    // Update player camera to match main camera position
-    if let Ok(mut player_camera_transform) = player_camera_query.get_single_mut() {
+    // Update player camera to match main camera position and projection exactly
+    for (mut player_camera_transform, mut player_projection) in player_camera_query.iter_mut() {
         player_camera_transform.translation = final_camera_position;
+        // Ensure player camera has the same projection scale as main camera
+        player_projection.scale = ortho_projection.scale;
     }
 }
 
