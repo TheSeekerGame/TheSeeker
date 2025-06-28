@@ -12,7 +12,7 @@ use bevy::render::render_graph::{
     ViewNodeRunner,
 };
 use bevy::render::render_resource::{
-    BindGroupEntries, BindGroupLayout, BindGroupLayoutEntry, BindingType,
+    AsBindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntry, BindingType,
     CachedRenderPipelineId, ColorTargetState, ColorWrites, FragmentState,
     MultisampleState, Operations, PipelineCache, PrimitiveState,
     RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
@@ -100,7 +100,7 @@ fn mark_light_source_layers(
     }
 }
 
-#[derive(Component, Clone, Copy, ExtractComponent, ShaderType, Reflect)]
+#[derive(Component, Clone, Copy, ExtractComponent, ShaderType, Reflect, AsBindGroup)]
 pub struct DarknessSettings {
     pub bg_light_level: f32,
     pub darkness_intensity: f32,
@@ -138,8 +138,13 @@ impl ViewNode for DarknessPostProcessNode {
 
         let pipeline_cache = world.resource::<PipelineCache>();
 
-        let Some(pipeline) = pipeline_cache
-            .get_render_pipeline(post_process_pipeline.pipeline_id)
+        let Some(horizontal_pipeline) = pipeline_cache
+            .get_render_pipeline(post_process_pipeline.horizontal_pipeline_id)
+        else {
+            return Ok(());
+        };
+        let Some(vertical_pipeline) = pipeline_cache
+            .get_render_pipeline(post_process_pipeline.vertical_pipeline_id)
         else {
             return Ok(());
         };
@@ -151,10 +156,10 @@ impl ViewNode for DarknessPostProcessNode {
             return Ok(());
         };
 
+        // Pass 1: Horizontal
         let post_process = view_target.post_process_write();
-
-        let bind_group = render_context.render_device().create_bind_group(
-            "darkness_post_process_bind_group",
+        let horizontal_bind_group = render_context.render_device().create_bind_group(
+            "darkness_h_bind_group",
             &post_process_pipeline.layout,
             &BindGroupEntries::sequential((
                 post_process.source,
@@ -165,24 +170,49 @@ impl ViewNode for DarknessPostProcessNode {
 
         let mut render_pass =
             render_context.begin_tracked_render_pass(RenderPassDescriptor {
-                label: Some("darkness_post_process_pass"),
+                label: Some("darkness_h_pass"),
                 color_attachments: &[Some(RenderPassColorAttachment {
                     view: post_process.destination,
                     resolve_target: None,
-                    ops: Operations {
-                        load: bevy::render::render_resource::LoadOp::Clear(
-                            Color::BLACK.to_linear().into(),
-                        ),
-                        store: bevy::render::render_resource::StoreOp::Store,
-                    },
+                    ops: Operations::default(),
                 })],
                 depth_stencil_attachment: None,
                 timestamp_writes: None,
                 occlusion_query_set: None,
             });
 
-        render_pass.set_render_pipeline(pipeline);
-        render_pass.set_bind_group(0, &bind_group, &[]);
+        render_pass.set_render_pipeline(horizontal_pipeline);
+        render_pass.set_bind_group(0, &horizontal_bind_group, &[]);
+        render_pass.draw(0..3, 0..1);
+        drop(render_pass);
+
+        // Pass 2: Vertical
+        let post_process = view_target.post_process_write();
+        let vertical_bind_group = render_context.render_device().create_bind_group(
+            "darkness_v_bind_group",
+            &post_process_pipeline.layout,
+            &BindGroupEntries::sequential((
+                post_process.source,
+                &post_process_pipeline.sampler,
+                settings_binding.clone(),
+            )),
+        );
+
+        let mut render_pass =
+            render_context.begin_tracked_render_pass(RenderPassDescriptor {
+                label: Some("darkness_v_pass"),
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: post_process.destination,
+                    resolve_target: None,
+                    ops: Operations::default(),
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+            });
+
+        render_pass.set_render_pipeline(vertical_pipeline);
+        render_pass.set_bind_group(0, &vertical_bind_group, &[]);
         render_pass.draw(0..3, 0..1);
 
         Ok(())
@@ -193,7 +223,8 @@ impl ViewNode for DarknessPostProcessNode {
 struct DarknessPostProcessPipeline {
     layout: BindGroupLayout,
     sampler: Sampler,
-    pipeline_id: CachedRenderPipelineId,
+    horizontal_pipeline_id: CachedRenderPipelineId,
+    vertical_pipeline_id: CachedRenderPipelineId,
 }
 
 impl FromWorld for DarknessPostProcessPipeline {
@@ -239,11 +270,33 @@ impl FromWorld for DarknessPostProcessPipeline {
             .resource::<AssetServer>()
             .load("shaders/post_processing/darkness.wgsl");
 
-        let pipeline_id = world
-            .resource_mut::<PipelineCache>()
-            .queue_render_pipeline(RenderPipelineDescriptor {
-                label: Some("darkness_post_process_pipeline".into()),
+        let pipeline_cache = world.resource_mut::<PipelineCache>();
+
+        let horizontal_pipeline_id =
+            pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
+                label: Some("darkness_h_pipeline".into()),
+                layout: vec![layout.clone()],
+                vertex: fullscreen_shader_vertex_state(),
+                fragment: Some(FragmentState {
+                    shader: shader.clone(),
+                    shader_defs: vec!["HORIZONTAL".into()],
+                    entry_point: "fragment".into(),
+                    targets: vec![Some(ColorTargetState {
+                        format: TextureFormat::Rgba16Float,
+                        blend: None,
+                        write_mask: ColorWrites::ALL,
+                    })],
+                }),
+                primitive: PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: MultisampleState::default(),
+                push_constant_ranges: vec![],
                 zero_initialize_workgroup_memory: false,
+            });
+
+        let vertical_pipeline_id =
+            pipeline_cache.queue_render_pipeline(RenderPipelineDescriptor {
+                label: Some("darkness_v_pipeline".into()),
                 layout: vec![layout.clone()],
                 vertex: fullscreen_shader_vertex_state(),
                 fragment: Some(FragmentState {
@@ -260,12 +313,14 @@ impl FromWorld for DarknessPostProcessPipeline {
                 depth_stencil: None,
                 multisample: MultisampleState::default(),
                 push_constant_ranges: vec![],
+                zero_initialize_workgroup_memory: false,
             });
 
         Self {
             layout,
             sampler,
-            pipeline_id,
+            horizontal_pipeline_id,
+            vertical_pipeline_id,
         }
     }
 }
