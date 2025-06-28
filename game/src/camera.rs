@@ -103,15 +103,15 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         StateDespawnMarker,
     ));
 
-    // Main camera for world content with darkness and vignette processing
-    let mut main_camera = Camera2dBundle::default();
-    main_camera.camera.hdr = true;
-    main_camera.camera.order = 0; // Render first
-    main_camera.projection.scale = PROJECTION_SCALE;
+    // Single camera that renders all layers, with post-processing applied to layers 0 and 1
+    // Player on layer 2 will be rendered after post-processing effects
+    let mut camera = Camera2dBundle::default();
+    camera.camera.hdr = true;
+    camera.projection.scale = PROJECTION_SCALE;
 
     commands.spawn((
         MainCameraBundle {
-            camera: main_camera,
+            camera,
             marker: MainCamera,
             despawn: StateDespawnMarker,
             // TODO: manage this from somewhere
@@ -121,26 +121,10 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         // Msaa::Off,
         VignetteSettings::default(),
         DarknessSettings::default(),
-        // Only render world content (layers 0 and 1) through darkness processing
-        RenderLayers::from_layers(&[0, 1]),
+        // Render all layers: world (0), light sources (1), and player (2)
+        // Post-processing will only affect layers 0 and 1, player layer 2 renders after
+        RenderLayers::from_layers(&[0, 1, 2]),
         Name::new("MainCamera"),
-    ));
-
-    // Player camera for rendering player on top without post-processing effects
-    let mut player_camera = Camera2dBundle::default();
-    player_camera.camera.hdr = true;
-    player_camera.camera.order = 1; // Render after main camera
-    player_camera.camera.clear_color = ClearColorConfig::None; // Don't clear, render on top
-    player_camera.projection.scale = PROJECTION_SCALE;
-
-    commands.spawn((
-        player_camera,
-        // Only render player layer (layer 2)
-        RenderLayers::layer(2),
-        StateDespawnMarker,
-        Name::new("PlayerCamera"),
-        // Add a marker component to make it easier to query
-        PlayerCamera,
     ));
 }
 
@@ -195,64 +179,48 @@ fn camera_rig_follow_player(
 /// Camera updates the camera position to smoothly interpolate to the
 /// rig location. also applies camera shake, and limits camera within the level boundaries
 pub(crate) fn update_camera(
-    mut main_camera_query: Query<
+    mut camera_query: Query<
         (&mut Transform, &OrthographicProjection),
         With<MainCamera>,
-    >,
-    mut player_camera_query: Query<
-        (&mut Transform, &mut OrthographicProjection),
-        (With<PlayerCamera>, Without<MainCamera>),
     >,
     rig: Res<CameraRig>,
     backround_query: Query<
         (&LayerMetadata, &Transform),
-        (With<MainBackround>, Without<MainCamera>, Without<PlayerCamera>),
+        (With<MainBackround>, Without<MainCamera>),
     >,
     camera_shake: Option<Res<CameraShake>>,
 ) {
-    let Ok((mut main_camera_transform, ortho_projection)) =
-        main_camera_query.get_single_mut()
+    let Ok((mut camera_transform, ortho_projection)) =
+        camera_query.get_single_mut()
     else {
         return;
     };
 
-    // Update main camera position
-    main_camera_transform.translation.x = rig.camera_position.x;
-    main_camera_transform.translation.y = rig.camera_position.y;
-
-    // Store the final camera position after clamping and effects
-    let mut final_camera_position = main_camera_transform.translation;
+    // Update camera position
+    camera_transform.translation.x = rig.camera_position.x;
+    camera_transform.translation.y = rig.camera_position.y;
 
     if let Ok((bg_layer, bg_transform)) = backround_query.get_single() {
         let camera_rect = ortho_projection.area;
         let background_rect = background_rect(bg_layer, bg_transform);
 
         clamp_camera_to_edge(
-            &mut main_camera_transform,
+            &mut camera_transform,
             background_rect,
             camera_rect,
         );
 
         // Apply screen shake after camera is clamped so that camera still shakes at the edges
         if let Some(camera_shake) = camera_shake {
-            camera_shake.apply(&mut main_camera_transform);
+            camera_shake.apply(&mut camera_transform);
         }
 
         // Apply another clamp so we don't show the edge of the level
         clamp_camera_to_edge(
-            &mut main_camera_transform,
+            &mut camera_transform,
             background_rect,
             camera_rect,
         );
-
-        final_camera_position = main_camera_transform.translation;
-    }
-
-    // Update player camera to match main camera position and projection exactly
-    for (mut player_camera_transform, mut player_projection) in player_camera_query.iter_mut() {
-        player_camera_transform.translation = final_camera_position;
-        // Ensure player camera has the same projection scale as main camera
-        player_projection.scale = ortho_projection.scale;
     }
 }
 

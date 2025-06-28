@@ -16,10 +16,21 @@ fn random(co: vec2<f32>) -> f32 {
     return fract(sin(dot(co.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }
 
+// Returns 1.0 if the color is a light source, 0.0 otherwise.
+fn is_light_source(color: vec3<f32>) -> f32 {
+    let target_light_color = vec3<f32>(245.0/255.0, 250.0/255.0, 253.0/255.0);
+    let threshold = 0.05;
+    let softness = 0.02;
+
+    let color_diff = abs(color - target_light_color);
+    let max_diff = max(max(color_diff.r, color_diff.g), color_diff.b);
+
+    return 1.0 - smoothstep(threshold - softness, threshold + softness, max_diff);
+}
+
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     let screen_color = textureSample(screen_texture, texture_sampler, in.uv);
-    let target_light_color = vec3<f32>(245.0/255.0, 250.0/255.0, 253.0/255.0);
     let pixel_size = 1.0 / vec2<f32>(textureDimensions(screen_texture, 0));
 
     let kernel_radius = 200;
@@ -41,12 +52,7 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         let sample_uv = in.uv + offset * pixel_size;
         let sample_color = textureSample(screen_texture, texture_sampler, sample_uv);
 
-        let color_diff = abs(sample_color.rgb - target_light_color);
-        let max_diff = max(max(color_diff.r, color_diff.g), color_diff.b);
-
-        let threshold = 0.05;
-        let softness = 0.02;
-        let is_light = 1.0 - smoothstep(threshold - softness, threshold + softness, max_diff);
+        let is_light = is_light_source(sample_color.rgb);
 
         let dist = abs(f32(i));
         let weight = exp(-(dist * dist) / (2.0 * sigma * sigma));
@@ -87,10 +93,14 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
         light_visibility = total_light / total_weight;
     }
 
+    // If the original pixel is a light source, it should be fully bright.
+    // Otherwise, use the blurred visibility.
+    let final_light_visibility = max(is_light_source(screen_color.rgb), light_visibility);
+
     let final_brightness = mix(
         settings.bg_light_level,
         1.0,
-        light_visibility
+        final_light_visibility
     );
 
     // Reconstruct the original color from the G and B channels passed from the first pass
