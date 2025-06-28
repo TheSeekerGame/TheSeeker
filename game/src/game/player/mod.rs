@@ -3,6 +3,7 @@ mod player_anim;
 mod player_behaviour;
 pub mod player_weapon;
 use bevy::utils::hashbrown::HashMap;
+use bevy::render::view::RenderLayers;
 use leafwing_input_manager::action_state::ActionState;
 use player_action::PlayerActionPlugin;
 use player_anim::PlayerAnimationPlugin;
@@ -452,7 +453,9 @@ fn setup_player(
                 ..Default::default()
             },
             animation: Default::default(),
-        },));
+        },
+        RenderLayers::layer(2), // Render player on separate layer to exclude from darkness pass
+        ));
 
         commands.init_resource::<DropTracker>();
     }
@@ -725,8 +728,8 @@ impl Transitionable<Stealthing> for CanStealth {
 // Not quite the same as states, these components enable certain behaviours when attached,
 // and provide storage for that behaviours state
 
-/// If a player attack lands, locks their velocity for the configured number of ticks'
-// Tracks the attack entity which last caused the hirfreeze affect. and ticks since triggered
+/// If a player attack lands, locks their velocity for the configured number of ticks
+/// Tracks the attack entity which last caused the hitfreeze effect and ticks since triggered
 // (this way the same attack doesn't trigger it multiple times)
 #[allow(dead_code)]
 #[derive(Component, Default, Debug)]

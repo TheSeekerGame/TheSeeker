@@ -10,6 +10,7 @@ use crate::graphics::post_processing::darkness::DarknessSettings;
 use crate::graphics::post_processing::vignette::VignetteSettings;
 use crate::level::MainBackround;
 use crate::prelude::*;
+use bevy::render::camera::ClearColorConfig;
 use bevy::render::view::RenderLayers;
 
 const PROJECTION_SCALE: f32 = 1.0 / 5.0;
@@ -98,16 +99,15 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         StateDespawnMarker,
     ));
 
-    let mut camera = Camera2dBundle::default();
-    camera.camera.hdr = true;
-    camera.projection.scale = PROJECTION_SCALE;
-
-    // TODO make tilemap write to depth buffer somehow.
-    // bring up in meeting!
+    // Main camera for world content with darkness processing
+    let mut main_camera = Camera2dBundle::default();
+    main_camera.camera.hdr = true;
+    main_camera.camera.order = 0; // Render first
+    main_camera.projection.scale = PROJECTION_SCALE;
 
     commands.spawn((
         MainCameraBundle {
-            camera,
+            camera: main_camera,
             marker: MainCamera,
             despawn: StateDespawnMarker,
             // TODO: manage this from somewhere
@@ -117,9 +117,24 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         // Msaa::Off,
         VignetteSettings::default(),
         DarknessSettings::default(),
-        // Add render layers to see both default layer (0) and light source layer (1)
+        // Only render world content (layers 0 and 1) through darkness processing
         RenderLayers::from_layers(&[0, 1]),
         Name::new("MainCamera"),
+    ));
+
+    // Player camera for rendering player on top without darkness
+    let mut player_camera = Camera2dBundle::default();
+    player_camera.camera.hdr = true;
+    player_camera.camera.order = 1; // Render after main camera
+    player_camera.camera.clear_color = ClearColorConfig::None; // Don't clear, render on top
+    player_camera.projection.scale = PROJECTION_SCALE;
+
+    commands.spawn((
+        player_camera,
+        // Only render player layer (layer 2)
+        RenderLayers::layer(2),
+        StateDespawnMarker,
+        Name::new("PlayerCamera"),
     ));
 }
 
@@ -174,47 +189,62 @@ fn camera_rig_follow_player(
 /// Camera updates the camera position to smoothly interpolate to the
 /// rig location. also applies camera shake, and limits camera within the level boundaries
 pub(crate) fn update_camera(
-    mut camera_query: Query<
+    mut main_camera_query: Query<
         (&mut Transform, &OrthographicProjection),
         With<MainCamera>,
+    >,
+    mut player_camera_query: Query<
+        &mut Transform,
+        (Without<MainCamera>, With<Camera2d>, With<RenderLayers>),
     >,
     rig: Res<CameraRig>,
     backround_query: Query<
         (&LayerMetadata, &Transform),
-        (With<MainBackround>, Without<MainCamera>),
+        (With<MainBackround>, Without<MainCamera>, Without<Camera2d>),
     >,
     camera_shake: Option<Res<CameraShake>>,
 ) {
-    let Ok((mut camera_transform, ortho_projection)) =
-        camera_query.get_single_mut()
+    let Ok((mut main_camera_transform, ortho_projection)) =
+        main_camera_query.get_single_mut()
     else {
         return;
     };
 
-    camera_transform.translation.x = rig.camera_position.x;
-    camera_transform.translation.y = rig.camera_position.y;
+    // Update main camera position
+    main_camera_transform.translation.x = rig.camera_position.x;
+    main_camera_transform.translation.y = rig.camera_position.y;
+
+    // Store the final camera position after clamping
+    let mut final_camera_position = main_camera_transform.translation;
 
     if let Ok((bg_layer, bg_transform)) = backround_query.get_single() {
         let camera_rect = ortho_projection.area;
         let background_rect = background_rect(bg_layer, bg_transform);
 
         clamp_camera_to_edge(
-            &mut camera_transform,
+            &mut main_camera_transform,
             background_rect,
             camera_rect,
         );
 
         // Apply screen shake after camera is clamped so that camera still shakes at the edges
         if let Some(camera_shake) = camera_shake {
-            camera_shake.apply(&mut camera_transform);
+            camera_shake.apply(&mut main_camera_transform);
         }
 
         // Apply another clamp so we don't show the edge of the level
         clamp_camera_to_edge(
-            &mut camera_transform,
+            &mut main_camera_transform,
             background_rect,
             camera_rect,
         );
+
+        final_camera_position = main_camera_transform.translation;
+    }
+
+    // Update player camera to match main camera position
+    if let Ok(mut player_camera_transform) = player_camera_query.get_single_mut() {
+        player_camera_transform.translation = final_camera_position;
     }
 }
 

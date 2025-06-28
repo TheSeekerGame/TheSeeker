@@ -156,6 +156,11 @@ impl ViewNode for DarknessPostProcessNode {
             return Ok(());
         };
 
+        // Note: This post-processing effect will be applied to the rendered content
+        // from layers 0 and 1 (world and light sources). Layer 2 (player) will be
+        // rendered afterwards by the normal rendering pipeline, effectively appearing
+        // on top of the darkness effect.
+
         // Pass 1: Horizontal
         let post_process = view_target.post_process_write();
         let horizontal_bind_group = render_context.render_device().create_bind_group(
