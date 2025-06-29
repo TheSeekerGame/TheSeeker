@@ -28,7 +28,6 @@ mod camera;
 mod game;
 mod gamestate;
 mod level;
-mod locale;
 
 mod screens {
     pub mod loading;
@@ -36,7 +35,7 @@ mod screens {
 
 mod ui;
 
-//#[cfg(feature = "dev")]
+#[cfg(feature = "dev")]
 mod dev;
 pub mod graphics;
 mod parallax;
@@ -125,8 +124,6 @@ fn main() {
     app.add_plugins((
         TilemapPlugin,
         LdtkPlugin,
-        bevy_fluent::FluentPlugin,
-        // iyes_bevy_extras::d2::WorldCursorPlugin,
         PhysicsPlugin,
     ));
 
@@ -140,7 +137,6 @@ fn main() {
         },
         crate::assets::AssetsPlugin,
         crate::audio::AudioPlugin,
-        crate::locale::LocalePlugin,
         crate::ui::UiPlugin,
         crate::camera::CameraPlugin,
         crate::level::LevelManagerPlugin,

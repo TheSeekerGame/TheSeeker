@@ -2,7 +2,7 @@ mod player_action;
 mod player_anim;
 mod player_behaviour;
 pub mod player_weapon;
-use bevy::utils::hashbrown::HashMap;
+use std::collections::HashMap;
 use bevy::render::view::RenderLayers;
 use leafwing_input_manager::action_state::ActionState;
 use player_action::PlayerActionPlugin;

@@ -37,18 +37,12 @@ debug = false
 # Random little libraries
 [dependencies]
 anyhow = "1.0.97"
-derive_more = { version = "2.0.1", features = ["full"] }
-directories = "6.0.0"
 enum-iterator = "2.1.0"
-enum-map = "2.7.3"
-fluent_content = "0.0.5"
 glam = "0.29.2"
 rand = "0.9.0"
 serde_with = "3.12.0"
 thiserror = "2.0.12"
 toml = "0.8.20"
-unic-langid = "0.9.5"
-ran = "2.0.1"                                            #for lighter weight/easier use random noise then using rand
 rodio = "0.19.0"
 cpal = "0.15.3"
 strum = "0.27"
@@ -56,13 +50,11 @@ strum_macros = "0.27"
 
 bevy_egui = "0.33"
 bevy-inspector-egui = "0.30"
-bevy_fluent = "0.11.0"
 
 # This specific rev was working main on may 28th.
 # needed for moveble forcefields not availible in 0.10
 # (also has some wgsl fixes)
 bevy_hanabi = "0.14"
-smallvec = "1.14.0"
 
 iyes_perf_ui = { version = "0.4.0", optional = true }
 num_cpus = "1.16.0"
@@ -92,17 +84,8 @@ features = ["default"]
 version = "0.15.0"
 features = ["default"]
 
-# [dependencies.iyes_bevy_extras]
-# git = "https://github.com/IyesGames/iyes_bevy_extras"
-# branch = "seeker-015"
-# features = ["2d"]
-
-
-
 [dependencies.leafwing-input-manager]
 version = "0.16"
-# git = "https://github.com/TheSeekerGame/leafwing-input-manager"
-# branch = "fixed_update_0.13"
 
 [dependencies.rapier2d]
 version = "0.18"

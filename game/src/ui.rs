@@ -1,7 +1,6 @@
 use bevy::ecs::system::EntityCommands;
 
 use crate::assets::UiAssets;
-use crate::locale::L10nKey;
 use crate::prelude::*;
 use crate::ui::kill_counter::KillCounterPlugin;
 use crate::ui::skill_toolbar::SkillToolbarPlugin;
@@ -58,7 +57,6 @@ fn spawn_menuentry(
 
     let text = commands
         .spawn((
-            L10nKey(text.to_owned()),
             Text(text.into()),
             TextColor(color_text),
             TextFont {
@@ -106,7 +104,6 @@ fn spawn_menuentry(
 //         ),
 //         |button| {
 //             button.spawn((
-//                 L10nKey(text.to_owned()),
 //                 TextBundle {
 //                     text: Text::from_section(text, style),
 //                     ..Default::default()

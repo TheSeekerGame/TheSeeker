@@ -1,7 +1,7 @@
 //! Everything to do with the in-game camera(s)
 
-use ran::ran_f64_range;
 use std::f32::consts::PI;
+use rand::{thread_rng, Rng};
 
 use crate::game::player::Player;
 
@@ -117,8 +117,6 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
             // TODO: manage this from somewhere
             limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
         },
-        // FIXME: complained about duplicate msaa component, where else is it added?
-        // Msaa::Off,
         VignetteSettings::default(),
         DarknessSettings::default(),
         // Render all layers: world (0), light sources (1), and player (2)
@@ -264,7 +262,7 @@ pub struct CameraShake {
 
 impl CameraShake {
     pub fn new(strength: f32, t: f32, freq: f32) -> Self {
-        let rand_a = ran_f64_range(0.0..=360.0);
+        let rand_a = thread_rng().gen_range(0.0..=360.0);
         let dir = Vec2::from_angle(rand_a as f32 * PI * 2.0);
 
         Self {
@@ -302,7 +300,7 @@ pub fn update_screen_shake(
     let tan_s = (TAN_FREQ_SCALE * t).sin();
 
     if shake.sub_timer.finished() {
-        let rand_a = ran_f64_range(0.0..=360.0);
+        let rand_a = thread_rng().gen_range(0.0..=360.0);
         shake.dir = Vec2::from_angle(rand_a as f32 * PI * 2.0);
     }
 

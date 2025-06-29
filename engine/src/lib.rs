@@ -5,12 +5,13 @@
 
 pub mod prelude {
     pub use std::sync::Arc;
+    pub use std::time::{Duration, Instant};
+    pub use std::collections::{HashMap, HashSet};
 
     pub use anyhow::{
         anyhow, bail, ensure, Context, Error as AnyError, Result as AnyResult,
     };
     pub use bevy::prelude::*;
-    pub use bevy::utils::{Duration, HashMap, HashSet, Instant};
     pub use bevy_asset_loader::prelude::*;
     pub use bevy_ecs_ldtk::prelude::*;
     pub use rand::prelude::*;
@@ -18,7 +19,6 @@ pub mod prelude {
     pub use serde::{Deserialize, Serialize};
     pub use serde_with::{serde_as, DeserializeFromStr, SerializeDisplay};
     pub use thiserror::Error;
-    pub use rand::prelude::*;
 
     pub use crate::assets::PreloadedAssets;
     pub use crate::condition::*;

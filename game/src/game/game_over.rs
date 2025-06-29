@@ -9,7 +9,6 @@ use crate::camera::MainCamera;
 use crate::game::attack::KillCount;
 use crate::game::player::PlayerStateSet;
 use crate::gamestate::GameState;
-use crate::locale::L10nKey;
 use crate::prelude::*;
 
 use super::pickups::DropTracker;
@@ -158,7 +157,6 @@ pub fn on_game_over(
                         BackgroundColor(Color::NONE),
                     ))
                     .with_child((
-                        L10nKey("Abandon Planet?".to_owned()),
                         Text::new("Abandon Planet?"),
                         style.clone(),
                     ));
@@ -177,7 +175,6 @@ pub fn on_game_over(
                         BackgroundColor(Color::NONE),
                     ))
                     .with_child((
-                        L10nKey("New Expedition!".to_owned()),
                         Text::new("New Expedition!"),
                         style.clone(),
                     ));
