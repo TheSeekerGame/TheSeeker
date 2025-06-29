@@ -13,7 +13,6 @@ pub mod prelude {
     pub use bevy::utils::{Duration, HashMap, HashSet, Instant};
     pub use bevy_asset_loader::prelude::*;
     pub use bevy_ecs_ldtk::prelude::*;
-    pub use iyes_progress::prelude::*;
     pub use rand::prelude::*;
     pub use serde::de::DeserializeOwned;
     pub use serde::{Deserialize, Serialize};

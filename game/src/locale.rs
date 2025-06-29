@@ -16,7 +16,6 @@ impl Plugin for LocalePlugin {
         app.add_systems(
             Update,
             init_l10n
-                .track_progress::<AppState>()
                 .run_if(in_state(AppState::AssetsLoading)),
         );
         app.add_systems(
@@ -47,7 +46,7 @@ fn init_l10n(
     folder: Option<Res<LocalesFolder>>,
     mut done: Local<bool>,
     ass: Res<AssetServer>,
-) -> Progress {
+) {
     match (*done, folder) {
         (false, None) => {
             commands.insert_resource(LocalesFolder(ass.load_folder("locale")));
@@ -68,7 +67,6 @@ fn init_l10n(
         },
         (true, _) => {},
     }
-    (*done).into()
 }
 
 fn resolve_l10n(

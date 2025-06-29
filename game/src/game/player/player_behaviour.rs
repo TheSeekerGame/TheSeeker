@@ -1631,16 +1631,6 @@ fn player_pickup_interact(
                                     .despawn_recursive();
                             }
                         },
-                        PickupType::Seed(_, (_, word)) => {
-                            commands
-                                .popup()
-                                .insert(PopupTimer::default())
-                                .with_children(|popup| {
-                                    popup.row().with_children(|row| {
-                                        row.text(word);
-                                    });
-                                });
-                        },
                     }
                     // Despawn the Pickup popup hint
                     for entity in &pickup_hint {

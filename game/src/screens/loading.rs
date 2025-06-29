@@ -1,5 +1,4 @@
 use bevy::{color::palettes::css::GRAY, render::camera::ClearColorConfig};
-// use iyes_progress::TrackedProgressSet;
 
 use crate::prelude::*;
 
@@ -16,9 +15,6 @@ impl<S: States> Plugin for LoadscreenPlugin<S> {
         app.add_systems(
             Last,
             update_loading_pct
-                // FIXME: maybe this needs a new ordering constraint now that there is no
-                // TrackedProgressSet?
-                // .after(TrackedProgressSet)
                 .run_if(in_state(self.state.clone())),
         );
     }
@@ -76,9 +72,11 @@ fn setup_loadscreen(mut commands: Commands) {
 
 fn update_loading_pct(
     mut q: Query<&mut Node, With<LoadingProgressIndicator>>,
-    progress: Res<ProgressTracker<AppState>>,
+    time: Res<Time>,
 ) {
-    let progress: f32 = progress.get_global_progress().into();
+    // Simple fake progress animation based on time
+    let elapsed = time.elapsed_secs();
+    let progress = (elapsed / 2.0).min(1.0); // Complete over 2 seconds
     for mut node in q.iter_mut() {
         node.width = Val::Percent(progress * 100.0);
     }

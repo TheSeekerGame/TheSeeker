@@ -12,7 +12,7 @@ use crate::{
 
 use super::{
     attack::KillCount,
-    enemy::{dead, Enemy, Tier},
+    enemy::{dead, Enemy},
     gentstate::Dead,
     player::{Passive, Passives, Player},
 };
@@ -68,7 +68,6 @@ impl PickupDrop {
 #[derive(Resource)]
 pub struct PickupAssetHandles {
     passive_map: HashMap<Passive, Handle<Image>>,
-    seed_map: HashMap<PlanetarySeed, String>,
 }
 
 impl PickupAssetHandles {
@@ -144,40 +143,11 @@ pub fn load_pickup_assets(assets: Res<AssetServer>, mut commands: Commands) {
         ),
     ];
 
-    let seed_mappings: Vec<(PlanetarySeed, &str)> = vec![
-        (
-            PlanetarySeed::CategoryA,
-            "items/seeds/a/PlanetarySeedA",
-        ),
-        (
-            PlanetarySeed::CategoryB,
-            "items/seeds/b/PlanetarySeedB",
-        ),
-        (
-            PlanetarySeed::CategoryC,
-            "items/seeds/c/PlanetarySeedC",
-        ),
-        (
-            PlanetarySeed::CategoryD,
-            "items/seeds/d/PlanetarySeedD",
-        ),
-        (
-            PlanetarySeed::CategoryE,
-            "items/seeds/e/PlanetarySeedE",
-        ),
-    ];
-
     commands.insert_resource(PickupAssetHandles {
         passive_map: HashMap::from_iter(
             passive_mappings
                 .iter()
                 .map(|(x, y)| (x.clone(), assets.load(*y)))
-                .collect::<Vec<_>>(),
-        ),
-        seed_map: HashMap::from_iter(
-            seed_mappings
-                .iter()
-                .map(|(x, y)| (x.clone(), String::from(*y)))
                 .collect::<Vec<_>>(),
         ),
     });
@@ -187,12 +157,11 @@ pub struct SpawnPickupCommand {
     pos: Vec3,
     p_type: PickupType,
 }
+
 impl Command for SpawnPickupCommand {
     fn apply(self, world: &mut World) {
         let pos = self.pos;
-
         let handles = world.get_resource::<PickupAssetHandles>().unwrap();
-        let asset_server = world.get_resource::<AssetServer>().unwrap();
 
         match self.p_type.clone() {
             PickupType::PassiveDrop(passive) => {
@@ -238,23 +207,6 @@ impl Command for SpawnPickupCommand {
                     StateDespawnMarker,
                 ));
             },
-            PickupType::Seed(categ, (id, _)) => {
-                let path = &handles.seed_map[&categ];
-
-                let texture_handle =
-                    asset_server.load(format!("{path}{id}.png"));
-
-                world.spawn((
-                    PickupDrop::new(self.p_type),
-                    SpriteBundle {
-                        transform: Transform::from_translation(Vec3::new(
-                            pos.x, pos.y, 50.0,
-                        )),
-                        sprite: texture_handle.clone().into(),
-                        ..default()
-                    },
-                ));
-            },
         }
     }
 }
@@ -262,124 +214,12 @@ impl Command for SpawnPickupCommand {
 #[derive(Clone)]
 pub enum PickupType {
     PassiveDrop(Passive),
-    Seed(PlanetarySeed, (u32, String)),
-}
-
-#[derive(Clone, PartialEq, Eq, Hash)]
-pub enum PlanetarySeed {
-    CategoryA,
-    CategoryB,
-    CategoryC,
-    CategoryD,
-    CategoryE,
-}
-
-impl PlanetarySeed {
-    const PLANETARY_SEED_A1: &str = "PLANETARY_SEED_A1";
-    const PLANETARY_SEED_A4: &str = "PLANETARY_SEED_A4";
-    const PLANETARY_SEED_A5: &str = "PLANETARY_SEED_A5";
-    const PLANETARY_SEED_A8: &str = "PLANETARY_SEED_A8";
-    const PLANETARY_SEED_A11: &str = "PLANETARY_SEED_A11";
-    const PLANETARY_SEED_A12: &str = "PLANETARY_SEED_A12";
-
-    const PLANETARY_SEED_B1: &str = "PLANETARY_SEED_B1";
-    const PLANETARY_SEED_B3: &str = "PLANETARY_SEED_B3";
-    const PLANETARY_SEED_B4: &str = "PLANETARY_SEED_B4";
-    const PLANETARY_SEED_B7: &str = "PLANETARY_SEED_B7";
-    const PLANETARY_SEED_B8: &str = "PLANETARY_SEED_B8";
-    const PLANETARY_SEED_B12: &str = "PLANETARY_SEED_B12";
-
-    const PLANETARY_SEED_C1: &str = "PLANETARY_SEED_C1";
-    const PLANETARY_SEED_C2: &str = "PLANETARY_SEED_C2";
-    const PLANETARY_SEED_C3: &str = "PLANETARY_SEED_C3";
-    const PLANETARY_SEED_C4: &str = "PLANETARY_SEED_C4";
-    const PLANETARY_SEED_C5: &str = "PLANETARY_SEED_C5";
-    const PLANETARY_SEED_C8: &str = "PLANETARY_SEED_C8";
-    const PLANETARY_SEED_C9: &str = "PLANETARY_SEED_C9";
-    const PLANETARY_SEED_C11: &str = "PLANETARY_SEED_C11";
-
-    const PLANETARY_SEED_D1: &str = "PLANETARY_SEED_D1";
-    const PLANETARY_SEED_D2: &str = "PLANETARY_SEED_D2";
-    const PLANETARY_SEED_D3: &str = "PLANETARY_SEED_D3";
-    const PLANETARY_SEED_D6: &str = "PLANETARY_SEED_D6";
-    const PLANETARY_SEED_D7: &str = "PLANETARY_SEED_D7";
-    const PLANETARY_SEED_D8: &str = "PLANETARY_SEED_D8";
-
-    const PLANETARY_SEED_E3: &str = "PLANETARY_SEED_E3";
-    const PLANETARY_SEED_E6: &str = "PLANETARY_SEED_E6";
-    const PLANETARY_SEED_E7: &str = "PLANETARY_SEED_E7";
-    const PLANETARY_SEED_E8: &str = "PLANETARY_SEED_E8";
-    const PLANETARY_SEED_E11: &str = "PLANETARY_SEED_E11";
-    const PLANETARY_SEED_E12: &str = "PLANETARY_SEED_E12";
-
-    fn seed_map() -> HashMap<Self, Vec<(u32, String)>> {
-        HashMap::from_iter(vec![
-            (
-                Self::CategoryA,
-                vec![
-                    (1, Self::PLANETARY_SEED_A1.to_string()),
-                    (4, Self::PLANETARY_SEED_A4.to_string()),
-                    (5, Self::PLANETARY_SEED_A5.to_string()),
-                    (8, Self::PLANETARY_SEED_A8.to_string()),
-                    (11, Self::PLANETARY_SEED_A11.to_string()),
-                    (12, Self::PLANETARY_SEED_A12.to_string()),
-                ],
-            ),
-            (
-                Self::CategoryB,
-                vec![
-                    (1, Self::PLANETARY_SEED_B1.to_string()),
-                    (3, Self::PLANETARY_SEED_B3.to_string()),
-                    (4, Self::PLANETARY_SEED_B4.to_string()),
-                    (7, Self::PLANETARY_SEED_B7.to_string()),
-                    (8, Self::PLANETARY_SEED_B8.to_string()),
-                    (12, Self::PLANETARY_SEED_B12.to_string()),
-                ],
-            ),
-            (
-                Self::CategoryC,
-                vec![
-                    (1, Self::PLANETARY_SEED_C1.to_string()),
-                    (2, Self::PLANETARY_SEED_C2.to_string()),
-                    (3, Self::PLANETARY_SEED_C3.to_string()),
-                    (4, Self::PLANETARY_SEED_C4.to_string()),
-                    (5, Self::PLANETARY_SEED_C5.to_string()),
-                    (8, Self::PLANETARY_SEED_C8.to_string()),
-                    (9, Self::PLANETARY_SEED_C9.to_string()),
-                    (11, Self::PLANETARY_SEED_C11.to_string()),
-                ],
-            ),
-            (
-                Self::CategoryD,
-                vec![
-                    (1, Self::PLANETARY_SEED_D1.to_string()),
-                    (2, Self::PLANETARY_SEED_D2.to_string()),
-                    (3, Self::PLANETARY_SEED_D3.to_string()),
-                    (6, Self::PLANETARY_SEED_D6.to_string()),
-                    (7, Self::PLANETARY_SEED_D7.to_string()),
-                    (8, Self::PLANETARY_SEED_D8.to_string()),
-                ],
-            ),
-            (
-                Self::CategoryE,
-                vec![
-                    (3, Self::PLANETARY_SEED_E3.to_string()),
-                    (6, Self::PLANETARY_SEED_E6.to_string()),
-                    (7, Self::PLANETARY_SEED_E7.to_string()),
-                    (8, Self::PLANETARY_SEED_E8.to_string()),
-                    (11, Self::PLANETARY_SEED_E11.to_string()),
-                    (12, Self::PLANETARY_SEED_E12.to_string()),
-                ],
-            ),
-        ])
-    }
 }
 
 #[derive(Resource)]
 pub struct DropTracker {
     pub progress: usize,
     pub passive_rolls: Vec<u32>,
-    pub seeds: HashMap<PlanetarySeed, Vec<(u32, String)>>,
 }
 
 impl Default for DropTracker {
@@ -407,30 +247,14 @@ impl DropTracker {
         Self {
             progress: 0,
             passive_rolls: rolls,
-            seeds: PlanetarySeed::seed_map(),
         }
-    }
-
-    pub fn drop_random_seed(
-        &mut self,
-        seed_type: &PlanetarySeed,
-    ) -> Option<(u32, String)> {
-        let mut rng = rand::thread_rng();
-
-        if !self.seeds[seed_type].is_empty() {
-            let i = rng.gen_range(0..self.seeds[seed_type].len());
-            let seed = self.seeds.get_mut(seed_type).unwrap().swap_remove(i);
-
-            return Some(seed);
-        }
-        None
     }
 }
 
 fn spawn_pickups_on_death(
     mut kill_count: ResMut<KillCount>,
     mut drop_tracker: ResMut<DropTracker>,
-    enemy_q: Query<(&GlobalTransform, &Tier), (With<Enemy>, Added<Dead>)>,
+    enemy_pos_q: Query<&GlobalTransform, (With<Enemy>, Added<Dead>)>,
     mut p_query: Query<&mut Passives, With<Player>>,
     mut commands: Commands,
 ) {
@@ -439,61 +263,8 @@ fn spawn_pickups_on_death(
         return;
     };
 
-    for (tr, tier) in enemy_q.iter() {
+    for tr in enemy_pos_q.iter() {
         let translation = tr.translation();
-
-        let seed_roll = rand::thread_rng().gen_range(0.0..1.0);
-
-        let seed_category: Option<PlanetarySeed> = match tier {
-            Tier::Base => {
-                if seed_roll < 0.001 {
-                    Some(PlanetarySeed::CategoryC)
-                } else if seed_roll < 0.005 {
-                    Some(PlanetarySeed::CategoryA)
-                } else {
-                    None
-                }
-            },
-            Tier::Two => {
-                if seed_roll < 0.0007 {
-                    Some(PlanetarySeed::CategoryD)
-                } else if seed_roll < 0.003 {
-                    Some(PlanetarySeed::CategoryB)
-                } else if seed_roll < 0.006 {
-                    Some(PlanetarySeed::CategoryC)
-                } else if seed_roll < 0.012 {
-                    Some(PlanetarySeed::CategoryA)
-                } else {
-                    None
-                }
-            },
-            Tier::Three => {
-                if seed_roll < 0.0005 {
-                    Some(PlanetarySeed::CategoryE)
-                } else if seed_roll < 0.001 {
-                    Some(PlanetarySeed::CategoryD)
-                } else if seed_roll < 0.005 {
-                    Some(PlanetarySeed::CategoryB)
-                } else if seed_roll < 0.01 {
-                    Some(PlanetarySeed::CategoryC)
-                } else if seed_roll < 0.1 {
-                    Some(PlanetarySeed::CategoryA)
-                } else {
-                    None
-                }
-            },
-        };
-
-        if let Some(seed_category) = seed_category {
-            let seed_id = drop_tracker.drop_random_seed(&seed_category);
-
-            if let Some(seed_id) = seed_id {
-                commands.queue(SpawnPickupCommand {
-                    pos: translation,
-                    p_type: PickupType::Seed(seed_category, seed_id),
-                });
-            }
-        }
 
         if let Some(milestone) = drop_tracker.get_passive_progress() {
             if kill_count.0 >= *milestone {

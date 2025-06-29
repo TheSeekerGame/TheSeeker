@@ -25,12 +25,10 @@ mod appstate;
 mod assets;
 mod audio;
 mod camera;
-mod cli;
 mod game;
 mod gamestate;
 mod level;
 mod locale;
-mod stepping_egui;
 
 mod screens {
     pub mod loading;
@@ -97,7 +95,7 @@ fn main() {
 
     #[cfg(feature = "dev")]
     let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
-        filter: "info,wgpu_core=warn,wgpu_hal=warn,iyes_progress=trace,theseeker_game=trace,theseeker_engine=trace".into(),
+        filter: "info,wgpu_core=warn,wgpu_hal=warn,theseeker_game=trace,theseeker_engine=trace".into(),
         level: bevy::log::Level::TRACE,
         ..Default::default()
     });
@@ -129,14 +127,6 @@ fn main() {
         LdtkPlugin,
         bevy_fluent::FluentPlugin,
         // iyes_bevy_extras::d2::WorldCursorPlugin,
-        ProgressPlugin::<AppState>::new()
-            .with_state_transition(
-                AppState::AssetsLoading,
-                // FIXME: fix main menu and re-enable state here
-                AppState::InGame,
-                // AppState::MainMenu,
-            )
-            .with_asset_tracking(),
         PhysicsPlugin,
     ));
 
@@ -151,7 +141,6 @@ fn main() {
         crate::assets::AssetsPlugin,
         crate::audio::AudioPlugin,
         crate::locale::LocalePlugin,
-        crate::cli::CliPlugin,
         crate::ui::UiPlugin,
         crate::camera::CameraPlugin,
         crate::level::LevelManagerPlugin,

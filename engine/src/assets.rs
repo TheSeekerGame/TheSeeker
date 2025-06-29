@@ -1,5 +1,3 @@
-use std::marker::PhantomData;
-
 use bevy::asset::{Asset, UntypedAssetId};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
@@ -35,11 +33,7 @@ impl<S: FreelyMutableState> Plugin for AssetsPlugin<S> {
         app.add_systems(
             Update,
             watch_preload_dynamic_collections::<S>
-                .track_progress::<S>()
-                .run_if(in_state(self.loading_state.clone()))
-                // NOTE: this is "after" on purpose; we want to check readiness of assets
-                // even though we might be adding more handles for tracking
-                .after(AssetsTrackProgress),
+                .run_if(in_state(self.loading_state.clone())),
         );
         app.add_systems(
             OnExit(self.loading_state.clone()),
@@ -114,12 +108,9 @@ impl PreloadedAssets {
 /// and preloads the things we want preloaded.
 fn watch_preload_dynamic_collections<S: FreelyMutableState>(
     dynamic_ass: Res<DynamicAssets>,
-    mut assets_progress: ResMut<AssetsLoading<S>>,
     mut assets_preloaded: ResMut<PreloadedAssets>,
     ass: Res<AssetServer>,
-    progress: Res<ProgressTracker<S>>,
-    mut done: Local<bool>,
-) -> HiddenProgress {
+) {
     if dynamic_ass.is_changed() {
         for (key, asset) in dynamic_ass.iter_assets() {
             // TODO: uncomment this when we have per-level asset management
@@ -130,25 +121,12 @@ fn watch_preload_dynamic_collections<S: FreelyMutableState>(
 
             for handle in asset.load(&ass) {
                 assets_preloaded.handles.insert(handle.clone());
-                assets_progress.add(&handle);
             }
 
             // reserve an entry in our map for later
             assets_preloaded.map.insert(key.to_owned(), None);
         }
     }
-
-    // give one frame grace, just in case
-    let r = HiddenProgress(Progress::from(*done));
-
-    // hold on until everything else (non-hidden progress) is done,
-    // and then complete ourselves to allow the iyes_progress to transition
-    let progress = progress.get_global_progress(); // NOTE: not including hidden
-    if progress.done >= progress.total {
-        *done = true;
-    }
-
-    r
 }
 
 /// At the end of the loading state, "build" any preloaded dynamic assets

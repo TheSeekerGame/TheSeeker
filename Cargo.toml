@@ -97,9 +97,7 @@ features = ["default"]
 # branch = "seeker-015"
 # features = ["2d"]
 
-[dependencies.iyes_progress]
-version = "0.13.1"
-features = ["assets"]
+
 
 [dependencies.leafwing-input-manager]
 version = "0.16"

@@ -7,12 +7,7 @@ pub struct DevPlugin;
 
 impl Plugin for DevPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(
-            Last,
-            debug_progress
-                .run_if(resource_exists::<ProgressTracker<AppState>>)
-                .after(iyes_progress::CheckProgressSet), // .after(iyes_progress::TrackedProgressSet),
-        );
+
         app.add_systems(
             GameTickUpdate,
             (
@@ -33,17 +28,7 @@ impl Plugin for DevPlugin {
     }
 }
 
-fn debug_progress(counter: Res<ProgressTracker<AppState>>) {
-    let progress = counter.get_global_progress();
-    let progress_full = counter.get_global_combined_progress();
-    trace!(
-        "Progress: {}/{}; Full Progress: {}/{}",
-        progress.done,
-        progress.total,
-        progress_full.done,
-        progress_full.total,
-    );
-}
+
 
 /// Temporary function to use during development
 ///
