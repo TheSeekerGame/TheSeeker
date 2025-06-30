@@ -1,6 +1,6 @@
 use bevy::color::palettes;
 use bevy::prelude::*;
-use theseeker_engine::physics::Collider;
+use theseeker_engine::physics::{Collider, ColliderShapeAccess};
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 
 use crate::camera::MainCamera;
@@ -78,7 +78,7 @@ fn instance(
             Some(collider) => {
                 let above_hb_offset = 11.0;
                 let collider_height =
-                    collider.0.compute_aabb().half_extents().y;
+                    collider.shape().compute_local_aabb().half_extents().y;
                 Vec3::new(
                     1.0,
                     collider_height + above_hb_offset,
@@ -144,9 +144,12 @@ fn update_number(
         // apply a little wobble affect, and start each with a random different phase
         let global_pos =
             dmg_number.0 + Vec3::new(0.0, 3.0 * elapsed_time as f32, 0.0);
-        let screen_position = camera
+        let Ok(screen_position) = camera
             .world_to_viewport(camera_transform, global_pos)
-            .unwrap();
+        else {
+            // Off-screen – skip update for this frame
+            continue;
+        };
 
         // Fades the floating number out after waiting 4 seconds
         let a = text_color

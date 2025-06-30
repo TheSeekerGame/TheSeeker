@@ -34,10 +34,10 @@ pub fn knockback(
     {
         knockback.ticks += 1;
         if knockback.is_added() && !is_defending {
-            **velocity = knockback.strength;
+            velocity.0 = knockback.strength;
         }
         if knockback.ticks > knockback.max_ticks {
-            velocity.x = 0.;
+            velocity.0.x = 0.;
             commands.entity(entity).remove::<Knockback>();
         }
     }

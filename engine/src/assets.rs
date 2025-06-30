@@ -3,10 +3,9 @@ use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::state::state::FreelyMutableState;
 use bevy_common_assets::toml::TomlAssetPlugin;
-use rapier2d::geometry::SharedShape;
-use rapier2d::prelude::Point;
+use bevy_rapier2d::rapier::geometry::SharedShape;
 
-use crate::physics::SpriteShapeMap;
+use crate::physics::{SpriteShapeMap, Collider};
 use crate::prelude::*;
 
 pub mod animation;
@@ -202,11 +201,8 @@ fn populate_collider_map(
     // A dummy collider that gets used when the image has no shape generated.
     // (need to do it this way because it removes any requirements for tracking the collider component
     // properties, so everything works as expected.)
-    let null_shape = SharedShape::convex_hull(&*vec![
-        Point::new(1000000.0f32, 1000000.0f32),
-        Point::new(1000001.0f32, 1000000.0f32),
-    ])
-    .unwrap();
+    let null_collider = Collider::cuboid(0.1, 0.1); // Use a tiny cuboid as null collider
+    let null_shape = null_collider.raw.clone();
     // fun thing about shared shapes is the are arc, so clones don't use more memory.
     collider_map.shapes.push((
         null_shape.clone(),
@@ -216,22 +212,37 @@ fn populate_collider_map(
     ));
     for (h_image, h_layout) in iter_assets {
         let Some(image_origin) = images.get_mut(&h_image) else {
+            warn!("Image asset {:?} not found in assets, skipping collider generation", h_image);
             continue;
         };
         let Some(layout) = layouts.get(&h_layout) else {
+            warn!("TextureAtlasLayout asset {:?} not found in assets, skipping collider generation", h_layout);
             continue;
         };
+        
+        debug!("Processing colliders for image {:?} with layout {:?}, format: {:?}", 
+               h_image, h_layout, image_origin.texture_descriptor.format);
 
         let mut collider_ids = vec![];
-        let mut image =
-            image_origin.convert(TextureFormat::Rgba8UnormSrgb).unwrap();
+        let mut image = match image_origin.convert(TextureFormat::Rgba8UnormSrgb) {
+            Some(converted_image) => converted_image,
+            None => {
+                warn!("Failed to convert image {:?} to Rgba8UnormSrgb format, skipping collider generation", h_image);
+                // Insert null colliders for all frames in this texture atlas
+                for _ in &layout.textures {
+                    collider_ids.push(0);
+                }
+                collider_map.map.insert(h_image.id(), collider_ids);
+                continue;
+            }
+        };
         let width = image.width() as usize;
         let mut data = &mut image.data;
         for (i, anim_frame_rect) in layout.textures.iter().enumerate() {
             let min = anim_frame_rect.min;
             let max = anim_frame_rect.max;
             let size = anim_frame_rect.size();
-            let mut collider_points = vec![];
+            let mut collider_points: Vec<Vec2> = vec![];
             for y in min.y as usize..max.y as usize {
                 for x in min.x as usize..max.x as usize {
                     let pixel_index = (y * width + x) * 4;
@@ -239,19 +250,31 @@ fn populate_collider_map(
                     // Read the pixel values (assuming RGBA format)
                     let pixel = &mut data[pixel_index..pixel_index + 4];
 
-                    // Any pixels with the bright Magenta color will be used for
-                    // building the collider
+                    // Detect magenta pixels (RGB: 255, 0, 255, alpha: 255)
+                    // These pixels define the collision shape for this animation frame
                     if pixel[0] == 255
                         && pixel[1] == 0
                         && pixel[2] == 255
                         && pixel[3] == 255
                     {
-                        collider_points.push(Point::new(
-                            (0.5 + x as f32 - min.x as f32) - size.x as f32 * 0.5,
-                            // the siz.y - flips it on y since texture coords are inverted y
-                            size.y as f32 - ((0.5 + y as f32 - min.y as f32) + size.y as f32 * 0.5),
-                        ));
-                        // Overwrites it with an empty color
+                        // Convert texture coordinates to physics coordinates
+                        // Texture space: origin at top-left, Y increases downward
+                        // Physics space: origin at sprite center, Y increases upward
+                        let texture_x = x as f32 - min.x as f32; // Relative to frame origin
+                        let texture_y = y as f32 - min.y as f32; // Relative to frame origin
+                        
+                        // Transform to physics coordinates:
+                        // - Center around sprite center (subtract half-width/height)
+                        // - Add 0.5 to move from pixel corner to pixel center
+                        let local_x = texture_x + 0.5 - size.x as f32 * 0.5;
+                        // - Flip Y axis (texture Y down -> physics Y up)
+                        // - Center vertically
+                        let local_y = size.y as f32 * 0.5 - (texture_y + 0.5);
+                        
+
+                        
+                        collider_points.push(Vec2::new(local_x, local_y));
+                        // Clear the magenta pixel to transparent (prevents it from being visible in-game)
                         pixel.copy_from_slice(&[0, 0, 0, 0]);
                     }
                 }
@@ -260,20 +283,52 @@ fn populate_collider_map(
                 collider_ids.push(0);
                 continue;
             }
-            let shape = SharedShape::convex_hull(&*collider_points)
-                .expect("Cannot build convex hull");
-            collider_points.iter_mut().for_each(|p| p.x = -p.x);
-            let shape_flipped_x =
-                SharedShape::convex_hull(&*collider_points).unwrap();
-            collider_points.iter_mut().for_each(|p| {
-                p.x = -p.x;
-                p.y = -p.y;
-            });
-            let shape_flipped_y =
-                SharedShape::convex_hull(&*collider_points).unwrap();
-            collider_points.iter_mut().for_each(|p| p.y = -p.y);
-            let shape_flipped_xy =
-                SharedShape::convex_hull(&*collider_points).unwrap();
+            // Use the Vec2 points directly
+            let verts = collider_points;
+            
+
+            
+            let shape = match Collider::convex_hull(&verts) {
+                Some(collider) => collider.raw,
+                None => {
+                    warn!("Failed to build convex hull for frame {} in image {:?}, using null collider", i, h_image);
+                    collider_ids.push(0);
+                    continue;
+                }
+            };
+            
+            // Flip X
+            let verts_flipped_x: Vec<Vec2> = verts.iter().map(|p| Vec2::new(-p.x, p.y)).collect();
+            let shape_flipped_x = match Collider::convex_hull(&verts_flipped_x) {
+                Some(collider) => collider.raw,
+                None => {
+                    warn!("Failed to build flipped-x convex hull for frame {} in image {:?}, using null collider", i, h_image);
+                    collider_ids.push(0);
+                    continue;
+                }
+            };
+            
+            // Flip Y
+            let verts_flipped_y: Vec<Vec2> = verts.iter().map(|p| Vec2::new(p.x, -p.y)).collect();
+            let shape_flipped_y = match Collider::convex_hull(&verts_flipped_y) {
+                Some(collider) => collider.raw,
+                None => {
+                    warn!("Failed to build flipped-y convex hull for frame {} in image {:?}, using null collider", i, h_image);
+                    collider_ids.push(0);
+                    continue;
+                }
+            };
+            
+            // Flip both X and Y
+            let verts_flipped_xy: Vec<Vec2> = verts.iter().map(|p| Vec2::new(-p.x, -p.y)).collect();
+            let shape_flipped_xy = match Collider::convex_hull(&verts_flipped_xy) {
+                Some(collider) => collider.raw,
+                None => {
+                    warn!("Failed to build flipped-xy convex hull for frame {} in image {:?}, using null collider", i, h_image);
+                    collider_ids.push(0);
+                    continue;
+                }
+            };
 
             let i_new = collider_map.shapes.len();
             collider_map.shapes.push((

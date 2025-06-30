@@ -4,13 +4,14 @@ pub mod particles;
 use std::mem;
 
 use arc_attack::Arrow;
-use rapier2d::prelude::InteractionGroups;
+use theseeker_engine::physics::{CollisionGroups as InteractionGroups, Group};
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
-    update_sprite_colliders, Collider, PhysicsWorld, GROUND, PLAYER_ATTACK,
+    update_sprite_colliders, Collider, ColliderShapeAccess, PhysicsWorld, 
+    GROUND, PLAYER_ATTACK, ENEMY, ShapeType,
 };
 
-use super::enemy::{Defense, EnemyGfx, EnemyStateSet};
+use super::enemy::{Defense, Enemy, EnemyGfx, EnemyStateSet};
 use super::gentstate::{Dead, Facing};
 use super::physics::Knockback;
 use super::player::player_weapon::CurrentWeapon;
@@ -23,6 +24,7 @@ use crate::game::attack::arc_attack::{arc_projectile, Projectile};
 use crate::game::attack::particles::AttackParticlesPlugin;
 use crate::prelude::*;
 use crate::{camera::CameraShake, game::player::PlayerStatMod};
+use bevy_rapier2d::prelude::Sensor;
 
 pub struct AttackPlugin;
 
@@ -55,6 +57,7 @@ impl Plugin for AttackPlugin {
                     on_hit_exit_stealthing,
                 )
                     .chain(),
+
                 (
                     kill_on_damage,
                     damage_flash,
@@ -76,6 +79,9 @@ impl Plugin for AttackPlugin {
                 .before(PlayerStateSet::Collisions)
                 .before(EnemyStateSet::Collisions),
         );
+        
+        // Tag all newly spawned attack hitboxes as Rapier sensors so they never apply contact forces.
+        app.add_systems(GameTickUpdate, tag_attack_sensors.before(determine_attack_targets));
     }
 }
 
@@ -198,29 +204,42 @@ pub fn determine_attack_targets(
         &GlobalTransform,
         &mut Attack,
         &Collider,
+        Option<&InteractionGroups>,
     )>,
     damageable_query: Query<
-        &GlobalTransform,
+        (&GlobalTransform, &Collider),
         (With<Collider>, With<Health>, With<Gent>),
     >,
-    spatial_query: Res<PhysicsWorld>,
+    spatial_query: PhysicsWorld,
 ) {
-    for (entity, transform, mut attack, collider) in attack_query.iter_mut() {
+    for (entity, transform, mut attack, collider, maybe_groups) in attack_query.iter_mut() {
         let mut newly_collided: HashSet<Entity> = HashSet::default();
+        // Default to PLAYER_ATTACK vs all if no collision groups are specified
+        let collision_groups = maybe_groups.copied()
+            .unwrap_or(InteractionGroups::new(PLAYER_ATTACK, ENEMY | GROUND));
+
+        // Add GROUND to the filter to prevent attacks from hitting the ground
+        let filter_with_ground = InteractionGroups::new(
+            collision_groups.memberships,
+            collision_groups.filters | GROUND,
+        );
+
+
+
         let intersections = spatial_query.intersect(
             transform.translation().xy(),
-            collider.0.shape(),
-            collider
-                .0
-                .collision_groups()
-                .with_filter(collider.0.collision_groups().filter | GROUND),
-            Some(entity),
+            collider.shape(),
+            filter_with_ground,
+            Some(attack.attacker), // ← Exclude the ATTACKER entity, not the attack entity
         );
+
+
+
         let mut targets = intersections
             .into_iter()
             // Filters out everything that's not damageable or one of the nearest max_targets entities to attack
             .filter_map(|colliding_entity| {
-                if let Ok(damageable_transform) =
+                if let Ok((damageable_transform, damageable_collider)) =
                     damageable_query.get(colliding_entity)
                 {
                     newly_collided.insert(entity);
@@ -237,10 +256,11 @@ pub fn determine_attack_targets(
         targets.sort_by(|(_, dist1), (_, dist2)| dist1.total_cmp(dist2));
 
         // Get the closest targets
-        let valid_targets = targets
+        let valid_targets: Vec<_> = targets
             .iter()
             .take(attack.max_targets as usize - attack.damaged_set.len())
-            .map(|(e, _)| e);
+            .map(|(e, _)| e)
+            .collect();
 
         for entity in valid_targets {
             // if we already damaged this entity
@@ -349,6 +369,7 @@ pub fn apply_attack_damage(
         let target_set = mem::take(&mut attack.target_set);
         // this gets put back
         let damaged_set = mem::take(&mut attack.damaged_set);
+        
         for target in target_set.difference(&damaged_set) {
             if let Ok((
                 t_entity,
@@ -360,6 +381,7 @@ pub fn apply_attack_damage(
             )) = target_query.get_mut(*target)
             {
                 let mut damage = attack.damage;
+                
                 // modify damage based on target specific qualities
                 // target defenses...
                 if can_backstab {
@@ -403,6 +425,7 @@ pub fn apply_attack_damage(
 
                 // apply damage to the targets health
                 health.current = health.current.saturating_sub(damage as u32);
+                
                 let damage_info = DamageInfo {
                     attacker: attack.attacker,
                     source: a_entity,
@@ -437,18 +460,15 @@ pub fn despawn_projectile(
 
 pub fn despawn_player_arrows(
     query: Query<(Entity, &Transform, &Collider), With<Arrow>>,
-    spatial_query: Res<PhysicsWorld>,
+    spatial_query: PhysicsWorld,
     mut commands: Commands,
 ) {
     for (entity, transform, collider) in query.iter() {
         let is_arrow_intersecting_with_ground = !spatial_query
             .intersect(
                 transform.translation.xy(),
-                collider.0.shape(),
-                InteractionGroups {
-                    memberships: PLAYER_ATTACK,
-                    filter: GROUND,
-                },
+                collider.shape(),
+                InteractionGroups::new(PLAYER_ATTACK, GROUND),
                 None,
             )
             .is_empty();
@@ -654,3 +674,16 @@ impl Crits {
         }
     }
 }
+
+/// System that marks every newly-created Attack entity's collider as a sensor so that
+/// hit-detection never produces contact forces.
+fn tag_attack_sensors(
+    mut commands: Commands,
+    query: Query<Entity, Added<Attack>>,
+) {
+    for entity in &query {
+        commands.entity(entity).insert(Sensor);
+    }
+}
+
+

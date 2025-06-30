@@ -1,8 +1,10 @@
 use leafwing_input_manager::prelude::ActionState;
-use rapier2d::prelude::InteractionGroups;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::{Gent, TransformGfxFromGent};
-use theseeker_engine::physics::{PhysicsWorld, PLAYER, SENSOR};
+use theseeker_engine::physics::{
+    CollisionGroups as InteractionGroups, ColliderShapeAccess, PhysicsWorld, 
+    PLAYER, SENSOR,
+};
 use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::{animation::SpriteAnimationBundle, physics::Collider};
 
@@ -187,14 +189,8 @@ pub fn setup_merchant(
                     e_gfx,
                     e_effects_gfx,
                 },
-                Collider::cuboid(
-                    40.0,
-                    40.0,
-                    InteractionGroups {
-                        memberships: SENSOR,
-                        filter: PLAYER,
-                    },
-                ),
+                Collider::cuboid(40.0, 40.0), // Sensor zone for player interaction (half-extents: 40x40)
+                InteractionGroups::new(SENSOR, PLAYER),
                 StateDespawnMarker,
             ))
             .remove_parent();
@@ -234,19 +230,22 @@ fn merchant_proximity_to_player(
             &Gent,
             &GlobalTransform,
             &Collider,
+            Option<&InteractionGroups>,
         ),
         With<MerchantBlueprint>,
     >,
-    spatial_query: Res<PhysicsWorld>,
+    spatial_query: PhysicsWorld,
 ) {
-    let Ok((entity, gent, transform, collider)) = merchant_query.get_single()
+    let Ok((entity, gent, transform, collider, maybe_groups)) = merchant_query.get_single()
     else {
         return;
     };
+    let collision_groups = maybe_groups.copied()
+        .unwrap_or_else(|| InteractionGroups::new(SENSOR, PLAYER));
     let intersections = spatial_query.intersect(
         transform.translation().xy(),
-        collider.0.shape(),
-        collider.0.collision_groups(),
+        collider.shape(),
+        collision_groups,
         Some(entity),
     );
     let is_player_nearby = !intersections.is_empty();

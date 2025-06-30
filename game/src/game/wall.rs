@@ -1,6 +1,6 @@
-use rapier2d::geometry::InteractionGroups;
-use rapier2d::prelude::Group;
-use theseeker_engine::physics::{Collider, GROUND};
+use theseeker_engine::physics::{
+    Collider, CollisionGroups as InteractionGroups, Group, GROUND,
+};
 
 use crate::prelude::*;
 
@@ -178,16 +178,14 @@ pub fn spawn_wall_collision(
                         Collider::cuboid(
                             (wall_rect.right as f32 - wall_rect.left as f32
                                 + 1.)
-                                * grid_size as f32,
+                                * grid_size as f32
+                                / 2.0, // Half-extents: bevy_rapier2d expects half-width
                             (wall_rect.top as f32 - wall_rect.bottom as f32
                                 + 1.)
-                                * grid_size as f32,
-                            InteractionGroups {
-                                memberships: GROUND,
-                                // TODO: layers, player and enemy ... and ranged attacks?
-                                filter: Group::all(),
-                            },
+                                * grid_size as f32
+                                / 2.0, // Half-extents: bevy_rapier2d expects half-height
                         ),
+                        InteractionGroups::new(GROUND, Group::all()),
                         Transform::from_translation(Vec3::new(
                             (wall_rect.left + wall_rect.right + 1) as f32
                                 * grid_size as f32

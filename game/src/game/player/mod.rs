@@ -9,14 +9,14 @@ use player_action::PlayerActionPlugin;
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
 use player_weapon::PlayerWeaponPlugin;
-use rapier2d::geometry::{Group, InteractionGroups};
+use theseeker_engine::physics::{CollisionGroups as InteractionGroups, Group};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
-    Collider, LinearVelocity, ShapeCaster, GROUND, PLAYER,
+    Collider, ColliderShapeAccess, LinearVelocity, ShapeCaster, GROUND, PLAYER,
 };
 
 use crate::game::attack::*;
@@ -372,31 +372,15 @@ fn setup_player(
                     e_effects_gfx,
                 },
                 phys: GentPhysicsBundle {
-                    collider: Collider::cuboid(
-                        4.0,
-                        10.0,
-                        InteractionGroups {
-                            memberships: PLAYER,
-                            // should be more specific
-                            filter: Group::all(),
-                        },
-                    ),
+                    collider: Collider::cuboid(2.0, 5.0), // Half-extents: creates 4x10 pixel collider
                     shapecast: ShapeCaster {
-                        shape: Collider::cuboid(
-                            4.0,
-                            10.0,
-                            InteractionGroups::none(),
-                        )
-                        .0
-                        .shared_shape()
-                        .clone(),
+                        shape: Collider::cuboid(2.0, 5.0)
+                            .shared_shape()
+                            .clone(),
                         origin: Vec2::new(0.0, 0.0),
                         max_toi: f32::MAX,
                         direction: Dir2::NEG_Y,
-                        interaction: InteractionGroups {
-                            memberships: PLAYER,
-                            filter: GROUND,
-                        },
+                        interaction: InteractionGroups::new(PLAYER, GROUND),
                     },
                     linear_velocity: LinearVelocity(Vec2::ZERO),
                 },
@@ -408,23 +392,29 @@ fn setup_player(
                 max: config.max_health,
             },
             PlayerAction::input_manager_bundle(),
-            // bundling things up because we reached max tuple
-            (
-                Falling,
-                CanDash {
-                    remaining_cooldown: 0.0,
-                    total_cooldown: 0.0,
-                },
-                CanStealth {
-                    remaining_cooldown: 0.0,
-                },
-            ),
-            (
-                PlayerStats::init_from_config(&config),
-                // maybe consolidate with PlayerStats
-                PlayerStatMod::new(),
-                EnemiesNearby(0),
-            ),
+        ));
+        
+        // Add player states
+        commands.entity(e_gent).insert((
+            Falling,
+            CanDash {
+                remaining_cooldown: 0.0,
+                total_cooldown: 0.0,
+            },
+            CanStealth {
+                remaining_cooldown: 0.0,
+            },
+        ));
+        
+        // Add player stats and modifiers
+        commands.entity(e_gent).insert((
+            PlayerStats::init_from_config(&config),
+            PlayerStatMod::new(),
+            EnemiesNearby(0),
+        ));
+        
+        // Add remaining components
+        commands.entity(e_gent).insert((
             WallSlideTime(f32::MAX),
             HitFreezeTime(u32::MAX, None),
             JumpCount(0),
@@ -432,7 +422,9 @@ fn setup_player(
             Crits::new(2.0),
             TransitionQueue::default(),
             StateDespawnMarker,
-            (passives, BuffTick::default()),
+            passives,
+            BuffTick::default(),
+            InteractionGroups::new(PLAYER, Group::all()),
         ));
         // unparent from the level
         if let Ok(parent) = parent_query.get(parent.get()) {
@@ -629,13 +621,13 @@ impl Dashing {
     ) {
         match self.dash_type {
             DashType::Horizontal => {
-                velocity.x = config.dash_velocity * facing.direction();
-                velocity.y = 0.0;
+                velocity.0.x = config.dash_velocity * facing.direction();
+                velocity.0.y = 0.0;
             },
             DashType::Downward => {
-                velocity.x =
+                velocity.0.x =
                     config.dash_down_horizontal_velocity * facing.direction();
-                velocity.y = -config.dash_down_vertical_velocity;
+                velocity.0.y = -config.dash_down_vertical_velocity;
             },
         };
     }

@@ -6,7 +6,7 @@ use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
 use bevy::utils;
 use glam::Vec2;
-use theseeker_engine::physics::Collider;
+use theseeker_engine::physics::{Collider, ColliderShapeAccess};
 
 use crate::appstate::StateDespawnMarker;
 use crate::camera::MainCamera;
@@ -143,15 +143,16 @@ fn update_positions(
         world_position += match collider {
             Some(collider) => {
                 let collider_height =
-                    collider.0.compute_aabb().half_extents().y;
+                    collider.shape().compute_local_aabb().half_extents().y;
                 Vec3::new(0.0, collider_height, 0.0)
             },
             None => Vec3::ZERO,
         };
 
-        let screen_position = camera
-            .world_to_viewport(camera_transform, world_position)
-            .map_err(|_| anyhow!("Unable to get screen position from camera."))?;
+        let Ok(screen_position) = camera.world_to_viewport(camera_transform, world_position) else {
+            // Off-screen or projection failed; nothing to do for this bar this frame.
+            continue;
+        };
 
         let width = match style.width {
             Val::Px(value) => value,

@@ -5,16 +5,16 @@ use crate::game::player::Passive;
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
-use rapier2d::geometry::{Group, InteractionGroups};
-use rapier2d::parry::query::TOIStatus;
+use theseeker_engine::physics::{Group, CollisionGroups, ShapeCastHit, ShapeCastStatus, CollisionGroups as InteractionGroups};
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
     into_vec2, update_sprite_colliders, AnimationCollider, Collider,
     LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_HURT, ENEMY_INSIDE,
-    GROUND, PLAYER, PLAYER_ATTACK,
+    GROUND, PLAYER, PLAYER_ATTACK, ColliderShapeAccess, GROUNDED_THRESHOLD,
 };
 use theseeker_engine::script::ScriptPlayer;
+use theseeker_engine::physics::groups;
 
 use super::arc_attack::{Arrow, Projectile};
 use super::player_weapon::{
@@ -43,6 +43,10 @@ use crate::prelude::*;
 use crate::ui::popup::{PopupTimer, PopupUi};
 use crate::StateDespawnMarker;
 use crate::{camera::CameraShake, game::player::PlayerStatMod};
+
+// `groups` provides a single source-of-truth for every commonly used
+// CollisionGroups mask (player body, player attack, etc.).  Using it here
+// prevents future bit-mask drift between colliders and queries.
 
 /// Player behavior systems.
 /// Do stuff here in states and add transitions to other states by pushing
@@ -300,7 +304,7 @@ fn player_move(
         let new_vel = if action_state.clamped_value(&PlayerAction::Move) != 0.0
             && controllable
         {
-            velocity.x
+            velocity.0.x
                 + initial_accel
                     * direction
                     * ground_friction
@@ -319,25 +323,25 @@ fn player_move(
         } else {
             // de-acceleration profile
             if is_grounded {
-                velocity.x + ground_friction * -velocity.x
+                velocity.0.x + ground_friction * -velocity.0.x
             } else {
                 // airtime de-acceleration profile
                 // if action_state.just_released(&PlayerAction::Move) {
                 if direction == 0. {
-                    velocity.x
+                    velocity.0.x
                         + initial_accel
                             * 0.5
                             * action_state.clamped_value(&PlayerAction::Move)
                 } else {
-                    let max_vel = velocity.x.abs();
-                    (velocity.x + accel * -velocity.x.signum())
+                    let max_vel = velocity.0.x.abs();
+                    (velocity.0.x + accel * -velocity.0.x.signum())
                         .clamp(-max_vel, max_vel)
                 }
             }
         };
 
         if !is_dashing {
-            velocity.x = new_vel.clamp(
+            velocity.0.x = new_vel.clamp(
                 -stats.get(StatType::MoveVelMax)
                     * stealth_boost
                     * stat_mod.speed,
@@ -371,8 +375,8 @@ fn set_movement_slots(
 ) {
     for (velocity, gent) in q_gent.iter_mut() {
         if let Ok(mut player) = q_gfx_player.get_mut(gent.e_gfx) {
-            if velocity.length() > 0.001 {
-                if velocity.x.abs() > velocity.y.abs() {
+                    if velocity.0.length() > 0.001 {
+            if velocity.0.x.abs() > velocity.0.y.abs() {
                     player.set_slot("MovingVertically", false);
                     player.set_slot("MovingHorizontally", true);
                 } else {
@@ -384,17 +388,17 @@ fn set_movement_slots(
                 player.set_slot("MovingHorizontally", false);
             }
 
-            if velocity.y > 0.001 {
+            if velocity.0.y > 0.001 {
                 player.set_slot("MovingUp", true);
             } else {
                 player.set_slot("MovingUp", false);
             }
-            if velocity.y < -0.001 {
+            if velocity.0.y < -0.001 {
                 player.set_slot("MovingDown", true);
             } else {
                 player.set_slot("MovingDown", false);
             }
-            if velocity.x.abs() > 50.0 {
+            if velocity.0.x.abs() > 50.0 {
                 player.set_slot("MovingSideways", true);
             } else {
                 player.set_slot("MovingSideways", false);
@@ -443,17 +447,17 @@ pub fn player_jump(
         let deaccel_rate = config.jump_fall_accel;
 
         if jumping.is_added() {
-            velocity.y += config.jump_vel_init;
+            velocity.0.y += config.jump_vel_init;
         } else {
-            if (velocity.y - deaccel_rate < 0.0)
+            if (velocity.0.y - deaccel_rate < 0.0)
                 || action_state.released(&PlayerAction::Jump)
             {
                 transitions.push(Jumping::new_transition(Falling));
             }
-            velocity.y -= deaccel_rate;
+            velocity.0.y -= deaccel_rate;
         }
 
-        velocity.y = velocity.y.clamp(0., config.jump_vel_init);
+        velocity.0.y = velocity.0.y.clamp(0., config.jump_vel_init);
     }
 }
 
@@ -592,17 +596,17 @@ pub fn player_dash(
                 let stealth_boost = get_stealth_boost(is_stealth);
                 let max_x_vel = stats.get(StatType::MoveVelMax) * stealth_boost;
 
-                if velocity.x.abs() > max_x_vel {
-                    let slowdown_factor = max_x_vel / velocity.x.abs();
-                    velocity.x *= slowdown_factor;
-                    velocity.y *= slowdown_factor;
+                if velocity.0.x.abs() > max_x_vel {
+                    let slowdown_factor = max_x_vel / velocity.0.x.abs();
+                    velocity.0.x *= slowdown_factor;
+                    velocity.0.y *= slowdown_factor;
                 }
 
                 if dashing.hit {
                     // stop all movement when we slam into the ground, but leave our velocity when we hit through an enemy
                     if dashing.hit_ground {
-                        velocity.x = 0.0;
-                        velocity.y = 0.0;
+                        velocity.0.x = 0.0;
+                        velocity.0.y = 0.0;
                     }
                     transitions.push(Dashing::new_transition(
                         DashStrike::default(),
@@ -660,12 +664,10 @@ fn add_dash_strike_collider(
     let attack = commands
         .spawn((
             TransformBundle::from_transform(Transform::from_translation(Vec3::new(0.0, 0.0, 0.0))),
+            Collider::cuboid(1.0, 1.0), // Initial collider - will be replaced by AnimationCollider system
             AnimationCollider(gent.e_gfx),
-            // TODO: ? ColliderMeta
-            Collider::empty(InteractionGroups::new(
-                PLAYER_ATTACK,
-                ENEMY_HURT,
-            )),
+            // Player dash-strike attack collider
+            groups::player_attack(),
             Attack::new(16, entity, 69. * attack_mod),
             SelfPushback(Knockback::new(
                 Vec2::new(self_pushback * -facing.direction(), 0.),
@@ -685,7 +687,7 @@ fn add_dash_strike_collider(
 }
 
 pub fn player_collisions(
-    spatial_query: Res<PhysicsWorld>,
+    spatial_query: PhysicsWorld,
     mut q_gent: Query<
         (
             Entity,
@@ -715,25 +717,28 @@ pub fn player_collisions(
         whirling,
     ) in q_gent.iter_mut()
     {
-        let mut shape = collider.0.shared_shape().clone();
+        let mut shape = collider.shared_shape().clone();
         let mut original_pos = pos.translation.xy();
         let mut possible_pos = pos.translation.xy();
         let z = pos.translation.z;
-        let mut projected_velocity = linear_velocity.xy();
-        let mut interaction = InteractionGroups {
-            memberships: PLAYER,
-            filter: Group::from_bits_truncate(0b10010),
-        };
+        let mut projected_velocity = linear_velocity.0;
+        let mut interaction = CollisionGroups::new(PLAYER, ENEMY | GROUND);
 
         let mut wall_slide = false;
-        let dir = linear_velocity.x.signum();
-        // We loop over the shape cast operation to check if the new trajectory might *also* collide.
-        // This can happen in a corner for example, where the first collision is on one wall, and
-        // so the velocity is only stopped in the x direction, but not the y, so without the extra
-        // check with the new velocity and position, the y might clip the player through the roof
-        // of the corner.
-        // if we are not moving, we can not shapecast in direction of movement
+        let dir = linear_velocity.0.x.signum();
+        // Iterative collision resolution loop:
+        // After resolving one collision, the adjusted velocity might cause another collision.
+        // Example: In a corner, hitting a wall stops X velocity but Y velocity could still
+        // clip through the ceiling. We iterate to resolve all collisions in the same frame.
+        // 
+        // Safety: Max 5 iterations prevents infinite loops while handling complex geometry
+        let mut iteration_count = 0;
         while let Ok(shape_dir) = Dir2::new(projected_velocity) {
+            iteration_count += 1;
+            if iteration_count > 5 {
+                break;
+            }
+                     
             if let Some((e, first_hit)) = spatial_query.shape_cast(
                 possible_pos,
                 shape_dir,
@@ -746,14 +751,12 @@ pub fn player_collisions(
                 if let Ok((enemy, mut collider)) = q_enemy.get_mut(e) {
                     // change collision groups to only include ground so on the next loop we can
                     // ignore enemies/check our ground collision
-                    interaction = InteractionGroups {
-                        memberships: PLAYER,
-                        filter: GROUND,
-                    };
+                    interaction = CollisionGroups::new(PLAYER, GROUND);
+                    
                     match first_hit.status {
                         // if we are not yet inside the enemy, collide, but not if we are falling
                         // from above
-                        TOIStatus::Converged | TOIStatus::OutOfIterations => {
+                        _ if first_hit.time_of_impact > 0.001 => {
                             // If we are dashing downwards, immediately cancel the dash, shake the camera, and start the attack animation, but don't do anything else.
                             if let Some(mut dashing) = dashing.as_mut() {
                                 if dashing.is_down_dash() {
@@ -773,46 +776,35 @@ pub fn player_collisions(
                                 && whirling.is_none()
                                 && !is_dash_strike
                             {
-                                let sliding_plane =
-                                    into_vec2(first_hit.normal1);
-                                // configurable threshold for collision normal/sliding plane in case of physics instability
-                                let threshold = 0.000001;
-                                if !(1. - threshold..=1. + threshold)
-                                    .contains(&sliding_plane.y)
-                                {
-                                    projected_velocity.x = linear_velocity.x
-                                        - sliding_plane.x
-                                            * linear_velocity
-                                                .xy()
-                                                .dot(sliding_plane);
+                                if let Some(details) = first_hit.details {
+                                    let sliding_plane = into_vec2(details.normal1);
+                                    // configurable threshold for collision normal/sliding plane in case of physics instability
+                                    let threshold = 0.000001;
+                                    if !(1. - threshold..=1. + threshold)
+                                        .contains(&sliding_plane.y)
+                                    {
+                                        projected_velocity.x = linear_velocity.0.x
+                                            - sliding_plane.x
+                                                * linear_velocity
+                                                    .0
+                                                    .dot(sliding_plane);
+                                    }
                                 }
                             }
                         },
                         // if we are already inside, modify the enemies collision group and add
                         // Inside so next frame we dont collide with them
-                        TOIStatus::Penetrating => {
-                            collider.0.set_collision_groups(
-                                InteractionGroups {
-                                    memberships: ENEMY_INSIDE,
-                                    filter: Group::all(),
-                                },
-                            );
-                            commands
-                                .entity(enemy)
-                                .insert(crate::game::enemy::Inside);
-                        },
-                        // maybe failed never happens?
-                        TOIStatus::Failed => {
-                            println!("player/enemy collision failed")
+                        _ => {
+                            theseeker_engine::physics::inside::set(&mut commands, entity, e);
                         },
                     }
                 // otherwise we are colliding with the ground
                 } else {
                     match first_hit.status {
-                        TOIStatus::Converged | TOIStatus::OutOfIterations => {
+                        ShapeCastStatus::Converged | ShapeCastStatus::OutOfIterations => {
                             // Applies a very small amount of bounce, as well as sliding to the character
                             // the bounce helps prevent the player from getting stuck.
-                            let sliding_plane = into_vec2(first_hit.normal1);
+                            let sliding_plane = into_vec2(first_hit.details.map(|d| d.normal1).unwrap_or_default());
 
                             // If we are dashing downwards, immediately cancel the dash, shake the camera, and start the attack animation
                             if let Some(mut dashing) = dashing.as_mut() {
@@ -832,12 +824,12 @@ pub fn player_collisions(
                                     0.05
                                 };
                             let bounce_force = -sliding_plane
-                                * linear_velocity.dot(sliding_plane)
+                                * linear_velocity.0.dot(sliding_plane)
                                 * bounce_coefficient;
 
-                            projected_velocity = linear_velocity.xy()
+                            projected_velocity = linear_velocity.0
                                 - sliding_plane
-                                    * linear_velocity.xy().dot(sliding_plane);
+                                    * linear_velocity.0.dot(sliding_plane);
 
                             // Applies downward friction only when player tries to push
                             // against the wall while falling. Ignores x component.
@@ -857,10 +849,8 @@ pub fn player_collisions(
                                             .x
                                             + 0.1,
                                         true,
-                                        InteractionGroups {
-                                            memberships: PLAYER,
-                                            filter: GROUND,
-                                        },
+                                        // Check ground directly in front of player
+                                        groups::player_body(),
                                         Some(entity),
                                     )
                                     .is_some()
@@ -879,15 +869,13 @@ pub fn player_collisions(
                             projected_velocity += friction_vec + bounce_force;
 
                             possible_pos = pos.translation.xy()
-                                + (shape_dir.xy() * (first_hit.toi - 0.01));
+                                + (shape_dir.xy() * (first_hit.time_of_impact - 0.01));
                         },
-                        TOIStatus::Penetrating => {
-                            let depenetration = -linear_velocity.0;
-                            projected_velocity += depenetration;
-                            possible_pos = original_pos;
+                        ShapeCastStatus::PenetratingOrWithinTargetDist => {
+                            // For ground penetration, we don't need special handling
                         },
-                        TOIStatus::Failed => {
-                            println!("player/ground collision failed")
+                        ShapeCastStatus::Failed => {
+                            // Collision failed - continue
                         },
                     }
                 }
@@ -906,7 +894,7 @@ pub fn player_collisions(
         }
 
         pos.translation = (pos.translation.xy()
-            + linear_velocity.xy() * (1.0 / time.hz as f32))
+            + linear_velocity.0 * (1.0 / time.hz as f32))
             .extend(z);
 
         if let Some(mut slide) = slide {
@@ -922,10 +910,11 @@ pub fn player_collisions(
 /// Tries to keep the characters shape caster this far above the ground
 ///
 /// Needs to be non-zero to avoid getting stuck in the ground.
-const GROUNDED_THRESHOLD: f32 = 1.0;
+
+// Use shared ground constants from physics module
 
 fn player_grounded(
-    spatial_query: Res<PhysicsWorld>,
+    spatial_query: PhysicsWorld,
     mut query: Query<
         (
             Entity,
@@ -960,12 +949,12 @@ fn player_grounded(
     ) in query.iter_mut()
     {
         let ray_cast =
-            ray_cast_info.cast(&spatial_query, &position, Some(entity));
+            ray_cast_info.cast(&spatial_query.context(), &position, Some(entity));
         let falling_toi = ray_cast
             .iter()
-            .find(|x| x.1.toi > GROUNDED_THRESHOLD + 0.01);
+            .find(|x| x.1.time_of_impact > GROUNDED_THRESHOLD + 0.01);
         let is_falling = falling_toi.is_some();
-        let time_of_impact = falling_toi.map_or(0.0, |x| x.1.toi);
+        let time_of_impact = falling_toi.map_or(0.0, |x| x.1.time_of_impact);
 
         // Adjust position if TOI is nonzero.
         if !is_falling && time_of_impact != 0.0 {
@@ -1006,7 +995,7 @@ fn player_grounded(
 }
 
 fn player_falling(
-    spatial_query: Res<PhysicsWorld>,
+    spatial_query: PhysicsWorld,
     mut query: Query<
         (
             Entity,
@@ -1041,16 +1030,16 @@ fn player_falling(
         let fall_accel = config.fall_accel;
         let mut falling = true;
         if let Some((_, toi)) =
-            hits.cast(&spatial_query, &transform, Some(entity))
+            hits.cast(&spatial_query.context(), &transform, Some(entity))
         {
             // if we are ~touching the ground
-            if (toi.toi + velocity.y * (1.0 / time.hz) as f32)
+            if (toi.time_of_impact + velocity.0.y * (1.0 / time.hz) as f32)
                 < GROUNDED_THRESHOLD
             {
                 transitions.push(Falling::new_transition(Grounded));
-                velocity.y = 0.0;
+                velocity.0.y = 0.0;
                 transform.translation.y =
-                    transform.translation.y - toi.toi + GROUNDED_THRESHOLD;
+                    transform.translation.y - toi.time_of_impact + GROUNDED_THRESHOLD;
                 if action_state.clamped_value(&PlayerAction::Move) != 0.0 {
                     transitions.push(Falling::new_transition(Running));
                 } else {
@@ -1068,16 +1057,16 @@ fn player_falling(
                     2
                 };
                 if jump_count.0 < allowed_jumps {
-                    velocity.y = 0.0;
+                    velocity.0.y = 0.0;
                     jump_count.0 += 1;
                     transitions.push(Falling::new_transition(Jumping));
                 }
             }
-            if velocity.y > 0.0 {
-                velocity.y /= 1.2;
+            if velocity.0.y > 0.0 {
+                velocity.0.y /= 1.2;
             }
-            velocity.y -= fall_accel;
-            velocity.y = velocity.y.clamp(
+            velocity.0.y -= fall_accel;
+            velocity.0.y = velocity.0.y.clamp(
                 -config.max_fall_vel,
                 config.jump_vel_init,
             );
@@ -1125,9 +1114,9 @@ pub fn player_sliding(
 
             wall_slide_time.0 = f32::MAX;
             // Move away from the wall a bit so that friction stops
-            lin_vel.x = -direction * config.move_accel_init;
+            lin_vel.0.x = -direction * config.move_accel_init;
             // Give a little boost for the frame that it takes for input to be received
-            lin_vel.y = config.fall_accel;
+            lin_vel.0.y = config.fall_accel;
 
             commands.entity(entity).insert(Knockback::new(
                 Vec2::new(
@@ -1272,7 +1261,9 @@ fn player_attack(
                         ));
                     }
 
-                    commands
+                    let collision_groups = groups::player_attack();
+
+                    let attack_entity = commands
                         .spawn((
                             Arrow,
                             SpriteBundle {
@@ -1287,13 +1278,10 @@ fn player_attack(
                             Collider::cuboid(
                                 //TODO: temp fix of extending collider length to account for
                                 //tunneling
-                                arrow_length,
-                                3.0,
-                                InteractionGroups::new(
-                                    PLAYER_ATTACK,
-                                    ENEMY_HURT | GROUND,
-                                ),
+                                arrow_length * 0.5,
+                                3.0 * 0.5,
                             ),
+                            collision_groups,
                             Attack::new(
                                 192,
                                 entity,
@@ -1310,7 +1298,9 @@ fn player_attack(
                             animation,
                             StateDespawnMarker,
                         ))
-                        .id()
+                        .id();
+
+                    attack_entity
                 },
                 PlayerCombatStyle::Melee => {
                     let (
@@ -1351,16 +1341,16 @@ fn player_attack(
                     } else {
                         Vec2::new(self_pushback * -facing.direction(), 0.)
                     };
+                    
+                    let collision_groups = groups::player_attack();
+                    
                     let mut attack_entity_commands = commands.spawn((
                         TransformBundle::from_transform(Transform::from_translation(Vec3::new(
                             0.0, 0.0, 0.0,
                         ))),
+                        Collider::cuboid(1.0, 1.0), // Placeholder - AnimationCollider will update this from sprite magenta pixels
                         AnimationCollider(gent.e_gfx),
-                        // TODO: ? ColliderMeta
-                        Collider::empty(InteractionGroups::new(
-                            PLAYER_ATTACK,
-                            ENEMY_HURT,
-                        )),
+                        collision_groups,
                         Attack::new(16, entity, damage * stat_mod.attack),
                         SelfPushback(Knockback::new(
                             self_knockback_strength,
@@ -1380,7 +1370,9 @@ fn player_attack(
                         attack_entity_commands.insert(DownwardAttack);
                     }
 
-                    attack_entity_commands.id()
+                    let attack_entity = attack_entity_commands.id();
+                    
+                    attack_entity
                 },
             };
 
@@ -1458,15 +1450,8 @@ pub fn player_whirl(
             Without<DashStrike>,
         ),
     >,
-    // attacks which have had their collider changed by the AnimationCollider system
-    // TODO: need to not change collider unless there is a collider?
-    attack_query: Query<
-        &Attack,
-        (
-            With<AnimationCollider>,
-            // Changed<Collider>,
-        ),
-    >,
+    // Query to check if attack entities still exist
+    attack_query: Query<&Attack>,
     mut commands: Commands,
     melee_weapon: Res<PlayerMeleeWeapon>,
     config: Res<PlayerConfig>,
@@ -1509,17 +1494,13 @@ pub fn player_whirl(
                 let damage = melee_weapon.base_damage() * stat_mod.attack;
                 let new_attack = commands
                     .spawn((
-                        AttackBundle {
-                            attack: Attack::new(lifetime, entity, damage),
-                            collider: Collider::empty(InteractionGroups::new(
-                                PLAYER_ATTACK,
-                                ENEMY_HURT,
-                            )),
-                        },
+                        Attack::new(lifetime, entity, damage),
+                        Collider::cuboid(1.0, 1.0), // Placeholder - AnimationCollider will update this from sprite magenta pixels
+                        AnimationCollider(gent.e_gfx),
+                        groups::player_attack(),
                         TransformBundle::from_transform(Transform::from_translation(Vec3::new(
                             0.0, 0.0, 0.0,
                         ))),
-                        AnimationCollider(gent.e_gfx),
                     ))
                     .set_parent(entity)
                     .id();
@@ -1547,7 +1528,7 @@ pub fn player_whirl(
 pub fn bow_auto_aim(
     mut q_gent: Query<(&mut Facing, &Transform), (With<Player>, With<Gent>)>,
     q_enemy: Query<Entity, With<Enemy>>,
-    spatial_query: Res<PhysicsWorld>,
+    spatial_query: PhysicsWorld,
 ) {
     for (mut facing, transform) in q_gent.iter_mut() {
         let is_facing_enemies = spatial_query
@@ -1556,10 +1537,8 @@ pub fn bow_auto_aim(
                 Vec2::X * facing.direction(),
                 f32::MAX,
                 true,
-                InteractionGroups {
-                    memberships: PLAYER,
-                    filter: ENEMY | GROUND,
-                },
+                // Check ground directly in front of player
+                groups::player_body(),
                 None,
             )
             .is_some_and(|(entity, _)| q_enemy.contains(entity));
@@ -1570,10 +1549,7 @@ pub fn bow_auto_aim(
                 Vec2::NEG_X * facing.direction(),
                 f32::MAX,
                 true,
-                InteractionGroups {
-                    memberships: PLAYER,
-                    filter: ENEMY | GROUND,
-                },
+                groups::player_body(),
                 None,
             )
             .is_some_and(|(entity, _)| q_enemy.contains(entity));

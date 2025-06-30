@@ -87,8 +87,9 @@ features = ["default"]
 [dependencies.leafwing-input-manager]
 version = "0.16"
 
-[dependencies.rapier2d]
-version = "0.18"
+[dependencies.bevy_rapier2d]
+version = "0.29"
+features = ["dim2", "debug-render-2d", "parallel"]
 
 # Unavoidable with how Bevy is designed
 [lints.clippy]

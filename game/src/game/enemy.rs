@@ -2,9 +2,6 @@
 use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use rand::distr::StandardUniform;
 use rand::thread_rng;
-use rapier2d::geometry::SharedShape;
-use rapier2d::parry::query::TOIStatus;
-use rapier2d::prelude::{Group, InteractionGroups};
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::assets::config::{update_field, DynamicConfig};
@@ -13,8 +10,11 @@ use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
     into_vec2, update_sprite_colliders, AnimationCollider, Collider,
     LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK,
-    ENEMY_INSIDE, GROUND, PLAYER, SENSOR,
+    ENEMY_INSIDE, GROUND, PLAYER, PLAYER_ATTACK, SENSOR, CollisionGroups, Group, GROUNDED_THRESHOLD, GROUND_BUFFER,
+    ColliderShapeAccess,
 };
+use bevy_rapier2d::rapier::prelude::SharedShape;
+use bevy_rapier2d::prelude::ShapeCastStatus;
 use theseeker_engine::script::ScriptPlayer;
 
 use super::physics::Knockback;
@@ -27,6 +27,7 @@ use crate::game::gentstate::*;
 use crate::game::player::EnemiesNearby;
 use crate::graphics::particles_util::BuildParticles;
 use crate::prelude::*;
+use theseeker_engine::physics::inside::EnemyInsidePlayer as Inside;
 
 pub struct EnemyPlugin;
 
@@ -444,27 +445,19 @@ fn setup_enemy(
                 phys: GentPhysicsBundle {
                     // need to find a way to offset this one px toward back of enemys facing
                     // direction
-                    collider: Collider::cuboid(
-                        16.0,
-                        10.0,
-                        InteractionGroups {
-                            memberships: ENEMY,
-                            filter: Group::all(),
-                        },
-                    ),
+                    collider: Collider::cuboid(4.0, 2.5), // Half-extents: creates 8x5 collider
                     shapecast: ShapeCaster {
                         shape: SharedShape::cuboid(22.0, 10.0),
                         direction: Dir2::NEG_Y,
                         origin: Vec2::new(0.0, -2.0),
                         max_toi: 0.0,
-                        interaction: InteractionGroups {
-                            memberships: ENEMY,
-                            filter: GROUND,
-                        },
+                        interaction: CollisionGroups::new(ENEMY, GROUND),
                     },
                     linear_velocity: LinearVelocity(Vec2::ZERO),
                 },
             },
+            // Enemy body collider – uses shared helper so masks stay consistent
+            theseeker_engine::physics::groups::enemy_body(),
             Navigation::Grounded,
             Range::None,
             Target(None),
@@ -523,6 +516,8 @@ fn setup_enemy(
         commands.entity(e_gfx).remove::<EnemyBlueprint>();
     }
 }
+
+
 
 struct EnemyBehaviorPlugin;
 
@@ -767,16 +762,36 @@ enum Range {
 #[derive(Component, Debug, Deref)]
 struct Target(Option<Entity>);
 
-/// Component that indicates that the player is inside of this enemy,
-/// and has its usual collision layer membership modified to ENEMY_INSIDE
-/// it is removed once the player stops intersecting in the remove_inside system
-#[derive(Component)]
-pub struct Inside;
-
 /// Component added to Decaying enemy
 /// not a GentState because it shouldnt transition to or from anything else
 #[derive(Component)]
 struct Decay;
+
+/// Increments the global KillCount, removes most components from the Enemy
+/// after a set amount of ticks transitions to the Decay state
+pub fn dead(
+    mut query: Query<(Entity, &mut Dead), With<Enemy>>,
+    mut kill_count: ResMut<KillCount>,
+    mut commands: Commands,
+) {
+    for (entity, mut dead) in query.iter_mut() {
+        if dead.ticks == 0 {
+            **kill_count += 1;
+            commands.entity(entity).retain::<(
+                TransformBundle,
+                Gent,
+                Dead,
+                Enemy,
+                Role,
+                Tier,
+            )>();
+        }
+        if dead.ticks == 8 * 7 {
+            commands.entity(entity).remove::<Dead>().insert(Decay).remove_parent();
+        }
+        dead.ticks += 1;
+    }
+}
 
 // Check how far the player is, set our range, set our target if applicable, turn to face player if
 // in range
@@ -1031,7 +1046,7 @@ fn aggro(
                         MeleeAttack::default(),
                     )),
                     Role::Ranged => {
-                        velocity.x = 0.;
+                        velocity.0.x = 0.;
                         transitions.push(Waiting::new_transition(Defense));
                     },
                 }
@@ -1052,7 +1067,7 @@ fn aggro(
 }
 
 fn ranged_attack(
-    spatial_query: Res<PhysicsWorld>,
+    spatial_query: PhysicsWorld,
     mut query: Query<
         (
             Entity,
@@ -1085,7 +1100,7 @@ fn ranged_attack(
     ) in query.iter_mut()
     {
         if attack.ticks == 0 {
-            velocity.x = 0.;
+            velocity.0.x = 0.;
         }
         attack.ticks += 1;
         if attack.ticks >= 15 * 8 {
@@ -1111,13 +1126,13 @@ fn ranged_attack(
                 Vec2::new(0.0, 1.0),
                 f32::MAX,
                 true,
-                InteractionGroups::new(ENEMY, GROUND),
+                CollisionGroups::new(ENEMY, GROUND),
                 None,
             ) {
                 // only count it if the ray didn't start underground
-                if hit.toi != 0.0 {
+                if hit.time_of_impact != 0.0 {
                     ceiling =
-                        mid_pt.y + hit.toi - enemy_transform.translation().y;
+                        mid_pt.y + hit.time_of_impact - enemy_transform.translation().y;
                 } else {
                     // if it did start underground, fire another one to find how far underground, and then fire again from there + 0.1
                     if let Some((_hit_e, hit)) = spatial_query.ray_cast(
@@ -1125,18 +1140,18 @@ fn ranged_attack(
                         Vec2::new(0.0, 1.0),
                         f32::MAX,
                         false,
-                        InteractionGroups::new(ENEMY, GROUND),
+                        CollisionGroups::new(ENEMY, GROUND),
                         None,
                     ) {
                         if let Some((_hit_e, hit_2)) = spatial_query.ray_cast(
-                            mid_pt + Vec2::new(0.0, hit.toi + 0.001),
+                            mid_pt + Vec2::new(0.0, hit.time_of_impact + 0.001),
                             Vec2::new(0.0, 1.0),
                             f32::MAX,
                             true,
-                            InteractionGroups::new(ENEMY, GROUND),
+                            CollisionGroups::new(ENEMY, GROUND),
                             None,
                         ) {
-                            ceiling = mid_pt.y + hit.toi + hit_2.toi + 0.001
+                            ceiling = mid_pt.y + hit.time_of_impact + hit_2.time_of_impact + 0.001
                                 - enemy_transform.translation().y;
                         }
                     }
@@ -1174,11 +1189,11 @@ fn ranged_attack(
                     speed,
                     gravity,
                 ) {
-                    let max_proj_h = projectile.vel.y.powi(2) / (2.0 * gravity);
+                    let max_proj_h = projectile.vel.0.y.powi(2) / (2.0 * gravity);
                     if max_proj_h >= ceiling {
                         let max_vel_y = (ceiling * (2.0 * gravity)).sqrt();
                         let max_vel_x =
-                            max_vel_y / projectile.vel.y * projectile.vel.x;
+                            max_vel_y / projectile.vel.0.y * projectile.vel.0.x;
                         let max_vel = Vec2::new(max_vel_x, max_vel_y).length();
                         if let Some(projectile_2) = Projectile::with_vel(
                             transform.translation.xy(),
@@ -1210,11 +1225,9 @@ fn ranged_attack(
                     .with_max_targets(1)
                     .set_stat_mod(StatusModifier::basic_ice_spider()),
                     final_solution,
-                    Collider::cuboid(
-                        5.,
-                        5.,
-                        InteractionGroups::new(ENEMY_ATTACK, PLAYER),
-                    ),
+                    Collider::cuboid(2.5, 2.5),
+                    // Melee hitbox shares the same mask as all enemy attacks
+                    theseeker_engine::physics::groups::enemy_attack(),
                     TransformBundle::from(Transform::from_translation(
                         enemy_transform.translation().truncate().extend(1.0),
                     )),
@@ -1245,22 +1258,24 @@ fn melee_attack(
     for (entity, mut attack, tier, mut trans_q, gent) in query.iter_mut() {
         attack.ticks += 1;
         if attack.ticks == 8 * MeleeAttack::STARTUP {
+            let damage = enemy_config.melee_damage * *tier as u32 as f32;
+            let collision_groups = theseeker_engine::physics::groups::enemy_attack();
+            
             // spawn attack hitbox collider as child
-            commands
+            let attack_entity = commands
                 .spawn((
-                    Collider::empty(InteractionGroups {
-                        memberships: SENSOR,
-                        filter: PLAYER,
-                    }),
-                    TransformBundle::from_transform(Transform::default()),
+                    Collider::cuboid(1.0, 1.0), // Placeholder - AnimationCollider will update this from sprite magenta pixels
                     AnimationCollider(gent.e_gfx),
+                    collision_groups,
+                    TransformBundle::from_transform(Transform::default()),
                     Attack::new(
                         8,
                         entity,
-                        enemy_config.melee_damage * *tier as u32 as f32,
+                        damage,
                     ),
                 ))
-                .set_parent(entity);
+                .set_parent(entity)
+                .id();
         }
         if attack.ticks >= MeleeAttack::MAX * 8 {
             trans_q.push(MeleeAttack::new_transition(
@@ -1299,9 +1314,9 @@ fn walking(
     ) in query.iter_mut()
     {
         // set initial velocity
-        velocity.x = -enemy_config.walking_speed * facing.direction();
+        velocity.0.x = -enemy_config.walking_speed * facing.direction();
         if walking.ticks >= walking.max_ticks {
-            velocity.x = 0.;
+            velocity.0.x = 0.;
             transitions.push(Walking::new_transition(Waiting {
                 ticks: 0,
                 max_ticks: enemy_config.idle_time,
@@ -1312,7 +1327,7 @@ fn walking(
         // Turn around if we get to the edge/wall
         match *nav {
             Navigation::Blocked => {
-                velocity.x *= -1.;
+                velocity.0.x *= -1.;
                 *nav = Navigation::Grounded;
                 *facing = match *facing {
                     Facing::Right => Facing::Left,
@@ -1325,10 +1340,8 @@ fn walking(
     }
 }
 
-const GROUNDED_THRESHOLD: f32 = 1.0;
-const GROUND_BUFFER: f32 = -1.0;
 fn falling(
-    spatial_query: Res<PhysicsWorld>,
+    spatial_query: PhysicsWorld,
     mut query: Query<
         (
             Entity,
@@ -1362,27 +1375,31 @@ fn falling(
         match *nav {
             Navigation::Falling { jumping } => {
                 // Apply gravity consistently
-                velocity.y -= enemy_config.fall_accel;
+                velocity.0.y -= enemy_config.fall_accel;
                 
                 // Check for ground collision
                 if let Some((_, toi)) = spatial_query.shape_cast(
                     transform.translation.xy(),
                     Dir2::new_unchecked(Vec2::new(0., -1.)),
-                    collider.0.shape(),
-                    GROUNDED_THRESHOLD,
-                    InteractionGroups {
-                        memberships: ENEMY,
-                        filter: GROUND,
-                    },
+                    collider.shape(),
+                    GROUNDED_THRESHOLD
+                        + collider
+                            .shape()
+                            .compute_local_aabb()
+                            .half_extents()
+                            .y
+                        + GROUND_BUFFER,
+                    CollisionGroups::new(ENEMY, GROUND),
                     Some(entity),
                 ) {
-                    // If we are close to the ground
-                    if velocity.y < 0. && toi.witness2[1] < 0. {
+                                            // Land if falling downward and witness point indicates ground contact
+                        if velocity.0.y < 0. && toi.details.map(|d| d.witness2.y).unwrap_or(0.0) < 0. {
                         *nav = Navigation::Grounded;
+                        let witness_y = toi.details.map(|d| d.witness2.y).unwrap_or(0.0);
                         transform.translation.y =
-                            transform.translation.y - toi.witness2[1] - toi.toi
+                            transform.translation.y - witness_y - toi.time_of_impact
                                 + GROUND_BUFFER;
-                        velocity.y = 0.;
+                        velocity.0.y = 0.;
                         if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
                             enemy_anim.play_key(&format!(
                                 "{}.Chase",
@@ -1401,20 +1418,20 @@ fn falling(
                 }
             },
             Navigation::Grounded => {
-                // Check if we're actually grounded
+                // Verify ground contact - transition to falling if no ground detected
                 if spatial_query
                     .shape_cast(
                         transform.translation.xy(),
                         Dir2::new_unchecked(Vec2::new(0., -1.)),
-                        collider.0.shape(),
+                        collider.shape(),
                         GROUNDED_THRESHOLD
-                            + collider.0.shape().compute_local_aabb().extents()[1]
-                                / 2.
+                            + collider
+                                .shape()
+                                .compute_local_aabb()
+                                .half_extents()
+                                .y
                             + GROUND_BUFFER,
-                        InteractionGroups {
-                            memberships: ENEMY,
-                            filter: GROUND,
-                        },
+                        CollisionGroups::new(ENEMY, GROUND),
                         Some(entity),
                     )
                     .is_none()
@@ -1422,7 +1439,7 @@ fn falling(
                     // We're not actually on ground, transition to falling
                     *nav = Navigation::Falling { jumping: false };
                     // Initialize falling with zero velocity
-                    velocity.y = 0.0;
+                    velocity.0.y = 0.0;
                     if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
                         enemy_anim.play_key(&format!(
                             "{}.Jump",
@@ -1560,22 +1577,23 @@ fn chasing(
             // check if we need to transition
             match *range {
                 Range::Melee => {
-                    velocity.x = 0.;
+                    velocity.0.x = 0.;
                     transitions.push(Chasing::new_transition(
                         MeleeAttack::default(),
                     ));
                 },
                 Range::Ranged | Range::Aggro | Range::Deaggro => {
-                    velocity.x =
+                    velocity.0.x =
                         -enemy_config.chasing_speed * facing.direction();
                     // if we cant get any closer because of edge
                     if let Navigation::Blocked = *nav {
                         // velocity.x = 0.;
-                        let ptrans = players
-                            .get(p_entity)
-                            .expect("Wasnt targeting player");
+                        let Ok(ptrans) = players.get(p_entity) else {
+                            // Player may have despawned (e.g. during scene change). Abort this iteration.
+                            continue;
+                        };
                         if ptrans.translation.y < trans.translation.y {
-                            velocity.y = enemy_config.fall_y_velocity;
+                            velocity.0.y = enemy_config.fall_y_velocity;
                             *nav = Navigation::Falling { jumping: false };
                             if let Ok(mut enemy_anim) =
                                 gfx_query.get_mut(gent.e_gfx)
@@ -1591,7 +1609,7 @@ fn chasing(
                             //     * (ptrans.translation.x - trans.translation.x)
                             //         .signum();
                         } else {
-                            velocity.y = enemy_config.jump_y_velocity;
+                            velocity.0.y = enemy_config.jump_y_velocity;
                             if let Ok(mut enemy_anim) =
                                 gfx_query.get_mut(gent.e_gfx)
                             {
@@ -1612,7 +1630,7 @@ fn chasing(
                     }
                 },
                 _ => {
-                    velocity.x = 0.;
+                    velocity.0.x = 0.;
                     transitions.push(Chasing::new_transition(
                         Waiting::default(),
                     ))
@@ -1620,7 +1638,7 @@ fn chasing(
             }
         // if there is no target, stop chasing
         } else {
-            velocity.x = 0.;
+            velocity.0.x = 0.;
             transitions.push(Chasing::new_transition(
                 Waiting::default(),
             ));
@@ -1641,7 +1659,7 @@ fn move_collide(
         With<Enemy>,
     >,
     time: Res<GameTime>,
-    spatial_query: Res<PhysicsWorld>,
+    spatial_query: PhysicsWorld,
 ) {
     for (
         mut linear_velocity,
@@ -1652,13 +1670,13 @@ fn move_collide(
         is_chasing,
     ) in query.iter_mut()
     {
-        let shape = collider.0.shared_shape().clone();
-        let dir = linear_velocity.x.signum();
-        let x_len = linear_velocity.x.abs();
+        let shape = collider.shared_shape().clone();
+        let dir = linear_velocity.0.x.signum();
+        let x_len = linear_velocity.0.x.abs();
         // TODO: should be based on collider half extent x
         let front = transform.translation.x + 10. * dir;
         let z = transform.translation.z;
-        let mut projected_velocity = linear_velocity.xy();
+        let mut projected_velocity = linear_velocity.0;
 
         // Simplified version of the player collisions
         // If the enemy encounters a collision with the player, wall or edge of platform, it sets
@@ -1668,19 +1686,15 @@ fn move_collide(
                 transform.translation.xy(),
                 shape_dir,
                 &*shape,
-                linear_velocity.length() / time.hz as f32 + 0.5,
-                InteractionGroups {
-                    memberships: ENEMY,
-                    // Ground group
-                    filter: Group::from_bits_truncate(0b10000),
-                },
+                linear_velocity.0.length() / time.hz as f32 + 0.5,
+                CollisionGroups::new(ENEMY, GROUND),
                 None,
             ) {
-                if first_hit.status != TOIStatus::Penetrating {
-                    let sliding_plane = into_vec2(first_hit.normal1);
-                    projected_velocity = linear_velocity.xy()
+                if first_hit.status != ShapeCastStatus::PenetratingOrWithinTargetDist {
+                    let sliding_plane = into_vec2(first_hit.details.map(|d| d.normal1).unwrap_or_default());
+                    projected_velocity = linear_velocity.0
                         - sliding_plane
-                            * linear_velocity.xy().dot(sliding_plane);
+                            * linear_velocity.0.dot(sliding_plane);
                     // println!("b {is_chasing} {transform:?}");
                     // if is_chasing {
                     //     println!("chasing noblock");
@@ -1704,21 +1718,17 @@ fn move_collide(
         // Raycast from underground directly below the enemy in direction of movement, detecting the edges of a platform from
         // inside
         if let Some((_entity, first_hit)) = spatial_query.ray_cast(
-            // TODO: should be based on collider half extent y + a little
             Vec2::new(front, transform.translation.y - 10.),
             Vec2::new(dir, 0.),
             x_len / time.hz as f32,
             false,
-            InteractionGroups {
-                memberships: ENEMY,
-                filter: GROUND,
-            },
+            CollisionGroups::new(ENEMY, GROUND),
             None,
         ) {
             if !is_knocked && !matches!(*nav, Navigation::Falling { .. }) {
                 *nav = Navigation::Blocked;
             }
-            projected_velocity.x = first_hit.toi * dir;
+            projected_velocity.x = first_hit.time_of_impact * dir;
         }
 
         transform.translation = (transform.translation.xy()
@@ -1728,60 +1738,42 @@ fn move_collide(
 }
 
 fn remove_inside(
-    mut query: Query<
-        (Entity, &GlobalTransform, &mut Collider),
+    mut enemies: Query<
+        (Entity, &GlobalTransform, &Collider),
         (With<Inside>, With<Enemy>),
     >,
+    players_q: Query<(Entity, &GlobalTransform, &Collider), With<theseeker_engine::physics::inside::PlayerInsideEnemy>>,    
     mut commands: Commands,
-    spatial_query: Res<PhysicsWorld>,
+    spatial_query: PhysicsWorld,
 ) {
-    for (entity, transform, mut collider) in query.iter_mut() {
+    for (enemy_entity, transform, collider) in enemies.iter_mut() {
+        // Collect players still intersecting this specific enemy
         let intersections = spatial_query.intersect(
             transform.translation().xy(),
-            collider.0.shape(),
-            InteractionGroups {
-                memberships: ENEMY_INSIDE,
-                filter: PLAYER,
-            },
-            Some(entity),
+            collider.shape(),
+            theseeker_engine::physics::groups::groups(ENEMY_INSIDE),
+            Some(enemy_entity),
         );
-        if intersections.is_empty() {
-            collider.0.set_collision_groups(InteractionGroups {
-                memberships: ENEMY,
-                filter: Group::all(),
-            });
-            commands.entity(entity).remove::<Inside>();
-        }
-    }
-}
+        let still_inside: std::collections::HashSet<Entity> = intersections.into_iter().collect();
 
-/// Increments the global KillCount, removes most components from the Enemy
-/// after a set amount of ticks transitions to the Decay state
-pub fn dead(
-    mut query: Query<(Entity, &mut Dead), With<Enemy>>,
-    mut kill_count: ResMut<KillCount>,
-    mut commands: Commands,
-) {
-    for (entity, mut dead) in query.iter_mut() {
-        if dead.ticks == 0 {
-            **kill_count += 1;
-            commands.entity(entity).retain::<(
-                TransformBundle,
-                Gent,
-                Dead,
-                Enemy,
-                Role,
-                Tier,
-            )>();
+        for (player_entity, p_transform, p_collider) in players_q.iter() {
+            if !still_inside.contains(&player_entity) {
+                // extra safeguard: confirm not intersecting to avoid premature clear
+                let overlap = spatial_query.intersect(
+                    p_transform.translation().xy(),
+                    p_collider.shape(),
+                    theseeker_engine::physics::groups::groups(ENEMY_INSIDE),
+                    Some(player_entity),
+                );
+                if overlap.is_empty() {
+                    theseeker_engine::physics::inside::clear(
+                        &mut commands,
+                        enemy_entity,
+                        player_entity,
+                    );
+                }
+            }
         }
-        if dead.ticks == 8 * 7 {
-            commands
-                .entity(entity)
-                .remove::<Dead>()
-                .insert(Decay)
-                .remove_parent();
-        }
-        dead.ticks += 1;
     }
 }
 
