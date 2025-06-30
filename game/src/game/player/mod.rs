@@ -435,6 +435,7 @@ fn setup_player(
             gent2gfx: TransformGfxFromGent {
                 pixel_aligned: false,
                 gent: e_gent,
+                offset: None,
             },
             sprite: SpriteBundle {
                 sprite: Sprite {

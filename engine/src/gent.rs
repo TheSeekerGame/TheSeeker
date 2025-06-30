@@ -32,7 +32,7 @@ pub struct TransformGfxFromGent {
     pub pixel_aligned: bool,
     // TODO: remove gent here and refactor transfor_gfx_from_gent to use player gfx?
     pub gent: Entity,
-    // potential to add offset here?... or does it not make sense
+    pub offset: Option<Vec3>,
 }
 
 fn transform_gfx_from_gent(
@@ -47,6 +47,14 @@ fn transform_gfx_from_gent(
             continue;
         };
         *xf_target = *xf_src;
+        
+        // Apply offset if specified
+        if let Some(offset) = gfx2gent.offset {
+            let mut transform = xf_target.compute_transform();
+            transform.translation += offset;
+            *xf_target = transform.into();
+        }
+        
         if gfx2gent.pixel_aligned {
             let mut xf = xf_target.compute_transform();
             xf.translation = xf.translation.round();

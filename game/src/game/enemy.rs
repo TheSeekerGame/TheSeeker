@@ -479,6 +479,7 @@ fn setup_enemy(
                 gent2gfx: TransformGfxFromGent {
                     pixel_aligned: false,
                     gent: e_gent,
+                    offset: Some(Vec3::new(0.0, 5.0, 0.0)),
                 },
                 sprite: SpriteBundle {
                     sprite: Sprite {
@@ -500,6 +501,7 @@ fn setup_enemy(
                 gent2gfx: TransformGfxFromGent {
                     pixel_aligned: false,
                     gent: e_gent,
+                    offset: Some(Vec3::new(0.0, 2.5, 0.0)),
                 },
                 sprite: SpriteBundle {
                     sprite: Sprite {

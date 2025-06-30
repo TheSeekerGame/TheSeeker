@@ -202,6 +202,7 @@ pub fn setup_merchant(
                 gent2gfx: TransformGfxFromGent {
                     pixel_aligned: false,
                     gent: e_gent,
+                    offset: None,
                 },
                 sprite: SpriteBundle {
                     sprite: Sprite {
