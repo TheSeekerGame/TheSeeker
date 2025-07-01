@@ -1,4 +1,6 @@
 use bevy::sprite::Sprite;
+use bevy::transform::components::GlobalTransform;
+use bevy::ecs::schedule::IntoScheduleConfigs;
 
 //TODO: remove, remove passive check in jumps
 use crate::game::player::Passive;
@@ -663,7 +665,8 @@ fn add_dash_strike_collider(
 
     let attack = commands
         .spawn((
-            TransformBundle::from_transform(Transform::from_translation(Vec3::new(0.0, 0.0, 0.0))),
+            Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+            GlobalTransform::default(),
             Collider::cuboid(1.0, 1.0), // Initial collider - will be replaced by AnimationCollider system
             AnimationCollider(gent.e_gfx),
             // Player dash-strike attack collider
@@ -1266,14 +1269,12 @@ fn player_attack(
                     let attack_entity = commands
                         .spawn((
                             Arrow,
-                            SpriteBundle {
-                                sprite: Sprite {
-                                    texture_atlas: Some(TextureAtlas::default()),
-                                    ..default()
-                                },
-                                transform: arrow_transform,
-                                ..Default::default()
+                            Sprite {
+                                texture_atlas: Some(TextureAtlas::default()),
+                                ..default()
                             },
+                            arrow_transform,
+                            GlobalTransform::default(),
                             Projectile { vel },
                             Collider::cuboid(
                                 //TODO: temp fix of extending collider length to account for
@@ -1345,9 +1346,8 @@ fn player_attack(
                     let collision_groups = groups::player_attack();
                     
                     let mut attack_entity_commands = commands.spawn((
-                        TransformBundle::from_transform(Transform::from_translation(Vec3::new(
-                            0.0, 0.0, 0.0,
-                        ))),
+                        Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+                        GlobalTransform::default(),
                         Collider::cuboid(1.0, 1.0), // Placeholder - AnimationCollider will update this from sprite magenta pixels
                         AnimationCollider(gent.e_gfx),
                         collision_groups,
@@ -1498,9 +1498,8 @@ pub fn player_whirl(
                         Collider::cuboid(1.0, 1.0), // Placeholder - AnimationCollider will update this from sprite magenta pixels
                         AnimationCollider(gent.e_gfx),
                         groups::player_attack(),
-                        TransformBundle::from_transform(Transform::from_translation(Vec3::new(
-                            0.0, 0.0, 0.0,
-                        ))),
+                        Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
+                        GlobalTransform::default(),
                     ))
                     .set_parent(entity)
                     .id();

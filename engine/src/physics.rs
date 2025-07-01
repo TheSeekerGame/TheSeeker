@@ -306,9 +306,12 @@ pub struct PhysicsWorld<'w, 's> {
 }
 
 impl<'w, 's> PhysicsWorld<'w, 's> {
-    /// Get the underlying RapierContext
+    /// Get the underlying RapierContext value (copied)
     pub fn context(&self) -> RapierContext {
-        self.rapier_context.single()
+        self
+            .rapier_context
+            .single()
+            .expect("RapierContext resource missing")
     }
     
     /// Cast a shape and find the first collision

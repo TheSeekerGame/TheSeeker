@@ -1,10 +1,10 @@
 use bevy::{
     prelude::*, text::LineBreak, transform::TransformSystem, ui::UiSystem,
-    utils::hashbrown::HashMap,
 };
 use rand::Rng;
 use strum::IntoEnumIterator;
 use theseeker_engine::time::GameTickUpdate;
+use std::collections::HashMap;
 
 use crate::{
     camera::MainCamera, prelude::StateDespawnMarker, ui::popup::PopupUi,
@@ -172,11 +172,15 @@ impl Command for SpawnPickupCommand {
                     .spawn((
                         Name::new("PickupDrop"),
                         PickupDrop::new(self.p_type),
-                        SpriteBundle {
-                            transform,
-                            sprite: texture_handle.clone().into(),
-                            ..default()
+                        Sprite {
+                            image: texture_handle.clone(),
+                            ..Default::default()
                         },
+                        transform,
+                        GlobalTransform::default(),
+                        Visibility::Visible,
+                        InheritedVisibility::VISIBLE,
+                        ViewVisibility::default(),
                         StateDespawnMarker,
                     ))
                     .id();

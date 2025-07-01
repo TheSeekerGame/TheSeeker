@@ -20,7 +20,7 @@ fn spawn_mainmenu(
     mut state: ResMut<NextState<AppState>>,
 ) {
     commands.spawn((
-        Camera2dBundle::default(),
+        Camera2d,
         StateDespawnMarker,
     ));
 
@@ -38,7 +38,7 @@ fn spawn_mainmenu(
                 justify_content: JustifyContent::SpaceEvenly,
                 ..Default::default()
             },
-            BackgroundColor(Color::rgb(0.0, 0.0, 0.0)),
+            BackgroundColor(Color::BLACK),
         ))
         .id();
     let e_logo_image = commands

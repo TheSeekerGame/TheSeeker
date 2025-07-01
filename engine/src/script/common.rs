@@ -1,4 +1,4 @@
-use bevy::audio::{PlaybackMode, Volume};
+use bevy::audio::{Volume, PlaybackSettings};
 use bevy::ecs::system::lifetimeless::*;
 
 use super::*;
@@ -612,18 +612,15 @@ impl ScriptAction for CommonScriptAction {
                     })
                     .collect();
                 if let Some(sound) = sounds.choose(&mut rand::thread_rng()) {
-                    let e = commands.spawn(AudioBundle {
-                        source: AudioPlayer(sound.clone()),
-                        settings: PlaybackSettings {
-                            mode: if r#loop.unwrap_or(false) {
-                                PlaybackMode::Loop
-                            } else {
-                                PlaybackMode::Despawn
-                            },
-                            volume: Volume::new(volume.unwrap_or(1.0)),
-                            ..Default::default()
-                        },
-                    }).id();
+                    let settings = if r#loop.unwrap_or(false) {
+                        PlaybackSettings::LOOP
+                    } else {
+                        PlaybackSettings::DESPAWN
+                    }.with_volume(Volume::Linear(volume.unwrap_or(1.0)));
+
+                    let e = commands
+                        .spawn((AudioPlayer(sound.clone()), settings))
+                        .id();
                     if let Some(label) = label {
                         commands.entity(e).insert(LabeledBackgroundSound {
                             label: label.clone(),
@@ -651,69 +648,67 @@ impl ScriptAction for CommonScriptAction {
                     })
                     .collect();
                 if let Some(sound) = sounds.choose(&mut rand::thread_rng()) {
-                    let ctl = q_mixer.single();
-                    let l = if let Some(l) = label {
-                        Some(l.as_str())
-                    } else {
-                        None
-                    };
-                    let audio_id = match timing {
-                        ScriptActionTiming::Unknown => {
-                            ctl.controller.play_immediately(
-                                l,
-                                sound.decoder(),
-                                volume,
-                                pan,
-                            )
-                        },
-                        ScriptActionTiming::UnknownTick => {
-                            ctl.controller.play_at_tick(
-                                l,
-                                gt.tick() as u32,
-                                0,
-                                sound.decoder(),
-                                volume,
-                                pan,
-                            )
-                        },
-                        ScriptActionTiming::Time(time) => {
-                            ctl.controller.play_at_time(
-                                l,
-                                time,
-                                sound.decoder(),
-                                volume,
-                                pan,
-                            )
-                        },
-                        ScriptActionTiming::Tick(tick) => {
-                            ctl.controller.play_at_tick(
-                                l,
-                                tick as u32,
-                                0,
-                                sound.decoder(),
-                                volume,
-                                pan,
-                            )
-                        },
-                    };
-                    tracker.my_sounds.push(audio_id);
+                    if let Ok(ctl) = q_mixer.get_single() {
+                        let l = label.as_deref();
+                        let audio_id = match timing {
+                            ScriptActionTiming::Unknown => {
+                                ctl.controller.play_immediately(
+                                    l,
+                                    sound.decoder(),
+                                    volume,
+                                    pan,
+                                )
+                            },
+                            ScriptActionTiming::UnknownTick => {
+                                ctl.controller.play_at_tick(
+                                    l,
+                                    gt.tick() as u32,
+                                    0,
+                                    sound.decoder(),
+                                    volume,
+                                    pan,
+                                )
+                            },
+                            ScriptActionTiming::Time(time) => {
+                                ctl.controller.play_at_time(
+                                    l,
+                                    time,
+                                    sound.decoder(),
+                                    volume,
+                                    pan,
+                                )
+                            },
+                            ScriptActionTiming::Tick(tick) => {
+                                ctl.controller.play_at_tick(
+                                    l,
+                                    tick as u32,
+                                    0,
+                                    sound.decoder(),
+                                    volume,
+                                    pan,
+                                )
+                            },
+                        };
+                        tracker.my_sounds.push(audio_id);
+                    }
                 }
                 ScriptUpdateResult::NormalRun
             },
             CommonScriptAction::StopAudio { current_script_only, label } => {
-                let ctl = q_mixer.single();
-                if current_script_only.unwrap_or(true) {
-                    if let Some(label) = label {
-                        ctl.controller.stop_many_with_label(&mut tracker.my_sounds, &label);
+                if let Ok(ctl) = q_mixer.get_single() {
+                    if current_script_only.unwrap_or(true) {
+                        if let Some(label) = label {
+                            ctl.controller.stop_many_with_label(&mut tracker.my_sounds, &label);
+                        } else {
+                            ctl.controller.stop_many(&tracker.my_sounds);
+                            tracker.my_sounds.clear();
+                        }
                     } else {
-                        ctl.controller.stop_many(&tracker.my_sounds);
-                        tracker.my_sounds.clear();
-                    }
-                } else {
-                    if let Some(label) = label {
-                        ctl.controller.stop_label(&label);
-                    } else {
-                        ctl.controller.stop_all();
+                        if let Some(label) = label {
+                            ctl.controller.stop_label(&label);
+                        } else {
+                            ctl.controller.stop_all();
+                        }
                     }
                 }
                 ScriptUpdateResult::NormalRun

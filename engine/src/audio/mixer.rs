@@ -3,7 +3,7 @@ use std::sync::atomic::{
 };
 use std::sync::Mutex;
 
-use cpal::FromSample;
+use rodio::cpal::FromSample;
 use rodio::{Sample, Source};
 
 use crate::prelude::*;

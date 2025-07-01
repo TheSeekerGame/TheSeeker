@@ -157,9 +157,16 @@ impl GameTime {
         self.last_update = now;
 
         let delta_f64 = delta.as_secs_f64();
-        let new_ticks = delta_f64 * self.hz + self.overstep;
-        self.total_ticks += new_ticks as u64;
-        self.overstep = new_ticks.fract();
+        // Use mul_add for maximum precision and accumulate any leftover fraction
+        let total_new_ticks = delta_f64.mul_add(self.hz, self.overstep);
+
+        // Split into whole-number ticks and fractional remainder
+        let whole_ticks = total_new_ticks.trunc();
+        // SAFETY: whole_ticks is always >= 0.0 because hz and overstep are ≥ 0.
+        let whole_ticks_u64 = whole_ticks as u64;
+
+        self.total_ticks = self.total_ticks.saturating_add(whole_ticks_u64);
+        self.overstep = total_new_ticks - whole_ticks;
         self.new_ticks = self.total_ticks - self.tick;
     }
 
@@ -176,7 +183,7 @@ impl GameTime {
 
 /// Update `GameTime` every frame
 pub fn update_gametime(time: Res<Time>, mut gametime: ResMut<GameTime>) {
-    gametime.update(&time);
+    gametime.update(&*time);
 }
 
 /// Our alternative to Bevy's fixed timestep, based on `GameTime`
@@ -195,6 +202,6 @@ pub fn run_gametickupdate_schedule(world: &mut World) {
 /// Run condition to run something "every N ticks"
 pub fn at_tick_multiples(quant: Quant) -> impl FnMut(Res<GameTime>) -> bool {
     move |gametime: Res<GameTime>| {
-        (gametime.tick() + quant.offset as u64) % quant.n as u64 == 0
+        ((gametime.tick() as i64 + quant.offset) % quant.n as i64) == 0
     }
 }

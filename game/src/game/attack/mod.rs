@@ -435,7 +435,7 @@ pub fn apply_attack_damage(
                     stealthed: is_stealthed,
                 };
                 attack.damaged_set.insert(t_entity);
-                damage_events.send(damage_info);
+                damage_events.write(damage_info);
 
                 // apply Knockback
                 if let Some(pushback) = maybe_pushback {
@@ -583,11 +583,11 @@ fn damage_flash(
     mut commands: Commands,
 ) {
     for (entity, mut sprite, mut damage_flash) in query.iter_mut() {
-        sprite.color = Color::rgb(2.5, 2.5, 2.5);
+        sprite.color = Color::linear_rgb(2.5, 2.5, 2.5);
 
         if damage_flash.current_ticks == damage_flash.max_ticks {
             commands.entity(entity).remove::<DamageFlash>();
-            sprite.color = Color::rgb(1., 1., 1.);
+            sprite.color = Color::linear_rgb(1.0, 1.0, 1.0);
         }
         damage_flash.current_ticks += 1;
     }

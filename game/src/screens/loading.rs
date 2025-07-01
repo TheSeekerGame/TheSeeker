@@ -26,11 +26,9 @@ struct LoadingProgressIndicator;
 fn setup_loadscreen(mut commands: Commands) {
     commands.spawn((
         StateDespawnMarker,
-        Camera2dBundle {
-            camera: Camera {
-                clear_color: ClearColorConfig::Custom(Color::BLACK),
-                ..Default::default()
-            },
+        Camera2d,
+        Camera {
+            clear_color: ClearColorConfig::Custom(Color::BLACK),
             ..Default::default()
         },
     ));

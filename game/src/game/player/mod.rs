@@ -4,6 +4,7 @@ mod player_behaviour;
 pub mod player_weapon;
 use std::collections::HashMap;
 use bevy::render::view::RenderLayers;
+use bevy::transform::components::GlobalTransform;
 use leafwing_input_manager::action_state::ActionState;
 use player_action::PlayerActionPlugin;
 use player_anim::PlayerAnimationPlugin;
@@ -18,6 +19,8 @@ use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
     Collider, ColliderShapeAccess, LinearVelocity, ShapeCaster, GROUND, PLAYER,
 };
+use bevy::sprite::Sprite;
+use bevy::transform::components::Transform;
 
 use crate::game::attack::*;
 use crate::game::gentstate::*;
@@ -28,6 +31,9 @@ use crate::prelude::*;
 use super::game_over::GameOver;
 use super::physics::Knockback;
 use crate::game::enemy::Enemy;
+
+use bevy::ecs::hierarchy::{ChildOf, Children};
+use bevy::ecs::schedule::IntoScheduleConfigs;
 
 pub use player_action::PlayerAction;
 
@@ -120,7 +126,8 @@ pub struct PlayerGentBundle {
 pub struct PlayerGfxBundle {
     marker: PlayerGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteBundle,
+    sprite: Sprite,
+    transform: Transform,
     animation: SpriteAnimationBundle,
 }
 
@@ -350,13 +357,14 @@ fn debug_player_states(
 // }
 
 fn setup_player(
-    mut q: Query<(&mut Transform, Entity, &Parent), Added<PlayerBlueprint>>,
+    mut q: Query<(&mut Transform, Entity, &ChildOf), Added<PlayerBlueprint>>,
     parent_query: Query<Entity, With<Children>>,
     mut commands: Commands,
     config: Res<PlayerConfig>,
 ) {
     for (mut xf_gent, e_gent, parent) in q.iter_mut() {
-        // TODO: proper way of ensuring z is correct
+        // Z-ordering: 15.0 * 0.000001 = 0.000015 places player above most entities
+        // but below UI elements. Using multiplication for clarity vs scientific notation.
         xf_gent.translation.z = 15.0 * 0.000001;
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn(()).id();
@@ -427,8 +435,8 @@ fn setup_player(
             InteractionGroups::new(PLAYER, Group::all()),
         ));
         // unparent from the level
-        if let Ok(parent) = parent_query.get(parent.get()) {
-            commands.entity(parent).remove_children(&[e_gent]);
+        if let Ok(parent_entity) = parent_query.get(parent.parent()) {
+            commands.entity(parent_entity).remove_children(&[e_gent]);
         }
         commands.entity(e_gfx).insert((PlayerGfxBundle {
             marker: PlayerGfx { e_gent },
@@ -437,14 +445,11 @@ fn setup_player(
                 gent: e_gent,
                 offset: None,
             },
-            sprite: SpriteBundle {
-                sprite: Sprite {
-                    texture_atlas: Some(TextureAtlas::default()),
-                    ..default()
-                },
-                transform: *xf_gent,
-                ..Default::default()
+            sprite: Sprite {
+                texture_atlas: Some(TextureAtlas::default()),
+                ..default()
             },
+            transform: *xf_gent,
             animation: Default::default(),
         },
         RenderLayers::layer(2), // Render player on separate layer to exclude from darkness pass
@@ -1424,18 +1429,14 @@ pub fn player_dash_fx(
         };
 
         commands.spawn((
-            SpriteBundle {
-                sprite: Sprite {
-                    image: tex,
-                    texture_atlas: Some(atlas),
-                    flip_x: facing.direction() < 0.,
-                    ..default()
-                },
-                transform: Transform::from_translation(pos),
-                // texture: tex.clone(),
-                // atlas,
+            Sprite {
+                image: tex,
+                texture_atlas: Some(atlas),
+                flip_x: facing.direction() < 0.,
                 ..default()
             },
+            Transform::from_translation(pos),
+            GlobalTransform::default(),
             DashIcon {
                 time: t,
                 init_a,

@@ -16,9 +16,10 @@ use crate::game::player::{
     Running, WallSlideTime, Whirling,
 };
 use crate::prelude::{
-    in_state, Added, App, Has, IntoSystemConfigs, Local, Or, Plugin, Query,
+    in_state, Added, App, Has, Local, Or, Plugin, Query,
     Res, With, Without,
 };
+use bevy::ecs::schedule::IntoScheduleConfigs;
 
 use super::player_weapon::CurrentWeapon;
 use crate::game::attack::DamageInfo;

@@ -207,9 +207,12 @@ pub struct EnemySpawner {
 }
 
 impl EnemySpawner {
-    const COOLDOWN: u32 = 4000;
-    const MAX: usize = 3;
-    const RANGE: f32 = 400.;
+    /// Maximum number of enemy slots per spawner
+    const MAX: usize = 4;
+    /// Distance from player required to spawn enemies (in pixels)
+    const RANGE: f32 = 320.;
+    /// Ticks to wait before spawning next wave after clearing
+    const COOLDOWN: u32 = 8 * 8;
 
     fn is_cleared(&self) -> bool {
         self.slots
@@ -254,7 +257,12 @@ pub struct Enemy;
 pub struct EnemyGfxBundle {
     marker: EnemyGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteBundle,
+    sprite: Sprite,
+    transform: Transform,
+    global_transform: GlobalTransform,
+    visibility: Visibility,
+    inherited_visibility: InheritedVisibility,
+    view_visibility: ViewVisibility,
     animation: SpriteAnimationBundle,
 }
 
@@ -262,7 +270,12 @@ pub struct EnemyGfxBundle {
 pub struct EnemyEffectsGfxBundle {
     marker: EnemyEffectGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteBundle,
+    sprite: Sprite,
+    transform: Transform,
+    global_transform: GlobalTransform,
+    visibility: Visibility,
+    inherited_visibility: InheritedVisibility,
+    view_visibility: ViewVisibility,
     animation: SpriteAnimationBundle,
 }
 
@@ -366,7 +379,8 @@ fn spawn_enemies(
                                     EnemyBlueprintBundle::default(),
                                     slot.tier,
                                     role,
-                                    TransformBundle::from_transform(*transform),
+                                    *transform,
+                                    GlobalTransform::default(),
                                 ))
                                 .id();
                             slot.enemy = Some(e);
@@ -418,7 +432,8 @@ fn setup_enemy(
         if !bp.is_added() {
             continue;
         }
-        // TODO: ensure proper z order
+        // Z-ordering: Base layer at 0.000014 keeps enemies below player (0.000015)
+        // Additional offsets ensure proper enemy layering by role and tier
         xf_gent.translation.z = 14.0 * 0.000001;
         // Make melee spiders appear in front of ranged ones
         if let Role::Melee = role {
@@ -481,14 +496,15 @@ fn setup_enemy(
                     gent: e_gent,
                     offset: Some(Vec3::new(0.0, 5.0, 0.0)),
                 },
-                sprite: SpriteBundle {
-                    sprite: Sprite {
-                        texture_atlas: Some(TextureAtlas::default()),
-                        ..default()
-                    },
-                    transform: *xf_gent,
+                sprite: Sprite {
+                    texture_atlas: Some(TextureAtlas::default()),
                     ..Default::default()
                 },
+                transform: *xf_gent,
+                global_transform: GlobalTransform::default(),
+                visibility: Visibility::Visible,
+                inherited_visibility: InheritedVisibility::VISIBLE,
+                view_visibility: ViewVisibility::default(),
                 animation: Default::default(),
             },
             StateDespawnMarker,
@@ -503,14 +519,15 @@ fn setup_enemy(
                     gent: e_gent,
                     offset: Some(Vec3::new(0.0, 2.5, 0.0)),
                 },
-                sprite: SpriteBundle {
-                    sprite: Sprite {
-                        texture_atlas: Some(TextureAtlas::default()),
-                        ..default()
-                    },
-                    transform: xf_gent.with_translation(Vec3::new(0., 0., 1.)),
+                sprite: Sprite {
+                    texture_atlas: Some(TextureAtlas::default()),
                     ..Default::default()
                 },
+                transform: xf_gent.with_translation(Vec3::new(0., 0., 1.)),
+                global_transform: GlobalTransform::default(),
+                visibility: Visibility::Visible,
+                inherited_visibility: InheritedVisibility::VISIBLE,
+                view_visibility: ViewVisibility::default(),
                 animation: SpriteAnimationBundle { player: animation },
             },
             StateDespawnMarker,
@@ -532,7 +549,6 @@ impl Plugin for EnemyBehaviorPlugin {
                     decay_despawn.run_if(any_with_component::<Decay>),
                     dead.run_if(any_with_component::<Dead>),
                     (
-                        // assign_group,
                         check_player_range,
                         (
                             patrolling.run_if(any_with_component::<Patrolling>),
@@ -543,12 +559,9 @@ impl Plugin for EnemyBehaviorPlugin {
                                 .run_if(any_with_component::<RangedAttack>),
                             melee_attack
                                 .run_if(any_with_component::<MeleeAttack>),
-                            // pushback_attack
-                            //     .run_if(any_with_component::<PushbackAttack>),
                         ),
                         (
                             walking.run_if(any_with_component::<Walking>),
-                            // retreating.run_if(any_with_component::<Retreating>),
                             chasing.run_if(any_with_component::<Chasing>),
                             falling,
                         ),
@@ -583,15 +596,6 @@ struct Walking {
 impl GentState for Walking {}
 impl GenericState for Walking {}
 
-// #[derive(Component, Debug)]
-// #[component(storage = "SparseSet")]
-// struct Retreating {
-//     ticks: u32,
-//     max_ticks: u32,
-// }
-// impl GentState for Retreating {}
-// impl GenericState for Retreating {}
-
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
 struct Chasing;
@@ -611,12 +615,6 @@ impl Transitionable<Patrolling> for Aggroed {
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
 pub struct Defense;
-// pub struct Defense {
-//     cooldown_ticks: u32,
-// }
-// impl Defense {
-//     const COOLDOWN: u32 = 30;
-// }
 
 impl GentState for Defense {}
 impl GenericState for Defense {}
@@ -648,19 +646,6 @@ impl MeleeAttack {
 }
 impl GentState for MeleeAttack {}
 impl GenericState for MeleeAttack {}
-
-// #[derive(Component, Default, Debug)]
-// #[component(storage = "SparseSet")]
-// struct PushbackAttack {
-//     ticks: u32,
-// }
-// impl PushbackAttack {
-//     // const RECOVERY: u32 = 7;
-//     const MAX: u32 = 10;
-//     const STARTUP: u32 = 5;
-// }
-// impl GentState for PushbackAttack {}
-// impl GenericState for PushbackAttack {}
 
 #[derive(Component, Default)]
 #[component(storage = "SparseSet")]
@@ -780,8 +765,8 @@ pub fn dead(
         if dead.ticks == 0 {
             **kill_count += 1;
             commands.entity(entity).retain::<(
-                TransformBundle,
-                Gent,
+                Transform,
+                GlobalTransform,
                 Dead,
                 Enemy,
                 Role,
@@ -881,35 +866,6 @@ fn check_player_range(
     }
 }
 
-// check if any other enemies are nearby, if so assign to group
-// fn _assign_group(
-//     query: Query<(Entity, &GlobalTransform, Has<Grouped>), With<Enemy>>,
-//     spatial_query: Res<PhysicsWorld>,
-//     mut commands: Commands,
-// ) {
-//     for (entity, transform, is_grouped) in query.iter() {
-//         let project_from = transform.translation().truncate();
-//         if let Some((other, projection)) = spatial_query.point_project(
-//             project_from,
-//             InteractionGroups::new(SENSOR, ENEMY_HURT),
-//             Some(entity),
-//         ) {
-//             let closest = project_from
-//                 .distance([projection.point.x, projection.point.y].into());
-//             if closest < Range::GROUPED && !is_grouped {
-//                 commands.entity(entity).insert(Grouped);
-//             } else if closest >= Range::GROUPED && is_grouped {
-//                 commands.entity(entity).remove::<Grouped>();
-//             }
-//         } else {
-//             commands.entity(entity).remove::<Grouped>();
-//         };
-//     }
-// }
-
-// #[derive(Component, Debug)]
-// struct Grouped;
-
 fn patrolling(
     mut query: Query<
         (
@@ -976,47 +932,6 @@ fn defense(
         }
     }
 }
-
-// fn pushback_attack(
-//     mut query: Query<
-//         (
-//             Entity,
-//             &Facing,
-//             &Gent,
-//             &mut PushbackAttack,
-//             &mut TransitionQueue,
-//         ),
-//         With<Enemy>,
-//     >,
-//     mut commands: Commands,
-// ) {
-//     for (entity, facing, gent, mut attack, mut transitions) in query.iter_mut()
-//     {
-//         attack.ticks += 1;
-//         if attack.ticks == PushbackAttack::STARTUP * 8 {
-//             commands
-//                 .spawn((
-//                     Collider::empty(InteractionGroups {
-//                         memberships: SENSOR,
-//                         filter: PLAYER,
-//                     }),
-//                     TransformBundle::from_transform(Transform::default()),
-//                     AnimationCollider(gent.e_gfx),
-//                     Attack::new(8, entity),
-//                     Pushback(Knockback::new(
-//                         Vec2::new(-facing.direction() * 100., 0.),
-//                         16,
-//                     )),
-//                 ))
-//                 .set_parent(entity);
-//         }
-//         if attack.ticks >= PushbackAttack::MAX * 8 {
-//             transitions.push(PushbackAttack::new_transition(
-//                 Defense::default(),
-//             ))
-//         }
-//     }
-// }
 
 fn aggro(
     mut query: Query<
@@ -1230,10 +1145,11 @@ fn ranged_attack(
                     Collider::cuboid(2.5, 2.5),
                     // Melee hitbox shares the same mask as all enemy attacks
                     theseeker_engine::physics::groups::enemy_attack(),
-                    TransformBundle::from(Transform::from_translation(
-                        enemy_transform.translation().truncate().extend(1.0),
-                    )),
-                    VisibilityBundle::default(),
+                    Transform::from_translation(enemy_transform.translation().truncate().extend(1.0)),
+                    GlobalTransform::default(),
+                    Visibility::Visible,
+                    InheritedVisibility::VISIBLE,
+                    ViewVisibility::default(),
                 ))
                 .with_lingering_particles(particle_effect.0.clone());
         }
@@ -1269,7 +1185,8 @@ fn melee_attack(
                     Collider::cuboid(1.0, 1.0), // Placeholder - AnimationCollider will update this from sprite magenta pixels
                     AnimationCollider(gent.e_gfx),
                     collision_groups,
-                    TransformBundle::from_transform(Transform::default()),
+                    Transform::default(),
+                    GlobalTransform::default(),
                     Attack::new(
                         8,
                         entity,
@@ -1456,82 +1373,6 @@ fn falling(
         }
     }
 }
-
-// fn retreating(
-//     mut query: Query<
-//         (
-//             &Range,
-//             &Facing,
-//             &mut Navigation,
-//             &mut LinearVelocity,
-//             &mut Retreating,
-//             &mut TransitionQueue,
-//         ),
-//         (
-//             With<Enemy>,
-//             Without<Walking>,
-//             Without<Knockback>,
-//         ),
-//     >,
-//     player_query: Query<Entity, With<Player>>,
-// ) {
-//     for (
-//         range,
-//         facing,
-//         mut nav,
-//         mut velocity,
-//         mut retreating,
-//         mut transitions,
-//     ) in query.iter_mut()
-//     {
-//         velocity.x = 12. * facing.direction();
-//         if matches!(*nav, Navigation::Blocked)
-//             || retreating.ticks > retreating.max_ticks
-//         {
-//             velocity.x = 0.;
-//             *nav = Navigation::Grounded;
-//             match range {
-//                 Range::Melee => {
-//                     transitions.push(Retreating::new_transition(
-//                         Defense::default(),
-//                     ));
-//                 },
-//                 Range::Ranged | Range::Aggro => transitions.push(
-//                     Retreating::new_transition(RangedAttack {
-//                         target: player_query.get_single().expect("no player"),
-//                         ticks: 0,
-//                     }),
-//                 ),
-//                 _ => {
-//                     transitions.push(Retreating::new_transition(
-//                         // RangedAttack {
-//                         //     target: player_query.get_single().expect("no player"),
-//                         //     ticks: 0,
-//                         // },
-//                         Waiting::default(),
-//                     ))
-//                 },
-//             }
-//         } else if matches!(range, Range::Melee) {
-//             velocity.x = 0.;
-//             transitions.push(Retreating::new_transition(
-//                 Defense::default(),
-//             ));
-//         } else if matches!(range, Range::Ranged)
-//             || matches!(range, Range::Aggro)
-//         {
-//             velocity.x = 0.;
-//             transitions.push(Retreating::new_transition(
-//                 RangedAttack {
-//                     target: player_query.get_single().expect("no player"),
-//                     ticks: 0,
-//                 },
-//             ));
-//         }
-//
-//         retreating.ticks += 1;
-//     }
-// }
 
 fn chasing(
     mut query: Query<
@@ -1963,17 +1804,6 @@ fn enemy_melee_attack_animation(
     }
 }
 
-// fn enemy_pushback_attack_animation(
-//     i_query: Query<&Gent, (Added<PushbackAttack>, With<Enemy>)>,
-//     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-// ) {
-//     for gent in i_query.iter() {
-//         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-//             enemy.play_key("anim.spider.DefensiveAttack");
-//         }
-//     }
-// }
-
 fn enemy_defense_animation(
     i_query: Query<(&Gent, &Tier), (Added<Defense>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
@@ -1989,18 +1819,6 @@ fn enemy_defense_animation(
         }
     }
 }
-
-// no longer used?
-// fn enemy_retreat_animation(
-//     i_query: Query<&Gent, (Added<Retreating>, With<Enemy>)>,
-//     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-// ) {
-//     for gent in i_query.iter() {
-//         if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-//             enemy.play_key("anim.spider.Retreat");
-//         }
-//     }
-// }
 
 fn enemy_death_animation(
     i_query: Query<(&Gent, &Role, &Tier), (Added<Dead>, With<Enemy>)>,

@@ -790,31 +790,28 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
     pub fn clear_slots(&mut self) {
         let timing = ScriptActionTiming::UnknownTick;
         match &mut self.state {
-            ScriptPlayerState::Playing { ref mut runtime } => {
+            // Active runtimes we can mutate directly
+            ScriptPlayerState::Playing { ref mut runtime }
+            | ScriptPlayerState::Starting { ref mut runtime }
+            | ScriptPlayerState::Stopping { ref mut runtime } => {
                 runtime.tracker.clear_slots(timing);
             },
-            ScriptPlayerState::Starting { ref mut runtime } => {
-                runtime.tracker.clear_slots(timing);
-            },
-            ScriptPlayerState::Stopping { ref mut runtime } => {
-                runtime.tracker.clear_slots(timing);
-            },
+
+            // Runtimes stored inside an Option while we are pre-playing
             ScriptPlayerState::PrePlayHandle {
                 old_runtime: Some(ref mut old_runtime),
                 ..
-            } => {
-                old_runtime.tracker.clear_slots(timing);
-            },
-            ScriptPlayerState::PrePlayKey {
+            }
+            | ScriptPlayerState::PrePlayKey {
                 old_runtime: Some(ref mut old_runtime),
                 ..
             } => {
                 old_runtime.tracker.clear_slots(timing);
             },
-            ScriptPlayerState::ChangingHandle { old_runtime, .. } => {
-                old_runtime.tracker.clear_slots(timing);
-            },
-            ScriptPlayerState::ChangingKey { old_runtime, .. } => {
+
+            // Runtimes swapped out during a change-over
+            ScriptPlayerState::ChangingHandle { old_runtime, .. }
+            | ScriptPlayerState::ChangingKey { old_runtime, .. } => {
                 old_runtime.tracker.clear_slots(timing);
             },
             _ => {},
@@ -824,31 +821,23 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
     pub fn set_slot(&mut self, slot: &str, state: bool) {
         let timing = ScriptActionTiming::UnknownTick;
         match &mut self.state {
-            ScriptPlayerState::Playing { ref mut runtime } => {
-                runtime.tracker.set_slot(timing, slot, state);
-            },
-            ScriptPlayerState::Starting { ref mut runtime } => {
-                runtime.tracker.set_slot(timing, slot, state);
-            },
-            ScriptPlayerState::Stopping { ref mut runtime } => {
+            ScriptPlayerState::Playing { ref mut runtime }
+            | ScriptPlayerState::Starting { ref mut runtime }
+            | ScriptPlayerState::Stopping { ref mut runtime } => {
                 runtime.tracker.set_slot(timing, slot, state);
             },
             ScriptPlayerState::PrePlayHandle {
                 old_runtime: Some(ref mut old_runtime),
                 ..
-            } => {
-                old_runtime.tracker.set_slot(timing, slot, state);
-            },
-            ScriptPlayerState::PrePlayKey {
+            }
+            | ScriptPlayerState::PrePlayKey {
                 old_runtime: Some(ref mut old_runtime),
                 ..
             } => {
                 old_runtime.tracker.set_slot(timing, slot, state);
             },
-            ScriptPlayerState::ChangingHandle { old_runtime, .. } => {
-                old_runtime.tracker.set_slot(timing, slot, state);
-            },
-            ScriptPlayerState::ChangingKey { old_runtime, .. } => {
+            ScriptPlayerState::ChangingHandle { old_runtime, .. }
+            | ScriptPlayerState::ChangingKey { old_runtime, .. } => {
                 old_runtime.tracker.set_slot(timing, slot, state);
             },
             _ => {},
@@ -930,20 +919,21 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
     /// might not be known/available, even if something is currently playing.
     pub fn current_key(&self) -> Option<&str> {
         match &self.state {
-            ScriptPlayerState::Stopped => None,
-            ScriptPlayerState::PrePlayHandle { .. } => None,
-            ScriptPlayerState::PrePlayKey { key, .. } => Some(&key),
-            ScriptPlayerState::Starting { runtime } => {
-                runtime.key.as_ref().map(|x| x.as_str())
+            // Nothing playing (or handle-based variants where we don't know the key)
+            ScriptPlayerState::Stopped
+            | ScriptPlayerState::PrePlayHandle { .. }
+            | ScriptPlayerState::ChangingHandle { .. } => None,
+
+            // Key known directly on the enum variant
+            ScriptPlayerState::PrePlayKey { key, .. }
+            | ScriptPlayerState::ChangingKey { key, .. } => Some(key.as_str()),
+
+            // Key stored inside the runtime
+            ScriptPlayerState::Starting { runtime }
+            | ScriptPlayerState::Playing { runtime }
+            | ScriptPlayerState::Stopping { runtime } => {
+                runtime.key.as_deref()
             },
-            ScriptPlayerState::Playing { runtime } => {
-                runtime.key.as_ref().map(|x| x.as_str())
-            },
-            ScriptPlayerState::Stopping { runtime } => {
-                runtime.key.as_ref().map(|x| x.as_str())
-            },
-            ScriptPlayerState::ChangingHandle { .. } => None,
-            ScriptPlayerState::ChangingKey { key, .. } => Some(&key),
         }
     }
 }

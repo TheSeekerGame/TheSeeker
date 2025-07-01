@@ -2,6 +2,7 @@ use std::f32::consts::PI;
 
 use bevy::ecs::system::{EntityCommand, EntityCommands};
 use bevy::sprite::Material2d;
+use bevy::ecs::world::EntityWorldMut;
 
 use crate::graphics::ability_cooldown;
 use crate::prelude::*;
@@ -108,23 +109,23 @@ impl<T: Component + Clone> AbilityWidgetConfig<T> {
 struct SetFactor(f32);
 
 impl EntityCommand for SetFactor {
-    fn apply(self, entity: Entity, world: &mut World) {
-        let Some(handle) = world
-            .entity(entity)
-            .get::<MaterialNode<ability_cooldown::Material>>()
-        else {
+    fn apply(self, mut entity: EntityWorldMut) {
+        // Retrieve the `MaterialNode` handle from this entity
+        let Some(handle) = entity.get::<MaterialNode<ability_cooldown::Material>>() else {
             return;
         };
         let handle = handle.clone();
-        let Some(mut assets) =
-            world.get_resource_mut::<Assets<ability_cooldown::Material>>()
-        else {
-            return;
-        };
-        let Some(material) = assets.get_mut(handle) else {
-            return;
-        };
-        material.factor = self.0;
+
+        // Access the world to update the underlying material asset
+        entity.world_scope(|world| {
+            if let Some(mut assets) =
+                world.get_resource_mut::<Assets<ability_cooldown::Material>>()
+            {
+                if let Some(material) = assets.get_mut(handle) {
+                    material.factor = self.0;
+                }
+            }
+        });
     }
 }
 

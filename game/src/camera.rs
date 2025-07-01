@@ -12,7 +12,13 @@ use crate::level::MainBackround;
 use crate::prelude::*;
 use bevy::render::camera::ClearColorConfig;
 use bevy::render::view::RenderLayers;
+use bevy::ecs::schedule::IntoScheduleConfigs;
+use bevy::render::camera::{Projection, OrthographicProjection, Camera};
+use bevy::core_pipeline::core_2d::Camera2d;
+use bevy::ecs::query::QuerySingleError;
 
+// Scale factor for the camera's orthographic projection.
+// 1/5 = 0.2 means 5 game pixels = 1 screen pixel at default zoom.
 const PROJECTION_SCALE: f32 = 1.0 / 5.0;
 
 pub struct CameraPlugin;
@@ -48,15 +54,6 @@ impl Plugin for CameraPlugin {
             ),
         );
     }
-}
-
-/// For spawning the main gameplay camera
-#[derive(Bundle)]
-struct MainCameraBundle {
-    camera: Camera2dBundle,
-    limits: GameViewLimits,
-    marker: MainCamera,
-    despawn: StateDespawnMarker,
 }
 
 /// Marker component for the main gameplay camera
@@ -103,24 +100,30 @@ pub(crate) fn setup_main_camera(mut commands: Commands) {
         StateDespawnMarker,
     ));
 
-    // Single camera that renders all layers, with post-processing applied to layers 0 and 1
-    // Player on layer 2 will be rendered after post-processing effects
-    let mut camera = Camera2dBundle::default();
-    camera.camera.hdr = true;
-    camera.projection.scale = PROJECTION_SCALE;
+    // Custom orthographic projection with our desired scale.
+    let projection = Projection::Orthographic(OrthographicProjection {
+        scale: PROJECTION_SCALE,
+        ..OrthographicProjection::default_2d()
+    });
 
+    // Spawn the main 2D camera.
     commands.spawn((
-        MainCameraBundle {
-            camera,
-            marker: MainCamera,
-            despawn: StateDespawnMarker,
-            // TODO: manage this from somewhere
-            limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
+        // Minimal 2-D camera marker – Bevy populates the remaining required components automatically.
+        Camera2d,
+        // Override the automatically-added `Camera` component so we can enable HDR.
+        Camera {
+            hdr: true,
+            ..Default::default()
         },
+        // Our custom projection.
+        projection,
+        // Custom components specific to the game.
+        MainCamera,
+        GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
+        StateDespawnMarker,
         VignetteSettings::default(),
         DarknessSettings::default(),
-        // Render all layers: world (0), light sources (1), and player (2)
-        // Post-processing will only affect layers 0 and 1, player layer 2 renders after
+        // Render layers: world (0), light sources (1) and player (2)
         RenderLayers::from_layers(&[0, 1, 2]),
         Name::new("MainCamera"),
     ));
@@ -178,7 +181,7 @@ fn camera_rig_follow_player(
 /// rig location. also applies camera shake, and limits camera within the level boundaries
 pub(crate) fn update_camera(
     mut camera_query: Query<
-        (&mut Transform, &OrthographicProjection),
+        (&mut Transform, &Projection),
         With<MainCamera>,
     >,
     rig: Res<CameraRig>,
@@ -188,18 +191,29 @@ pub(crate) fn update_camera(
     >,
     camera_shake: Option<Res<CameraShake>>,
 ) {
-    let Ok((mut camera_transform, ortho_projection)) =
-        camera_query.get_single_mut()
-    else {
-        return;
+    let (mut camera_transform, projection) = match camera_query.get_single_mut() {
+        Ok(tuple) => tuple,
+        Err(QuerySingleError::NoEntities(_)) => return,
+        Err(QuerySingleError::MultipleEntities(_)) => {
+            // More than one MainCamera found; this should not happen in normal gameplay.
+            // Log a warning and skip this update to avoid nondeterministic behavior.
+            warn!("Multiple MainCamera entities detected – skipping camera update this frame.");
+            return;
+        },
     };
 
     // Update camera position
     camera_transform.translation.x = rig.camera_position.x;
     camera_transform.translation.y = rig.camera_position.y;
 
+    // Only proceed if this is an orthographic camera.
+    let camera_rect = if let Projection::Orthographic(ortho) = projection {
+        ortho.area
+    } else {
+        return;
+    };
+
     if let Ok((bg_layer, bg_transform)) = backround_query.get_single() {
-        let camera_rect = ortho_projection.area;
         let background_rect = background_rect(bg_layer, bg_transform);
 
         clamp_camera_to_edge(

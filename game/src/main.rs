@@ -12,7 +12,7 @@ mod prelude {
     pub use crate::gamestate::GameState;
 }
 
-use bevy::core::TaskPoolThreadAssignmentPolicy;
+use bevy::app::{TaskPoolThreadAssignmentPolicy, TaskPoolOptions, TaskPoolPlugin};
 use bevy::ecs::schedule::ExecutorKind;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
@@ -65,9 +65,12 @@ fn main() {
     let bevy_plugins = bevy_plugins.set(RenderPlugin {
         render_creation: wgpu_settings.into(),
         synchronous_pipeline_compilation: false,
+        debug_flags: Default::default(),
     });
 
-    let cpus = num_cpus::get_physical();
+    let cpus = std::thread::available_parallelism()
+        .map(|n| n.get())
+        .unwrap_or(1);
     let cpus_io = (cpus * 3 / 4).max(2);
     let cpus_async_compute = (cpus / 4).max(2);
     let bevy_plugins = bevy_plugins.set(TaskPoolPlugin {
@@ -78,16 +81,22 @@ fn main() {
                 min_threads: cpus_io,
                 max_threads: cpus_io,
                 percent: 1.0,
+                on_thread_spawn: None,
+                on_thread_destroy: None,
             },
             async_compute: TaskPoolThreadAssignmentPolicy {
                 min_threads: cpus_async_compute,
                 max_threads: cpus_async_compute,
                 percent: 1.0,
+                on_thread_spawn: None,
+                on_thread_destroy: None,
             },
             compute: TaskPoolThreadAssignmentPolicy {
                 min_threads: cpus,
                 max_threads: cpus,
                 percent: 1.0,
+                on_thread_spawn: None,
+                on_thread_destroy: None,
             },
         },
     });

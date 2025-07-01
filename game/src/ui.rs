@@ -1,9 +1,10 @@
-use bevy::ecs::system::EntityCommands;
+// use of EntityCommands only occurs in commented code; import removed after Bevy 0.16 migration
 
 use crate::assets::UiAssets;
 use crate::prelude::*;
 use crate::ui::kill_counter::KillCounterPlugin;
 use crate::ui::skill_toolbar::SkillToolbarPlugin;
+use bevy::ecs::system::EntityCommands;
 
 pub mod ability_widget;
 mod controls_overlay;
@@ -72,59 +73,39 @@ fn spawn_menuentry(
     butt
 }
 
-/// For use in sickle_ui contexts, use like:
-/// ```rust
-/// button(
-///     row, // any  &mut UiBuilder<Entity> type
-///     OnClick::new().system(new_game),
-///     "YourButtonTextHere",
-///     style.clone(),
-/// );
-/// ```
-// pub fn button<'w, 's, 'a>(
-//     parent: &'a mut UiBuilder<'w, 's, '_, Entity>,
-//     behavior: OnClick,
-//     text: &'static str,
-//     style: TextStyle,
-// ) -> UiBuilder<'w, 's, 'a, Entity> {
-//     parent.container(
-//         (
-//             behavior,
-//             ButtonBundle {
-//                 background_color: BackgroundColor(Color::NONE),
-//                 style: Style {
-//                     justify_content: JustifyContent::Center,
-//                     align_items: AlignItems::Center,
-//                     padding: UiRect::all(Val::Px(4.0)),
-//                     margin: UiRect::all(Val::Px(4.0)),
-//                     ..Default::default()
-//                 },
-//                 ..Default::default()
-//             },
-//         ),
-//         |button| {
-//             button.spawn((
-//                 TextBundle {
-//                     text: Text::from_section(text, style),
-//                     ..Default::default()
-//                 },
-//             ));
-//         },
-//     )
-// }
+// For use in sickle_ui contexts, use like:
+// ```rust
+// button(
+//     row, // any  &mut UiBuilder<Entity> type
+//     OnClick::new().system(new_game),
+//     "YourButtonTextHere",
+//     style.clone(),
+// );
+// ```
 
-trait Spawn {
+// -------------------------------------------------------------------------------------------------
+// A very small helper trait to abstract over the `spawn` method shared by `Commands` and
+// `ChildSpawnerCommands`. In Bevy 0.16 both types expose an inherent `spawn` method with the same
+// signature, so the implementation here is just a thin delegation that keeps existing call-sites
+// intact while avoiding lifetime pitfalls that arose during the migration.
+
+pub(crate) trait Spawn {
     fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands;
 }
 
-impl Spawn for Commands<'_, '_> {
+impl<'w, 's> Spawn for Commands<'w, 's> {
+    #[inline]
     fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
+        // Call the inherent `spawn` on `Commands` directly.
         Commands::spawn(self, bundle)
     }
 }
 
-impl Spawn for ChildBuilder<'_> {
+// Support spawning in Bevy 0.16 child builder API.
+impl<'w> Spawn for bevy::ecs::hierarchy::ChildSpawnerCommands<'w> {
+    #[inline]
     fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
-        theseeker_engine::prelude::ChildBuild::spawn(self, bundle)
+        // Calling the inherent `spawn` method directly via the alias to bypass the trait call.
+        bevy::ecs::hierarchy::ChildSpawnerCommands::spawn(self, bundle)
     }
 }

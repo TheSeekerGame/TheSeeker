@@ -1,4 +1,4 @@
-use bevy::audio::AddAudioSource;
+use bevy::audio::{AddAudioSource, PlaybackSettings};
 
 use crate::prelude::*;
 
@@ -27,10 +27,8 @@ fn setup_precisionmixer(
         PrecisionMixerControl {
             controller: controller.clone(),
         },
-        AudioSourceBundle {
-            source: AudioPlayer(handle),
-            ..Default::default()
-        },
+        AudioPlayer(handle),
+        PlaybackSettings::LOOP,
     ));
 }
 

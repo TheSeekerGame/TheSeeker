@@ -74,18 +74,19 @@ fn spawn_orbs_on_death(
             commands.spawn((
                 LinearVelocity(vel + init_vel),
                 XpOrb { init_timer: 1.0 },
-                SpriteBundle {
-                    sprite: Sprite {
-                        image: asset_server.load("fx/xporb.png"),
-                        color,
-                        custom_size: Some(size),
-                        ..default()
-                    },
-                    transform: Transform::from_translation(
-                        orb_position.extend((15.0 * 0.000001) - 0.0000001),
-                    ),
+                Sprite {
+                    image: asset_server.load("fx/xporb.png"),
+                    color,
+                    custom_size: Some(size),
                     ..default()
                 },
+                Transform::from_translation(
+                    orb_position.extend((15.0 * 0.000001) - 0.0000001),
+                ),
+                GlobalTransform::default(),
+                Visibility::Visible,
+                InheritedVisibility::VISIBLE,
+                ViewVisibility::default(),
                 StateDespawnMarker,
             ));
         }
@@ -128,7 +129,7 @@ fn update_orbs_vel(
 
         if dist < DIST_THRESHOLD {
             commands.entity(entity).despawn();
-            xp_event.send(XpOrbPickup);
+            xp_event.write(XpOrbPickup);
         } else {
             const SPEEDUP_DIST: f32 = 150.0;
             //let scaled_dist = ((100.0 - dist).powi(2) / 100.).clamp(0.0, 2.);

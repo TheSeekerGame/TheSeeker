@@ -2,6 +2,8 @@ use theseeker_engine::physics::{
     Collider, CollisionGroups as InteractionGroups, Group, GROUND,
 };
 
+use bevy::prelude::ChildOf;
+
 use crate::prelude::*;
 
 pub struct WallPlugin;
@@ -43,8 +45,8 @@ pub struct WallBundle {
 pub fn spawn_wall_collision(
     mut commands: Commands,
     // FIXME: LdtkParent was added in our custom bevy_ecs_ldtk, is it no longer needed?
-    wall_query: Query<(&GridCoords, &Parent), Added<Wall>>,
-    parent_query: Query<&Parent, Without<Wall>>,
+    wall_query: Query<(&GridCoords, &ChildOf), Added<Wall>>,
+    parent_query: Query<&ChildOf, Without<Wall>>,
     level_query: Query<(Entity, &LevelIid)>,
     ldtk_projects: Query<&LdtkProjectHandle>,
     ldtk_project_assets: Res<Assets<LdtkProject>>,
@@ -83,9 +85,9 @@ pub fn spawn_wall_collision(
         // An intgrid tile's direct parent will be a layer entity, not the level entity
         // To get the level entity, you need the tile's grandparent.
         // This is where parent_query comes in.
-        if let Ok(grandparent) = parent_query.get(parent.get()) {
+        if let Ok(grandparent) = parent_query.get(parent.parent()) {
             level_to_wall_locations
-                .entry(grandparent.get())
+                .entry(grandparent.parent())
                 .or_default()
                 .insert(grid_coords);
         }
@@ -94,7 +96,7 @@ pub fn spawn_wall_collision(
     level_query.iter().for_each(|(level_entity, level_iid)| {
         if let Some(level_walls) = level_to_wall_locations.get(&level_entity) {
             let ldtk_project = ldtk_project_assets
-                .get(ldtk_projects.single())
+                .get(ldtk_projects.single().expect("Missing LDtk project handle"))
                 .expect("Project should be loaded if level has spawned");
 
             let level = ldtk_project

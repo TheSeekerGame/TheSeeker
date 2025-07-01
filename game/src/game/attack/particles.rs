@@ -1,18 +1,19 @@
 use bevy::ecs::system::EntityCommands;
-use bevy::prelude::{default, BuildChildren, Entity, Name, Query, Without};
+use bevy::prelude::{default, Entity, Name, Query, Without};
+use bevy::ecs::hierarchy::ChildOf;
 use bevy_hanabi::{
     Attribute, ColorOverLifetimeModifier, EffectAsset, EffectProperties,
-    ExprWriter, Gradient, ParticleEffect, ParticleEffectBundle,
-    SetAttributeModifier, SetPositionCircleModifier, ShapeDimension,
-    SizeOverLifetimeModifier, Spawner,
+    ExprWriter, Gradient, ParticleEffect, SetAttributeModifier,
+    SetPositionCircleModifier, ShapeDimension, SizeOverLifetimeModifier,
+    SpawnerSettings,
 };
-use glam::{Vec2, Vec3, Vec4};
+use glam::{Vec3, Vec4};
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
 
 use crate::game::attack::arc_attack::Projectile;
 use crate::prelude::{
-    App, Assets, Commands, Component, GlobalTransform, Handle, Parent, Plugin,
-    Res, ResMut, Resource, Startup, Update,
+    App, Assets, Commands, Component, GlobalTransform, Handle, Plugin, Res,
+    ResMut, Resource, Startup, Update,
 };
 
 pub struct AttackParticlesPlugin;
@@ -122,7 +123,7 @@ fn attack_particles_setup(
     // Create a new effect asset spawning 30 particles per second from a circle
     // and slowly fading from blue-ish to transparent over their lifetime.
     // By default the asset spawns the particles at Z=0.
-    let spawner = Spawner::rate(1000.0.into());
+    let spawner = SpawnerSettings::rate(1000.0.into());
     let effect = effects.add(
         EffectAsset::new(4096, spawner, writer.finish())
             .with_name("2d")
@@ -136,7 +137,7 @@ fn attack_particles_setup(
                 gradient: Gradient::constant(Vec3::splat(1.0)),
                 screen_space_size: false,
             })
-            .render(ColorOverLifetimeModifier { gradient }), //.with_alpha_mode(AlphaMode::Mask(ExprWriter::new().lit(0.001).expr())),
+            .render(ColorOverLifetimeModifier::new(gradient)),
     );
 
     commands.insert_resource(ArcParticleEffectHandle(effect.clone()));
@@ -150,26 +151,21 @@ impl crate::graphics::particles_util::BuildParticles for EntityCommands<'_> {
         &mut self,
         handle: Handle<EffectAsset>,
     ) -> &mut Self {
-        self.with_child(
-            ((
-                ParticleEffectBundle {
-                    // Assign the Z layer so it appears in the egui inspector and can be modified at runtime
-                    effect: ParticleEffect::new(handle.clone()),
-                    ..default()
-                },
-                SystemLifetime(MAX_LIFETIME),
-                Name::new("projectile_particles"),
-            )),
-        )
+        self.with_child((
+            ParticleEffect::new(handle.clone()),
+            EffectProperties::default(),
+            SystemLifetime(MAX_LIFETIME),
+            Name::new("projectile_particles"),
+        ))
     }
 }
 
 fn update_velocity(
     q_parent: Query<&Projectile>,
-    mut query: Query<(&Parent, &mut EffectProperties)>,
+    mut query: Query<(&ChildOf, &mut EffectProperties)>,
 ) {
-    for (parent, mut effect) in &mut query {
-        if let Ok(vel) = q_parent.get(**parent) {
+    for (child_of, mut effect) in &mut query {
+        if let Ok(vel) = q_parent.get(child_of.parent()) {
             // sets emission location far far away so emission appears to have stopped
             effect.set(
                 "dir",
@@ -185,12 +181,12 @@ fn update_velocity(
 
 fn track_particles_parent(
     q_parent: Query<&GlobalTransform>,
-    mut query: Query<(Entity, &Parent, &mut EffectProperties)>,
+    mut query: Query<(Entity, &ChildOf, &mut EffectProperties)>,
     mut commands: Commands,
 ) {
-    for (entity, parent, mut effect) in &mut query {
-        if q_parent.get(**parent).is_err() {
-            commands.entity(entity).remove_parent();
+    for (entity, child_of, mut effect) in &mut query {
+        if q_parent.get(child_of.parent()).is_err() {
+            commands.entity(entity).remove::<ChildOf>();
             // sets emission location far far away so emission appears to have stopped
             effect.set(
                 "emit_loc",
@@ -202,7 +198,7 @@ fn track_particles_parent(
 
 fn despawn_lingering(
     time: Res<GameTime>,
-    mut query: Query<(Entity, &mut SystemLifetime), Without<Parent>>,
+    mut query: Query<(Entity, &mut SystemLifetime), Without<ChildOf>>,
     mut commands: Commands,
 ) {
     for (entity, mut lifetime) in &mut query {

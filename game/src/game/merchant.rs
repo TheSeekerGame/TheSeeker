@@ -52,7 +52,7 @@ impl Plugin for MerchantPlugin {
                         .after(player_enters_merchant_range)
                         .run_if(
                             any_with_component::<MerchantInPlayerRange>
-                                .and_then(not(any_with_component::<
+                                .and(not(any_with_component::<
                                     MerchantNonInteractable,
                                 >)),
                         ),
@@ -76,10 +76,10 @@ impl Plugin for MerchantPlugin {
                     handle_finished_dialogue_stage.before(advance_dialog),
                     advance_dialog.after(spawn_merchant_dialog_text).run_if(
                         any_with_component::<MerchantDialogueBox>
-                            .and_then(
+                            .and(
                                 any_with_component::<MerchantDialogueText>,
                             )
-                            .and_then(
+                            .and(
                                 any_with_component::<MerchantInPlayerRange>,
                             ),
                     ),
@@ -89,7 +89,7 @@ impl Plugin for MerchantPlugin {
             )
                 .run_if(
                     in_state(GameState::Playing)
-                        .and_then(in_state(AppState::InGame)),
+                        .and(in_state(AppState::InGame)),
                 ),
         );
     }
@@ -112,7 +112,12 @@ pub struct MerchantGfx {
 pub struct MerchantGfxBundle {
     marker: MerchantGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteBundle,
+    sprite: Sprite,
+    transform: Transform,
+    global_transform: GlobalTransform,
+    visibility: Visibility,
+    inherited_visibility: InheritedVisibility,
+    view_visibility: ViewVisibility,
     animation: SpriteAnimationBundle,
 }
 
@@ -204,14 +209,15 @@ pub fn setup_merchant(
                     gent: e_gent,
                     offset: None,
                 },
-                sprite: SpriteBundle {
-                    sprite: Sprite {
-                        texture_atlas: Some(TextureAtlas::default()),
-                        ..default()
-                    },
-                    transform: *xf_gent,
-                    ..Default::default()
+                sprite: Sprite {
+                    texture_atlas: Some(TextureAtlas::default()),
+                    ..default()
                 },
+                transform: *xf_gent,
+                global_transform: GlobalTransform::default(),
+                visibility: Visibility::Visible,
+                inherited_visibility: InheritedVisibility::VISIBLE,
+                view_visibility: ViewVisibility::default(),
                 animation: SpriteAnimationBundle { player },
             },
             StateDespawnMarker,
@@ -286,7 +292,7 @@ fn player_in_merchant_range(
 ) {
     if let Ok(player_action) = player_query.get_single() {
         if player_action.just_pressed(&PlayerAction::Interact) {
-            event_writer.send(MerchantDialogueInteractionEvent);
+            event_writer.write(MerchantDialogueInteractionEvent);
         }
     }
 }

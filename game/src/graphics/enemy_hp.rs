@@ -1,10 +1,9 @@
 use std::time::Duration;
 
-use anyhow::{anyhow, Result};
+use anyhow::{anyhow};
 use bevy::prelude::*;
 use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
-use bevy::utils;
 use glam::Vec2;
 use theseeker_engine::physics::{Collider, ColliderShapeAccess};
 
@@ -15,7 +14,7 @@ use crate::game::enemy::Enemy;
 use crate::game::gentstate::Dead;
 use crate::prelude::Update;
 
-const BACKGROUND_COLOR: Color = Color::rgba(0.5, 0.5, 0.5, 0.5);
+const BACKGROUND_COLOR: Color = Color::linear_rgba(0.5, 0.5, 0.5, 0.5);
 const ANIMATION_DELAY_IN_MILLIS: u64 = 600;
 const ANIMATION_SPEED: f32 = 0.2;
 
@@ -24,17 +23,13 @@ pub struct EnemyHpBarPlugin;
 impl Plugin for EnemyHpBarPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(UiMaterialPlugin::<Material>::default());
-        app.add_systems(
-            Update,
-            (
-                instance,
-                update_positions.map(utils::dbg),
-                update_hp.map(utils::dbg),
-                update_visibility.map(utils::dbg),
-                tick_damage_animation,
-                despawn,
-            ),
-        );
+        app
+            .add_systems(Update, instance)
+            .add_systems(Update, update_positions)
+            .add_systems(Update, update_hp)
+            .add_systems(Update, update_visibility)
+            .add_systems(Update, tick_damage_animation)
+            .add_systems(Update, despawn);
     }
 }
 
@@ -78,42 +73,36 @@ fn instance(
         if health.is_added() {
             commands
                 .spawn((
-                    NodeBundle {
-                        node: Node {
-                            width: Val::Px(60.0),
-                            height: Val::Px(10.0),
-                            padding: UiRect::horizontal(Val::Px(2.0)),
-                            position_type: PositionType::Absolute,
-                            ..default()
-                        },
-                        background_color: BACKGROUND_COLOR.into(),
-                        visibility: Visibility::Hidden,
+                    // Root node of the health bar
+                    Node {
+                        width: Val::Px(60.0),
+                        height: Val::Px(10.0),
+                        padding: UiRect::horizontal(Val::Px(2.0)),
+                        position_type: PositionType::Absolute,
                         ..default()
                     },
+                    BackgroundColor(BACKGROUND_COLOR),
+                    Visibility::Hidden,
                     Root { parent: entity },
                     StateDespawnMarker,
                 ))
                 .with_children(|parent| {
                     parent.spawn((
-                        MaterialNodeBundle {
-                            node: Node {
-                                width: Val::Percent(100.0),
-                                height: Val::Percent(200.0),
-                                align_self: AlignSelf::Center,
-                                ..default()
-                            },
-                            material: MaterialNode(material.add(Material {
-                                health: 1.0,
-                                damage: 1.0,
-                            })),
+                        // The filled portion of the bar driven by custom material
+                        Node {
+                            width: Val::Percent(100.0),
+                            height: Val::Percent(200.0),
+                            align_self: AlignSelf::Center,
                             ..default()
                         },
+                        MaterialNode(material.add(Material {
+                            health: 1.0,
+                            damage: 1.0,
+                        })),
                         Bar { parent: entity },
                         DamageAnimation {
                             delay: Timer::new(
-                                Duration::from_millis(
-                                    ANIMATION_DELAY_IN_MILLIS,
-                                ),
+                                Duration::from_millis(ANIMATION_DELAY_IN_MILLIS),
                                 TimerMode::Once,
                             ),
                         },
@@ -130,8 +119,8 @@ fn update_positions(
     >,
     mut hp_root_q: Query<(&Root, &mut Node)>,
     mut camera_q: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
-) -> Result<()> {
-    let (camera_transform, camera) = camera_q.get_single()?;
+) {
+    let Ok((camera_transform, camera)) = camera_q.get_single() else { return; };
 
     for (hp_root, mut style) in hp_root_q.iter_mut() {
         let Ok((global_transform, collider)) = enemy_q.get(hp_root.parent) else {
@@ -166,8 +155,6 @@ fn update_positions(
         style.left = Val::Px(screen_position.x + offset.x);
         style.top = Val::Px(screen_position.y + offset.y);
     }
-
-    Ok(())
 }
 
 fn update_hp(
@@ -178,14 +165,16 @@ fn update_hp(
         &mut DamageAnimation,
     )>,
     mut material: ResMut<Assets<Material>>,
-) -> Result<()> {
+) {
     for (hp_bar, matnode, mut damage_animation) in &mut hp_bar_q {
         let Ok(health) = enemy_q.get(hp_bar.parent) else {
             continue;
         };
-        let material = material.get_mut(&matnode.0).ok_or(anyhow!(
+        let Ok(material) = material.get_mut(&matnode.0).ok_or(anyhow!(
             "Enemy health bar material not found"
-        ))?;
+        )) else {
+            continue;
+        };
 
         let health_factor = 1.0 * (health.current as f32 / health.max as f32);
 
@@ -201,8 +190,6 @@ fn update_hp(
 
         material.health = health_factor;
     }
-
-    Ok(())
 }
 
 fn tick_damage_animation(

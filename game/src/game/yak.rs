@@ -34,7 +34,12 @@ pub struct YakGfx {
 pub struct YakGfxBundle {
     marker: YakGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteBundle,
+    sprite: Sprite,
+    transform: Transform,
+    global_transform: GlobalTransform,
+    visibility: Visibility,
+    inherited_visibility: InheritedVisibility,
+    view_visibility: ViewVisibility,
     animation: SpriteAnimationBundle,
 }
 
@@ -60,14 +65,15 @@ pub fn setup_yak(
                     gent: e_gent,
                     offset: None,
                 },
-                sprite: SpriteBundle {
-                    sprite: Sprite {
-                        texture_atlas: Some(TextureAtlas::default()),
-                        ..default()
-                    },
-                    transform: *xf_gent,
-                    ..Default::default()
+                sprite: Sprite {
+                    texture_atlas: Some(TextureAtlas::default()),
+                    ..default()
                 },
+                transform: *xf_gent,
+                global_transform: GlobalTransform::default(),
+                visibility: Visibility::Visible,
+                inherited_visibility: InheritedVisibility::VISIBLE,
+                view_visibility: ViewVisibility::default(),
                 animation: SpriteAnimationBundle { player },
             },
             StateDespawnMarker,

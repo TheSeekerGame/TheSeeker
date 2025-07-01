@@ -1,7 +1,7 @@
 use bevy::asset::{Asset, UntypedAssetId};
 use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
-use bevy::state::state::FreelyMutableState;
+use bevy::prelude::States;
 use bevy_common_assets::toml::TomlAssetPlugin;
 use bevy_rapier2d::rapier::geometry::SharedShape;
 
@@ -12,11 +12,11 @@ pub mod animation;
 pub mod config;
 pub mod script;
 
-pub struct AssetsPlugin<S: FreelyMutableState> {
+pub struct AssetsPlugin<S: States> {
     pub loading_state: S,
 }
 
-impl<S: FreelyMutableState> Plugin for AssetsPlugin<S> {
+impl<S: States> Plugin for AssetsPlugin<S> {
     fn build(&self, app: &mut App) {
         // add custom asset types
         app.add_plugins((
@@ -105,7 +105,7 @@ impl PreloadedAssets {
 
 /// Detects any "dynamic assets", as they get discovered by `bevy_asset_loader`,
 /// and preloads the things we want preloaded.
-fn watch_preload_dynamic_collections<S: FreelyMutableState>(
+fn watch_preload_dynamic_collections<S: States>(
     dynamic_ass: Res<DynamicAssets>,
     mut assets_preloaded: ResMut<PreloadedAssets>,
     ass: Res<AssetServer>,
@@ -237,7 +237,12 @@ fn populate_collider_map(
             }
         };
         let width = image.width() as usize;
-        let mut data = &mut image.data;
+        let Some(data) = image.data.as_mut() else {
+            warn!(
+                "Image {:?} has no pixel data after conversion, skipping collider generation", h_image
+            );
+            continue;
+        };
         for (i, anim_frame_rect) in layout.textures.iter().enumerate() {
             let min = anim_frame_rect.min;
             let max = anim_frame_rect.max;

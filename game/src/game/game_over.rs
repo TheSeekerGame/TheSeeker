@@ -1,5 +1,4 @@
-use bevy::core::Name;
-use bevy::hierarchy::BuildChildren;
+use bevy::prelude::{Name, UiTargetCamera as TargetCamera};
 use theseeker_engine::prelude::{
     in_state, resource_exists, Button, Color, GameTickUpdate, GameTime,
     Resource,

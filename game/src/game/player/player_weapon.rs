@@ -1,5 +1,6 @@
 use bevy::ecs::system::SystemParam;
-use bevy::prelude::{in_state, IntoSystemConfigs, Res};
+use bevy::prelude::{in_state, Res};
+use bevy::ecs::schedule::IntoScheduleConfigs;
 use leafwing_input_manager::prelude::ActionState;
 use strum_macros::Display;
 use theseeker_engine::prelude::{Commands, DetectChanges, OnEnter};

@@ -1,6 +1,4 @@
-use anyhow::Result;
 use bevy::prelude::*;
-use bevy::utils;
 use leafwing_input_manager::prelude::ActionState;
 
 use super::popup::PopupTimer;
@@ -26,13 +24,8 @@ pub(super) fn plugin(app: &mut App) {
         },
         spawn_control_hint,
     )
-    .add_systems(
-        Update,
-        (
-            toggle_control_overlay.map(utils::dbg),
-            hide_controls_hint.map(utils::dbg),
-        ),
-    );
+    .add_systems(Update, toggle_control_overlay)
+    .add_systems(Update, hide_controls_hint);
 }
 
 fn spawn_control_hint(mut commands: Commands) {
@@ -150,8 +143,8 @@ fn spawn_control_overlay(mut commands: Commands) {
 fn toggle_control_overlay(
     action_state_q: Query<&ActionState<PlayerAction>>,
     mut control_overlay_q: Query<&mut Visibility, With<ControlsOverlay>>,
-) -> Result<()> {
-    let action_state = action_state_q.get_single()?;
+) {
+    let Ok(action_state) = action_state_q.get_single() else { return; };
     if action_state.just_pressed(&PlayerAction::ToggleControlOverlay) {
         for mut visibility in &mut control_overlay_q {
             *visibility = match *visibility {
@@ -162,22 +155,18 @@ fn toggle_control_overlay(
             }
         }
     }
-
-    Ok(())
 }
 
 fn hide_controls_hint(
     action_state_q: Query<&ActionState<PlayerAction>>,
     control_overlay_q: Query<Entity, With<ControlsHint>>,
     mut commands: Commands,
-) -> Result<()> {
-    let action_state = action_state_q.get_single()?;
+) {
+    let Ok(action_state) = action_state_q.get_single() else { return; };
 
     for entity in &control_overlay_q {
         if action_state.just_pressed(&PlayerAction::ToggleControlOverlay) {
             commands.entity(entity).despawn_recursive();
         }
     }
-
-    Ok(())
 }

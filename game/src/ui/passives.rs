@@ -10,9 +10,7 @@ pub(super) fn plugin(app: &mut App) {
     );
     app.add_systems(
         GameTickUpdate,
-        display_passives.run_if(in_state(AppState::InGame).and_then(
-            any_matching::<(Changed<Passives>, With<Player>)>(),
-        )),
+        display_passives.run_if(in_state(AppState::InGame)),
     );
 }
 
@@ -32,35 +30,37 @@ fn spawn_passive_ui_container(mut commands: Commands) {
     ));
 }
 
-// TODO: Improve this system by making it event driven
 fn display_passives(
     mut commands: Commands,
     pickup_assets: Res<PickupAssetHandles>,
     passives: Query<&Passives, With<Player>>,
     passives_ui_node: Query<Entity, With<PassivesUiNode>>,
+    children_q: Query<&Children>,
 ) {
     let Ok(passives) = passives.get_single() else {
         return;
     };
 
     if let Ok(entity) = passives_ui_node.get_single() {
-        commands.entity(entity).despawn_descendants().with_children(
-            |builder| {
-                passives.iter().for_each(|passive| {
-                    if let Some(handle) =
-                        pickup_assets.get_passive_handle(passive)
-                    {
-                        builder.spawn((
-                            ImageNode::new(handle.clone()),
-                            Node {
-                                width: Val::Px(64.0),
-                                height: Val::Px(64.0),
-                                ..Default::default()
-                            },
-                        ));
-                    }
-                });
-            },
-        );
+        if let Ok(children) = children_q.get(entity) {
+            for child_entity in children.iter() {
+                commands.entity(child_entity).despawn_recursive();
+            }
+        }
+
+        commands.entity(entity).with_children(|builder| {
+            passives.iter().for_each(|passive| {
+                if let Some(handle) = pickup_assets.get_passive_handle(passive) {
+                    builder.spawn((
+                        ImageNode::new(handle.clone()),
+                        Node {
+                            width: Val::Px(64.0),
+                            height: Val::Px(64.0),
+                            ..Default::default()
+                        },
+                    ));
+                }
+            });
+        });
     }
 }
