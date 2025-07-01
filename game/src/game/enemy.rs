@@ -771,6 +771,7 @@ pub fn dead(
                 Enemy,
                 Role,
                 Tier,
+                Gent,
             )>();
         }
         if dead.ticks == 8 * 7 {

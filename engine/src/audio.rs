@@ -28,7 +28,10 @@ fn setup_precisionmixer(
             controller: controller.clone(),
         },
         AudioPlayer(handle),
-        PlaybackSettings::LOOP,
+        PlaybackSettings::ONCE,
+        LabeledBackgroundSound {
+            label: "__precisionmixer__".into(),
+        },
     ));
 }
 
