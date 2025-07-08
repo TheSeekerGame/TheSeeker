@@ -1,6 +1,5 @@
 use crate::prelude::*;
 
-// todo make generic
 pub fn transition(
     mut query: Query<(Entity, &mut TransitionQueue)>,
     mut commands: Commands,
@@ -33,7 +32,7 @@ pub trait Transitionable<T: GentState> {
     }
 }
 
-// make not component, make field of state machine
+// Component for queuing state transitions
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct TransitionQueue(
     Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>,
@@ -64,7 +63,7 @@ pub fn add_states(
     }
 }
 
-#[derive(Component, Debug, Default, Clone)]
+#[derive(Component, Debug, Default, Clone, PartialEq, Eq)]
 pub enum Facing {
     #[default]
     Right,

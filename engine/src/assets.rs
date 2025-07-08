@@ -18,6 +18,12 @@ pub struct AssetsPlugin<S: States> {
 
 impl<S: States> Plugin for AssetsPlugin<S> {
     fn build(&self, app: &mut App) {
+        // Register AI asset loaders (must run before LoadingState)
+        app.add_plugins((
+            TomlAssetPlugin::<crate::ai::asset::EnemyArchetype>::new(&["arch.toml"]),
+            TomlAssetPlugin::<crate::ai::asset::EnemyFsm>::new(&["fsm.toml"]),
+        ));
+        
         // add custom asset types
         app.add_plugins((
             TomlAssetPlugin::<self::script::Script>::new(&["script.toml"]),
@@ -38,8 +44,16 @@ impl<S: States> Plugin for AssetsPlugin<S> {
             OnExit(self.loading_state.clone()),
             (
                 finalize_preloaded_dynamic_assets,
-                populate_collider_map.after(finalize_preloaded_dynamic_assets),
+                merge_archetype_overrides.after(finalize_preloaded_dynamic_assets),
+                compile_ai_fsm_assets.after(merge_archetype_overrides),
+                populate_collider_map.after(compile_ai_fsm_assets),
             ),
+        );
+
+        // Add hot-reload support for archetype changes
+        app.add_systems(
+            Update,
+            hot_reload_archetype_fsms.run_if(on_event::<AssetEvent<crate::ai::EnemyArchetype>>),
         );
     }
 }
@@ -112,7 +126,7 @@ fn watch_preload_dynamic_collections<S: States>(
 ) {
     if dynamic_ass.is_changed() {
         for (key, asset) in dynamic_ass.iter_assets() {
-            // TODO: uncomment this when we have per-level asset management
+            // TODO: per-level asset management
             // skip preloading level-specific assets
             // if key.starts_with("level.") {
             //     continue;
@@ -178,6 +192,79 @@ fn finalize_preloaded_dynamic_assets(world: &mut World) {
     // put them back
     world.insert_resource(dynamic_ass);
     world.insert_resource(preloaded_ass);
+}
+
+/// Merge archetype override assets with their base archetypes
+fn merge_archetype_overrides(
+    mut arch_assets: ResMut<Assets<crate::ai::EnemyArchetype>>,
+    preloaded: Res<PreloadedAssets>,
+) {
+    // Collect archetypes that need merging
+    let mut to_merge = Vec::new();
+    for (id, archetype) in arch_assets.iter() {
+        if archetype.base.is_some() {
+            to_merge.push((id, archetype.clone()));
+        }
+    }
+    
+    // Merge each override archetype with its base
+    for (id, mut archetype) in to_merge {
+        if let Some(base_name) = &archetype.base {
+            // Find the base archetype
+            let base_key = format!("arch.{}", base_name);
+            if let Some(base_handle) = preloaded.get_single_asset::<crate::ai::EnemyArchetype>(&base_key) {
+                if let Some(base_arch) = arch_assets.get(&base_handle) {
+                    archetype.merge_with_base(base_arch);
+                    // Update the archetype in assets
+                    arch_assets.insert(id, archetype);
+                } else {
+                    error!("Base archetype {} not found for override", base_name);
+                }
+            } else {
+                error!("Base archetype {} not in preloaded assets", base_name);
+            }
+        }
+    }
+}
+
+/// Compile all loaded FSM assets into CompiledFsm assets
+fn compile_ai_fsm_assets(
+    fsm_assets: Res<Assets<crate::ai::EnemyFsm>>,
+    arch_assets: Res<Assets<crate::ai::EnemyArchetype>>,
+    mut compiled_assets: ResMut<Assets<crate::ai::CompiledFsm>>,
+    mut preloaded: ResMut<PreloadedAssets>,
+) {
+    // First validate all FSM assets
+    for (handle, fsm) in fsm_assets.iter() {
+        if let Err(e) = fsm.validate() {
+            error!("FSM validation failed for {:?}: {}", handle, e);
+        }
+    }
+    
+    // Then validate all archetype assets
+    for (handle, archetype) in arch_assets.iter() {
+        if let Err(e) = archetype.validate() {
+            error!("Archetype validation failed for {:?}: {}", handle, e);
+        }
+    }
+    
+    let compiled_map = crate::ai::compile_all_fsms(
+        &fsm_assets,
+        &arch_assets,
+        &mut compiled_assets,
+        &preloaded,
+    );
+    
+    // Add compiled FSM handles to preloaded assets
+    for (key, handle) in compiled_map {
+        let untyped_handle = handle.untyped();
+        preloaded.handles.insert(untyped_handle.clone());
+        preloaded.map.insert(
+            key.clone(),
+            Some(DynamicAssetType::Single(untyped_handle.clone())),
+        );
+        preloaded.map_reverse.insert(untyped_handle.id(), key);
+    }
 }
 
 fn populate_collider_map(
@@ -348,5 +435,100 @@ fn populate_collider_map(
         // collider ids is either 0 or an index into shapes?
         // could it be option instead..
         collider_map.map.insert(h_image.id(), collider_ids);
+    }
+}
+
+/// System that recompiles FSMs when archetypes are modified at runtime
+fn hot_reload_archetype_fsms(
+    mut events: EventReader<AssetEvent<crate::ai::EnemyArchetype>>,
+    fsm_assets: Res<Assets<crate::ai::EnemyFsm>>,
+    mut arch_assets: ResMut<Assets<crate::ai::EnemyArchetype>>,
+    mut compiled_assets: ResMut<Assets<crate::ai::CompiledFsm>>,
+    preloaded: Res<PreloadedAssets>,
+    mut fsm_instances: Query<&mut crate::ai::FsmInstance>,
+) {
+    for event in events.read() {
+        match event {
+            AssetEvent::Modified { id } => {
+                // Find which archetype was modified
+                if let Some(archetype) = arch_assets.get(*id).cloned() {
+                    // First, check if this is an override archetype that needs merging
+                    if let Some(base_name) = &archetype.base {
+                        // Find and merge with base
+                        let base_key = format!("arch.{}", base_name);
+                        if let Some(base_handle) = preloaded.get_single_asset::<crate::ai::EnemyArchetype>(&base_key) {
+                            if let Some(base_arch) = arch_assets.get(&base_handle) {
+                                let mut merged_archetype = archetype.clone();
+                                merged_archetype.merge_with_base(base_arch);
+                                // Update the archetype in assets
+                                arch_assets.insert(*id, merged_archetype);
+                            }
+                        }
+                    }
+                    
+                    // Additionally, if the modified archetype is a base archetype (no base field),
+                    // find all override archetypes that inherit from it and re-merge them
+                    if archetype.base.is_none() {
+                        let base_id = &archetype.id;
+                        let mut to_remerge = Vec::new();
+                        
+                        // Find all archetypes that use this as a base
+                        for (override_handle, override_arch) in arch_assets.iter() {
+                            if let Some(ref override_base) = override_arch.base {
+                                if override_base == base_id {
+                                    to_remerge.push((override_handle, override_arch.clone()));
+                                }
+                            }
+                        }
+                        
+                        // Re-merge each override archetype with the updated base
+                        for (override_handle, mut override_arch) in to_remerge {
+                            override_arch.merge_with_base(&archetype);
+                            arch_assets.insert(override_handle, override_arch);
+                        }
+                    }
+                    
+                    // Now recompile all FSMs with the updated archetypes
+                    let compiled_map = crate::ai::compile_all_fsms(
+                        &fsm_assets,
+                        &arch_assets,
+                        &mut compiled_assets,
+                        &preloaded,
+                    );
+
+                    // Hot-patch: Replace CompiledFsm data in existing handles.
+                    // This preserves handle references in active FsmInstance components
+                    // while updating the FSM logic. Keeps temporary handle to avoid
+                    // Bevy asset reuse conflicts during rapid edits.
+                    for (key, new_handle) in compiled_map {
+                        if let Some(old_handle) = preloaded.get_single_asset::<crate::ai::CompiledFsm>(&key) {
+                            if old_handle != new_handle {
+                                // Clone the new FSM data first to avoid borrowing conflicts
+                                if let Some(new_fsm) = compiled_assets.get(&new_handle) {
+                                    let new_fsm_data = new_fsm.clone();
+                                    if let Some(old_fsm) = compiled_assets.get_mut(&old_handle) {
+                                        *old_fsm = new_fsm_data;
+                                    }
+                                }
+                                // Don't remove the temporary handle immediately - let Bevy's 
+                                // Assets GC clean it up to avoid reuse panic
+                            }
+                        }
+                    }
+                    
+                    // Extend cooldown vectors on active enemies if needed
+                    for mut fsm in fsm_instances.iter_mut() {
+                        if let Some(compiled) = compiled_assets.get(&fsm.brain) {
+                            let expected_len = compiled.inner.cooldown_names.len();
+                            if fsm.cooldowns.len() < expected_len {
+                                // Extend with zeros for new cooldowns
+                                fsm.cooldowns.resize(expected_len, 0);
+                            }
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
     }
 }

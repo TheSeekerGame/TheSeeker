@@ -1,0 +1,92 @@
+# Deterministic FSM: exactly ONE state active at any time
+#
+# Core design: Each state has ONE entry condition (from="Any")
+# States exit when another state's conditions become true
+#
+# from="Any" should be used as default
+# Use more specific 'from' settings only if no other solution is available
+# Each state should only have a single [transition] that triggers it
+
+schema_version = 1
+
+[start]
+logic    = "Patrol"
+movement = "Grounded"
+
+# ================= STATES =================
+
+[[state]]
+track = "logic"
+name  = "Patrol"
+# Idle/walk phases via state_tick (avoids duplicate entry conditions)
+on_enter = [
+    { play_anim = "Idle" },
+    { set_vel = "0,0" }
+]
+tick = [
+    # At 75 ticks, switch to walk phase
+    { at_state_tick = 75, play_anim = "Walk" },
+    { at_state_tick = 75, set_vel_from_facing = "$WALK_SPEED" },
+    # Refresh velocity to handle blocked navigation
+    { at_state_tick = 100, set_vel_from_facing = "$WALK_SPEED" },
+    { at_state_tick = 125, set_vel_from_facing = "$WALK_SPEED" },
+    { at_state_tick = 150, set_vel_from_facing = "$WALK_SPEED" },
+    { at_state_tick = 175, set_vel_from_facing = "$WALK_SPEED" },
+    { at_state_tick = 200, set_vel_from_facing = "$WALK_SPEED" },
+    # At 225 ticks, return to idle
+    { at_state_tick = 225, play_anim = "Idle" },
+    { at_state_tick = 225, set_vel = "0,0" }
+]
+
+[[state]]
+track = "logic"
+name  = "Chase"
+# Chase the player horizontally
+on_enter = [ { play_anim = "Chase" } ]
+tick = [
+    { face_player = true },
+    { set_vel_towards_player = "$CHASE_SPEED" }
+]
+
+[[state]]
+track = "logic"
+name  = "Attack"
+# Looping melee attack animation; hitbox spawns each loop
+on_enter = [
+    { play_anim = "Attack" },
+    { set_vel = "0,0" }
+]
+# Fire on the exact damage frame (frame-3 → 24 ticks @ 8 tpf)
+tick = [ { at_anim_tick = 24, spawn_attack = { key = "melee_hit", dmg = "$DMG_MELEE" } } ]
+
+[[state]]
+track = "movement"
+name  = "Grounded"
+# (movement handled by logic track actions)
+
+# ================= TRANSITIONS =================
+# Priority order ensures determinism (lower = higher priority)
+
+# Attack: when player is within melee range
+[[transition]]
+track      = "logic"
+from       = "Any"
+to         = "Attack"
+conditions = [ { distance_lt = "$MELEE_RANGE" } ]
+priority   = 0
+
+# Chase: when player is in vision range but outside melee range
+[[transition]]
+track      = "logic"
+from       = "Any"
+to         = "Chase"
+conditions = [ { distance_gt = "$MELEE_RANGE" }, { distance_lt = "$VISION_RANGE" } ]
+priority   = 5
+
+# Patrol: when player is outside vision range
+[[transition]]
+track      = "logic"
+from       = "Any"
+to         = "Patrol"
+conditions = [ { distance_gt = "$VISION_RANGE" } ]
+priority   = 10 

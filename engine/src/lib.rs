@@ -33,6 +33,7 @@ use bevy::app::PluginGroupBuilder;
 
 use crate::prelude::*;
 
+pub mod ai;
 pub mod animation;
 pub mod assets;
 pub mod audio;
@@ -55,5 +56,6 @@ impl PluginGroup for EnginePlugins {
             .add(crate::animation::SpriteAnimationPlugin)
             .add(crate::audio::AudioPlugin)
             .add(crate::gent::GentPlugin)
+            .add(crate::ai::AiPlugin)
     }
 }

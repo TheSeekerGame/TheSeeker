@@ -19,8 +19,8 @@ impl Projectile {
     ///
     /// Creates a projectile with ballistic trajectory toward the target.
     /// 
-    /// Gravity conversion: PlayerConfig.fall_accel is in pixels/tick²,
-    /// multiply by time.hz to convert to pixels/second² for velocity calculations.
+    /// Gravity: fall_accel is in px/tick² at 96Hz, so multiply by 96 to get px/s².
+    /// Example: 4.5 px/tick² × 96 Hz = 432 px/s²
     pub fn with_vel(
         target: Vec2,
         start: Vec2,

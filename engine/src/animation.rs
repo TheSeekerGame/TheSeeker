@@ -8,11 +8,41 @@ use crate::prelude::*;
 use crate::script::common::ExtendedScriptTracker;
 use crate::script::*;
 
+/// System set for animation loop detection ordering
+#[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
+pub enum AnimationSet {
+    /// Detects when animations loop
+    LoopDetection,
+    /// Clears animation loop markers
+    LoopClear,
+}
+
 pub struct SpriteAnimationPlugin;
 
 impl Plugin for SpriteAnimationPlugin {
     fn build(&self, app: &mut App) {
         app.add_script_runtime::<SpriteAnimation>();
+
+        // Configure animation system sets
+        app.configure_sets(
+            crate::time::GameTickUpdate,
+            (
+                AnimationSet::LoopDetection,
+                AnimationSet::LoopClear.after(AnimationSet::LoopDetection),
+            ),
+        );
+
+        // Detect animation loops on every tick and mark them with AnimLoop.
+        app.add_systems(
+            crate::time::GameTickUpdate,
+            detect_animation_loop.in_set(AnimationSet::LoopDetection),
+        );
+        
+        // Clear animation loop markers after all systems that might need them
+        app.add_systems(
+            crate::time::GameTickUpdate,
+            clear_anim_loop.in_set(AnimationSet::LoopClear),
+        );
     }
 }
 
@@ -57,6 +87,15 @@ pub struct SpriteAnimationTracker {
 pub struct SpriteAnimationCarryover {
     frame: Option<FrameId>,
 }
+
+// One-tick marker when sprite animation loops to frame 0.
+// Used by AI to reset anim_tick for frame-exact action timing (at_anim_tick).
+#[derive(Component)]
+pub struct AnimLoop;
+
+// Tracks previous frame to detect animation loops
+#[derive(Component, Default)]
+struct PrevFrame(u32);
 
 impl SpriteAnimationTracker {
     fn resolve_bookmark(&self, bm: Option<&String>) -> FrameId {
@@ -646,5 +685,43 @@ impl ScriptAsset for SpriteAnimation {
         }
 
         builder
+    }
+}
+
+/// Detect when a `SpriteAnimation` wraps from a later frame back to an earlier one.
+fn detect_animation_loop(
+    mut query: Query<(Entity, &Sprite, Option<&mut PrevFrame>), With<ScriptPlayer<SpriteAnimation>>>,
+    mut commands: Commands,
+) {
+    for (entity, sprite, prev_opt) in query.iter_mut() {
+        let current_idx = sprite.texture_atlas.as_ref().map(|t| t.index).unwrap_or(0) as u32;
+
+        let mut prev_idx = match prev_opt {
+            Some(mut prev) => {
+                let p = prev.0;
+                prev.0 = current_idx; // update for next tick
+                p
+            },
+            None => {
+                // First time – insert tracker component
+                commands.entity(entity).insert(PrevFrame(current_idx));
+                current_idx
+            }
+        };
+
+        // Loop detected if current index is less than previous index.
+        if current_idx < prev_idx {
+            commands.entity(entity).insert(AnimLoop);
+        }
+    }
+}
+
+/// Remove the one-frame `AnimLoop` markers so they only last a single tick.
+fn clear_anim_loop(
+    mut commands: Commands,
+    query: Query<Entity, With<AnimLoop>>,
+) {
+    for e in &query {
+        commands.entity(e).remove::<AnimLoop>();
     }
 }

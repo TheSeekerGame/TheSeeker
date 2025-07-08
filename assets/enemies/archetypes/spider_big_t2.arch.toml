@@ -1,0 +1,16 @@
+# Override archetype: inherits spider_big, modifies HP and animations
+
+schema_version = 1
+id = "spider_big_t2"
+base = "spider_big"
+
+[override.stats]
+spawn_hp = 900    # Tier2 is 3x base HP (300 * 3)
+
+[override.anim]
+Idle       = "anim.spider2.Idle"
+Attack     = "anim.spider2.RangedAttack"
+Die        = "anim.spider2.Death"
+Decay      = "anim.spider2.Decay"
+Defense    = "anim.spider2.Defense"
+Walk       = "anim.spider2.Walk" 

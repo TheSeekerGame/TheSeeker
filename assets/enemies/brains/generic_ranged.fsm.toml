@@ -1,0 +1,90 @@
+# Deterministic FSM: exactly ONE state active at any time
+#
+# Core design: Each state has ONE entry condition (from="Any")
+# States exit when another state's conditions become true
+#
+# from="Any" should be used as default
+# Use more specific 'from' settings only if no other solution is available
+# Each state should only have a single [transition] that triggers it
+
+schema_version = 1
+
+[start]
+logic    = "Patrol"
+movement = "Grounded"
+
+# ================= STATES =================
+
+[[state]]
+track = "logic"
+name  = "Patrol"
+# Idle/walk phases via state_tick (avoids duplicate entry conditions)
+on_enter = [
+    { play_anim = "Idle" },
+    { set_vel = "0,0" }
+]
+tick = [
+    # At 75 ticks, switch to walk phase
+    { at_state_tick = 75, play_anim = "Walk" },
+    { at_state_tick = 75, set_vel_from_facing = "$WALK_SPEED" },
+    # Refresh velocity to handle blocked navigation
+    { at_state_tick = 100, set_vel_from_facing = "$WALK_SPEED" },
+    { at_state_tick = 125, set_vel_from_facing = "$WALK_SPEED" },
+    { at_state_tick = 150, set_vel_from_facing = "$WALK_SPEED" },
+    { at_state_tick = 175, set_vel_from_facing = "$WALK_SPEED" },
+    { at_state_tick = 200, set_vel_from_facing = "$WALK_SPEED" },
+    # At 225 ticks, return to idle
+    { at_state_tick = 225, play_anim = "Idle" },
+    { at_state_tick = 225, set_vel = "0,0" }
+]
+
+[[state]]
+track = "logic"
+name  = "RangedAttack"
+# Play attack animation, projectile spawns mid-animation
+on_enter = [
+    { face_player = true },
+    { set_vel = "0,0" },
+    { play_anim = "Attack" }
+]
+# Fire projectile on frame 7 (56 ticks @ 8tpf)
+tick = [
+  { at_anim_tick = 56, spawn_attack = { key = "spider_ball", dmg = "$DMG_RANGED" } }
+]
+
+[[state]]
+track = "logic"
+name  = "Defense"
+# Defensive stance when player too close
+on_enter = [
+    { set_vel = "0,0" },
+    { play_anim = "Defense" }
+]
+
+[[state]]
+track = "movement"
+name  = "Grounded"
+
+# ================= TRANSITIONS =================
+# Priority order ensures determinism (lower = higher priority)
+
+[[transition]]
+track      = "logic"
+from       = "Any"
+to         = "Defense"
+conditions = [ { distance_lt = "$MELEE_RANGE" } ]
+priority   = 0
+
+[[transition]]
+track      = "logic"
+from       = "Any"
+to         = "RangedAttack"
+conditions = [ { distance_gt = "$MELEE_RANGE" }, { distance_lt = "$VISION_RANGE" } ]
+priority   = 5
+
+[[transition]]
+track      = "logic"
+from       = "Any"
+to         = "Patrol"
+conditions = [ { distance_gt = "$VISION_RANGE" } ]
+priority   = 10

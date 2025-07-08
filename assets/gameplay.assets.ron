@@ -10,7 +10,30 @@
     "cfg.player": File (
         path: "player.cfg.toml",
     ),
-    "cfg.enemy": File (
-        path: "enemy.cfg.toml",
+    // Enemy archetypes
+    "arch.spider_small": File (
+        path: "enemies/archetypes/spider_small.arch.toml",
+    ),
+    "arch.spider_small_t2": File (
+        path: "enemies/archetypes/spider_small_t2.arch.toml",
+    ),
+    "arch.spider_small_t3": File (
+        path: "enemies/archetypes/spider_small_t3.arch.toml",
+    ),
+    "arch.spider_big": File (
+        path: "enemies/archetypes/spider_big.arch.toml",
+    ),
+    "arch.spider_big_t2": File (
+        path: "enemies/archetypes/spider_big_t2.arch.toml",
+    ),
+    "arch.spider_big_t3": File (
+        path: "enemies/archetypes/spider_big_t3.arch.toml",
+    ),
+    // Enemy brains
+    "brain.generic_melee": File (
+        path: "enemies/brains/generic_melee.fsm.toml",
+    ),
+    "brain.generic_ranged": File (
+        path: "enemies/brains/generic_ranged.fsm.toml",
     ),
 })

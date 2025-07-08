@@ -1,0 +1,27 @@
+# Base archetype: defines complete enemy type
+# Override archetypes (t2/t3) inherit and modify these values
+
+schema_version = 1
+id = "spider_big"
+
+# FSM behavior reference
+brain = "generic_ranged.fsm.toml"
+
+# Core stats
+spawn_hp     = 300       # 3x small spider HP
+walk_speed   = 20        # Patrol movement speed
+chase_speed  = 80        # Not used by ranged FSM but included for completeness
+fall_accel   = 4.5       # Gravity
+dmg_melee    = 12        # Defense state damage
+dmg_ranged   = 10        # Projectile damage
+vision_range = 100       # Aggro range
+melee_range  = 24        # Defense state trigger
+
+# Animation mappings: FSM key → asset key
+[anim]
+Idle       = "anim.spider.Idle"
+Attack     = "anim.spider.RangedAttack"
+Die        = "anim.spider.Death"
+Decay      = "anim.spider.Decay"
+Defense    = "anim.spider.Defense"
+Walk       = "anim.spider.Walk"        # used when patrolling 

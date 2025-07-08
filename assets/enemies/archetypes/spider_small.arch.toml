@@ -1,0 +1,28 @@
+# Base archetype: defines complete enemy type
+# Override archetypes (t2/t3) inherit and modify these values
+
+schema_version = 1
+id = "spider_small"
+
+# FSM behavior reference
+brain = "generic_melee.fsm.toml"
+
+# Core stats (all required for base archetypes)
+spawn_hp     = 100       # from enemy.cfg.toml
+walk_speed   = 20        # walking_speed from enemy.cfg.toml
+chase_speed  = 35        # chasing_speed from enemy.cfg.toml
+fall_accel   = 4.5       # from enemy.cfg.toml
+dmg_melee    = 20        # melee_damage from enemy.cfg.toml
+dmg_ranged   = 0         # small melee spider has no ranged attack
+vision_range = 120       # updated vision range per design spec
+melee_range  = 12        # range_melee_melee from enemy.cfg.toml
+
+# Animation mappings: FSM key → asset key
+[anim]
+Idle    = "anim.smallspider.Idle"
+Walk    = "anim.smallspider.Walk"
+Chase   = "anim.smallspider.Chase"
+Attack  = "anim.smallspider.MeleeAttack"
+Die     = "anim.smallspider.Death"
+Decay   = "anim.smallspider.Decay"
+Jump    = "anim.smallspider.Jump" 

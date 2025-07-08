@@ -1,0 +1,17 @@
+# Override archetype: inherits spider_small, modifies HP and animations
+
+schema_version = 1
+id = "spider_small_t3"
+base = "spider_small"
+
+[override.stats]
+spawn_hp = 900    # Tier3 is 9x base HP
+
+[override.anim]
+Idle    = "anim.smallspider3.Idle"
+Walk    = "anim.smallspider3.Walk"
+Chase   = "anim.smallspider3.Chase"
+Attack  = "anim.smallspider3.MeleeAttack"
+Die     = "anim.smallspider3.Death"
+Decay   = "anim.smallspider3.Decay"
+Jump    = "anim.smallspider3.Jump" 

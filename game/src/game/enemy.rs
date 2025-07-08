@@ -4,7 +4,6 @@ use rand::distr::StandardUniform;
 use rand::thread_rng;
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
-use theseeker_engine::assets::config::{update_field, DynamicConfig};
 use theseeker_engine::ballistics_math::ballistic_speed;
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
@@ -29,10 +28,35 @@ use crate::graphics::particles_util::BuildParticles;
 use crate::prelude::*;
 use theseeker_engine::physics::inside::EnemyInsidePlayer as Inside;
 
+use theseeker_engine::ai::{FsmInstance, TargetSensor, GroundSensor, RangeSensor, TurnCooldown, HealthSensor};
+use theseeker_engine::ai::sensors::{CachedArchetypeStats, AiTarget, AiTargetInvisible, GroundedCheck, HealthCheck};
+
 pub struct EnemyPlugin;
 
 impl Plugin for EnemyPlugin {
     fn build(&self, app: &mut App) {
+        // Schedule ordering: Sensors → Brain → Actuator → legacy systems
+        app.configure_sets(
+            GameTickUpdate,
+            (
+                EnemyStateSet::Sensors,
+                EnemyStateSet::Brain.after(EnemyStateSet::Sensors),
+                EnemyStateSet::Actuator.after(EnemyStateSet::Brain),
+                EnemyStateSet::Behavior.after(EnemyStateSet::Actuator),
+                EnemyStateSet::Transition.after(EnemyStateSet::Behavior),
+                EnemyStateSet::Animation.after(EnemyStateSet::Transition),
+                EnemyStateSet::Collisions.after(EnemyStateSet::Animation),
+            ).chain().run_if(in_state(AppState::InGame)),
+        );
+        
+        // Ensure sensors run after animation loop detection but before loop clear
+        app.configure_sets(
+            GameTickUpdate,
+            EnemyStateSet::Sensors
+                .after(theseeker_engine::animation::AnimationSet::LoopDetection)
+                .before(theseeker_engine::animation::AnimationSet::LoopClear),
+        );
+        
         app.add_systems(
             GameTickUpdate,
             (setup_enemy.run_if(in_state(GameState::Playing)))
@@ -44,138 +68,98 @@ impl Plugin for EnemyPlugin {
             spawn_enemies.after(setup_enemy),
         );
         app.insert_resource(EnemyConfig::default());
-        app.add_systems(
-            GameTickUpdate,
-            load_enemy_config.before(EnemyStateSet::Behavior),
-        );
         app.add_plugins((
             EnemyBehaviorPlugin,
-            EnemyTransitionPlugin,
             EnemyAnimationPlugin,
         ));
-        app.register_type::<Range>();
         app.register_type::<Role>();
         app.register_type::<Navigation>();
+
+        // Add player marking systems
+        app.add_systems(
+            GameTickUpdate,
+            (mark_player_as_target, update_player_target_visibility)
+                .before(EnemyStateSet::Sensors)
+                .run_if(in_state(AppState::InGame)),
+        );
+
+        {
+            use theseeker_engine::ai::systems::ai_brain_system;
+            use theseeker_engine::ai::sensors::*;
+
+            // Sensor systems gather world info → sensor components
+            app.add_systems(
+                GameTickUpdate,
+                (
+                    sensor_target,
+                    sensor_ground::<Navigation>,
+                    sensor_range,
+                    sensor_health::<Health>,
+                    sensor_slots,
+                    sensor_reset_timer_on_anim_loop,
+                )
+                    .in_set(EnemyStateSet::Sensors)
+                    .run_if(in_state(AppState::InGame)),
+            );
+            
+            // Trigger state actions for newly spawned enemies
+            app.add_systems(
+                GameTickUpdate,
+                trigger_initial_state_actions
+                    .after(setup_enemy)
+                    .before(EnemyStateSet::Sensors)
+                    .run_if(in_state(AppState::InGame)),
+            );
+
+            // Brain evaluates FSM rules → queues actions
+            app.add_systems(
+                GameTickUpdate,
+                ai_brain_system
+                    .in_set(EnemyStateSet::Brain)
+                    .run_if(in_state(AppState::InGame)),
+            );
+
+            // Actuator executes queued actions → world changes
+            app.add_systems(
+                GameTickUpdate,
+                (enemy_ai_actuator_game, clear_projectile_cache_on_death)
+                    .chain()
+                    .in_set(EnemyStateSet::Actuator)
+                    .run_if(in_state(AppState::InGame)),
+            );
+        }
     }
 }
 
-// pub fn debug_enemy(world: &World, query: Query<Entity, With<Gent>>) {
-//     for entity in query.iter() {
-//         let components = world.inspect_entity(entity);
-//         println!("enemy");
-//         for component in components.iter() {
-//             println!("{:?}", component.name());
-//         }
-//     }
-// }
-
-#[derive(Resource, Debug, Default)]
+#[derive(Resource, Debug)]
 struct EnemyConfig {
     fall_accel: f32,
-    jump_accel: f32,
-
     start_hp: u32,
-
     range_melee_melee: f32,
     range_melee_aggro: f32,
-    range_melee_deaggro: f32,
-    range_ranged_melee: f32,
-    range_ranged_aggro: f32,
-    range_ranged_ranged: f32,
-    range_nearby: f32,
-
-    walking_min_time: u32,
-    walking_max_time: u32,
-    idle_time: u32,
-
-    projectile_arc_x: f32,
-    projectile_arc_y: f32,
-    projectile_damage: f32,
-
-    melee_damage: f32,
-
-    walking_speed: f32,
-    chasing_speed: f32,
-
-    fall_y_velocity: f32,
-    jump_y_velocity: f32,
-}
-fn load_enemy_config(
-    mut ev_asset: EventReader<AssetEvent<DynamicConfig>>,
-    cfgs: Res<Assets<DynamicConfig>>,
-    preloaded: Res<PreloadedAssets>,
-    mut enemy_config: ResMut<EnemyConfig>,
-    mut initialized_config: Local<bool>,
-) {
-    // convert from asset key string to bevy handle
-    let Some(cfg_handle) =
-        preloaded.get_single_asset::<DynamicConfig>("cfg.enemy")
-    else {
-        println!("Couldnt find enemy cfg file");
-        return;
-    };
-    // The reason we do this here instead of in an AssetEvent::Added match arm, is because
-    // the Added match arm fires before preloaded updates with the asset key; as a result
-    // you can't tell what specific DynamicConfig loaded in like that.
-    if !*initialized_config {
-        if let Some(cfg) = cfgs.get(&cfg_handle) {
-            update_enemy_config(&mut enemy_config, cfg);
-        }
-        *initialized_config = true;
-    }
-    for ev in ev_asset.read() {
-        if let AssetEvent::Modified { id } = ev {
-            if let Some(cfg) = cfgs.get(*id) {
-                if cfg_handle.id() == *id {
-                    update_enemy_config(&mut enemy_config, cfg);
-                }
-            }
-        }
-    }
 }
 
-#[rustfmt::skip]
-fn update_enemy_config(config: &mut EnemyConfig, cfg: &DynamicConfig) {
-    let mut errors = Vec::new();
-    update_field(&mut errors, &cfg.0, "fall_accel", |val| config.fall_accel = val);
-    update_field(&mut errors, &cfg.0, "jump_accel", |val| config.jump_accel = val);
-
-    update_field(&mut errors, &cfg.0, "start_hp", |val| config.start_hp = val as u32);
-
-    update_field(&mut errors, &cfg.0, "range_melee_melee", |val| config.range_melee_melee = val);
-    update_field(&mut errors, &cfg.0, "range_melee_aggro", |val| config.range_melee_aggro = val);
-    update_field(&mut errors, &cfg.0, "range_melee_deaggro", |val| config.range_melee_deaggro = val);
-    update_field(&mut errors, &cfg.0, "range_ranged_melee", |val| config.range_ranged_melee = val);
-    update_field(&mut errors, &cfg.0, "range_ranged_aggro", |val| config.range_ranged_aggro = val);
-    update_field(&mut errors, &cfg.0, "range_ranged_ranged", |val| config.range_ranged_ranged = val);
-    update_field(&mut errors, &cfg.0, "range_nearby", |val| config.range_nearby = val);
-
-    update_field(&mut errors, &cfg.0, "walking_min_time", |val| config.walking_min_time = val as u32);
-    update_field(&mut errors, &cfg.0, "walking_max_time", |val| config.walking_max_time = val as u32);
-    update_field(&mut errors, &cfg.0, "idle_time", |val| config.idle_time = val as u32);
-
-    update_field(&mut errors, &cfg.0, "projectile_arc_x", |val| config.projectile_arc_x = val);
-    update_field(&mut errors, &cfg.0, "projectile_arc_y", |val| config.projectile_arc_y = val);
-    update_field(&mut errors, &cfg.0, "projectile_damage", |val| config.projectile_damage = val);
-    update_field(&mut errors, &cfg.0, "melee_damage", |val| config.melee_damage = val);
-
-    update_field(&mut errors, &cfg.0, "walking_speed", |val| config.walking_speed = val);
-    update_field(&mut errors, &cfg.0, "chasing_speed", |val| config.chasing_speed = val);
-
-    update_field(&mut errors, &cfg.0, "fall_y_velocity", |val| config.fall_y_velocity = val);
-    update_field(&mut errors, &cfg.0, "jump_y_velocity", |val| config.jump_y_velocity = val);
-
-    for error in errors{
-       warn!("failed to load enemy cfg value: {}", error);
-   }
+// Fallback defaults when archetype stats missing
+impl Default for EnemyConfig {
+    fn default() -> Self {
+        Self {
+            fall_accel: 4.5,
+            start_hp: 100,
+            range_melee_melee: 12.0,
+            range_melee_aggro: 100.0,
+        }
+    }
 }
 
 #[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
 pub enum EnemyStateSet {
-    Behavior,
-    Collisions,
-    Transition,
-    Animation,
+    Sensors,    // Gather world info into sensor components
+    Brain,      // Evaluate FSM rules using sensor data
+    Actuator,   // Execute actions from FSM
+    Behavior,   // Legacy behavior systems
+    Collisions, // Physics resolution
+    Transition, // State transition handling
+    Animation,  // Animation updates
 }
 
 #[derive(Bundle, LdtkEntity, Default)]
@@ -288,8 +272,7 @@ pub struct EnemyEffectGfx {
     e_gent: Entity,
 }
 
-// TODO:only spawn when all from spawner have died, increase scaling, when 5 are cleared, up spider
-// tier one at a time
+// Spawner scaling occurs automatically once all enemies are cleared.
 // when ranged should be capped at 2 per spawner
 // only tick cooldown when spawner is cleared
 fn spawn_enemies(
@@ -326,8 +309,6 @@ fn spawn_enemies(
             match spawner.spawn_state {
                 SpawnerState::Upgrade => {
                     // set number of clears till next upgrade 2 or 3
-                    // TODO: get rid of threshold_next if we decide to continue with spawning every
-                    // clear
                     spawner.threshold_next = 1;
                     // spawner.threshold_next = thread_rng().gen_range(2..4);
                     // add a slot
@@ -427,13 +408,19 @@ fn setup_enemy(
     )>,
     mut commands: Commands,
     enemy_config: Res<EnemyConfig>,
+    _arch_assets: Res<Assets<theseeker_engine::ai::EnemyArchetype>>,
+    _preloaded: Res<PreloadedAssets>,
+    fsm_assets: Res<Assets<theseeker_engine::ai::CompiledFsm>>,
+    level_seed: Res<theseeker_engine::ai::LevelSeed>,
 ) {
     for (mut xf_gent, tier, role, e_gent, bp) in q.iter_mut() {
         if !bp.is_added() {
             continue;
         }
-        // Z-ordering: Base layer at 0.000014 keeps enemies below player (0.000015)
-        // Additional offsets ensure proper enemy layering by role and tier
+        // Z-ordering layers:
+        // - Base: 0.000014 (below player at 0.000015)
+        // - +0.0000001 for melee (in front of ranged)
+        // - +0.00000001/2 for higher tiers
         xf_gent.translation.z = 14.0 * 0.000001;
         // Make melee spiders appear in front of ranged ones
         if let Role::Melee = role {
@@ -446,21 +433,36 @@ fn setup_enemy(
             Tier::Three => 0.00000002,
         };
         xf_gent.translation.y += 2.0; // Sprite offset so it looks like it is standing on the ground
-        let health = enemy_config.start_hp * *tier as u32;
+        // Resolve health from archetype stats, fallback to config * tier
+        let expected_id = format!("spider_{}{}",
+            if matches!(role, Role::Melee) { "small" } else { "big" },
+            match tier {
+                Tier::Base => "",
+                Tier::Two => "_t2",
+                Tier::Three => "_t3",
+            }
+        );
+
+        let health = _arch_assets
+            .iter()
+            .find(|(_, arch)| arch.id == expected_id)
+            .and_then(|(_, arch)| arch.stats.as_ref().map(|s| s.spawn_hp as u32))
+            .unwrap_or(enemy_config.start_hp * *tier as u32);
         let e_gfx = commands.spawn(()).id();
         let e_effects_gfx = commands.spawn(()).id();
-        commands.entity(e_gent).insert((
-            Name::new("Enemy"),
-            EnemyGentBundle {
-                enemy: Enemy,
-                marker: Gent {
+
+        
+        {
+            // Base components that are always needed
+            commands.entity(e_gent).insert((
+                Name::new("Enemy"),
+                Enemy,
+                Gent {
                     e_gfx,
                     e_effects_gfx,
                 },
-                phys: GentPhysicsBundle {
-                    // need to find a way to offset this one px toward back of enemys facing
-                    // direction
-                    collider: Collider::cuboid(4.0, 2.5), // Half-extents: creates 8x5 collider
+                GentPhysicsBundle {
+                    collider: Collider::cuboid(4.0, 2.5),
                     shapecast: ShapeCaster {
                         shape: SharedShape::cuboid(22.0, 10.0),
                         direction: Dir2::NEG_Y,
@@ -470,24 +472,68 @@ fn setup_enemy(
                     },
                     linear_velocity: LinearVelocity(Vec2::ZERO),
                 },
-            },
-            // Enemy body collider – uses shared helper so masks stay consistent
-            theseeker_engine::physics::groups::enemy_body(),
-            Navigation::Grounded,
-            Range::None,
-            Target(None),
-            Health {
-                current: health,
-                max: health,
-            },
-            Facing::Right,
-            Patrolling,
-            Idle,
-            Waiting::new(12),
-            AddQueue::default(),
-            TransitionQueue::default(),
-            StateDespawnMarker,
-        ));
+                theseeker_engine::physics::groups::enemy_body(),
+                Navigation::Grounded,
+                Health {
+                    current: health,
+                    max: health,
+                },
+                // Random initial facing for patrol variety
+                if rand::thread_rng().gen_bool(0.5) { Facing::Left } else { Facing::Right },
+                StateDespawnMarker,
+                // Keep Role and Tier for death/decay animations and other systems
+                *role,
+                *tier,
+            ));
+            
+            // Add the new AI components via ScriptBundle
+            if let Some(bundle) = theseeker_engine::ai::ScriptBundle::from_arch(
+                &expected_id,
+                e_gent,
+                &_arch_assets,
+                &fsm_assets,
+                &_preloaded,
+                level_seed.0,
+            ) {
+                commands.entity(e_gent).insert(bundle);
+                
+                // Cache archetype stats to avoid per-frame asset lookups
+                let arch = _arch_assets
+                    .iter()
+                    .find(|(_, a)| &a.id == &expected_id)
+                    .map(|(_, a)| a);
+                    
+                let cached_stats = if let Some(arch) = arch {
+                    let stats = arch.stats.as_ref();
+                    theseeker_engine::ai::sensors::CachedArchetypeStats {
+                        vision_range: stats.map(|s| s.vision_range).filter(|&v| v > 0.0).unwrap_or(enemy_config.range_melee_aggro),
+                        melee_range: stats.map(|s| s.melee_range).filter(|&v| v > 0.0).unwrap_or(enemy_config.range_melee_melee),
+                        fall_accel: stats.map(|s| s.fall_accel).unwrap_or(enemy_config.fall_accel),
+                        needs_line_of_sight: arch.id.starts_with("spider_big"),
+                    }
+                } else {
+                    // Fallback stats
+                    theseeker_engine::ai::sensors::CachedArchetypeStats {
+                        vision_range: enemy_config.range_melee_aggro,
+                        melee_range: enemy_config.range_melee_melee,
+                        fall_accel: enemy_config.fall_accel,
+                        needs_line_of_sight: matches!(role, Role::Ranged),
+                    }
+                };
+                commands.entity(e_gent).insert(cached_stats);
+                
+                // Add ProjectileCache for ranged enemies to optimize ballistic calculations
+                if matches!(role, Role::Ranged) {
+                    commands.entity(e_gent).insert(ProjectileCache::new());
+                }
+            } else {
+                error!("Failed to create ScriptBundle for archetype: {}", expected_id);
+            }
+        }
+        
+        // Create the sprite WITHOUT an initial animation - let FSM handle it
+        let sprite_animation = ScriptPlayer::<SpriteAnimation>::default();
+        
         commands.entity(e_gfx).insert((
             EnemyGfxBundle {
                 marker: EnemyGfx { e_gent },
@@ -505,7 +551,7 @@ fn setup_enemy(
                 visibility: Visibility::Visible,
                 inherited_visibility: InheritedVisibility::VISIBLE,
                 view_visibility: ViewVisibility::default(),
-                animation: Default::default(),
+                animation: SpriteAnimationBundle { player: sprite_animation },
             },
             StateDespawnMarker,
         ));
@@ -532,137 +578,45 @@ fn setup_enemy(
             },
             StateDespawnMarker,
         ));
-        commands.entity(e_gfx).remove::<EnemyBlueprint>();
+        commands.entity(e_gent).remove::<EnemyBlueprint>();
     }
 }
-
-
 
 struct EnemyBehaviorPlugin;
 
 impl Plugin for EnemyBehaviorPlugin {
     fn build(&self, app: &mut App) {
+        // Death & decay systems (shared by both AI approaches)
         app.add_systems(
             GameTickUpdate,
-            (
                 (
                     decay_despawn.run_if(any_with_component::<Decay>),
                     dead.run_if(any_with_component::<Dead>),
-                    (
-                        check_player_range,
-                        (
-                            patrolling.run_if(any_with_component::<Patrolling>),
-                            aggro.run_if(any_with_component::<Aggroed>),
-                            waiting.run_if(any_with_component::<Waiting>),
-                            defense.run_if(any_with_component::<Defense>),
-                            ranged_attack
-                                .run_if(any_with_component::<RangedAttack>),
-                            melee_attack
-                                .run_if(any_with_component::<MeleeAttack>),
-                        ),
-                        (
-                            walking.run_if(any_with_component::<Walking>),
-                            chasing.run_if(any_with_component::<Chasing>),
-                            falling,
-                        ),
-                    )
-                        .chain(),
-                )
-                    .run_if(in_state(AppState::InGame))
-                    .in_set(EnemyStateSet::Behavior)
-                    .before(update_sprite_colliders),
-                (move_collide, remove_inside)
-                    .chain()
-                    .in_set(EnemyStateSet::Collisions),
-            ),
+            )
+                .run_if(in_state(AppState::InGame))
+                .in_set(EnemyStateSet::Behavior),
+        );
+        
+        // Physics systems
+        app.add_systems(
+            GameTickUpdate,
+            (
+                enemy_gravity,  // Pure gravity application
+                move_collide,
+                remove_inside,
+            )
+                .chain()  // Chain all physics systems to ensure proper ordering
+                .in_set(EnemyStateSet::Collisions)
+                .run_if(in_state(AppState::InGame)),
         );
     }
 }
 
-#[derive(Component, Default, Debug)]
-#[component(storage = "SparseSet")]
-struct Patrolling;
-impl GentState for Patrolling {}
-impl Transitionable<Aggroed> for Patrolling {
-    type Removals = Patrolling;
-}
-
-#[derive(Component, Default, Debug)]
-#[component(storage = "SparseSet")]
-struct Walking {
-    ticks: u32,
-    max_ticks: u32,
-}
-impl GentState for Walking {}
-impl GenericState for Walking {}
-
-#[derive(Component, Debug, Default)]
-#[component(storage = "SparseSet")]
-struct Chasing;
-impl GentState for Chasing {}
-impl GenericState for Chasing {}
-
-#[derive(Component, Debug)]
-#[component(storage = "SparseSet")]
-struct Aggroed;
-
-impl GentState for Aggroed {}
-impl Transitionable<Patrolling> for Aggroed {
-    // type Removals = (Aggroed, RangedAttack);
-    type Removals = Aggroed;
-}
-
+// Defense component is used by attack system for damage reduction
+// Keep it available for both old and new AI
 #[derive(Component, Debug, Default)]
 #[component(storage = "SparseSet")]
 pub struct Defense;
-
-impl GentState for Defense {}
-impl GenericState for Defense {}
-
-#[derive(Component, Debug)]
-#[component(storage = "SparseSet")]
-struct RangedAttack {
-    target: Entity,
-    ticks: u32,
-}
-impl RangedAttack {
-    const STARTUP: u32 = 6;
-    // const RANGE: f32 = 40.;
-}
-impl GentState for RangedAttack {}
-impl GenericState for RangedAttack {}
-
-#[derive(Component, Debug, Default)]
-#[component(storage = "SparseSet")]
-struct MeleeAttack {
-    ticks: u32,
-}
-impl MeleeAttack {
-    // const RECOVERY: u32 = 9;
-    // const MAX: u32 = 10;
-    // const STARTUP: u32 = 7;
-    const MAX: u32 = 5;
-    const STARTUP: u32 = 3;
-}
-impl GentState for MeleeAttack {}
-impl GenericState for MeleeAttack {}
-
-#[derive(Component, Default)]
-#[component(storage = "SparseSet")]
-struct Waiting {
-    ticks: u32,
-    max_ticks: u32,
-}
-impl Waiting {
-    pub fn new(max: u32) -> Self {
-        Waiting {
-            ticks: 0,
-            max_ticks: max,
-        }
-    }
-}
-impl GentState for Waiting {}
-impl GenericState for Waiting {}
 
 #[derive(Component, Reflect)]
 enum Navigation {
@@ -671,7 +625,7 @@ enum Navigation {
     Blocked,
 }
 
-#[derive(Component, Reflect)]
+#[derive(Component, Reflect, Copy, Clone)]
 enum Role {
     Melee,
     Ranged,
@@ -703,51 +657,6 @@ impl Distribution<Role> for StandardUniform {
         }
     }
 }
-impl Role {
-    pub fn check_range(
-        &self,
-        distance: f32,
-        enemy_config: &EnemyConfig,
-    ) -> Range {
-        match self {
-            Role::Melee => {
-                if distance <= enemy_config.range_melee_melee {
-                    Range::Melee
-                } else if distance <= enemy_config.range_melee_aggro {
-                    Range::Aggro
-                } else if distance <= enemy_config.range_melee_deaggro {
-                    Range::Deaggro
-                } else {
-                    Range::Far
-                }
-            },
-            Role::Ranged => {
-                if distance <= enemy_config.range_ranged_melee {
-                    Range::Melee
-                } else if distance <= enemy_config.range_ranged_aggro {
-                    Range::Aggro
-                } else if distance <= enemy_config.range_ranged_ranged {
-                    Range::Ranged
-                } else {
-                    Range::Far
-                }
-            },
-        }
-    }
-}
-
-#[derive(Component, Debug, Reflect, PartialEq, Eq)]
-enum Range {
-    Melee,
-    Ranged,
-    Aggro,
-    Deaggro,
-    Far,
-    None,
-}
-
-#[derive(Component, Debug, Deref)]
-struct Target(Option<Entity>);
 
 /// Component added to Decaying enemy
 /// not a GentState because it shouldnt transition to or from anything else
@@ -781,521 +690,23 @@ pub fn dead(
     }
 }
 
-// Check how far the player is, set our range, set our target if applicable, turn to face player if
-// in range
-// TODO: check x and y distance independently?
-fn check_player_range(
-    mut query: Query<
-        (
-            &mut Range,
-            &mut Target,
-            &mut Facing,
-            &Role,
-            &GlobalTransform,
-            Has<Aggroed>,
-            Has<MeleeAttack>,
-            Has<Defense>,
-        ),
-        With<Enemy>,
-    >,
-    mut player_query: Query<
-        (
-            Entity,
-            &GlobalTransform,
-            Option<&Stealthing>,
-            &mut EnemiesNearby,
-        ),
-        (Without<Enemy>, With<Player>),
-    >,
-    enemy_config: Res<EnemyConfig>,
-) {
-    if let Ok((player_e, player_trans, player_stealth, mut enemies_nearby)) =
-        player_query.get_single_mut()
-    {
-        // reset every tick
-        **enemies_nearby = 0;
-
-        for (
-            mut range,
-            mut target,
-            mut facing,
-            role,
-            trans,
-            is_aggroed,
-            is_meleeing,
-            is_defending,
-        ) in query.iter_mut()
-        {
-            // TODO: still update enemies nearby in stealth?
-            if player_stealth.is_some() {
-                *range = Range::Deaggro;
-                target.0 = None;
-                continue;
-            }
-            let distance = trans
-                .translation()
-                .truncate()
-                .distance(player_trans.translation().truncate());
-
-            // face player
-            if is_aggroed && !is_meleeing && !is_defending {
-                if trans.translation().x > player_trans.translation().x {
-                    *facing = Facing::Right;
-                } else if trans.translation().x < player_trans.translation().x {
-                    *facing = Facing::Left;
-                }
-            }
-
-            // set range
-            *range = role.check_range(distance, &enemy_config);
-            // set target
-            target.0 = match *range {
-                Range::Melee | Range::Aggro | Range::Ranged => Some(player_e),
-                Range::Deaggro | Range::Far | Range::None => None,
-            };
-            // set nearby enemies for passive buff
-            if distance < enemy_config.range_nearby {
-                **enemies_nearby += 1;
-            };
-        }
-    // if there is no player
-    } else {
-        for (mut range, mut target, _, _, _, _, _, _) in query.iter_mut() {
-            *range = Range::None;
-            target.0 = None;
-        }
-    }
-}
-
-fn patrolling(
-    mut query: Query<
-        (
-            &Range,
-            &mut TransitionQueue,
-            &mut AddQueue,
-            Option<&Waiting>,
-        ),
-        (With<Patrolling>, With<Enemy>),
-    >,
-    enemy_config: Res<EnemyConfig>,
-) {
-    for (range, mut transitions, mut additions, maybe_waiting) in
-        query.iter_mut()
-    {
-        match range {
-            Range::Aggro | Range::Melee => {
-                transitions.push(Patrolling::new_transition(Aggroed));
-                transitions.push(Walking::new_transition(
-                    Waiting::default(),
-                ));
-            },
-            Range::Deaggro | Range::Ranged | Range::Far => {
-                if let Some(waiting) = maybe_waiting {
-                    if waiting.ticks >= waiting.max_ticks {
-                        transitions.push(Waiting::new_transition(Walking {
-                            max_ticks: rand::thread_rng().gen_range(
-                                (enemy_config.walking_min_time)
-                                    ..(enemy_config.walking_max_time),
-                            ),
-                            ticks: 0,
-                        }));
-                    }
-                }
-            },
-            Range::None => {
-                if let Some(waiting) = maybe_waiting {
-                    if waiting.ticks >= 15 * 8 {
-                        additions.add(Idle);
-                    }
-                }
-            },
-        }
-    }
-}
-
-fn waiting(mut query: Query<&mut Waiting, With<Enemy>>) {
-    for mut waiting in query.iter_mut() {
-        waiting.ticks += 1;
-    }
-}
-
-fn defense(
-    mut query: Query<
-        (&Range, &mut TransitionQueue),
-        (With<Enemy>, With<Defense>),
-    >,
-) {
-    for (range, mut transitions) in query.iter_mut() {
-        if !matches!(range, Range::Melee) {
-            transitions.push(Defense::new_transition(
-                Waiting::default(),
-            ));
-        }
-    }
-}
-
-fn aggro(
-    mut query: Query<
-        (
-            &Role,
-            &Range,
-            &Target,
-            &mut LinearVelocity,
-            &mut TransitionQueue,
-        ),
-        (
-            With<Enemy>,
-            With<Aggroed>,
-            // each "substate" of aggro should return back to waiting when with wants to return control
-            // to aggro
-            With<Waiting>,
-        ),
-    >,
-) {
-    for (role, range, target, mut velocity, mut transitions) in query.iter_mut()
-    {
-        if let Some(p_entity) = target.0 {
-            // return to patrol if out of aggro range
-            if matches!(range, Range::Far) {
-                transitions.push(Aggroed::new_transition(Patrolling));
-            } else if matches!(range, Range::Melee) {
-                match role {
-                    Role::Melee => transitions.push(Waiting::new_transition(
-                        MeleeAttack::default(),
-                    )),
-                    Role::Ranged => {
-                        velocity.0.x = 0.;
-                        transitions.push(Waiting::new_transition(Defense));
-                    },
-                }
-            } else if matches!(role, Role::Melee) {
-                transitions.push(Waiting::new_transition(Chasing));
-            } else if matches!(role, Role::Ranged) {
-                transitions.push(Waiting::new_transition(RangedAttack {
-                    target: p_entity,
-                    ticks: 0,
-                }));
-            }
-
-            // if there is no player it should also return to patrol state
-        } else {
-            transitions.push(Aggroed::new_transition(Patrolling));
-        }
-    }
-}
-
-fn ranged_attack(
+// Pure gravity system - applies fall_accel without side effects
+fn enemy_gravity(
     spatial_query: PhysicsWorld,
-    mut query: Query<
-        (
-            Entity,
-            &GlobalTransform,
-            &Range,
-            &Tier,
-            &mut RangedAttack,
-            &mut LinearVelocity,
-            &mut TransitionQueue,
-            &mut AddQueue,
-        ),
-        (With<Enemy>, Without<Knockback>),
-    >,
-    player_query: Query<&Transform, With<Player>>,
-    mut commands: Commands,
-    config: Res<PlayerConfig>,
-    time: Res<GameTime>,
-    particle_effect: Res<ArcParticleEffectHandle>,
-    enemy_config: Res<EnemyConfig>,
+    mut query: Query<(
+        Entity,
+        &mut LinearVelocity,
+        &mut Transform,
+        &mut Navigation,
+        &Collider,
+        &theseeker_engine::ai::sensors::CachedArchetypeStats,
+    ), (With<Enemy>, With<FsmInstance>)>,
 ) {
-    for (
-        entity,
-        enemy_transform,
-        range,
-        tier,
-        mut attack,
-        mut velocity,
-        mut trans_q,
-        mut add_q,
-    ) in query.iter_mut()
-    {
-        if attack.ticks == 0 {
-            velocity.0.x = 0.;
-        }
-        attack.ticks += 1;
-        if attack.ticks >= 15 * 8 {
-            trans_q.push(RangedAttack::new_transition(
-                Waiting::default(),
-            ));
-            add_q.add(Idle);
-        }
-        // if player isnt alive, do nothing, we will transition back once animation finishes
-        let Ok(transform) = player_query.get(attack.target) else {
-            continue;
-        };
-        if attack.ticks == RangedAttack::STARTUP * 8 {
-            // cast a ray midway between enemy and player to find height of ceiling
-            // we want to avoid
-            let mid_pt = (enemy_transform.translation().xy()
-                + transform.translation.xy())
-                * 0.5;
-            // how far is the ceiling above the mid point of the projectile trajectory?
-            let mut ceiling = f32::MAX;
-            if let Some((_hit_e, hit)) = spatial_query.ray_cast(
-                mid_pt,
-                Vec2::new(0.0, 1.0),
-                f32::MAX,
-                true,
-                CollisionGroups::new(ENEMY, GROUND),
-                None,
-            ) {
-                // only count it if the ray didn't start underground
-                if hit.time_of_impact != 0.0 {
-                    ceiling =
-                        mid_pt.y + hit.time_of_impact - enemy_transform.translation().y;
-                } else {
-                    // if it did start underground, fire another one to find how far underground, and then fire again from there + 0.1
-                    if let Some((_hit_e, hit)) = spatial_query.ray_cast(
-                        mid_pt,
-                        Vec2::new(0.0, 1.0),
-                        f32::MAX,
-                        false,
-                        CollisionGroups::new(ENEMY, GROUND),
-                        None,
-                    ) {
-                        if let Some((_hit_e, hit_2)) = spatial_query.ray_cast(
-                            mid_pt + Vec2::new(0.0, hit.time_of_impact + 0.001),
-                            Vec2::new(0.0, 1.0),
-                            f32::MAX,
-                            true,
-                            CollisionGroups::new(ENEMY, GROUND),
-                            None,
-                        ) {
-                            ceiling = mid_pt.y + hit.time_of_impact + hit_2.time_of_impact + 0.001
-                                - enemy_transform.translation().y;
-                        }
-                    }
-                }
-            }
-
-            // account for projectile width
-            ceiling -= 5.0;
-
-            let relative_height =
-                enemy_transform.translation().y - transform.translation.y;
-            let delta_x =
-                transform.translation.x - enemy_transform.translation().x;
-            let gravity = config.fall_accel * time.hz as f32;
-            let rng_factor = 1.0;
-            let mut speed = ballistic_speed(
-                enemy_config.range_ranged_ranged,
-                gravity,
-                relative_height,
-            ) * rng_factor as f32;
-            let max_attempts = 10;
-            // Define default arc as 50ish degree shot with in the direction of the player
-            let mut final_solution = Projectile {
-                vel: LinearVelocity(Vec2::new(
-                    // enemy_config.projectile_arc_x * delta_x.signum(),
-                    // enemy_config.projectile_arc_y,
-                    134.0 * delta_x.signum(),
-                    151.0,
-                )),
-            };
-            for i in 0..max_attempts {
-                if let Some(mut projectile) = Projectile::with_vel(
-                    transform.translation.xy(),
-                    enemy_transform.translation().xy(),
-                    speed,
-                    gravity,
-                ) {
-                    let max_proj_h = projectile.vel.0.y.powi(2) / (2.0 * gravity);
-                    if max_proj_h >= ceiling {
-                        let max_vel_y = (ceiling * (2.0 * gravity)).sqrt();
-                        let max_vel_x =
-                            max_vel_y / projectile.vel.0.y * projectile.vel.0.x;
-                        let max_vel = Vec2::new(max_vel_x, max_vel_y).length();
-                        if let Some(projectile_2) = Projectile::with_vel(
-                            transform.translation.xy(),
-                            enemy_transform.translation().xy(),
-                            max_vel,
-                            gravity,
-                        ) {
-                            projectile = projectile_2
-                        } else {
-                            // attempts to fire anyway, even though ceiling will always block the shot
-                        }
-                    }
-                    final_solution = projectile;
-                    break;
-                } else if i == max_attempts - 1 {
-                    warn!("No solution for ballistic trajectory, even after increased speed to {speed}, using default trajectory!")
-                } else {
-                    speed *= 1.15;
-                }
-            }
-            // spawn in the new projectile:
-            commands
-                .spawn((
-                    Attack::new(
-                        192,
-                        entity,
-                        enemy_config.projectile_damage * *tier as u32 as f32,
-                    )
-                    .with_max_targets(1)
-                    .set_stat_mod(StatusModifier::basic_ice_spider()),
-                    final_solution,
-                    Collider::cuboid(2.5, 2.5),
-                    // Melee hitbox shares the same mask as all enemy attacks
-                    theseeker_engine::physics::groups::enemy_attack(),
-                    Transform::from_translation(enemy_transform.translation().truncate().extend(1.0)),
-                    GlobalTransform::default(),
-                    Visibility::Visible,
-                    InheritedVisibility::VISIBLE,
-                    ViewVisibility::default(),
-                ))
-                .with_lingering_particles(particle_effect.0.clone());
-        }
-        if matches!(range, Range::Melee) {
-            trans_q.push(RangedAttack::new_transition(Defense));
-        }
-    }
-}
-
-fn melee_attack(
-    mut query: Query<
-        (
-            Entity,
-            &mut MeleeAttack,
-            &Tier,
-            &mut TransitionQueue,
-            &Gent,
-        ),
-        With<Enemy>,
-    >,
-    mut commands: Commands,
-    enemy_config: Res<EnemyConfig>,
-) {
-    for (entity, mut attack, tier, mut trans_q, gent) in query.iter_mut() {
-        attack.ticks += 1;
-        if attack.ticks == 8 * MeleeAttack::STARTUP {
-            let damage = enemy_config.melee_damage * *tier as u32 as f32;
-            let collision_groups = theseeker_engine::physics::groups::enemy_attack();
-            
-            // spawn attack hitbox collider as child
-            let attack_entity = commands
-                .spawn((
-                    Collider::cuboid(1.0, 1.0), // Placeholder - AnimationCollider will update this from sprite magenta pixels
-                    AnimationCollider(gent.e_gfx),
-                    collision_groups,
-                    Transform::default(),
-                    GlobalTransform::default(),
-                    Attack::new(
-                        8,
-                        entity,
-                        damage,
-                    ),
-                ))
-                .set_parent(entity)
-                .id();
-        }
-        if attack.ticks >= MeleeAttack::MAX * 8 {
-            trans_q.push(MeleeAttack::new_transition(
-                Waiting::default(),
-            ))
-        }
-    }
-}
-
-fn walking(
-    mut query: Query<
-        (
-            &mut Navigation,
-            &mut Facing,
-            &mut LinearVelocity,
-            &mut Walking,
-            &mut TransitionQueue,
-            &mut AddQueue,
-            // TODO: remove addqueue
-        ),
-        (
-            With<Enemy>,
-            // Without<Retreating>,
-            Without<Knockback>,
-        ),
-    >,
-    enemy_config: Res<EnemyConfig>,
-) {
-    for (
-        mut nav,
-        mut facing,
-        mut velocity,
-        mut walking,
-        mut transitions,
-        mut add_q,
-    ) in query.iter_mut()
-    {
-        // set initial velocity
-        velocity.0.x = -enemy_config.walking_speed * facing.direction();
-        if walking.ticks >= walking.max_ticks {
-            velocity.0.x = 0.;
-            transitions.push(Walking::new_transition(Waiting {
-                ticks: 0,
-                max_ticks: enemy_config.idle_time,
-            }));
-            add_q.add(Idle);
-            continue;
-        }
-        // Turn around if we get to the edge/wall
-        match *nav {
-            Navigation::Blocked => {
-                velocity.0.x *= -1.;
-                *nav = Navigation::Grounded;
-                *facing = match *facing {
-                    Facing::Right => Facing::Left,
-                    Facing::Left => Facing::Right,
-                }
-            },
-            Navigation::Grounded | Navigation::Falling { .. } => {},
-        }
-        walking.ticks += 1;
-    }
-}
-
-fn falling(
-    spatial_query: PhysicsWorld,
-    mut query: Query<
-        (
-            Entity,
-            &mut LinearVelocity,
-            &mut Transform,
-            &ShapeCaster,
-            &mut Navigation,
-            &Collider,
-            &Gent,
-            &Role,
-            &Tier,
-        ),
-        With<Enemy>,
-    >,
-    players: Query<&Transform, (With<Player>, Without<Enemy>)>,
-    enemy_config: Res<EnemyConfig>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-) {
-    for (
-        entity,
-        mut velocity,
-        mut transform,
-        _,
-        mut nav,
-        collider,
-        gent,
-        role,
-        tier,
-    ) in query.iter_mut()
-    {
+    for (entity, mut velocity, mut transform, mut nav, collider, stats) in query.iter_mut() {
         match *nav {
             Navigation::Falling { jumping } => {
                 // Apply gravity consistently
-                velocity.0.y -= enemy_config.fall_accel;
+                velocity.0.y -= stats.fall_accel;
                 
                 // Check for ground collision
                 if let Some((_, toi)) = spatial_query.shape_cast(
@@ -1312,29 +723,18 @@ fn falling(
                     CollisionGroups::new(ENEMY, GROUND),
                     Some(entity),
                 ) {
-                                            // Land if falling downward and witness point indicates ground contact
-                        if velocity.0.y < 0. && toi.details.map(|d| d.witness2.y).unwrap_or(0.0) < 0. {
-                        *nav = Navigation::Grounded;
-                        let witness_y = toi.details.map(|d| d.witness2.y).unwrap_or(0.0);
-                        transform.translation.y =
-                            transform.translation.y - witness_y - toi.time_of_impact
-                                + GROUND_BUFFER;
-                        velocity.0.y = 0.;
-                        if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
-                            enemy_anim.play_key(&format!(
-                                "{}.Chase",
-                                enemy_anim_prefix(role, tier)
-                            ));
+                    if velocity.0.y < 0. {
+                        if let Some(details) = toi.details {
+                            let witness_y = details.witness2.y;
+                            // Only land if witness point is below the collider origin (ground contact)
+                            if witness_y < 0.0 {
+                                *nav = Navigation::Grounded;
+                                // Adjust vertical position so collider rests on ground exactly like pre-refactor behaviour
+                                transform.translation.y = transform.translation.y - witness_y - toi.time_of_impact + GROUND_BUFFER;
+                                velocity.0.y = 0.0;
+                            }
                         }
                     }
-                }
-
-                // Update animation if needed
-                if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
-                    enemy_anim.play_key(&format!(
-                        "{}.Jump",
-                        enemy_anim_prefix(role, tier)
-                    ));
                 }
             },
             Navigation::Grounded => {
@@ -1360,132 +760,11 @@ fn falling(
                     *nav = Navigation::Falling { jumping: false };
                     // Initialize falling with zero velocity
                     velocity.0.y = 0.0;
-                    if let Ok(mut enemy_anim) = gfx_query.get_mut(gent.e_gfx) {
-                        enemy_anim.play_key(&format!(
-                            "{}.Jump",
-                            enemy_anim_prefix(role, tier)
-                        ));
-                    }
                 }
             },
             Navigation::Blocked => {
                 // No special handling needed for blocked state
             }
-        }
-    }
-}
-
-fn chasing(
-    mut query: Query<
-        (
-            &Target,
-            &Facing,
-            &Role,
-            &Range,
-            &mut Navigation,
-            &mut LinearVelocity,
-            &mut TransitionQueue,
-            &Transform,
-            &Gent,
-            &Tier,
-        ),
-        (
-            With<Enemy>,
-            With<Chasing>,
-            Without<Knockback>,
-        ),
-    >,
-    players: Query<&Transform, (With<Player>, Without<Enemy>)>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-    enemy_config: Res<EnemyConfig>,
-) {
-    // println!("tick");
-    for (
-        target,
-        facing,
-        role,
-        range,
-        mut nav,
-        mut velocity,
-        mut transitions,
-        trans,
-        gent,
-        tier,
-    ) in query.iter_mut()
-    {
-        // only melee chase
-        if !matches!(role, Role::Melee) {
-            continue;
-        }
-        if let Some(p_entity) = target.0 {
-            // check if we need to transition
-            match *range {
-                Range::Melee => {
-                    velocity.0.x = 0.;
-                    transitions.push(Chasing::new_transition(
-                        MeleeAttack::default(),
-                    ));
-                },
-                Range::Ranged | Range::Aggro | Range::Deaggro => {
-                    velocity.0.x =
-                        -enemy_config.chasing_speed * facing.direction();
-                    // if we cant get any closer because of edge
-                    if let Navigation::Blocked = *nav {
-                        // velocity.x = 0.;
-                        let Ok(ptrans) = players.get(p_entity) else {
-                            // Player may have despawned (e.g. during scene change). Abort this iteration.
-                            continue;
-                        };
-                        if ptrans.translation.y < trans.translation.y {
-                            velocity.0.y = enemy_config.fall_y_velocity;
-                            *nav = Navigation::Falling { jumping: false };
-                            if let Ok(mut enemy_anim) =
-                                gfx_query.get_mut(gent.e_gfx)
-                            {
-                                enemy_anim.play_key(&format!(
-                                    "{}.Jump",
-                                    enemy_anim_prefix(role, tier)
-                                ));
-                                // enemy_anim.set_slot("fall", true);
-                                // enemy_anim.set_slot("jump", false);
-                            }
-                            // velocity.x = 10.
-                            //     * (ptrans.translation.x - trans.translation.x)
-                            //         .signum();
-                        } else {
-                            velocity.0.y = enemy_config.jump_y_velocity;
-                            if let Ok(mut enemy_anim) =
-                                gfx_query.get_mut(gent.e_gfx)
-                            {
-                                enemy_anim.play_key(&format!(
-                                    "{}.Jump",
-                                    enemy_anim_prefix(role, tier)
-                                ));
-                                // enemy_anim.set_slot("jump", true);
-                                // enemy_anim.set_slot("fall", false);
-                            }
-                            // *nav = Navigation::Grounded;
-                            *nav = Navigation::Falling { jumping: true };
-                        }
-                        // println!("chasing but blocked");
-                        // transitions.push(Chasing::new_transition(
-                        //     Waiting::default(),
-                        // ));
-                    }
-                },
-                _ => {
-                    velocity.0.x = 0.;
-                    transitions.push(Chasing::new_transition(
-                        Waiting::default(),
-                    ))
-                },
-            }
-        // if there is no target, stop chasing
-        } else {
-            velocity.0.x = 0.;
-            transitions.push(Chasing::new_transition(
-                Waiting::default(),
-            ));
         }
     }
 }
@@ -1498,7 +777,6 @@ fn move_collide(
             &mut Navigation,
             &Collider,
             Has<Knockback>,
-            Has<Chasing>,
         ),
         With<Enemy>,
     >,
@@ -1511,14 +789,13 @@ fn move_collide(
         mut nav,
         collider,
         is_knocked,
-        is_chasing,
     ) in query.iter_mut()
     {
         let shape = collider.shared_shape().clone();
         let dir = linear_velocity.0.x.signum();
         let x_len = linear_velocity.0.x.abs();
-        // TODO: should be based on collider half extent x
-        let front = transform.translation.x + 10. * dir;
+        let half_extent_x = collider.shape().compute_local_aabb().half_extents().x;
+        let front = transform.translation.x + (half_extent_x + 2.0) * dir;
         let z = transform.translation.z;
         let mut projected_velocity = linear_velocity.0;
 
@@ -1641,51 +918,32 @@ fn decay_despawn(
     }
 }
 
-struct EnemyTransitionPlugin;
-
-impl Plugin for EnemyTransitionPlugin {
-    fn build(&self, app: &mut App) {
-        app.add_systems(
-            GameTickUpdate,
-            (
-                transition.run_if(any_with_component::<Enemy>),
-                add_states.run_if(any_with_component::<AddQueue>),
-                apply_deferred,
-            )
-                .chain()
-                .in_set(EnemyStateSet::Transition)
-                .after(EnemyStateSet::Behavior)
-                .run_if(in_state(AppState::InGame)),
-        );
-    }
-}
-
 struct EnemyAnimationPlugin;
 
 impl Plugin for EnemyAnimationPlugin {
     fn build(&self, app: &mut App) {
+        // Animation systems (shared by all enemies)
         app.add_systems(
             GameTickUpdate,
             (
-                (
-                    enemy_idle_animation,
-                    enemy_defense_animation,
-                    enemy_walking_animation,
-                    enemy_chasing_animation,
-                    enemy_ranged_attack_animation,
-                    enemy_melee_attack_animation,
-                    enemy_death_animation,
-                    enemy_decay_animation,
-                    enemy_decay_visibility,
-                    sprite_flip,
-                )
-                    .in_set(EnemyStateSet::Animation)
-                    .after(EnemyStateSet::Transition)
-                    .run_if(in_state(AppState::InGame)),
+                enemy_death_animation,
+                enemy_decay_animation,
+                enemy_decay_visibility,
+                sprite_flip,
+            )
+                .in_set(EnemyStateSet::Animation)
+                .after(EnemyStateSet::Transition)
+                .run_if(in_state(AppState::InGame)),
+        );
+        
+
+        
+        // Hit effects run for both
+        app.add_systems(
+            GameTickUpdate,
                 enemy_hit_sfx_gfx
                     .run_if(on_event::<DamageInfo>)
                     .in_set(RespondToDamageInfoSet),
-            ),
         );
     }
 }
@@ -1735,92 +993,6 @@ fn enemy_hit_sfx_gfx(
     }
 }
 
-fn enemy_idle_animation(
-    i_query: Query<(&Gent, &Role, &Tier), (Added<Idle>, With<Enemy>)>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-) {
-    for (gent, role, tier) in i_query.iter() {
-        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key((enemy_anim_prefix(role, tier) + ".Idle").as_str());
-        }
-    }
-}
-
-fn enemy_walking_animation(
-    i_query: Query<(&Gent, &Role, &Tier), (Added<Walking>, With<Enemy>)>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-) {
-    for (gent, role, tier) in i_query.iter() {
-        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            enemy.play_key((enemy_anim_prefix(role, tier) + ".Walk").as_str());
-        }
-    }
-}
-
-fn enemy_chasing_animation(
-    i_query: Query<(&Gent, &Tier), (Added<Chasing>, With<Enemy>)>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-) {
-    for (gent, tier) in i_query.iter() {
-        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            let key = match tier {
-                Tier::Base => "anim.smallspider.Chase",
-                Tier::Two => "anim.smallspider2.Chase",
-                Tier::Three => "anim.smallspider3.Chase",
-            };
-            enemy.play_key(key);
-        }
-    }
-}
-
-fn enemy_ranged_attack_animation(
-    i_query: Query<(&Gent, &Tier), (Added<RangedAttack>, With<Enemy>)>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-) {
-    for (gent, tier) in i_query.iter() {
-        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            let key = match tier {
-                Tier::Base => "anim.spider.RangedAttack",
-                Tier::Two => "anim.spider2.RangedAttack",
-                Tier::Three => "anim.spider3.RangedAttack",
-            };
-            enemy.play_key(key);
-        }
-    }
-}
-
-fn enemy_melee_attack_animation(
-    i_query: Query<(&Gent, &Tier), (Added<MeleeAttack>, With<Enemy>)>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-) {
-    for (gent, tier) in i_query.iter() {
-        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            let key = match tier {
-                Tier::Base => "anim.smallspider.MeleeAttack",
-                Tier::Two => "anim.smallspider2.MeleeAttack",
-                Tier::Three => "anim.smallspider3.MeleeAttack",
-            };
-            enemy.play_key(key);
-        }
-    }
-}
-
-fn enemy_defense_animation(
-    i_query: Query<(&Gent, &Tier), (Added<Defense>, With<Enemy>)>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-) {
-    for (gent, tier) in i_query.iter() {
-        if let Ok(mut enemy) = gfx_query.get_mut(gent.e_gfx) {
-            let key = match tier {
-                Tier::Base => "anim.spider.Defense",
-                Tier::Two => "anim.spider2.Defense",
-                Tier::Three => "anim.spider3.Defense",
-            };
-            enemy.play_key(key);
-        }
-    }
-}
-
 fn enemy_death_animation(
     i_query: Query<(&Gent, &Role, &Tier), (Added<Dead>, With<Enemy>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
@@ -1860,16 +1032,17 @@ fn enemy_decay_visibility(
 
 /// Outputs "anim.{enemy}{tier}"
 fn enemy_anim_prefix(role: &Role, tier: &Tier) -> String {
-    let r = match role {
-        Role::Ranged => "spider",
-        Role::Melee => "smallspider",
-    };
-    let t = match tier {
-        Tier::Base => "",
-        Tier::Two => "2",
-        Tier::Three => "3",
-    };
-    "anim.".to_owned() + r + t
+    format!("anim.{}{}",
+        match role {
+            Role::Ranged => "spider",
+            Role::Melee => "smallspider",
+        },
+        match tier {
+            Tier::Base => "",
+            Tier::Two => "2",
+            Tier::Three => "3",
+        }
+    )
 }
 
 fn sprite_flip(
@@ -1880,7 +1053,6 @@ fn sprite_flip(
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             match facing {
                 Facing::Right => {
-                    // TODO: toggle facing script action
                     player.set_slot("DirectionRight", true);
                     player.set_slot("DirectionLeft", false);
                 },
@@ -1889,6 +1061,369 @@ fn sprite_flip(
                     player.set_slot("DirectionLeft", true);
                 },
             }
+        }
+    }
+}
+
+// AI Components & Systems
+
+/// Ballistic projectile cache - avoids recalculating trajectories each frame
+#[derive(Component, Default)]
+struct ProjectileCache {
+    /// Cached projectile velocity
+    velocity: Option<LinearVelocity>,
+    /// Player position when cache was calculated
+    cached_player_pos: Vec2,
+    /// Gravity value when cache was calculated
+    cached_gravity: f32,
+    /// Max allowed position delta before recalculation (px)
+    position_tolerance: f32,
+}
+
+impl ProjectileCache {
+    fn new() -> Self {
+        Self {
+            velocity: None,
+            cached_player_pos: Vec2::ZERO,
+            cached_gravity: 0.0,
+            position_tolerance: 6.0, // Recalculate if player moves >6px for responsive targeting
+        }
+    }
+    
+    fn is_valid(&self, current_player_pos: Vec2, current_gravity: f32) -> bool {
+        self.velocity.is_some() && 
+        self.cached_player_pos.distance(current_player_pos) < self.position_tolerance &&
+        (self.cached_gravity - current_gravity).abs() < 0.1 // Allow tiny floating point differences
+    }
+    
+    fn clear(&mut self) {
+        self.velocity = None;
+    }
+}
+
+// Game-level actuator: executes AI actions affecting game-specific components
+fn enemy_ai_actuator_game(
+    mut query: Query<(
+        Entity,
+        &mut FsmInstance,
+        &mut LinearVelocity,
+        &mut Facing,
+        &TargetSensor,
+        &Gent,
+        &Transform,
+        &mut Navigation,
+        &mut TurnCooldown,
+        &theseeker_engine::ai::sensors::CachedArchetypeStats,
+        Option<&mut ProjectileCache>,
+    ), With<Enemy>>,
+    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
+    player_query: Query<&Transform, With<Player>>,
+    enemy_config: Res<EnemyConfig>,
+    particle_effects: Res<ArcParticleEffectHandle>,
+    _preloaded: Res<PreloadedAssets>,
+    compiled_assets: Res<Assets<theseeker_engine::ai::CompiledFsm>>,
+    mut commands: Commands,
+) {
+    for (entity, mut fsm, mut velocity, mut facing, target_sensor, gent, transform, mut navigation, mut turn_cooldown, cached_stats, mut projectile_cache) in query.iter_mut() {
+        // Turn cooldown prevents wall-flipping spam
+        if turn_cooldown.timer > 0 {
+            turn_cooldown.timer = turn_cooldown.timer.saturating_sub(1);
+        }
+        
+        // Process queued actions (FIFO). Drain keeps the underlying capacity, avoiding the
+        // two small allocations incurred by `swap`.
+        let brain_handle = fsm.brain.clone();
+        let actions_drained: Vec<_> = fsm.actions.drain(..).collect();
+        
+        for action in actions_drained {
+            match action {
+                theseeker_engine::ai::CompiledAction::PlayAnim(key) => {
+                    if let Ok(mut anim_player) = gfx_query.get_mut(gent.e_gfx) {
+                        // Reset state_tick on animation change for at_state_tick actions
+                        if fsm.current_anim_key.as_ref() != Some(&key.to_string()) {
+                            // Reset state_tick when playing a new animation
+                            fsm.state_tick = 0;
+                            fsm.current_anim_key = Some(key.to_string());
+                        }
+                        anim_player.play_key(&key);
+                        // Reset anim_tick when starting a new animation to synchronize frame timing
+                        fsm.anim_tick = 0;
+                    }
+                },
+                
+                theseeker_engine::ai::CompiledAction::SetVel(vel) => {
+                    velocity.0 = vel;
+                },
+                
+                theseeker_engine::ai::CompiledAction::SetVelTowardsPlayer(speed) => {
+                    // Calculate velocity towards player
+                    if let Some(target_entity) = target_sensor.entity {
+                        if let Ok(player_transform) = player_query.get(target_entity) {
+                            let direction = (player_transform.translation - transform.translation).truncate();
+                            if direction.length_squared() > 0.001 {
+                                // Only move horizontally
+                                let normalized_x = direction.x.signum();
+                                velocity.0.x = normalized_x * speed;
+                            }
+                        }
+                    }
+                },
+                
+                theseeker_engine::ai::CompiledAction::SetVelFromFacing(speed) => {
+                    // Set velocity based on current facing direction
+                    // Note: facing.direction() returns -1.0 for Right, 1.0 for Left
+                    // So we negate it to get the correct direction
+                    velocity.0.x = -facing.direction() * speed;
+                    
+                    // Turn around at walls (with cooldown to prevent flipping)
+                    if matches!(*navigation, Navigation::Blocked) && turn_cooldown.timer == 0 {
+                        // Turn around
+                        *facing = match *facing {
+                            Facing::Right => Facing::Left,
+                            Facing::Left => Facing::Right,
+                        };
+                        // Reset navigation state
+                        *navigation = Navigation::Grounded;
+                        // Update velocity with new facing
+                        velocity.0.x = -facing.direction() * speed;
+                        // Set cooldown to prevent rapid flipping (about 0.5 seconds)
+                        turn_cooldown.timer = 48;
+                    }
+                },
+                
+                theseeker_engine::ai::CompiledAction::FacePlayer => {
+                    // Face player (with turn cooldown)
+                    if turn_cooldown.timer == 0 {
+                        if let Some(target_entity) = target_sensor.entity {
+                            if let Ok(player_transform) = player_query.get(target_entity) {
+                                let dx = player_transform.translation.x - transform.translation.x;
+                                // Note: Sprites are drawn facing LEFT by default, so the facing logic is inverted
+                                let new_facing = if dx >= 0.0 { Facing::Left } else { Facing::Right };
+                                
+                                // Only update if actually changing direction
+                                if new_facing != *facing {
+                                    *facing = new_facing;
+                                    turn_cooldown.timer = 48; // About 0.5 seconds
+                                }
+                            }
+                        }
+                    }
+                },
+                
+                theseeker_engine::ai::CompiledAction::SpawnAttack { key, dmg } => {
+                    if key == "melee_hit" {
+                        // Spawn melee hitbox as child
+                        let attack_entity = commands.spawn((
+                            Collider::cuboid(8.0, 8.0), // Larger initial size to ensure hits register before AnimationCollider updates
+                            theseeker_engine::physics::groups::enemy_attack(),
+                            AnimationCollider(gent.e_gfx), // Links to sprite's magenta pixels
+                            Transform::from_translation(Vec3::new(0.0, 5.0, 0.0)),
+                            GlobalTransform::default(),
+                            Attack::new(8, entity, dmg),
+                        )).set_parent(entity).id();
+
+                        // Ensure the enemy stops moving while performing melee attack
+                        velocity.0 = Vec2::ZERO;
+                    } else if key == "spider_ball" {
+                        // Spawn ranged projectile (big spider attack)
+                        let current_position = transform.translation.truncate();
+
+                        // Create the projectile entity first – we'll attach velocity once we have it.
+                        let projectile_entity = commands
+                            .spawn((
+                                Attack::new(480, entity, dmg), // lifetime in ticks
+                                Collider::cuboid(2.5, 2.5),
+                                theseeker_engine::physics::groups::enemy_attack(),
+                                Transform::from_translation(current_position.extend(1.0)),
+                                GlobalTransform::default(),
+                                Visibility::Visible,
+                                InheritedVisibility::VISIBLE,
+                                ViewVisibility::default(),
+                            ))
+                            .with_lingering_particles(particle_effects.0.clone())
+                            .id();
+
+                        // Try to use cached projectile solution or compute a new one
+                        let mut maybe_projectile = None;
+                        
+                        if let Some(target_entity) = target_sensor.entity {
+                            if let Ok(player_transform) = player_query.get(target_entity) {
+                                let player_pos = player_transform.translation.truncate();
+                                
+                                // Projectile cache for performance
+                                // Get gravity from cached archetype stats for consistency
+                                let archetype_gravity = cached_stats.fall_accel * 96.0;
+                                    
+                                let (need_recalculate, cached_velocity) = if let Some(ref mut cache) = projectile_cache {
+                                    if cache.is_valid(player_pos, archetype_gravity) {
+                                        // Use cached velocity
+                                        (false, cache.velocity)
+                                    } else {
+                                        // Invalidate old cached velocity
+                                        cache.velocity = None;
+                                        (true, None)
+                                    }
+                                } else {
+                                    (true, None)
+                                };
+                                
+                                if !need_recalculate {
+                                    // Use cached solution
+                                    maybe_projectile = cached_velocity.map(|vel| 
+                                        crate::game::attack::arc_attack::Projectile { vel }
+                                    );
+                                } else {
+                                    // Calculate new projectile solution
+                                    let gravity = archetype_gravity; // Use archetype-specific gravity for consistency
+
+                                    // Start with a reasonable speed and keep increasing until we find a solution.
+                                    let mut launch_speed = 200.0; // px/s
+                                    for _ in 0..10 {
+                                        if let Some(p) = crate::game::attack::arc_attack::Projectile::with_vel(
+                                            player_pos,
+                                            current_position,
+                                            launch_speed,
+                                            gravity,
+                                        ) {
+                                                // Cache the solution
+                                                if let Some(ref mut cache) = projectile_cache {
+                                                    cache.velocity = Some(p.vel);
+                                                    cache.cached_player_pos = player_pos;
+                                                    cache.cached_gravity = gravity;
+                                                }
+                                            maybe_projectile = Some(p);
+                                            break;
+                                        }
+                                        launch_speed *= 1.15; // progressively try faster shots
+                                    }
+
+                                    // Fallback: fixed arc if ballistic solver fails
+                                    if maybe_projectile.is_none() {
+                                        let delta_x = player_pos.x - current_position.x;
+                                        let fallback_vel = LinearVelocity(Vec2::new(134.0 * delta_x.signum(), 151.0));
+                                            // Cache the fallback solution
+                                            if let Some(ref mut cache) = projectile_cache {
+                                                cache.velocity = Some(fallback_vel);
+                                                cache.cached_player_pos = player_pos;
+                                                cache.cached_gravity = gravity;
+                                            }
+                                        maybe_projectile = Some(crate::game::attack::arc_attack::Projectile { vel: fallback_vel });
+                                    }
+                                }
+                            }
+                        }
+
+                        // If we didn't have a target (e.g., player stealthed), still fire forward using facing.
+                        if maybe_projectile.is_none() {
+                            let horiz_dir = -facing.direction(); // facing -> sprite left/right; negate to get +x is right
+                            let fallback_vel = LinearVelocity(Vec2::new(134.0 * horiz_dir, 151.0));
+                            maybe_projectile = Some(crate::game::attack::arc_attack::Projectile { vel: fallback_vel });
+                            // Clear cache when firing without target
+                            if let Some(ref mut cache) = projectile_cache {
+                                cache.velocity = Some(fallback_vel);
+                                cache.cached_player_pos = current_position; // approximate
+                            }
+                        }
+
+                        // Attach the projectile component so the arc_projectile system will move it.
+                        if let Some(projectile) = maybe_projectile {
+                            commands.entity(projectile_entity).insert(projectile);
+                        }
+                    }
+                },
+                
+                theseeker_engine::ai::CompiledAction::Cooldown { name, ticks } => {
+                    if let Some(compiled) = compiled_assets.get(&brain_handle) {
+                        if let Some(id) = compiled.inner.cooldown_id(&name) {
+                            let idx = id as usize;
+                            // Direct index - vector sized in ScriptBundle::from_arch
+                            fsm.cooldowns[idx] = ticks;
+                        }
+                    }
+                },
+
+                theseeker_engine::ai::CompiledAction::Delayed { .. } => {
+                    // Delayed actions are unwrapped in brain system
+                },
+                
+                theseeker_engine::ai::CompiledAction::StateDelayed { .. } => {
+                    // StateDelayed actions are unwrapped in brain system
+                },
+            }
+        }
+    }
+}
+
+/// Execute on_enter actions for newly spawned enemies (initial state setup)
+fn trigger_initial_state_actions(
+    mut query: Query<&mut FsmInstance, Added<FsmInstance>>,
+    compiled_assets: Res<Assets<theseeker_engine::ai::CompiledFsm>>,
+) {
+    for mut fsm in query.iter_mut() {
+        // Get the compiled FSM data
+        let Some(compiled) = compiled_assets.get(&fsm.brain) else { 
+            continue; 
+        };
+        
+        // Execute on_enter actions for the initial logic state
+        if let Some(actions) = compiled.inner.logic_state_actions.get(fsm.logic as usize) {
+            fsm.actions.extend(actions.on_enter.iter().cloned());
+        }
+        
+        // Execute on_enter actions for the initial movement state
+        if let Some(actions) = compiled.inner.movement_state_actions.get(fsm.movement as usize) {
+            fsm.actions.extend(actions.on_enter.iter().cloned());
+        }
+    }
+}
+
+/// Clear projectile cache when enemy dies to prevent stale data
+fn clear_projectile_cache_on_death(
+    mut query: Query<&mut ProjectileCache, Added<Dead>>,
+) {
+    for mut cache in query.iter_mut() {
+        cache.clear();
+    }
+}
+
+// Generic trait implementations for sensor systems
+impl GroundedCheck for Navigation {
+    fn is_grounded(&self) -> bool {
+        matches!(self, Navigation::Grounded)
+    }
+}
+
+impl HealthCheck for Health {
+    fn is_zero(&self) -> bool {
+        self.current == 0
+    }
+}
+
+// Player target management - allows AI to find/track player
+pub fn mark_player_as_target(
+    mut commands: Commands,
+    query: Query<Entity, (With<Player>, Without<AiTarget>)>,
+) {
+    for entity in query.iter() {
+        commands.entity(entity).insert(AiTarget);
+    }
+}
+
+pub fn update_player_target_visibility(
+    mut commands: Commands,
+    added_stealth: Query<Entity, (With<Player>, Added<Stealthing>)>,
+    mut removed_stealth: RemovedComponents<Stealthing>,
+    player_query: Query<Entity, With<Player>>,
+) {
+    // Add AiTargetInvisible when stealth is added
+    for entity in added_stealth.iter() {
+        commands.entity(entity).insert(AiTargetInvisible);
+    }
+    
+    // Remove AiTargetInvisible when stealth is removed
+    for entity in removed_stealth.read() {
+        if player_query.contains(entity) {
+            commands.entity(entity).remove::<AiTargetInvisible>();
         }
     }
 }
