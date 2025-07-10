@@ -1130,12 +1130,16 @@ fn enemy_ai_actuator_game(
             turn_cooldown.timer = turn_cooldown.timer.saturating_sub(1);
         }
         
+        let brain_handle = fsm.brain.clone();
         // Process queued actions (FIFO). Drain keeps the underlying capacity, avoiding the
         // two small allocations incurred by `swap`.
-        let brain_handle = fsm.brain.clone();
-        let actions_drained: Vec<_> = fsm.actions.drain(..).collect();
-        
-        for action in actions_drained {
+        // Move the queued actions out of the component without allocating a new buffer.
+        // This avoids the per-frame allocation created by `drain(..).collect()` while still
+        // allowing us to mutate `fsm` inside the loop (the borrow on `actions` is held on
+        // the local variable, not on `fsm`).
+        let mut actions = std::mem::take(&mut fsm.actions);
+
+        for action in actions.drain(..) {
             match action {
                 theseeker_engine::ai::CompiledAction::PlayAnim(key) => {
                     if let Ok(mut anim_player) = gfx_query.get_mut(gent.e_gfx) {
@@ -1351,6 +1355,10 @@ fn enemy_ai_actuator_game(
                 },
             }
         }
+
+        // `actions` is now empty but retains its original capacity; put it back so the brain
+        // system can reuse the allocation next frame without growing a new buffer.
+        fsm.actions = actions;
     }
 }
 

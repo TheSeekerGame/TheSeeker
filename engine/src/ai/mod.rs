@@ -241,7 +241,13 @@ mod script_bundle {
                 logic: compiled_fsm.inner.start_logic,
                 movement: compiled_fsm.inner.start_movement,
                 timers: [0, 0],
-                rng_state: entity.index() ^ level_seed, // Use entity ID XOR level seed as specified
+                // Use the full 64-bit entity bits for a stronger, collision-resistant seed
+                // as per §4.4 of the specification.
+                rng_state: {
+                    let bits = entity.to_bits();          // 64-bit unique identifier
+                    // Mix upper and lower 32 bits then xor with the level seed
+                    ((bits ^ (bits >> 32)) as u32) ^ level_seed
+                },
                 actions: Vec::with_capacity(8),
                 anim_tick: 0,
                 slot_bits: 0,

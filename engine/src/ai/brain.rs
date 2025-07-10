@@ -340,6 +340,28 @@ pub fn compile_fsm(
     logic_rules.sort_by_key(|r| r.priority);
     movement_rules.sort_by_key(|r| r.priority);
 
+    // ---------------------------------------------------------------------
+    // Spec §4 notes that the loader must add an *implicit fallback rule* so
+    // that at least one rule fires every tick, preventing any possibility
+    // of a state vacuum.  We inject a no-op rule that matches `Any`, has
+    // `Always` as its sole condition, performs no actions, and does **not**
+    // trigger a state transition.  Its priority is set to the maximum
+    // `u16` value so that it is evaluated **after** all designer-authored
+    // rules.
+    // ---------------------------------------------------------------------
+
+    let fallback_rule = || CompiledRule {
+        from_pattern: FromPattern::Any,
+        conditions: vec![CompiledCondition::Always],
+        actions: Vec::new(),
+        target_state: None, // Stay in current state
+        priority: u16::MAX,
+        terminal: false,
+    };
+
+    logic_rules.push(fallback_rule());
+    movement_rules.push(fallback_rule());
+
     // Final assembly
     Ok(CompiledFsm {
         inner: Arc::new(CompiledFsmInner {

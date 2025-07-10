@@ -47,7 +47,7 @@ pub fn ai_brain_system(
         
         // NOTE: Do NOT advance timers here – they are incremented **after** rule evaluation
         // and state-action processing to guarantee that `TimerGt(0)` is false on a freshly
-        // entered state (spec §6).
+        // entered state
         
         let prev_states = [fsm.logic, fsm.movement];
         
