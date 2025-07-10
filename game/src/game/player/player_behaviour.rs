@@ -7,13 +7,13 @@ use crate::game::player::Passive;
 use bevy::transform::TransformSystem::TransformPropagate;
 use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
 use leafwing_input_manager::action_state::ActionState;
-use theseeker_engine::physics::{Group, CollisionGroups, ShapeCastHit, ShapeCastStatus, CollisionGroups as InteractionGroups};
+use theseeker_engine::physics::{CollisionGroups, ShapeCastStatus};
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
     into_vec2, update_sprite_colliders, AnimationCollider, Collider,
-    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_HURT, ENEMY_INSIDE,
-    GROUND, PLAYER, PLAYER_ATTACK, ColliderShapeAccess, GROUNDED_THRESHOLD,
+    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
+    GROUND, PLAYER, ColliderShapeAccess, GROUNDED_THRESHOLD,
 };
 use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::physics::groups;
@@ -23,7 +23,7 @@ use super::player_weapon::{
     PlayerCombatStyle, PlayerMeleeWeapon, PushbackValues,
 };
 use super::{
-    dash_icon_fx, player_dash_fx, AttackBundle, CanStealth, DashIcon,
+    dash_icon_fx, player_dash_fx, CanStealth, DashIcon,
     DashStrike, DashType, JumpCount, Knockback, Passives, PlayerStats,
     Pushback, StatType, Stealthing, Whirling,
 };
@@ -42,7 +42,6 @@ use crate::game::player::{
     PlayerGfx, PlayerStateSet, Running, WallSlideTime, WhirlAbility,
 };
 use crate::prelude::*;
-use crate::ui::popup::{PopupTimer, PopupUi};
 use crate::StateDespawnMarker;
 use crate::{camera::CameraShake, game::player::PlayerStatMod};
 
@@ -681,7 +680,7 @@ fn add_dash_strike_collider(
                 pushback_ticks,
             )),
         ))
-        .set_parent(entity)
+        .insert(ChildOf(entity))
         .id();
 
     if stealthed {
@@ -721,7 +720,7 @@ pub fn player_collisions(
     ) in q_gent.iter_mut()
     {
         let mut shape = collider.shared_shape().clone();
-        let mut original_pos = pos.translation.xy();
+        let _original_pos = pos.translation.xy();
         let mut possible_pos = pos.translation.xy();
         let z = pos.translation.z;
         let mut projected_velocity = linear_velocity.0;
@@ -751,7 +750,7 @@ pub fn player_collisions(
                 Some(entity),
             ) {
                 // If we are colliding with an enemy
-                if let Ok((enemy, mut collider)) = q_enemy.get_mut(e) {
+                if let Ok((_enemy, mut _collider)) = q_enemy.get_mut(e) {
                     // change collision groups to only include ground so on the next loop we can
                     // ignore enemies/check our ground collision
                     interaction = CollisionGroups::new(PLAYER, GROUND);
@@ -1357,7 +1356,7 @@ fn player_attack(
                             self_pushback_ticks,
                         )),
                     ));
-                    attack_entity_commands.set_parent(entity);
+                    attack_entity_commands.insert(ChildOf(entity));
 
                     if !is_attacking_downwards {
                         attack_entity_commands.insert(Pushback(
@@ -1501,7 +1500,7 @@ pub fn player_whirl(
                         Transform::from_translation(Vec3::new(0.0, 0.0, 0.0)),
                         GlobalTransform::default(),
                     ))
-                    .set_parent(entity)
+                    .insert(ChildOf(entity))
                     .id();
                 if is_stealthing {
                     commands.entity(new_attack).insert(Stealthed);
@@ -1603,16 +1602,16 @@ fn player_pickup_interact(
                             {
                                 commands
                                     .entity(passive_description)
-                                    .despawn_recursive();
+                                    .despawn();
                             }
                         },
                     }
                     // Despawn the Pickup popup hint
                     for entity in &pickup_hint {
-                        commands.entity(entity).despawn_recursive();
+                        commands.entity(entity).despawn();
                     }
                     // Despawn the PickupDrop entity from the map
-                    commands.entity(entity).despawn_recursive();
+                    commands.entity(entity).despawn();
                     break;
                 }
             }

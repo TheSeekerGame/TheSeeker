@@ -1,4 +1,4 @@
-use std::f32::consts::PI;
+
 
 use bevy::prelude::*;
 use bevy::ecs::system::SystemParam;
@@ -34,10 +34,6 @@ impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         // Add the bevy_rapier2d plugin with pixels_per_meter scaling
         app.add_plugins(InternalPhysicsPlugin::<NoUserData>::pixels_per_meter(1.0));
-        
-        // Add debug rendering to visualize colliders only in non-optimized builds
-        #[cfg(debug_assertions)]
-        app.add_plugins(RapierDebugRenderPlugin::default());
         
         // Keep the sprite shape map for animation colliders
         app.init_resource::<SpriteShapeMap>();

@@ -17,7 +17,7 @@ fn spawn_mainmenu(
     mut commands: Commands,
     uiassets: Res<UiAssets>,
     menuassets: Res<MainMenuAssets>,
-    mut state: ResMut<NextState<AppState>>,
+    mut _state: ResMut<NextState<AppState>>,
 ) {
     commands.spawn((
         Camera2d,

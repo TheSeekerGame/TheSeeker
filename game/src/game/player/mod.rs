@@ -73,14 +73,6 @@ impl Plugin for PlayerPlugin {
             .after(PlayerStateSet::Transition)
             .run_if(in_state(AppState::InGame)),
         );
-        // app.add_systems(
-        //     OnEnter(GameState::Paused),
-        //     (
-        //         debug_player,
-        //         crate::game::enemy::debug_enemy,
-        //     )
-        //         .chain(),
-        // )
         app.add_plugins((
             PlayerActionPlugin,
             PlayerBehaviorPlugin,
@@ -88,14 +80,6 @@ impl Plugin for PlayerPlugin {
             PlayerAnimationPlugin,
             PlayerWeaponPlugin,
         ));
-
-        #[cfg(feature = "dev")]
-        app.add_systems(
-            GameTickUpdate,
-            debug_player_states
-                .run_if(in_state(GameState::Playing))
-                .after(PlayerStateSet::Transition),
-        );
     }
 }
 
@@ -165,11 +149,11 @@ impl Default for Passives {
 
 impl Passives {
     pub fn drop_random(&mut self) -> Option<Passive> {
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         // dont drop more passives if full
         if !self.locked.is_empty() && self.current.len() < Passives::MAX {
-            let i = rng.gen_range(0..self.locked.len());
+            let i = rng.random_range(0..self.locked.len());
             let passive = self.locked.swap_remove(i);
 
             return Some(passive);
@@ -261,100 +245,6 @@ impl Passive {
         }
     }
 }
-
-#[cfg(feature = "dev")]
-fn debug_player_states(
-    query: Query<
-        AnyOf<(
-            Ref<Running>,
-            Ref<Idle>,
-            Ref<Falling>,
-            Ref<Jumping>,
-            Ref<Grounded>,
-            Ref<Dashing>,
-            Ref<DashStrike>,
-            Ref<CanDash>,
-        )>,
-        With<Player>,
-    >,
-) {
-    for states in query.iter() {
-        // println!("{:?}", states);
-        let (
-            running,
-            idle,
-            falling,
-            jumping,
-            grounded,
-            dashing,
-            dash_strike,
-            can_dash,
-        ) = states;
-        let mut states_string: String = String::new();
-        if let Some(running) = running {
-            if running.is_added() {
-                states_string.push_str("added running, ");
-            }
-        }
-        if let Some(idle) = idle {
-            if idle.is_added() {
-                states_string.push_str("added idle, ");
-            }
-        }
-        if let Some(falling) = falling {
-            if falling.is_added() {
-                states_string.push_str("added falling, ");
-            }
-        }
-        if let Some(jumping) = jumping {
-            if jumping.is_added() {
-                states_string.push_str("added jumping, ");
-            }
-        }
-        if let Some(grounded) = grounded {
-            if grounded.is_added() {
-                states_string.push_str("added grounded, ");
-            }
-        }
-        if let Some(dashing) = dashing {
-            if dashing.is_added() {
-                if dashing.is_down_dash() {
-                    states_string.push_str("added down dashing, ");
-                } else {
-                    states_string.push_str("added dashing, ");
-                }
-            }
-        }
-        if let Some(dash_strike) = dash_strike {
-            if dash_strike.is_added() {
-                states_string.push_str("added dashing strike ");
-            }
-        }
-        if let Some(can_dash) = can_dash {
-            if can_dash.is_added() {
-                states_string.push_str("added can_dash, ");
-            }
-        }
-        if !states_string.is_empty() {
-            println!("{}", states_string);
-        }
-
-        // let components = entity.archetype().sparse_set_components();
-        // for item in components {
-        // print!("{:?}", item);
-        // }
-    }
-}
-
-// fn debug_player(world: &World, query: Query<Entity, With<PlayerGfx>>) {
-// fn debug_player(world: &World, query: Query<Entity, With<Player>>) {
-//     for entity in query.iter() {
-//         let components = world.inspect_entity(entity);
-//         for component in components.iter() {
-//             println!("{:?}", component.name());
-//         }
-//     }
-// }
 
 fn setup_player(
     mut q: Query<(&mut Transform, Entity, &ChildOf), Added<PlayerBlueprint>>,
@@ -464,8 +354,8 @@ fn despawn_dead_player(
     mut commands: Commands,
 ) {
     for (entity, gent) in query.iter() {
-        commands.entity(gent.e_gfx).despawn_recursive();
-        commands.entity(entity).despawn_recursive();
+        commands.entity(gent.e_gfx).despawn();
+        commands.entity(entity).despawn();
         commands.insert_resource(GameOver);
     }
 }
@@ -1200,9 +1090,9 @@ fn player_update_passive_buffs(
         health,
         grounded,
         is_stealth,
-        idle,
+        _idle,
         running,
-        jumping,
+        _jumping,
     ) in query.iter_mut()
     {
         let mut attack = 1.;
@@ -1550,7 +1440,7 @@ pub fn on_xp_heal(
     mut query: Query<(&Passives, &mut Health), With<Player>>,
     mut xp_event: EventReader<XpOrbPickup>,
 ) {
-    if let Ok((passives, mut health)) = query.get_single_mut() {
+    if let Ok((passives, mut health)) = query.single_mut() {
         if passives.contains(&Passive::Bloodstone) {
             for _event in xp_event.read() {
                 health.current = (health.current + 2).min(health.max);
@@ -1578,7 +1468,7 @@ fn track_hits(
     mut damage_events: EventReader<DamageInfo>,
 ) {
     if let Ok((player_e, passives, mut health, mut buff)) =
-        query.get_single_mut()
+        query.single_mut()
     {
         // tick falloff
         buff.falloff = buff.falloff.saturating_sub(1);
@@ -1604,7 +1494,7 @@ fn update_serpentring_health(
     mut query: Query<(&mut Health, &Passives), With<Player>>,
     config: Res<PlayerConfig>,
 ) {
-    if let Ok((mut health, passives)) = query.get_single_mut() {
+    if let Ok((mut health, passives)) = query.single_mut() {
         if passives.contains(&Passive::SerpentRing) {
             // Halve the max health when grounded.
             let new_max = ((config.max_health as f32) / 2.0) as u32;

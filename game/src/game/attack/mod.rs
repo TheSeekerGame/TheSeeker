@@ -4,14 +4,14 @@ pub mod particles;
 use std::mem;
 
 use arc_attack::Arrow;
-use theseeker_engine::physics::{CollisionGroups as InteractionGroups, Group};
+use theseeker_engine::physics::CollisionGroups as InteractionGroups;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
     update_sprite_colliders, Collider, ColliderShapeAccess, PhysicsWorld, 
-    GROUND, PLAYER_ATTACK, ENEMY, ShapeType,
+    GROUND, PLAYER_ATTACK, ENEMY,
 };
 
-use super::enemy::{Defense, Enemy, EnemyGfx, EnemyStateSet};
+use super::enemy::{Defense, EnemyGfx, EnemyStateSet};
 use super::gentstate::{Dead, Facing};
 use super::physics::Knockback;
 use super::player::player_weapon::CurrentWeapon;
@@ -239,7 +239,7 @@ pub fn determine_attack_targets(
             .into_iter()
             // Filters out everything that's not damageable or one of the nearest max_targets entities to attack
             .filter_map(|colliding_entity| {
-                if let Ok((damageable_transform, damageable_collider)) =
+                if let Ok((damageable_transform, _damageable_collider)) =
                     damageable_query.get(colliding_entity)
                 {
                     newly_collided.insert(entity);
@@ -453,7 +453,7 @@ pub fn despawn_projectile(
 ) {
     for (entity, attack) in query.iter() {
         if attack.damaged_set.len() == attack.max_targets as usize {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).despawn();
         }
     }
 }

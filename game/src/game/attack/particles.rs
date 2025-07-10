@@ -1,5 +1,5 @@
 use bevy::ecs::system::EntityCommands;
-use bevy::prelude::{default, Entity, Name, Query, Without};
+use bevy::prelude::{Entity, Name, Query, Without};
 use bevy::ecs::hierarchy::ChildOf;
 use bevy_hanabi::{
     Attribute, ColorOverLifetimeModifier, EffectAsset, EffectProperties,

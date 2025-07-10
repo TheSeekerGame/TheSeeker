@@ -1,3 +1,4 @@
+use bevy::ecs::hierarchy::ChildOf;
 use leafwing_input_manager::prelude::ActionState;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::{Gent, TransformGfxFromGent};
@@ -198,7 +199,7 @@ pub fn setup_merchant(
                 InteractionGroups::new(SENSOR, PLAYER),
                 StateDespawnMarker,
             ))
-            .remove_parent();
+            .remove::<ChildOf>();
         let mut player = ScriptPlayer::<SpriteAnimation>::default();
         player.play_key("anim.merchant.Idle");
         commands.entity(e_gfx).insert((
@@ -243,7 +244,7 @@ fn merchant_proximity_to_player(
     >,
     spatial_query: PhysicsWorld,
 ) {
-    let Ok((entity, gent, transform, collider, maybe_groups)) = merchant_query.get_single()
+    let Ok((entity, gent, transform, collider, maybe_groups)) = merchant_query.single()
     else {
         return;
     };
@@ -290,7 +291,7 @@ fn player_in_merchant_range(
     mut event_writer: EventWriter<MerchantDialogueInteractionEvent>,
     player_query: Query<&ActionState<PlayerAction>, With<Player>>,
 ) {
-    if let Ok(player_action) = player_query.get_single() {
+    if let Ok(player_action) = player_query.single() {
         if player_action.just_pressed(&PlayerAction::Interact) {
             event_writer.write(MerchantDialogueInteractionEvent);
         }
@@ -315,10 +316,10 @@ fn player_leaves_merchant_range(
     dialogue_stage: Res<MerchantDialogueStage>,
 ) {
     for entity in &query {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 
-    if let Ok(is_merchant_non_interactable) = merchant_query.get_single() {
+    if let Ok(is_merchant_non_interactable) = merchant_query.single() {
         if !is_merchant_non_interactable {
             dialogue_current_step.0 = dialogue_stage.initial_step();
         }
@@ -331,7 +332,7 @@ fn spawn_merchant_dialog_ui(
     dialog_assets: Res<DialogAssets>,
     images: Res<Assets<Image>>,
 ) {
-    let Ok((camera, camera_transform)) = camera_query.get_single() else {
+    let Ok((camera, camera_transform)) = camera_query.single() else {
         return;
     };
     let viewport_size = camera.logical_viewport_size().unwrap_or_default();
@@ -366,7 +367,7 @@ fn spawn_merchant_dialog_text(
     dialogue_asset_handles: Res<DialogueAssetHandles>,
     images: Res<Assets<Image>>,
 ) {
-    let Ok((camera, camera_transform)) = camera_query.get_single() else {
+    let Ok((camera, camera_transform)) = camera_query.single() else {
         return;
     };
     let viewport_size = camera.logical_viewport_size().unwrap_or_default();
@@ -436,10 +437,10 @@ fn handle_finished_dialogue_stage(
     dialogue_stage: Res<MerchantDialogueStage>,
 ) {
     if dialogue_current_step.0 > dialogue_stage.last_step() {
-        if let Ok(entity) = merchant_query.get_single() {
+        if let Ok(entity) = merchant_query.single() {
             commands.entity(entity).insert(MerchantNonInteractable);
             for entity in &query {
-                commands.entity(entity).despawn_recursive();
+                commands.entity(entity).despawn();
             }
         }
     }
@@ -451,10 +452,10 @@ fn restore_merchant_interactability(
     merchant_query: Query<(Entity, &GlobalTransform), With<MerchantBlueprint>>,
     player_query: Query<&GlobalTransform, With<Player>>,
 ) {
-    let Ok((entity, merchant_transform)) = merchant_query.get_single() else {
+    let Ok((entity, merchant_transform)) = merchant_query.single() else {
         return;
     };
-    let Ok(player_transform) = player_query.get_single() else {
+    let Ok(player_transform) = player_query.single() else {
         return;
     };
     const RANGE_SQUARED: f32 = 500.0 * 500.0;
@@ -476,7 +477,7 @@ fn update_dialog_background(
     dialogue_current_step: Res<MerchantDialogueCurrentStep>,
     dialog_assets: Res<DialogAssets>,
 ) {
-    if let Ok(mut sprite) = query.get_single_mut() {
+    if let Ok(mut sprite) = query.single_mut() {
         sprite.image = if MR_SNAFFLES_DIALOGS.contains(&dialogue_current_step.0)
         {
             dialog_assets.mr_snaffles_background.clone()

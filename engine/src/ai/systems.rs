@@ -15,7 +15,7 @@
 //! - **state_tick**: Ticks since state OR animation change (for patrol phases)
 
 use bevy::prelude::*;
-use super::brain::{CompiledFsm, CompiledFsmInner, CompiledRule, FromPattern, CompiledAction, CompiledCondition};
+use super::brain::{CompiledFsm, CompiledRule, CompiledAction, CompiledCondition};
 
 // Import the components from the ai module
 use crate::ai::{FsmInstance, TargetSensor, GroundSensor, RangeSensor};
@@ -48,7 +48,7 @@ pub fn ai_brain_system(
         // NOTE: Do NOT advance timers here – they are incremented **after** rule evaluation
         // and state-action processing to guarantee that `TimerGt(0)` is false on a freshly
         // entered state
-        
+
         let prev_states = [fsm.logic, fsm.movement];
         
         // Evaluate LOGIC track first, capture whether a *terminal* rule fired.
@@ -108,7 +108,7 @@ pub fn ai_brain_system(
             }
         }
         
-        // Increment tick counters AFTER processing actions (§6)
+        // Increment tick counters AFTER processing actions
         fsm.anim_tick = fsm.anim_tick.saturating_add(1);
         fsm.state_tick = fsm.state_tick.saturating_add(1);
 
@@ -196,7 +196,7 @@ fn evaluate_condition(
     fsm: &mut FsmInstance,
     target_sensor: &TargetSensor,
     ground_sensor: &GroundSensor,
-    range_sensor: &RangeSensor,
+    _range_sensor: &RangeSensor,
     health_sensor: &crate::ai::components::HealthSensor,
     is_logic_track: bool,
 ) -> bool {

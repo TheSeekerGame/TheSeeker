@@ -99,6 +99,6 @@ fn despawn_all_recursive<F: QueryFilter>(
     q: Query<Entity, F>,
 ) {
     for entity in &q {
-        commands.entity(entity).despawn_recursive();
+        commands.entity(entity).despawn();
     }
 }

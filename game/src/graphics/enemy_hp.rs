@@ -120,7 +120,7 @@ fn update_positions(
     mut hp_root_q: Query<(&Root, &mut Node)>,
     mut camera_q: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
 ) {
-    let Ok((camera_transform, camera)) = camera_q.get_single() else { return; };
+    let Ok((camera_transform, camera)) = camera_q.single() else { return; };
 
     for (hp_root, mut style) in hp_root_q.iter_mut() {
         let Ok((global_transform, collider)) = enemy_q.get(hp_root.parent) else {
@@ -228,7 +228,7 @@ fn despawn(
         match enemy_q.get(hp_root.parent) {
             // Despawn if entity can't be found or is marked as dead.
             Ok(Some(_)) | Err(_) => {
-                commands.entity(hp_entity).despawn_recursive()
+                commands.entity(hp_entity).despawn()
             },
             Ok(None) => {},
         }

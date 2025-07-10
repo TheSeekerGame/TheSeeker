@@ -1,7 +1,5 @@
 #![cfg_attr(feature = "release", windows_subsystem = "windows")]
 #![allow(unused_mut)]
-// FIXME: temporary, to reduce noise during the 0.15 upgrade
-#![allow(warnings)]
 
 /// Custom prelude, for stuff we'd like to access all over the codebase
 /// Use in every file. :)
@@ -35,9 +33,7 @@ mod screens {
 
 mod ui;
 
-#[cfg(feature = "dev")]
-mod dev;
-pub mod graphics;
+mod graphics;
 mod parallax;
 
 fn main() {
@@ -101,13 +97,6 @@ fn main() {
         },
     });
 
-    #[cfg(feature = "dev")]
-    let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
-        filter: "info,wgpu_core=warn,wgpu_hal=warn,theseeker_game=trace,theseeker_engine=trace".into(),
-        level: bevy::log::Level::TRACE,
-        ..Default::default()
-    });
-    #[cfg(not(feature = "dev"))]
     let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
         filter: "info,wgpu_core=warn,wgpu_hal=warn,theseeker_game=info,theseeker_engine=info"
             .into(),
@@ -136,9 +125,6 @@ fn main() {
         PhysicsPlugin,
     ));
 
-    #[cfg(feature = "iyes_perf_ui")]
-    app.add_plugins((iyes_perf_ui::PerfUiPlugin,));
-
     // our stuff
     app.add_plugins((
         crate::screens::loading::LoadscreenPlugin {
@@ -154,9 +140,6 @@ fn main() {
         crate::gamestate::GameStatePlugin,
         crate::graphics::GraphicsFxPlugin,
     ));
-
-    #[cfg(feature = "dev")]
-    app.add_plugins(crate::dev::DevPlugin);
 
     app.edit_schedule(Update, |s| {
         s.set_executor_kind(ExecutorKind::SingleThreaded);

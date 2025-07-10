@@ -49,19 +49,19 @@ fn spawn_orbs_on_death(
     for tr in enemy_q.iter() {
         let enemy_pos = tr.translation().truncate();
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let init_vel = Vec2::new(0.0, 2.0);
         const POS_RADIUS: f32 = 3.0;
         for _ in 0..12 {
             let pos = Vec2::new(
-                rng.gen_range(-POS_RADIUS..POS_RADIUS),
-                rng.gen_range(-POS_RADIUS..POS_RADIUS),
+                rng.random_range(-POS_RADIUS..POS_RADIUS),
+                rng.random_range(-POS_RADIUS..POS_RADIUS),
             )
             .clamp_length_max(POS_RADIUS);
             let orb_position = enemy_pos + pos;
             let vel = pos * 0.25;
-            let color: Color = if let Ok(passives) = player_q.get_single() {
+            let color: Color = if let Ok(passives) = player_q.single() {
                 if passives.contains(&Passive::Bloodstone) {
                     RED.into()
                 } else {
@@ -107,7 +107,7 @@ fn update_orbs_vel(
     mut p_query: Query<(&GlobalTransform, &Passives), With<Player>>,
     mut xp_event: EventWriter<XpOrbPickup>,
 ) {
-    let Ok((p, passives)) = p_query.get_single() else {
+    let Ok((p, passives)) = p_query.single() else {
         return;
     };
 

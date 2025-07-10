@@ -285,7 +285,7 @@ impl ScriptTracker for CommonScriptTracker {
                 });
             }
         }
-        if let Ok(ctl) = q_mixer.get_single() {
+        if let Ok(ctl) = q_mixer.single() {
             ctl.controller.cleanup_stale_ids(&mut self.my_sounds);
         } else {
             self.my_sounds.clear();
@@ -525,8 +525,8 @@ impl ScriptActionParams for CommonScriptParams {
             return Err(ScriptUpdateResult::NormalRun);
         }
         if let Some(rng_pct) = &self.rng_pct {
-            let mut rng = rand::thread_rng();
-            if !rng.gen_bool((*rng_pct as f64 / 100.0).clamp(0.0, 1.0)) {
+            let mut rng = rand::rng();
+            if !rng.random_bool((*rng_pct as f64 / 100.0).clamp(0.0, 1.0)) {
                 return Err(ScriptUpdateResult::NormalRun);
             }
         }
@@ -569,10 +569,10 @@ impl ScriptAction for CommonScriptAction {
             CommonScriptAction::DespawnEntity { label } => {
                 if let Some(label) = label {
                     for e in elabels.iter_label_entities(label) {
-                        commands.entity(*e).despawn_recursive();
+                        commands.entity(*e).despawn();
                     }
                 } else {
-                    commands.entity(entity).despawn_recursive();
+                    commands.entity(entity).despawn();
                     return ScriptUpdateResult::Terminated;
                 }
                 ScriptUpdateResult::NormalRun
@@ -611,7 +611,7 @@ impl ScriptAction for CommonScriptAction {
                         h_untyped.clone().typed::<AudioSource>()
                     })
                     .collect();
-                if let Some(sound) = sounds.choose(&mut rand::thread_rng()) {
+                if let Some(sound) = sounds.choose(&mut rand::rng()) {
                     let settings = if r#loop.unwrap_or(false) {
                         PlaybackSettings::LOOP
                     } else {
@@ -636,7 +636,7 @@ impl ScriptAction for CommonScriptAction {
                 volume,
                 pan,
             } => {
-                use rand::seq::SliceRandom;
+
                 let volume = volume.unwrap_or(1.0);
                 let pan = pan.unwrap_or(0.0);
                 let sounds: Vec<&AudioSource> = preloaded
@@ -647,8 +647,8 @@ impl ScriptAction for CommonScriptAction {
                         ass_audio.get(h_untyped.id().typed::<AudioSource>())
                     })
                     .collect();
-                if let Some(sound) = sounds.choose(&mut rand::thread_rng()) {
-                    if let Ok(ctl) = q_mixer.get_single() {
+                if let Some(sound) = sounds.choose(&mut rand::rng()) {
+                    if let Ok(ctl) = q_mixer.single() {
                         let l = label.as_deref();
                         let audio_id = match timing {
                             ScriptActionTiming::Unknown => {
@@ -695,7 +695,7 @@ impl ScriptAction for CommonScriptAction {
                 ScriptUpdateResult::NormalRun
             },
             CommonScriptAction::StopAudio { current_script_only, label } => {
-                if let Ok(ctl) = q_mixer.get_single() {
+                if let Ok(ctl) = q_mixer.single() {
                     if current_script_only.unwrap_or(true) {
                         if let Some(label) = label {
                             ctl.controller.stop_many_with_label(&mut tracker.my_sounds, &label);

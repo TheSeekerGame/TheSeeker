@@ -1,4 +1,3 @@
-use crate::appstate::AppState;
 use crate::game::player::{
     Attacking, CanDash, CanStealth, Player, PlayerConfig, WhirlAbility,
 };
@@ -7,7 +6,6 @@ use crate::prelude::*;
 use crate::ui::ability_widget::{
     AbilityWidget,
     AbilityWidgetCommands,
-    AbilityWidgetConfig,
     // UiAbilityWidgetExt,
 };
 

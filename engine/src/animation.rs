@@ -99,15 +99,13 @@ struct PrevFrame(u32);
 
 impl SpriteAnimationTracker {
     fn resolve_bookmark(&self, bm: Option<&String>) -> FrameId {
+        let default = || FrameId::from_sprite_index(0);
         let Some(bm) = bm else {
             return default();
         };
         if let Some(i) = self.bookmarks.get(bm) {
             *i
         } else {
-            if cfg!(feature = "dev") {
-                warn!("Script bookmark {:?} is undefined!", bm);
-            }
             default()
         }
     }

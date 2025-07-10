@@ -1,35 +1,34 @@
-#[cfg(feature = "dev")]
-use bevy_inspector_egui::quick::FilterQueryInspectorPlugin;
 use rand::distr::StandardUniform;
-use rand::thread_rng;
+use rand::rng;
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
-use theseeker_engine::ballistics_math::ballistic_speed;
+
 use theseeker_engine::gent::{Gent, GentPhysicsBundle, TransformGfxFromGent};
 use theseeker_engine::physics::{
-    into_vec2, update_sprite_colliders, AnimationCollider, Collider,
-    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY, ENEMY_ATTACK,
-    ENEMY_INSIDE, GROUND, PLAYER, PLAYER_ATTACK, SENSOR, CollisionGroups, Group, GROUNDED_THRESHOLD, GROUND_BUFFER,
+    into_vec2, AnimationCollider, Collider,
+    LinearVelocity, PhysicsWorld, ShapeCaster, ENEMY,
+    ENEMY_INSIDE, GROUND, CollisionGroups, GROUNDED_THRESHOLD, GROUND_BUFFER,
     ColliderShapeAccess,
 };
 use bevy_rapier2d::rapier::prelude::SharedShape;
+use bevy::ecs::hierarchy::ChildOf;
 use bevy_rapier2d::prelude::ShapeCastStatus;
 use theseeker_engine::script::ScriptPlayer;
 
 use super::physics::Knockback;
 use super::player::player_weapon::CurrentWeapon;
-use super::player::{Player, PlayerConfig, StatusModifier, Stealthing};
-use crate::game::attack::arc_attack::Projectile;
+use super::player::{Player, Stealthing};
+
 use crate::game::attack::particles::ArcParticleEffectHandle;
 use crate::game::attack::*;
 use crate::game::gentstate::*;
-use crate::game::player::EnemiesNearby;
+
 use crate::graphics::particles_util::BuildParticles;
 use crate::prelude::*;
 use theseeker_engine::physics::inside::EnemyInsidePlayer as Inside;
 
-use theseeker_engine::ai::{FsmInstance, TargetSensor, GroundSensor, RangeSensor, TurnCooldown, HealthSensor};
-use theseeker_engine::ai::sensors::{CachedArchetypeStats, AiTarget, AiTargetInvisible, GroundedCheck, HealthCheck};
+use theseeker_engine::ai::{FsmInstance, TargetSensor, TurnCooldown};
+use theseeker_engine::ai::sensors::{AiTarget, AiTargetInvisible, GroundedCheck, HealthCheck};
 
 pub struct EnemyPlugin;
 
@@ -288,8 +287,9 @@ fn spawn_enemies(
     >,
     player_query: Query<&Transform, (Without<Enemy>, With<Player>)>,
     mut commands: Commands,
+    level_seed: Res<theseeker_engine::ai::LevelSeed>,
 ) {
-    let p_transform = player_query.get_single();
+    let p_transform = player_query.single();
     for (transform, mut spawner) in spawner_q.iter_mut() {
         let mut killed = spawner.killed;
 
@@ -343,13 +343,36 @@ fn spawn_enemies(
                         true
                     } {
                         let mut ranged_role = 0;
+                        // Deterministic RNG seeded from level seed and this spawner's world
+                        // position.  Needs tweaks so it's still determinictic but controlled by
+                        // random seed that can later be controlled in interesting ways.
+
+                        let mut rng_state: u32 = {
+                            // Hash the integer coordinates (rounded) into a u32 then mix with
+                            // the global level seed.
+                            let pos = transform.translation;
+                            let mut h = 0u32;
+                            h ^= (pos.x as i32 as u32).wrapping_mul(374761393);
+                            h = h.rotate_left(13);
+                            h = h.wrapping_mul(1274126177);
+                            h ^= (pos.y as i32 as u32).wrapping_add(level_seed.0);
+                            h
+                        };
+
+                        // Simple LCG helper
+                        let mut next_rand = || {
+                            rng_state = rng_state.wrapping_mul(1664525).wrapping_add(1013904223);
+                            rng_state
+                        };
+
                         for slot in spawner.slots.iter_mut() {
-                            // generate a random roll, max 2 per spawner
+                            // generate a deterministic pseudo-random roll, cap ranged to 2 per spawner
                             let role = if ranged_role < 2 {
-                                let r = Role::random();
+                                let rand_bit = (next_rand() >> 16) & 1;
+                                let r = if rand_bit == 0 { Role::Melee } else { Role::Ranged };
                                 if matches!(r, Role::Ranged) {
                                     ranged_role += 1;
-                                };
+                                }
                                 r
                             } else {
                                 Role::Melee
@@ -479,7 +502,7 @@ fn setup_enemy(
                     max: health,
                 },
                 // Random initial facing for patrol variety
-                if rand::thread_rng().gen_bool(0.5) { Facing::Left } else { Facing::Right },
+                if rand::rng().random_bool(0.5) { Facing::Left } else { Facing::Right },
                 StateDespawnMarker,
                 // Keep Role and Tier for death/decay animations and other systems
                 *role,
@@ -633,8 +656,8 @@ enum Role {
 
 impl Role {
     fn random() -> Role {
-        let mut rng = rand::thread_rng();
-        rng.gen()
+        let mut rng = rand::rng();
+        rng.random()
     }
 }
 
@@ -649,7 +672,7 @@ pub enum Tier {
 
 impl Distribution<Role> for StandardUniform {
     fn sample<R: Rng + ?Sized>(&self, rng: &mut R) -> Role {
-        let index: u8 = rng.gen_range(0..=1);
+        let index: u8 = rng.random_range(0..=1);
         match index {
             0 => Role::Melee,
             1 => Role::Ranged,
@@ -684,7 +707,7 @@ pub fn dead(
             )>();
         }
         if dead.ticks == 8 * 7 {
-            commands.entity(entity).remove::<Dead>().insert(Decay).remove_parent();
+            commands.entity(entity).remove::<Dead>().insert(Decay).remove::<ChildOf>();
         }
         dead.ticks += 1;
     }
@@ -704,7 +727,7 @@ fn enemy_gravity(
 ) {
     for (entity, mut velocity, mut transform, mut nav, collider, stats) in query.iter_mut() {
         match *nav {
-            Navigation::Falling { jumping } => {
+            Navigation::Falling { jumping: _ } => {
                 // Apply gravity consistently
                 velocity.0.y -= stats.fall_accel;
                 
@@ -909,7 +932,7 @@ fn decay_despawn(
         // First detach the graphics entity from hierarchy
         if let Ok(gfx_entity) = gfx_query.get(gent.e_gfx) {
             commands.entity(gfx_entity)
-                .remove_parent()
+                .remove::<ChildOf>()
                 .insert(Decay);
         }
         
@@ -961,8 +984,8 @@ fn enemy_hit_sfx_gfx(
     for damage_info in damage_events.read() {
         if let Ok(enemy) = i_query.get(damage_info.target) {
             if let Ok(mut hit_gfx) = gfx_query.get_mut(enemy.e_effects_gfx) {
-                let mut rng = thread_rng();
-                let picked_spark = rng.gen_range(1..=6);
+                let mut rng = rng();
+                let picked_spark = rng.random_range(1..=6);
                 hit_gfx.play_key("anim.spider.Sparks");
                 // reset everything so as not to glitch audio?
                 hit_gfx.clear_slots();
@@ -976,7 +999,7 @@ fn enemy_hit_sfx_gfx(
                 let current_weapon_name = current_weapon.to_string();
                 let slot = &format!("{current_weapon_name}Hit");
                 hit_gfx.set_slot(slot, true);
-                if let Ok(direction) = player_facing_dir.get_single() {
+                if let Ok(direction) = player_facing_dir.single() {
                     match direction {
                         Facing::Right => {
                             hit_gfx.set_slot("DirectionRight", true);
@@ -1118,7 +1141,7 @@ fn enemy_ai_actuator_game(
     ), With<Enemy>>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
     player_query: Query<&Transform, With<Player>>,
-    enemy_config: Res<EnemyConfig>,
+    _enemy_config: Res<EnemyConfig>,
     particle_effects: Res<ArcParticleEffectHandle>,
     _preloaded: Res<PreloadedAssets>,
     compiled_assets: Res<Assets<theseeker_engine::ai::CompiledFsm>>,
@@ -1217,14 +1240,14 @@ fn enemy_ai_actuator_game(
                 theseeker_engine::ai::CompiledAction::SpawnAttack { key, dmg } => {
                     if key == "melee_hit" {
                         // Spawn melee hitbox as child
-                        let attack_entity = commands.spawn((
+                        let _attack_entity = commands.spawn((
                             Collider::cuboid(8.0, 8.0), // Larger initial size to ensure hits register before AnimationCollider updates
                             theseeker_engine::physics::groups::enemy_attack(),
                             AnimationCollider(gent.e_gfx), // Links to sprite's magenta pixels
                             Transform::from_translation(Vec3::new(0.0, 5.0, 0.0)),
                             GlobalTransform::default(),
                             Attack::new(8, entity, dmg),
-                        )).set_parent(entity).id();
+                        )).insert(ChildOf(entity)).id();
 
                         // Ensure the enemy stops moving while performing melee attack
                         velocity.0 = Vec2::ZERO;

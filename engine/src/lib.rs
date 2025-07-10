@@ -1,8 +1,5 @@
 #![allow(unused_mut)]
 
-// FIXME: temporary, to reduce noise during the 0.15 upgrade
-#![allow(warnings)]
-
 pub mod prelude {
     pub use std::sync::Arc;
     pub use std::time::{Duration, Instant};

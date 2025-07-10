@@ -3,6 +3,11 @@ use std::sync::atomic::{
 };
 use std::sync::Mutex;
 
+// NEW: light-weight lock-free channels for communicating with the audio callback
+use crossbeam_channel::{unbounded, Receiver, Sender, TryRecvError};
+use std::cmp::Reverse;
+use std::collections::BinaryHeap;
+
 use rodio::cpal::FromSample;
 use rodio::{Sample, Source};
 
@@ -22,6 +27,28 @@ impl PreciseAudioId {
 
 static NEXT_ID: AtomicU64 = AtomicU64::new(0);
 
+// ============================================================================
+//  Channel messages exchanged between game logic and the audio mixing thread.
+// ============================================================================
+
+#[derive(Debug)]
+enum PrecisionMixerCommand {
+    /// Queue a new sound for playback.
+    Add {
+        id: PreciseAudioId,
+        label: Option<String>,
+        track: PrecisionMixerQueuedTrack,
+    },
+    /// Stop one specific sound by its id.
+    StopOne(PreciseAudioId),
+    /// Stop a collection of ids.
+    StopMany(Vec<PreciseAudioId>),
+    /// Stop all currently playing/queued sounds that share the same label.
+    StopLabel(String),
+    /// Stop everything.
+    StopAll,
+}
+
 /// Audio Source that mixes many sounds with accurate timings.
 ///
 /// Internally everything uses `f32` sample format to ensure no clipping.
@@ -31,6 +58,19 @@ pub struct PrecisionMixer {
     controller: Arc<PrecisionMixerController>,
     sample_count: i64,
     current_channel: u16,
+
+    // NEW: communication primitives + local state ---------------------------------
+    cmd_rx: Receiver<PrecisionMixerCommand>,
+    finished_tx: Sender<PreciseAudioId>,
+
+    // pending → BinaryHeap keyed by start sample (min-heap via Reverse)
+    pending_heap: BinaryHeap<(Reverse<i64>, PreciseAudioId)>,
+    pending: HashMap<PreciseAudioId, PrecisionMixerQueuedTrack>,
+
+    // active sounds
+    playing: HashMap<PreciseAudioId, PrecisionMixerActiveTrack>,
+    label2id: HashMap<String, HashSet<PreciseAudioId>>,
+    id2label: HashMap<PreciseAudioId, String>,
 }
 
 pub struct PrecisionMixerController {
@@ -38,7 +78,20 @@ pub struct PrecisionMixerController {
     tick_rate: f32,
     sample_rate: u32,
     channels: u16,
-    tracks: Mutex<PrecisionMixerTracks>,
+
+    // NEW: lock-free communication channels --------------------------------------
+    cmd_tx: Sender<PrecisionMixerCommand>,
+    // Receiver lives on the mixer side – we keep it in a Mutex<Option<..>> so it
+    // can be taken exactly once when the `PrecisionMixer` is constructed.
+    cmd_rx: Mutex<Option<Receiver<PrecisionMixerCommand>>>,
+
+    // Finished sound notifications (mixer → logic)
+    finished_tx: Sender<PreciseAudioId>,
+    finished_rx: Receiver<PreciseAudioId>,
+
+    // Lightweight atomic counter so game-logic can cheaply query if *anything*
+    // is currently playing.
+    playing_count: AtomicU64,
 }
 
 #[derive(Default)]
@@ -97,12 +150,25 @@ impl PrecisionMixerTracks {
     }
 }
 
+// NOTE: `start_at_sample_number == -1` means "start as soon as possible".
 struct PrecisionMixerQueuedTrack {
-    start_at_sample_number: Option<i64>,
+    start_at_sample_number: i64,
     first_sample: MySample,
     volume: f32,
     pan: f32,
-    source: Option<BoxedSource>,
+    source: BoxedSource,
+}
+
+impl std::fmt::Debug for PrecisionMixerQueuedTrack {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PrecisionMixerQueuedTrack")
+            .field("start_at_sample_number", &self.start_at_sample_number)
+            .field("first_sample", &self.first_sample)
+            .field("volume", &self.volume)
+            .field("pan", &self.pan)
+            .field("source", &"<BoxedSource>")
+            .finish()
+    }
 }
 
 struct PrecisionMixerActiveTrack {
@@ -123,17 +189,48 @@ impl PrecisionMixerController {
         if channels > 2 {
             panic!("PrecisionMixer does not support > 2 audio channels!");
         }
+
+        // Create channels (command → mixer, finished ← mixer)
+        let (cmd_tx, cmd_rx) = unbounded::<PrecisionMixerCommand>();
+        let (finished_tx, finished_rx) = unbounded::<PreciseAudioId>();
+
         Arc::new(PrecisionMixerController {
             sample_count: AtomicI64::new(0),
-            tracks: Mutex::new(default()),
-            channels,
-            sample_rate,
             tick_rate,
+            sample_rate,
+            channels,
+
+            cmd_tx,
+            cmd_rx: Mutex::new(Some(cmd_rx)),
+            finished_tx,
+            finished_rx,
+            playing_count: AtomicU64::new(0),
         })
     }
 
+    // --- internal helpers ------------------------------------------------------
+
+    fn take_cmd_receiver(&self) -> Receiver<PrecisionMixerCommand> {
+        self.cmd_rx
+            .lock()
+            .unwrap()
+            .take()
+            .expect("PrecisionMixerReceiver already taken!")
+    }
+
+    fn finished_tx(&self) -> Sender<PreciseAudioId> {
+        self.finished_tx.clone()
+    }
+
+    /// Helper: send command to the mixer, log if the channel is closed.
+    fn send_cmd(&self, cmd: PrecisionMixerCommand) {
+        if let Err(e) = self.cmd_tx.send(cmd) {
+            error!("PrecisionMixer command channel closed: {}", e);
+        }
+    }
+
     pub fn has_playing(&self) -> bool {
-        !self.tracks.lock().unwrap().playing.is_empty()
+        self.playing_count.load(MemOrdering::Relaxed) > 0
     }
 
     pub fn reset_sample_counter(&self, new: i64) {
@@ -149,45 +246,32 @@ impl PrecisionMixerController {
     }
 
     pub fn stop_one(&self, id: PreciseAudioId) {
-        let mut tracks = self.tracks.lock().unwrap();
-        tracks.remove(id);
+        self.send_cmd(PrecisionMixerCommand::StopOne(id));
     }
 
     pub fn stop_all(&self) {
-        let mut tracks = self.tracks.lock().unwrap();
-        tracks.playing.clear();
-        tracks.pending.clear();
-        tracks.label2id.clear();
+        self.send_cmd(PrecisionMixerCommand::StopAll);
     }
 
     pub fn stop_label(&self, label: &str) {
-        let mut tracks = self.tracks.lock().unwrap();
-        tracks.remove_label(label);
+        self.send_cmd(PrecisionMixerCommand::StopLabel(label.to_owned()));
     }
 
     pub fn stop_many(&self, ids: &[PreciseAudioId]) {
-        let mut tracks = self.tracks.lock().unwrap();
-        for id in ids {
-            tracks.remove(*id);
-        }
+        self.send_cmd(PrecisionMixerCommand::StopMany(ids.to_vec()));
     }
 
-    pub fn stop_many_with_label(&self, ids: &mut Vec<PreciseAudioId>, label: &str) {
-        let mut tracks = self.tracks.lock().unwrap();
-        ids.retain(|id| {
-            let has_label = tracks.id2label.get(id).map(|s| s.as_str()) == Some(label);
-            if has_label {
-                tracks.remove(*id);
-            }
-            !has_label
-        });
+    pub fn stop_many_with_label(&self, _ids: &mut Vec<PreciseAudioId>, label: &str) {
+        self.send_cmd(PrecisionMixerCommand::StopLabel(label.to_owned()));
     }
 
     pub fn cleanup_stale_ids(&self, ids: &mut Vec<PreciseAudioId>) {
-        let tracks = self.tracks.lock().unwrap();
-        ids.retain(|id| {
-            tracks.playing.contains_key(id) || tracks.pending.contains_key(id)
-        });
+        use std::collections::HashSet;
+        let mut finished: HashSet<PreciseAudioId> = Default::default();
+        while let Ok(id) = self.finished_rx.try_recv() {
+            finished.insert(id);
+        }
+        ids.retain(|id| !finished.contains(id));
     }
 
     fn play_at_sample_number<T, S>(
@@ -209,20 +293,18 @@ impl PrecisionMixerController {
         let mut source = Box::new(source.convert_samples::<MySample>());
         let id = PreciseAudioId::new();
         if let Some(first_sample) = (&mut *source).next() {
-            let mut tracks = self.tracks.lock().unwrap();
-            tracks.pending.insert(
+            let track = PrecisionMixerQueuedTrack {
+                start_at_sample_number: start_at_sample_number.unwrap_or(-1),
+                first_sample,
+                volume,
+                pan,
+                source,
+            };
+            self.send_cmd(PrecisionMixerCommand::Add {
                 id,
-                PrecisionMixerQueuedTrack {
-                    start_at_sample_number,
-                    first_sample,
-                    volume,
-                    pan,
-                    source: Some(source),
-                },
-            );
-            if let Some(label) = label {
-                tracks.add_to_label(label, id);
-            }
+                label: label.map(|s| s.to_owned()),
+                track,
+            });
         }
         id
     }
@@ -301,63 +383,109 @@ impl Iterator for PrecisionMixer {
     type Item = MySample;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.sample_count =
-            self.controller.sample_count.load(MemOrdering::Relaxed);
 
-        let mut tracks_guard = self.controller.tracks.lock().unwrap();
-        let tracks = &mut *tracks_guard;
-
-        // PROCESS PENDING
-
-        // we must only start new tracks when our current channel is 0
-        // to ensure that channels don't get swapped around
-        if self.current_channel == 0 {
-            // we must ensure that each track is started so that it is
-            // perfectly aligned to its desired sample number
-            for (id, track) in tracks.pending.iter_mut() {
-                let start_at_sample_number =
-                    track.start_at_sample_number.unwrap_or(self.sample_count);
-
-                if start_at_sample_number > self.sample_count {
-                    // we are early, it's not time for this one yet
-                    continue;
-                }
-
-                let Some(mut source) = track.source.take() else {
-                    continue;
-                };
-
-                // if we are already late, we have to skip ahead into the source
-                let missed_by = self.sample_count - start_at_sample_number;
-                if missed_by > 0 {
-                    for _ in 0..(missed_by * source.channels() as i64) {
-                        if let Some(value) = source.next() {
-                            track.first_sample = value;
-                        } else {
-                            // the sound is already over before it even started playing ;)
-                            continue;
+        // ---------------------------------------------------------------------
+        //  Process inbound commands from the game-logic thread.
+        // ---------------------------------------------------------------------
+        loop {
+            match self.cmd_rx.try_recv() {
+                Ok(cmd) => match cmd {
+                    PrecisionMixerCommand::Add { id, label, track } => {
+                        if let Some(ref lbl) = label {
+                            self.label2id
+                                .entry(lbl.clone())
+                                .or_insert_with(HashSet::default)
+                                .insert(id);
+                            self.id2label.insert(id, lbl.clone());
                         }
-                    }
-                }
-
-                tracks.playing.insert(*id, PrecisionMixerActiveTrack {
-                    done: false,
-                    current_channel: 0,
-                    pan: track.pan,
-                    volume: track.volume,
-                    next_sample: track.first_sample,
-                    source,
-                });
+                        self.pending_heap.push((Reverse(track.start_at_sample_number), id));
+                        self.pending.insert(id, track);
+                    },
+                    PrecisionMixerCommand::StopOne(id) => {
+                        self.playing.remove(&id);
+                        self.pending.remove(&id);
+                    },
+                    PrecisionMixerCommand::StopMany(ids) => {
+                        for id in ids {
+                            self.playing.remove(&id);
+                            self.pending.remove(&id);
+                        }
+                    },
+                    PrecisionMixerCommand::StopLabel(label) => {
+                        if let Some(set) = self.label2id.remove(&label) {
+                            for id in set {
+                                self.playing.remove(&id);
+                                self.pending.remove(&id);
+                                self.id2label.remove(&id);
+                            }
+                        }
+                    },
+                    PrecisionMixerCommand::StopAll => {
+                        self.playing.clear();
+                        self.pending.clear();
+                        self.label2id.clear();
+                        self.id2label.clear();
+                    },
+                },
+                Err(TryRecvError::Empty) => break, // nothing left this tick
+                Err(TryRecvError::Disconnected) => break, // should not happen
             }
-
-            tracks.pending.retain(|_id, track| track.source.is_some());
         }
 
-        // MIX
+        // sync with controller's sample counter
+        self.sample_count = self.controller.sample_count.load(MemOrdering::Relaxed);
 
+        // ---------------------------------------------------------------------
+        //  Move ready-to-start pending tracks into the active list (only on the
+        //  first channel to keep stereo pairs aligned).
+        // ---------------------------------------------------------------------
+        if self.current_channel == 0 {
+            while let Some(&(Reverse(start_at), id)) = self.pending_heap.peek() {
+                let start_at_sample_number = if start_at < 0 {
+                    self.sample_count
+                } else {
+                    start_at
+                };
+
+                if start_at_sample_number > self.sample_count {
+                    break; // earliest pending item is still in the future
+                }
+
+                self.pending_heap.pop();
+                if let Some(mut track) = self.pending.remove(&id) {
+                    let missed_by = self.sample_count - start_at_sample_number;
+                    if missed_by > 0 {
+                        for _ in 0..(missed_by * track.source.channels() as i64) {
+                            if let Some(value) = track.source.next() {
+                                track.first_sample = value;
+                            } else {
+                                // sound is already over
+                                break;
+                            }
+                        }
+                    }
+
+                    self.playing.insert(id, PrecisionMixerActiveTrack {
+                        done: false,
+                        current_channel: 0,
+                        pan: track.pan,
+                        volume: track.volume,
+                        next_sample: track.first_sample,
+                        source: track.source,
+                    });
+
+                    // update global playing count
+                    self.controller.playing_count.fetch_add(1, MemOrdering::Relaxed);
+                }
+            }
+        }
+
+        // ------------------------------------------------------------------
+        //  Actual mixing – iterate over active tracks and sum their samples.
+        // ------------------------------------------------------------------
         let mut sum = MySample::zero_value();
         let channels = self.channels();
-        for (_id, track) in tracks.playing.iter_mut() {
+        for (_id, track) in self.playing.iter_mut() {
             let source_channels = track.source.channels();
             let (pan_l, pan_r) = pan_lr(track.pan.clamp(-1.0, 1.0));
             match (channels, source_channels) {
@@ -456,7 +584,29 @@ impl Iterator for PrecisionMixer {
                 },
             }
         }
-        tracks.playing.retain(|_id, track| !track.done);
+        // Collect finished tracks so we can update bookkeeping atomically.
+        let mut finished: Vec<PreciseAudioId> = Vec::new();
+        self.playing.retain(|id, track| {
+            if track.done {
+                finished.push(*id);
+                false
+            } else {
+                true
+            }
+        });
+
+        for id in finished {
+            let _ = self.finished_tx.send(id);
+            self.controller.playing_count.fetch_sub(1, MemOrdering::Relaxed);
+            if let Some(label) = self.id2label.remove(&id) {
+                if let Some(set) = self.label2id.get_mut(&label) {
+                    set.remove(&id);
+                    if set.is_empty() {
+                        self.label2id.remove(&label);
+                    }
+                }
+            }
+        }
 
         // BOOKKEEPING
 
@@ -497,10 +647,22 @@ impl Source for PrecisionMixer {
 
 impl PrecisionMixer {
     pub fn new(controller: Arc<PrecisionMixerController>) -> Self {
+        let cmd_rx = controller.take_cmd_receiver();
+        let finished_tx = controller.finished_tx();
+
         PrecisionMixer {
             current_channel: 0,
             sample_count: 0,
             controller: controller.clone(),
+
+            cmd_rx,
+            finished_tx,
+
+            pending_heap: BinaryHeap::with_capacity(16),
+            pending: HashMap::with_capacity(16),
+            playing: HashMap::with_capacity(16),
+            label2id: HashMap::with_capacity(8),
+            id2label: HashMap::with_capacity(8),
         }
     }
 

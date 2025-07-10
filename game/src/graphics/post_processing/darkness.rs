@@ -2,7 +2,6 @@ use bevy::core_pipeline::core_2d;
 use bevy::core_pipeline::fullscreen_vertex_shader::fullscreen_shader_vertex_state;
 use bevy::ecs::query::QueryItem;
 use bevy::prelude::*;
-use bevy::render::camera::RenderTarget;
 use bevy::render::extract_component::{
     ComponentUniforms, ExtractComponent, ExtractComponentPlugin,
     UniformComponentPlugin,
@@ -24,7 +23,6 @@ use bevy::render::view::{RenderLayers, ViewTarget};
 use bevy::render::RenderApp;
 
 use crate::parallax::Parallax;
-use crate::StateDespawnMarker;
 use super::vignette::VignettePostProcessLabel;
 
 pub(crate) struct DarknessPlugin;

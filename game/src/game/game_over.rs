@@ -65,7 +65,7 @@ pub fn on_game_over(
     mut kill_count: ResMut<KillCount>,
     time: Res<GameTime>,
 ) {
-    let Ok(cam_e) = q_cam.get_single() else {
+    let Ok(cam_e) = q_cam.single() else {
         return;
     };
 

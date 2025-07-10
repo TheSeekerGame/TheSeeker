@@ -37,14 +37,14 @@ fn display_passives(
     passives_ui_node: Query<Entity, With<PassivesUiNode>>,
     children_q: Query<&Children>,
 ) {
-    let Ok(passives) = passives.get_single() else {
+    let Ok(passives) = passives.single() else {
         return;
     };
 
-    if let Ok(entity) = passives_ui_node.get_single() {
+    if let Ok(entity) = passives_ui_node.single() {
         if let Ok(children) = children_q.get(entity) {
             for child_entity in children.iter() {
-                commands.entity(child_entity).despawn_recursive();
+                commands.entity(child_entity).despawn();
             }
         }
 

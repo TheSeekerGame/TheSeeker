@@ -1,7 +1,6 @@
 pub mod darkness;
 pub mod vignette;
 
-use bevy::asset::load_internal_asset;
 use bevy::prelude::*;
 // use floaters::FloaterPlugin; // Deleted file
 use darkness::DarknessPlugin;

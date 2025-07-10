@@ -93,7 +93,7 @@ fn add_despawn_marker_to_entity<T: Component>(
 
 /// level_0 is a giant grey object that blocks all our backgrounds, so we hide it.
 fn hide_level_0(
-    mut commands: Commands,
+    _commands: Commands,
     mut query: Query<(Entity, &Name, &mut Visibility)>,
     state: Res<State<AppState>>,
     mut ran: Local<bool>,
@@ -104,7 +104,7 @@ fn hide_level_0(
     if *ran {
         return;
     }
-    for (entity, name, mut visbility) in query.iter_mut() {
+    for (_entity, name, mut visbility) in query.iter_mut() {
         if name.as_str() == "Level_0" {
             *visbility = Visibility::Hidden;
             println!("Made 'level_0' invisible");

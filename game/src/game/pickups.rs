@@ -240,12 +240,12 @@ impl DropTracker {
     fn new(passive_count: usize) -> Self {
         const SPAN: u32 = 5;
 
-        let mut rng = rand::thread_rng();
+        let mut rng = rand::rng();
 
         let mut rolls = Vec::new();
 
         for i in 0..passive_count {
-            rolls.push(SPAN * i as u32 + rng.gen_range(1..SPAN));
+            rolls.push(SPAN * i as u32 + rng.random_range(1..SPAN));
         }
 
         Self {
@@ -263,7 +263,7 @@ fn spawn_pickups_on_death(
     mut commands: Commands,
 ) {
     //ASSUMES ONLY 1 PLAYER
-    let Ok(mut passives) = p_query.get_single_mut() else {
+    let Ok(mut passives) = p_query.single_mut() else {
         return;
     };
 
@@ -304,10 +304,10 @@ fn display_passives_description(
     camera_query: Query<(&Camera, &GlobalTransform), With<MainCamera>>,
     pickup_hint: Query<Entity, With<PickupHint>>,
 ) {
-    let Ok(p_transform) = player_query.get_single() else {
+    let Ok(p_transform) = player_query.single() else {
         return;
     };
-    let Ok((camera, camera_transform)) = camera_query.get_single() else {
+    let Ok((camera, camera_transform)) = camera_query.single() else {
         return;
     };
     let p_pos = p_transform.translation.truncate();
@@ -360,7 +360,7 @@ fn display_passives_description(
         },
         None => {
             for entity in &pickup_hint {
-                commands.entity(entity).despawn_recursive();
+                commands.entity(entity).despawn();
             }
 
             for (_, _, _, mut visibility) in &mut passive_descriptions {

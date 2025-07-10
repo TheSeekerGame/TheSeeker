@@ -84,7 +84,7 @@ fn toggle_console(
         } else {
             // despawn console
             for e in &query_existing {
-                commands.entity(e).despawn_recursive();
+                commands.entity(e).despawn();
             }
             debug!("Console despawned.");
         }
@@ -105,7 +105,7 @@ fn console_text_input(
 ) {
     if kbd.just_pressed(KeyCode::Escape) {
         for (_, _, prompt) in &query {
-            commands.entity(prompt.0).despawn_recursive();
+            commands.entity(prompt.0).despawn();
         }
         evr_char.clear();
         return;
@@ -113,7 +113,7 @@ fn console_text_input(
     if kbd.just_pressed(KeyCode::Enter) {
         for (text, _, prompt) in &query {
             history.0.push(text.0.clone());
-            commands.entity(prompt.0).despawn_recursive();
+            commands.entity(prompt.0).despawn();
         }
         evr_char.clear();
         return;
@@ -121,7 +121,7 @@ fn console_text_input(
     if kbd.just_pressed(KeyCode::Backspace) {
         for (mut text, mut hisentry, prompt) in &mut query {
             if text.0.is_empty() {
-                commands.entity(prompt.0).despawn_recursive();
+                commands.entity(prompt.0).despawn();
             }
             text.0.pop();
             hisentry.0 = None;

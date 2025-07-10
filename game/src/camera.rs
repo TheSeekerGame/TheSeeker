@@ -1,7 +1,7 @@
 //! Everything to do with the in-game camera(s)
 
 use std::f32::consts::PI;
-use rand::{thread_rng, Rng};
+use rand::{rng, Rng};
 
 use crate::game::player::Player;
 
@@ -10,7 +10,6 @@ use crate::graphics::post_processing::darkness::DarknessSettings;
 use crate::graphics::post_processing::vignette::VignetteSettings;
 use crate::level::MainBackround;
 use crate::prelude::*;
-use bevy::render::camera::ClearColorConfig;
 use bevy::render::view::RenderLayers;
 use bevy::ecs::schedule::IntoScheduleConfigs;
 use bevy::render::camera::{Projection, OrthographicProjection, Camera};
@@ -25,12 +24,6 @@ pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        // app.register_clicommand_args("camera_at", cli_camera_at);
-        // app.register_clicommand_noargs(
-        //     "camera_limits",
-        //     cli_camera_limits_noargs,
-        // );
-        // app.register_clicommand_args("camera_limits", cli_camera_limits_args);
         app.add_systems(
             OnEnter(AppState::InGame),
             setup_main_camera,
@@ -94,12 +87,6 @@ enum LeadDirection {
 pub struct GameViewLimits(Rect);
 
 pub(crate) fn setup_main_camera(mut commands: Commands) {
-    #[cfg(feature = "iyes_perf_ui")]
-    commands.spawn((
-        iyes_perf_ui::PerfUiCompleteBundle::default(),
-        StateDespawnMarker,
-    ));
-
     // Custom orthographic projection with our desired scale.
     let projection = Projection::Orthographic(OrthographicProjection {
         scale: PROJECTION_SCALE,
@@ -141,7 +128,7 @@ fn camera_rig_follow_player(
     player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
     time: Res<Time>,
 ) {
-    let Ok(player_transform) = player_query.get_single() else {
+    let Ok(player_transform) = player_query.single() else {
         return;
     };
     // Default state is to predict the player goes forward, ie "right"
@@ -191,7 +178,7 @@ pub(crate) fn update_camera(
     >,
     camera_shake: Option<Res<CameraShake>>,
 ) {
-    let (mut camera_transform, projection) = match camera_query.get_single_mut() {
+            let (mut camera_transform, projection) = match camera_query.single_mut() {
         Ok(tuple) => tuple,
         Err(QuerySingleError::NoEntities(_)) => return,
         Err(QuerySingleError::MultipleEntities(_)) => {
@@ -213,7 +200,7 @@ pub(crate) fn update_camera(
         return;
     };
 
-    if let Ok((bg_layer, bg_transform)) = backround_query.get_single() {
+    if let Ok((bg_layer, bg_transform)) = backround_query.single() {
         let background_rect = background_rect(bg_layer, bg_transform);
 
         clamp_camera_to_edge(
@@ -276,7 +263,7 @@ pub struct CameraShake {
 
 impl CameraShake {
     pub fn new(strength: f32, t: f32, freq: f32) -> Self {
-        let rand_a = thread_rng().gen_range(0.0..=360.0);
+        let rand_a = rng().random_range(0.0..=360.0);
         let dir = Vec2::from_angle(rand_a as f32 * PI * 2.0);
 
         Self {
@@ -314,7 +301,7 @@ pub fn update_screen_shake(
     let tan_s = (TAN_FREQ_SCALE * t).sin();
 
     if shake.sub_timer.finished() {
-        let rand_a = thread_rng().gen_range(0.0..=360.0);
+        let rand_a = rng().random_range(0.0..=360.0);
         shake.dir = Vec2::from_angle(rand_a as f32 * PI * 2.0);
     }
 
@@ -336,54 +323,3 @@ pub fn update_screen_shake(
         commands.remove_resource::<CameraShake>();
     }
 }
-
-// fn cli_camera_at(
-//     In(args): In<Vec<String>>,
-//     mut q_cam: Query<&mut Transform, With<MainCamera>>,
-// ) {
-//     if args.len() != 2 {
-//         error!("\"camera_at <x> <y>\"");
-//         return;
-//     }
-//     if let Ok(mut xf_cam) = q_cam.get_single_mut() {
-//         if let (Ok(x), Ok(y)) = (args[0].parse(), args[1].parse()) {
-//             xf_cam.translation.x = x;
-//             xf_cam.translation.y = y;
-//         } else {
-//             error!("\"camera_at <x> <y>\": args must be numeric values");
-//         }
-//     }
-// }
-//
-// fn cli_camera_limits_noargs(q_cam: Query<&GameViewLimits, With<MainCamera>>) {
-//     if let Ok(limits) = q_cam.get_single() {
-//         info!(
-//             "Game Camera limits: {} {} {} {}",
-//             limits.0.min.x, limits.0.min.y, limits.0.max.x, limits.0.max.y
-//         );
-//     } else {
-//         error!("Game Camera not found!");
-//     }
-// }
-//
-// fn cli_camera_limits_args(
-//     In(args): In<Vec<String>>,
-//     mut q_cam: Query<&mut GameViewLimits, With<MainCamera>>,
-// ) {
-//     if args.len() != 4 {
-//         error!("\"camera_limits <x0> <y0> <x1> <y1>\"");
-//         return;
-//     }
-//     if let Ok(mut limits) = q_cam.get_single_mut() {
-//         if let (Ok(x0), Ok(y0), Ok(x1), Ok(y1)) = (
-//             args[0].parse(),
-//             args[1].parse(),
-//             args[2].parse(),
-//             args[3].parse(),
-//         ) {
-//             limits.0 = Rect::new(x0, y0, x1, y1);
-//         } else {
-//             error!("\"camera_limits <x0> <y0> <x1> <y1>\": args must be numeric values");
-//         }
-//     }
-// }

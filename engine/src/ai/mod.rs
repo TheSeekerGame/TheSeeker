@@ -248,7 +248,11 @@ mod script_bundle {
                     // Mix upper and lower 32 bits then xor with the level seed
                     ((bits ^ (bits >> 32)) as u32) ^ level_seed
                 },
-                actions: Vec::with_capacity(8),
+                // Pre-allocate a slightly larger action buffer to avoid growth when
+                // many delayed/state-delayed actions fire on the same frame. The small
+                // extra memory per entity (8 more enum slots ≈ 64 bytes) pays off by
+                // ensuring zero allocs up to fairly complex behaviours.
+                actions: Vec::with_capacity(16),
                 anim_tick: 0,
                 slot_bits: 0,
                 cooldowns: vec![0; compiled_fsm.inner.cooldown_names.len()],

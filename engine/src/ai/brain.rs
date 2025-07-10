@@ -10,7 +10,7 @@ use bevy::prelude::*;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::borrow::Cow;
-use super::asset::{EnemyFsm, FsmState, FsmTransition, FsmCondition, FsmAction, ArchetypeStats, EnemyArchetype};
+use super::asset::{EnemyFsm, FsmState, FsmTransition, FsmCondition, FsmAction, ArchetypeStats};
 
 /// Type alias for state IDs  
 pub type StateId = u16;
@@ -773,7 +773,7 @@ fn compile_state_actions(
     state: &FsmState,
     archetype: Option<&crate::ai::EnemyArchetype>,
     archetype_stats: Option<&ArchetypeStats>,
-    slot_names: &mut Vec<String>,
+    _slot_names: &mut Vec<String>,
     cooldown_names: &mut Vec<String>,
 ) -> Result<StateActions, String> {
     let mut on_enter_compiled = Vec::new();

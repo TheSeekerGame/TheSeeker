@@ -4,8 +4,6 @@ use crate::game::attack::KillCount;
 use crate::prelude::*;
 use bevy::prelude::UiTargetCamera as TargetCamera;
 
-use super::popup::PopupUi;
-
 pub struct KillCounterPlugin;
 
 impl Plugin for KillCounterPlugin {
@@ -29,7 +27,7 @@ fn spawn_killcounter(
     q_cam: Query<Entity, With<MainCamera>>,
     asset_server: Res<AssetServer>,
 ) {
-    let Ok(cam_e) = q_cam.get_single() else {
+    let Ok(cam_e) = q_cam.single() else {
         return;
     };
 
@@ -57,11 +55,11 @@ fn spawn_killcounter(
 }
 
 pub fn update_counter(
-    mut commands: Commands,
+    _commands: Commands,
     mut query: Query<(Entity, &mut Text), With<KillCounterUi>>,
     kill_count: Res<KillCount>,
 ) {
-    for (entity, mut text) in query.iter_mut() {
+    for (_entity, mut text) in query.iter_mut() {
         text.0 = format!("{}", kill_count.0);
     }
 }

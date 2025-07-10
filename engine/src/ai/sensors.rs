@@ -7,7 +7,7 @@
 use bevy::prelude::*;
 use crate::animation::AnimLoop;
 use crate::gent::Gent;
-use crate::physics::{Collider, CollisionGroups, PhysicsWorld, ENEMY, GROUND, SENSOR};
+use crate::physics::{CollisionGroups, PhysicsWorld, ENEMY, GROUND};
 
 // Import the components from the parent module
 use super::{FsmInstance, TargetSensor, GroundSensor, RangeSensor, HealthSensor};

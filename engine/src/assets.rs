@@ -3,7 +3,7 @@ use bevy::prelude::*;
 use bevy::render::render_resource::TextureFormat;
 use bevy::prelude::States;
 use bevy_common_assets::toml::TomlAssetPlugin;
-use bevy_rapier2d::rapier::geometry::SharedShape;
+
 
 use crate::physics::{SpriteShapeMap, Collider};
 use crate::prelude::*;

@@ -23,7 +23,7 @@ fn manage_audio_delay(
     q_mixer: Query<&PrecisionMixerControl>,
     mut state: Local<DelayManagerState>,
 ) {
-    let Ok(ctl) = q_mixer.get_single() else {
+    let Ok(ctl) = q_mixer.single() else {
         return;
     };
     let sample = ctl.controller.sample_count();

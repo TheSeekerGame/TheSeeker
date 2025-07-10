@@ -177,7 +177,7 @@ fn despawn_popup_on_timer(
 ) {
     for (entity, mut timer) in &mut popup_q {
         if timer.tick(time.delta()).finished() {
-            commands.entity(entity).despawn_recursive();
+            commands.entity(entity).despawn();
         }
     }
 }

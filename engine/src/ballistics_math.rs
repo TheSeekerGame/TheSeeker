@@ -353,7 +353,7 @@ pub fn solve_ballistic_arc_moving(
     let mut t3 = 0.0;
     let mut t4 = 0.0;
 
-    let num_times = solve_quartic(
+    let _num_times = solve_quartic(
         c0, c1, c2, c3, c4, &mut t1, &mut t2, &mut t3, &mut t4,
     );
     let mut times = [t1, t2, t3, t4];

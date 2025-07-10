@@ -60,7 +60,7 @@ fn update_hp_vignette(
     time: Res<Time>,
     mut query: Query<&mut VignetteSettings>, 
 ) {
-    if let Ok(health) = player_q.get_single() {
+    if let Ok(health) = player_q.single() {
         let health_percentage = health.current as f32 / health.max as f32;
         if health_percentage <= 0.25 {
             let bpm = 103.0;
