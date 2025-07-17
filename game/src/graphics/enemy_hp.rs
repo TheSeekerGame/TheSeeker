@@ -170,7 +170,7 @@ fn update_positions(
         };
 
         // center the bar, and make it hover above the collider
-        let offset = Vec2::ZERO + Vec2::new(-width * 0.5, -60.0);
+        let offset = Vec2::ZERO + Vec2::new(-width * 0.5, -55.0);
 
         // Update the position of the health bar UI
         style.left = Val::Px(screen_position.x + offset.x);

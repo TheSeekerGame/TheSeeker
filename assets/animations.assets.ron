@@ -1082,4 +1082,124 @@
         rows: 1,
         columns: 1, 
     ),
+    "anim.numbers.0": File (
+        path: "animations/numbers/0.anim.toml",
+    ),
+    "anim.numbers.0.image": File (
+        path: "animations/numbers/0.png",
+    ),
+    "anim.numbers.0.atlas": TextureAtlasLayout (
+        tile_size_x: 3,
+        tile_size_y: 10,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.numbers.1": File (
+        path: "animations/numbers/1.anim.toml",
+    ),
+    "anim.numbers.1.image": File (
+        path: "animations/numbers/1.png",
+    ),
+    "anim.numbers.1.atlas": TextureAtlasLayout (
+        tile_size_x: 3,
+        tile_size_y: 10,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.numbers.2": File (
+        path: "animations/numbers/2.anim.toml",
+    ),
+    "anim.numbers.2.image": File (
+        path: "animations/numbers/2.png",
+    ),
+    "anim.numbers.2.atlas": TextureAtlasLayout (
+        tile_size_x: 3,
+        tile_size_y: 10,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.numbers.3": File (
+        path: "animations/numbers/3.anim.toml",
+    ),
+    "anim.numbers.3.image": File (
+        path: "animations/numbers/3.png",
+    ),
+    "anim.numbers.3.atlas": TextureAtlasLayout (
+        tile_size_x: 3,
+        tile_size_y: 10,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.numbers.4": File (
+        path: "animations/numbers/4.anim.toml",
+    ),
+    "anim.numbers.4.image": File (
+        path: "animations/numbers/4.png",
+    ),
+    "anim.numbers.4.atlas": TextureAtlasLayout (
+        tile_size_x: 3,
+        tile_size_y: 10,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.numbers.5": File (
+        path: "animations/numbers/5.anim.toml",
+    ),
+    "anim.numbers.5.image": File (
+        path: "animations/numbers/5.png",
+    ),
+    "anim.numbers.5.atlas": TextureAtlasLayout (
+        tile_size_x: 3,
+        tile_size_y: 10,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.numbers.6": File (
+        path: "animations/numbers/6.anim.toml",
+    ),
+    "anim.numbers.6.image": File (
+        path: "animations/numbers/6.png",
+    ),
+    "anim.numbers.6.atlas": TextureAtlasLayout (
+        tile_size_x: 3,
+        tile_size_y: 10,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.numbers.7": File (
+        path: "animations/numbers/7.anim.toml",
+    ),
+    "anim.numbers.7.image": File (
+        path: "animations/numbers/7.png",
+    ),
+    "anim.numbers.7.atlas": TextureAtlasLayout (
+        tile_size_x: 3,
+        tile_size_y: 10,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.numbers.8": File (
+        path: "animations/numbers/8.anim.toml",
+    ),
+    "anim.numbers.8.image": File (
+        path: "animations/numbers/8.png",
+    ),
+    "anim.numbers.8.atlas": TextureAtlasLayout (
+        tile_size_x: 3,
+        tile_size_y: 10,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.numbers.9": File (
+        path: "animations/numbers/9.anim.toml",
+    ),
+    "anim.numbers.9.image": File (
+        path: "animations/numbers/9.png",
+    ),
+    "anim.numbers.9.atlas": TextureAtlasLayout (
+        tile_size_x: 3,
+        tile_size_y: 10,
+        rows: 1,
+        columns: 4, 
+    )
 })
