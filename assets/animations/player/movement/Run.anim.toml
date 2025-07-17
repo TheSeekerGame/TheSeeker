@@ -37,6 +37,12 @@ action = "PlayAudio"
 volume = 0.5
 asset_key = "audio.game.Footstep"
 
+[[script]]
+run_at_frame = [7]
+action = "PlayAudio"
+volume = 0.16
+asset_key = "audio.game.Pluck"
+
 # LOOP
 [[script]]
 run_at_frame = 10

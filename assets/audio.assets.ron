@@ -193,7 +193,6 @@
     ),
     "audio.game.Music": Files (
         paths: [
-            "audio/music/Music2.flac",
             "audio/music/Music3.flac",
         ],
     ),
@@ -207,6 +206,38 @@
             "audio/yak/Mooo1.flac",
             "audio/yak/Mooo2.flac",
             "audio/yak/Mooo3.flac",
+        ],
+    ),
+    "audio.game.Perc": Files (
+        paths: [
+            "audio/generative/Perc1.flac",
+            "audio/generative/Perc2.flac",
+            "audio/generative/Perc3.flac",
+            "audio/generative/Perc4.flac",
+            "audio/generative/Perc5.flac",
+            "audio/generative/Perc6.flac",
+            "audio/generative/Perc7.flac",
+            "audio/generative/Perc8.flac",
+        ],
+    ),
+    "audio.game.Piano": Files (
+        paths: [
+            "audio/generative/Piano1.flac",
+            "audio/generative/Piano2.flac",
+            "audio/generative/Piano3.flac",
+        ],
+    ),
+    "audio.game.Pluck": Files (
+        paths: [
+            "audio/generative/Pluck1.flac",
+            "audio/generative/Pluck2.flac",
+            "audio/generative/Pluck3.flac",
+            "audio/generative/Pluck3.flac",
+        ],
+    ),
+    "audio.game.Click": Files (
+        paths: [
+            "audio/generative/TestClick.flac",
         ],
     ),
 })

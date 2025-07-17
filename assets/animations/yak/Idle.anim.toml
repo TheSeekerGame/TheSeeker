@@ -17,14 +17,7 @@ label = "Music"
 [[script]]
 run_at_frame = 2
 action = "PlayBackgroundAudio"
-volume = 0.2
-asset_key = "audio.game.Music"
-label = "Music"
-
-[[script]]
-run_at_frame = 2
-action = "PlayBackgroundAudio"
-volume = 0.1
+volume = 0.04
 asset_key = "audio.game.Ambience"
 label = "Music"
 
