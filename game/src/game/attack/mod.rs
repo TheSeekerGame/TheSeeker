@@ -583,7 +583,7 @@ fn damage_flash(
     mut commands: Commands,
 ) {
     for (entity, mut sprite, mut damage_flash) in query.iter_mut() {
-        sprite.color = Color::linear_rgb(2.5, 2.5, 2.5);
+        sprite.color = Color::linear_rgb(100.0, 100.0, 100.0);
 
         if damage_flash.current_ticks == damage_flash.max_ticks {
             commands.entity(entity).remove::<DamageFlash>();
