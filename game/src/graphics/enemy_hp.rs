@@ -1,6 +1,6 @@
 use std::time::Duration;
 
-use anyhow::{anyhow};
+// anyhow no longer required after refactor
 use bevy::prelude::*;
 use bevy::reflect::TypePath;
 use bevy::render::render_resource::*;
@@ -14,9 +14,14 @@ use crate::game::enemy::Enemy;
 use crate::game::gentstate::Dead;
 use crate::prelude::Update;
 
-const BACKGROUND_COLOR: Color = Color::linear_rgba(0.5, 0.5, 0.5, 0.5);
+const BACKGROUND_COLOR: Color = Color::NONE;
 const ANIMATION_DELAY_IN_MILLIS: u64 = 600;
 const ANIMATION_SPEED: f32 = 0.2;
+const SPARK_DURATION_MILLIS: u64 = 400;
+// UI constants
+const BAR_WIDTH: f32 = 80.0;  // Base width (actual visible width will be less due to slant)
+const BAR_HEIGHT: f32 = 16.0;  // Increased to allow spark to extend beyond visible bar
+const BAR_SLOPE_FACTOR: f32 = 0.05; // Should match shader SLOPE constant
 
 pub struct EnemyHpBarPlugin;
 
@@ -28,7 +33,6 @@ impl Plugin for EnemyHpBarPlugin {
             .add_systems(Update, update_positions)
             .add_systems(Update, update_hp)
             .add_systems(Update, update_visibility)
-            .add_systems(Update, tick_damage_animation)
             .add_systems(Update, despawn);
     }
 }
@@ -45,17 +49,24 @@ pub struct Bar {
 
 #[derive(Component)]
 pub struct DamageAnimation {
+    /// Delay before the white trailing bar starts shrinking.
     delay: Timer,
+    /// Lifetime of the sharp "spark" line at the damage frontier.
+    spark: Timer,
 }
 
 #[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
 pub struct Material {
-    /// A number between `0` and `1` indicating the health amount.
+    /// A number between `0` and `1` indicating the current health amount (red part).
     #[uniform(0)]
     health: f32,
-    /// The current position of the damage taken indicator.
+    /// The current position (in UV space) of the trailing damage indicator (white part).
     #[uniform(1)]
     damage: f32,
+    /// Visibility / alpha for the transient "spark" line that marks recent damage.
+    /// Ranges from `1` (fully visible) to `0` (invisible).
+    #[uniform(2)]
+    spark: f32,
 }
 
 impl UiMaterial for Material {
@@ -75,9 +86,9 @@ fn instance(
                 .spawn((
                     // Root node of the health bar
                     Node {
-                        width: Val::Px(60.0),
-                        height: Val::Px(10.0),
-                        padding: UiRect::horizontal(Val::Px(2.0)),
+                        width: Val::Px(BAR_WIDTH),
+                        height: Val::Px(BAR_HEIGHT),
+                        padding: UiRect::all(Val::Px(0.0)),
                         position_type: PositionType::Absolute,
                         ..default()
                     },
@@ -91,13 +102,14 @@ fn instance(
                         // The filled portion of the bar driven by custom material
                         Node {
                             width: Val::Percent(100.0),
-                            height: Val::Percent(200.0),
+                            height: Val::Percent(100.0),
                             align_self: AlignSelf::Center,
                             ..default()
                         },
                         MaterialNode(material.add(Material {
                             health: 1.0,
                             damage: 1.0,
+                            spark: 0.0,
                         })),
                         Bar { parent: entity },
                         DamageAnimation {
@@ -105,6 +117,15 @@ fn instance(
                                 Duration::from_millis(ANIMATION_DELAY_IN_MILLIS),
                                 TimerMode::Once,
                             ),
+                            spark: {
+                                let mut t = Timer::new(
+                                    Duration::from_millis(SPARK_DURATION_MILLIS),
+                                    TimerMode::Once,
+                                );
+                                // Start in the finished state so the spark is invisible until first damage.
+                                t.tick(Duration::from_millis(SPARK_DURATION_MILLIS));
+                                t
+                            },
                         },
                     ));
                 });
@@ -149,7 +170,7 @@ fn update_positions(
         };
 
         // center the bar, and make it hover above the collider
-        let offset = Vec2::ZERO + Vec2::new(-width * 0.5, -30.0);
+        let offset = Vec2::ZERO + Vec2::new(-width * 0.5, -60.0);
 
         // Update the position of the health bar UI
         style.left = Val::Px(screen_position.x + offset.x);
@@ -164,42 +185,50 @@ fn update_hp(
         &MaterialNode<Material>,
         &mut DamageAnimation,
     )>,
-    mut material: ResMut<Assets<Material>>,
+    mut materials: ResMut<Assets<Material>>,
+    time: Res<Time>,
 ) {
     for (hp_bar, matnode, mut damage_animation) in &mut hp_bar_q {
+        // Tick timers first so their state is up-to-date for this frame.
+        damage_animation.delay.tick(time.delta());
+        damage_animation.spark.tick(time.delta());
+
         let Ok(health) = enemy_q.get(hp_bar.parent) else {
             continue;
         };
-        let Ok(material) = material.get_mut(&matnode.0).ok_or(anyhow!(
-            "Enemy health bar material not found"
-        )) else {
+
+        let Some(material) = materials.get_mut(&matnode.0) else {
+            // Should never happen, but play safe.
             continue;
         };
 
-        let health_factor = 1.0 * (health.current as f32 / health.max as f32);
+        let health_factor = (health.current as f32) / (health.max as f32);
 
-        // Reset the damage animation on taking damage
-        if material.health != health_factor {
+        // Detect change (damage) and restart animations when it happens
+        if (material.health - health_factor).abs() > f32::EPSILON {
             damage_animation.delay.reset();
+            damage_animation.spark.reset();
+            material.spark = 1.0; // fully visible spark
         }
 
+        // Animate trailing white bar once delay elapsed
         if damage_animation.delay.finished() {
-            material.damage =
-                material.damage.lerp(health_factor, ANIMATION_SPEED);
+            material.damage = material.damage.lerp(health_factor, ANIMATION_SPEED);
+        }
+
+        // Fade spark over its lifetime
+        if !damage_animation.spark.finished() {
+            // spark visibility decays from 1.0 -> 0.0 over the timer duration
+            material.spark = 1.0 - damage_animation.spark.fraction();
+        } else {
+            material.spark = 0.0;
         }
 
         material.health = health_factor;
     }
 }
 
-fn tick_damage_animation(
-    mut damage_animation: Query<&mut DamageAnimation>,
-    time: Res<Time>,
-) {
-    for mut damage_animation in &mut damage_animation {
-        damage_animation.delay.tick(time.delta());
-    }
-}
+// We no longer need a separate system to tick the damage animation; all timing is handled inside `update_hp`.
 
 fn update_visibility(
     enemy_q: Query<Ref<Health>, With<Enemy>>,

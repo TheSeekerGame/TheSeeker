@@ -2,6 +2,7 @@ mod player_action;
 mod player_anim;
 mod player_behaviour;
 pub mod player_weapon;
+mod equipment;
 use std::collections::HashMap;
 use bevy::render::view::RenderLayers;
 use bevy::transform::components::GlobalTransform;
@@ -10,6 +11,7 @@ use player_action::PlayerActionPlugin;
 use player_anim::PlayerAnimationPlugin;
 use player_behaviour::PlayerBehaviorPlugin;
 use player_weapon::PlayerWeaponPlugin;
+use equipment::EquipmentPlugin;
 use theseeker_engine::physics::{CollisionGroups as InteractionGroups, Group};
 use strum::IntoEnumIterator;
 use strum_macros::EnumIter;
@@ -79,6 +81,7 @@ impl Plugin for PlayerPlugin {
             PlayerTransitionPlugin,
             PlayerAnimationPlugin,
             PlayerWeaponPlugin,
+            EquipmentPlugin,
         ));
     }
 }
