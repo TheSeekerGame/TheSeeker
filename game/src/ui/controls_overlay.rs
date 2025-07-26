@@ -129,6 +129,10 @@ fn spawn_control_overlay(mut commands: Commands) {
                     row.text(" or ");
                     row.control_icon("Y / Triangle");
                 });
+                container.row().with_children(|row| {
+                    row.text("Passive Inventory: ");
+                    row.control_icon("M");
+                });
                 container.spacer();
                 container.row().with_children(|row| {
                     row.text("Show/Hide Controls: ");

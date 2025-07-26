@@ -34,7 +34,8 @@ impl Plugin for AssetsPlugin {
                 )
                 .load_collection::<UiAssets>()
                 .load_collection::<MainMenuAssets>()
-                .load_collection::<DialogAssets>(),
+                .load_collection::<DialogAssets>()
+                .load_collection::<GameUiAssets>(),
         );
     }
 }
@@ -61,4 +62,18 @@ pub struct DialogAssets {
     pub mr_snaffles_background: Handle<Image>,
     #[asset(key = "dialog.VagrantBackground")]
     pub vagrant_background: Handle<Image>,
+}
+
+#[derive(AssetCollection, Resource)]
+pub struct GameUiAssets {
+    #[asset(key = "ui.game.toolbar_frame")]
+    pub toolbar_frame: Handle<Image>,
+    #[asset(key = "ui.game.attack_skill_icon")]
+    pub attack_skill_icon: Handle<Image>,
+    #[asset(key = "ui.game.dash_skill_icon")]
+    pub dash_skill_icon: Handle<Image>,
+    #[asset(key = "ui.game.whirl_skill_icon")]
+    pub whirl_skill_icon: Handle<Image>,
+    #[asset(key = "ui.game.stealth_skill_icon")]
+    pub stealth_skill_icon: Handle<Image>,
 }

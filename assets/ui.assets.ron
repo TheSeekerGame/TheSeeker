@@ -12,4 +12,19 @@
     "ui.mainmenu.background": File (
         path: "ui/mainmenu/background.png"
     ),
+    "ui.game.toolbar_frame": File (
+        path: "ui/game/ToolbarFrame.png"
+    ),
+    "ui.game.attack_skill_icon": File (
+        path: "ui/game/AttackSkillIcon.png"
+    ),
+    "ui.game.dash_skill_icon": File (
+        path: "ui/game/DashSkillIcon.png"
+    ),
+    "ui.game.whirl_skill_icon": File (
+        path: "ui/game/WhirlSkillIcon.png"
+    ),
+    "ui.game.stealth_skill_icon": File (
+        path: "ui/game/StealthSkillIcon.png"
+    ),
 })

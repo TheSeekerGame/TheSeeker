@@ -129,22 +129,27 @@ pub struct PlayerGfx {
     pub e_gent: Entity,
 }
 
-#[derive(Component, Debug, Deref, DerefMut)]
+#[derive(Component, Debug)]
 pub struct Passives {
-    #[deref]
-    pub current: HashSet<Passive>,
+    /// Currently equipped passives (up to 4)
+    pub equipped: HashSet<Passive>,
+    /// Passives in inventory but not equipped
+    pub inventory: Vec<Passive>,
+    /// Passives that haven't been found yet
     pub locked: Vec<Passive>,
 }
+
 impl Passives {
-    /// Maximum number of passives player can hold at once
-    pub const MAX: usize = 3;
+    /// Maximum number of passives player can have equipped at once
+    pub const MAX_EQUIPPED: usize = 4;
 }
 
 impl Default for Passives {
     fn default() -> Self {
         let passives: Vec<Passive> = Passive::iter().collect();
         Passives {
-            current: HashSet::with_capacity(Passives::MAX),
+            equipped: HashSet::with_capacity(Passives::MAX_EQUIPPED),
+            inventory: Vec::new(),
             locked: passives,
         }
     }
@@ -154,26 +159,64 @@ impl Passives {
     pub fn drop_random(&mut self) -> Option<Passive> {
         let mut rng = rand::rng();
 
-        // dont drop more passives if full
-        if !self.locked.is_empty() && self.current.len() < Passives::MAX {
+        // Drop a random passive from locked pool
+        if !self.locked.is_empty() {
             let i = rng.random_range(0..self.locked.len());
             let passive = self.locked.swap_remove(i);
-
             return Some(passive);
         }
         None
     }
 
-    // TODO: return result?
+    /// Add a passive to the inventory (not equipped)
     pub fn add_passive(&mut self, passive: Passive) {
-        if self.current.len() < Passives::MAX {
-            self.current.insert(passive);
+        self.inventory.push(passive);
+    }
+
+    /// Equip a passive from inventory
+    pub fn equip_passive(&mut self, passive: Passive) -> bool {
+        if self.equipped.len() < Passives::MAX_EQUIPPED {
+            if let Some(pos) = self.inventory.iter().position(|p| *p == passive) {
+                self.inventory.remove(pos);
+                self.equipped.insert(passive);
+                return true;
+            }
         }
+        false
+    }
+
+    /// Unequip a passive back to inventory
+    pub fn unequip_passive(&mut self, passive: Passive) -> bool {
+        if self.equipped.remove(&passive) {
+            self.inventory.push(passive);
+            return true;
+        }
+        false
+    }
+
+    /// Check if passive is equipped
+    pub fn is_equipped(&self, passive: &Passive) -> bool {
+        self.equipped.contains(passive)
+    }
+
+    /// Iterator over equipped passives
+    pub fn iter(&self) -> std::collections::hash_set::Iter<Passive> {
+        self.equipped.iter()
+    }
+
+    /// Get total passive count (equipped + inventory)
+    pub fn total_count(&self) -> usize {
+        self.equipped.len() + self.inventory.len()
+    }
+
+    /// Check if a passive is equipped (compatibility method)
+    pub fn contains(&self, passive: &Passive) -> bool {
+        self.equipped.contains(passive)
     }
 }
 
 // they could also be components...limit only by the pickup/gain function instead of sized hashmap
-#[derive(Debug, Eq, PartialEq, Hash, EnumIter, Clone)]
+#[derive(Debug, Eq, PartialEq, Hash, EnumIter, Clone, Copy)]
 pub enum Passive {
     /// Heal after killing an enemy
     Bloodstone,

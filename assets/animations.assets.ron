@@ -1201,5 +1201,29 @@
         tile_size_y: 10,
         rows: 1,
         columns: 4, 
+    ),
+    "anim.ui.passivesbg": File (
+        path: "animations/ui/PassivesBG.anim.toml",
+    ),
+    "anim.ui.passivesbg.image": File (
+        path: "animations/ui/UIbg1.png",
+    ),
+    "anim.ui.passivesbg.atlas": TextureAtlasLayout (
+        tile_size_x: 118,
+        tile_size_y: 74,
+        rows: 1,
+        columns: 11, 
+    ),
+    "anim.ui.abilitiesbg": File (
+        path: "animations/ui/AbilitiesBG.anim.toml",
+    ),
+    "anim.ui.abilitiesbg.image": File (
+        path: "animations/ui/UIbg1.png",
+    ),
+    "anim.ui.abilitiesbg.atlas": TextureAtlasLayout (
+        tile_size_x: 118,
+        tile_size_y: 74,
+        rows: 1,
+        columns: 11, 
     )
 })

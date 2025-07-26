@@ -280,8 +280,8 @@ fn update_equipment_position(
     // Hovering speed - radians per tick (at 96Hz, this gives ~2.0 radians/second)
     const HOVER_SPEED_PER_TICK: f32 = 0.02083;
     // Running shake constants
-    const RUN_SHAKE_AMPLITUDE: f32 = 1.0;  // pixels
-    const RUN_SHAKE_CYCLE_TICKS: u32 = 64; // 16 ticks up, 16 ticks down
+    const RUN_SHAKE_AMPLITUDE: f32 = 2.0;  // pixels
+    const RUN_SHAKE_CYCLE_TICKS: u32 = 32; // 16 ticks up, 16 ticks down
 
     for (mut equipment, mut transform, mut sprite) in equipment_query.iter_mut() {
         let Ok((player_transform, player_gfx)) = player_gfx_query.get(equipment.player_gfx) else {

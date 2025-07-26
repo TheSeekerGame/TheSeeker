@@ -26,6 +26,7 @@ pub enum PlayerAction {
     SwapMeleeWeapon,
     Interact,
     ToggleControlOverlay,
+    TogglePassiveInventory,
 }
 
 impl PlayerAction {
@@ -58,6 +59,10 @@ impl PlayerAction {
             (
                 Self::ToggleControlOverlay,
                 KeyCode::KeyC,
+            ),
+            (
+                Self::TogglePassiveInventory,
+                KeyCode::KeyM,
             ),
         ])
         .with_axis(Self::Move, VirtualAxis::ad())

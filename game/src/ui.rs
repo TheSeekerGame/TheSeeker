@@ -11,6 +11,7 @@ mod controls_overlay;
 mod kill_counter;
 mod mainmenu;
 mod passives;
+mod passive_inventory;
 pub mod popup;
 mod skill_toolbar;
 
@@ -25,6 +26,7 @@ impl Plugin for UiPlugin {
             controls_overlay::plugin,
             popup::plugin,
             passives::plugin,
+            self::passive_inventory::PassiveInventoryPlugin,
             self::mainmenu::MainMenuPlugin,
             SkillToolbarPlugin,
             KillCounterPlugin,
