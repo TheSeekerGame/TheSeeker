@@ -179,7 +179,7 @@ fn update_passive_slots(
         commands.entity(entity).despawn();
     }
 
-    let equipped_passives: Vec<_> = passives.equipped.iter().cloned().collect();
+    let equipped_passives = &passives.equipped;
     let inventory_passives = &passives.inventory;
 
     // Update slots with new icons

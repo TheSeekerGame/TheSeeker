@@ -132,7 +132,7 @@ pub struct PlayerGfx {
 #[derive(Component, Debug)]
 pub struct Passives {
     /// Currently equipped passives (up to 4)
-    pub equipped: HashSet<Passive>,
+    pub equipped: Vec<Passive>,
     /// Passives in inventory but not equipped
     pub inventory: Vec<Passive>,
     /// Passives that haven't been found yet
@@ -148,7 +148,7 @@ impl Default for Passives {
     fn default() -> Self {
         let passives: Vec<Passive> = Passive::iter().collect();
         Passives {
-            equipped: HashSet::with_capacity(Passives::MAX_EQUIPPED),
+            equipped: Vec::with_capacity(Passives::MAX_EQUIPPED),
             inventory: Vec::new(),
             locked: passives,
         }
@@ -178,7 +178,7 @@ impl Passives {
         if self.equipped.len() < Passives::MAX_EQUIPPED {
             if let Some(pos) = self.inventory.iter().position(|p| *p == passive) {
                 self.inventory.remove(pos);
-                self.equipped.insert(passive);
+                self.equipped.push(passive);
                 return true;
             }
         }
@@ -187,7 +187,8 @@ impl Passives {
 
     /// Unequip a passive back to inventory
     pub fn unequip_passive(&mut self, passive: Passive) -> bool {
-        if self.equipped.remove(&passive) {
+        if let Some(pos) = self.equipped.iter().position(|p| *p == passive) {
+            self.equipped.remove(pos);
             self.inventory.push(passive);
             return true;
         }
@@ -196,11 +197,11 @@ impl Passives {
 
     /// Check if passive is equipped
     pub fn is_equipped(&self, passive: &Passive) -> bool {
-        self.equipped.contains(passive)
+        self.equipped.iter().any(|p| p == passive)
     }
 
     /// Iterator over equipped passives
-    pub fn iter(&self) -> std::collections::hash_set::Iter<Passive> {
+    pub fn iter(&self) -> std::slice::Iter<Passive> {
         self.equipped.iter()
     }
 
@@ -211,7 +212,7 @@ impl Passives {
 
     /// Check if a passive is equipped (compatibility method)
     pub fn contains(&self, passive: &Passive) -> bool {
-        self.equipped.contains(passive)
+        self.equipped.iter().any(|p| p == passive)
     }
 }
 
