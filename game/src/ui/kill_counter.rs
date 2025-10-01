@@ -1,6 +1,6 @@
 use crate::appstate::AppState;
 use crate::camera::MainCamera;
-use crate::game::attack::KillCount;
+use crate::game::combat::KillCount;
 use crate::prelude::*;
 use bevy::prelude::UiTargetCamera as TargetCamera;
 
@@ -60,6 +60,6 @@ pub fn update_counter(
     kill_count: Res<KillCount>,
 ) {
     for (_entity, mut text) in query.iter_mut() {
-        text.0 = format!("{}", kill_count.0);
+        text.0 = kill_count.0.to_string();
     }
 }

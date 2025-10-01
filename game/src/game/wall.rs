@@ -24,7 +24,7 @@ pub struct WallBundle {
     wall: Wall,
 }
 
-/// Spawns XPBD colliders for the walls of a level
+/// Spawns merged static colliders for wall tiles in the current level.
 ///
 /// (adapted from the `bevy_ecs_ldtk` example)
 ///
@@ -71,13 +71,8 @@ pub fn spawn_wall_collision(
         return;
     }
 
-    // Consider where the walls are
-    // storing them as GridCoords in a HashSet for quick, easy lookup
-    //
-    // The key of this map will be the entity of the level the wall belongs to.
-    // This has two consequences in the resulting collision entities:
-    // 1. it forces the walls to be split along level boundaries
-    // 2. it lets us easily add the collision entities as children of the appropriate level entity
+    // Build a map from level entity to wall grid coordinates. Using the level as key ensures
+    // collisions are split per-level and spawned as children of the correct level entity.
     let mut level_to_wall_locations: HashMap<Entity, HashSet<GridCoords>> =
         HashMap::new();
 
@@ -96,7 +91,11 @@ pub fn spawn_wall_collision(
     level_query.iter().for_each(|(level_entity, level_iid)| {
         if let Some(level_walls) = level_to_wall_locations.get(&level_entity) {
             let ldtk_project = ldtk_project_assets
-                .get(ldtk_projects.single().expect("Missing LDtk project handle"))
+                .get(
+                    ldtk_projects
+                        .single()
+                        .expect("Missing LDtk project handle"),
+                )
                 .expect("Project should be loaded if level has spawned");
 
             let level = ldtk_project
@@ -111,7 +110,7 @@ pub fn spawn_wall_collision(
                 ..
             } = level.layer_instances()[0];
 
-            // combine wall tiles into flat "plates" in each individual row
+            // Combine wall tiles into flat plates per row
             let mut plate_stack: Vec<Vec<Plate>> = Vec::new();
 
             for y in 0..height {
@@ -139,7 +138,7 @@ pub fn spawn_wall_collision(
                 plate_stack.push(row_plates);
             }
 
-            // combine "plates" into rectangles across multiple rows
+            // Merge plates into rectangles across adjacent rows
             let mut rect_builder: HashMap<Plate, Rect> = HashMap::new();
             let mut prev_row: Vec<Plate> = Vec::new();
             let mut wall_rects: Vec<Rect> = Vec::new();
@@ -171,21 +170,18 @@ pub fn spawn_wall_collision(
             }
 
             commands.entity(level_entity).with_children(|level| {
-                // Spawn colliders for every rectangle..
-                // Making the collider a child of the level serves two purposes:
-                // 1. Adjusts the transforms to be relative to the level for free
-                // 2. the colliders will be despawned automatically when levels unload
+                // Spawn one collider per merged rectangle as a child of the level
                 for wall_rect in wall_rects {
                     level.spawn((
                         Collider::cuboid(
                             (wall_rect.right as f32 - wall_rect.left as f32
                                 + 1.)
                                 * grid_size as f32
-                                / 2.0, // Half-extents: bevy_rapier2d expects half-width
+                                / 2.0,
                             (wall_rect.top as f32 - wall_rect.bottom as f32
                                 + 1.)
                                 * grid_size as f32
-                                / 2.0, // Half-extents: bevy_rapier2d expects half-height
+                                / 2.0,
                         ),
                         InteractionGroups::new(GROUND, Group::all()),
                         Transform::from_translation(Vec3::new(

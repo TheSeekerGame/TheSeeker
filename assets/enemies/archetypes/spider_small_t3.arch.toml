@@ -6,6 +6,7 @@ base = "spider_small"
 
 [override.stats]
 spawn_hp = 900    # Tier3 is 9x base HP
+dmg_melee = 80   # Tier3 is 4x base damage 
 
 [override.anim]
 Idle    = "anim.smallspider3.Idle"

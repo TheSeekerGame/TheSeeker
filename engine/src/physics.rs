@@ -1,25 +1,24 @@
-
-
-use bevy::prelude::*;
 use bevy::ecs::system::SystemParam;
+use bevy::prelude::*;
 use bevy::transform::TransformSystem::TransformPropagate;
+use bevy_rapier2d::plugin::context::systemparams::{
+    RapierContext, ReadRapierContext,
+};
 use bevy_rapier2d::prelude::*;
-use bevy_rapier2d::rapier::prelude::{SharedShape, Shape};
-use bevy_rapier2d::plugin::context::systemparams::{ReadRapierContext, RapierContext};
+use bevy_rapier2d::rapier::prelude::{Shape, SharedShape};
 
 use crate::prelude::{GameTickUpdate, HashMap};
 use crate::script::ScriptSet;
 
 /// Re-export bevy_rapier2d types for compatibility
 pub use bevy_rapier2d::prelude::{
-    Collider, CollisionGroups, Group, QueryFilter,
-    RapierPhysicsPlugin as InternalPhysicsPlugin, Real, Rot, Vect,
-    ExternalImpulse, ExternalForce, RigidBody, Velocity,
-    ShapeCastHit, RayIntersection, PointProjection,
-    ShapeCastOptions,
+    Collider, CollisionGroups, ExternalForce, ExternalImpulse, Group,
+    PointProjection, QueryFilter, RapierPhysicsPlugin as InternalPhysicsPlugin,
+    RayIntersection, Real, RigidBody, Rot, ShapeCastHit, ShapeCastOptions,
+    Vect, Velocity,
 };
-pub use bevy_rapier2d::rapier::geometry::ShapeType;
 pub use bevy_rapier2d::rapier;
+pub use bevy_rapier2d::rapier::geometry::ShapeType;
 
 /// Re-export ShapeCastStatus from rapier
 pub use bevy_rapier2d::rapier::parry::query::ShapeCastStatus;
@@ -33,24 +32,24 @@ pub struct PhysicsPlugin;
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
         // Add the bevy_rapier2d plugin with pixels_per_meter scaling
-        app.add_plugins(InternalPhysicsPlugin::<NoUserData>::pixels_per_meter(1.0));
-        
+        app.add_plugins(
+            InternalPhysicsPlugin::<NoUserData>::pixels_per_meter(1.0),
+        );
+
         // Keep the sprite shape map for animation colliders
         app.init_resource::<SpriteShapeMap>();
         app.add_systems(Startup, init_physics_world);
-        
+
         app.configure_sets(
             GameTickUpdate,
             PhysicsSet.after(TransformPropagate),
         );
-        
+
         app.add_systems(
             GameTickUpdate,
-            (
-                update_sprite_colliders
-                    .before(PhysicsSet)
-                    .after(ScriptSet::Run),
-            ),
+            (update_sprite_colliders
+                .before(PhysicsSet)
+                .after(ScriptSet::Run),),
         );
     }
 }
@@ -98,10 +97,18 @@ pub mod groups {
     /// logic guarantees that colliders and queries never diverge.
     pub fn default_filter(memberships: Group) -> Group {
         match memberships.bits() {
-            bits if bits == super::PLAYER.bits() => super::ENEMY | super::ENEMY_ATTACK | super::GROUND,
-            bits if bits == super::ENEMY.bits() => super::PLAYER | super::PLAYER_ATTACK | super::GROUND,
-            bits if bits == super::PLAYER_ATTACK.bits() => super::ENEMY | super::GROUND,
-            bits if bits == super::ENEMY_ATTACK.bits() => super::PLAYER | super::ENEMY_INSIDE,
+            bits if bits == super::PLAYER.bits() => {
+                super::ENEMY | super::ENEMY_ATTACK | super::GROUND
+            },
+            bits if bits == super::ENEMY.bits() => {
+                super::PLAYER | super::PLAYER_ATTACK | super::GROUND
+            },
+            bits if bits == super::PLAYER_ATTACK.bits() => {
+                super::ENEMY | super::GROUND
+            },
+            bits if bits == super::ENEMY_ATTACK.bits() => {
+                super::PLAYER | super::ENEMY_INSIDE
+            },
             bits if bits == super::ENEMY_INSIDE.bits() => super::PLAYER,
             _ => Group::all(),
         }
@@ -165,9 +172,12 @@ pub struct StoredColliderFrame {
 pub fn update_sprite_colliders(
     shape_map: Res<SpriteShapeMap>,
     q_sprite: Query<&Sprite>,
-    mut q_collider: Query<
-        (Entity, &mut Collider, &AnimationCollider, Option<&mut StoredColliderFrame>),
-    >,
+    mut q_collider: Query<(
+        Entity,
+        &mut Collider,
+        &AnimationCollider,
+        Option<&mut StoredColliderFrame>,
+    )>,
     mut commands: Commands,
 ) {
     for (entity, mut collider, anim_entity, cached_opt) in &mut q_collider {
@@ -175,25 +185,25 @@ pub fn update_sprite_colliders(
             Ok(sprite) => sprite,
             Err(_) => continue,
         };
-        
+
         let texture_atlas = match &sprite.texture_atlas {
             Some(atlas) => atlas,
             None => continue,
         };
-        
+
         let atlas_index = texture_atlas.index;
         let image_id = sprite.image.id();
-        
+
         let shape_indices = match shape_map.map.get(&image_id) {
             Some(indices) => indices,
             None => continue,
         };
-        
+
         let shape_index = match shape_indices.get(atlas_index) {
             Some(index) => *index,
             None => continue,
         };
-        
+
         // Early-out: if the requested frame & flip is identical to what is already set, skip work.
         if let Some(cached) = cached_opt.as_ref() {
             if cached.frame_index == shape_index
@@ -272,7 +282,7 @@ impl ShapeCaster {
         ignore: Option<Entity>,
     ) -> Option<(Entity, ShapeCastHit)> {
         let origin = transform.translation.xy() + self.origin;
-        
+
         let mut filter = QueryFilter::new().groups(self.interaction);
         if let Some(entity) = ignore {
             filter = filter.exclude_collider(entity);
@@ -304,12 +314,11 @@ pub struct PhysicsWorld<'w, 's> {
 impl<'w, 's> PhysicsWorld<'w, 's> {
     /// Get the underlying RapierContext value (copied)
     pub fn context(&self) -> RapierContext {
-        self
-            .rapier_context
+        self.rapier_context
             .single()
             .expect("RapierContext resource missing")
     }
-    
+
     /// Cast a shape and find the first collision
     pub fn shape_cast(
         &self,
@@ -325,10 +334,10 @@ impl<'w, 's> PhysicsWorld<'w, 's> {
         if let Some(entity) = exclude {
             filter = filter.exclude_collider(entity);
         }
-        
+
         // Convert the shape to a Collider
         let collider = shape_to_collider(shape);
-        
+
         context.cast_shape(
             origin,
             0.0, // rotation
@@ -343,7 +352,7 @@ impl<'w, 's> PhysicsWorld<'w, 's> {
             filter,
         )
     }
-    
+
     /// Cast a ray and find the first collision
     pub fn ray_cast(
         &self,
@@ -359,7 +368,7 @@ impl<'w, 's> PhysicsWorld<'w, 's> {
         if let Some(entity) = exclude {
             filter = filter.exclude_collider(entity);
         }
-        
+
         context.cast_ray_and_get_normal(
             origin,
             cast.normalize_or_zero(),
@@ -368,7 +377,7 @@ impl<'w, 's> PhysicsWorld<'w, 's> {
             filter,
         )
     }
-    
+
     /// Find all entities with shapes intersecting the given shape
     pub fn intersect(
         &self,
@@ -383,10 +392,10 @@ impl<'w, 's> PhysicsWorld<'w, 's> {
         if let Some(entity) = exclude {
             filter = filter.exclude_collider(entity);
         }
-        
+
         // Convert the shape to a Collider
         let collider = shape_to_collider(shape);
-        
+
         context.intersections_with_shape(
             origin,
             0.0,
@@ -397,10 +406,10 @@ impl<'w, 's> PhysicsWorld<'w, 's> {
                 true
             },
         );
-        
+
         intersections
     }
-    
+
     /// Project a point onto the nearest collider
     pub fn point_project(
         &self,
@@ -413,7 +422,7 @@ impl<'w, 's> PhysicsWorld<'w, 's> {
         if let Some(entity) = exclude {
             filter = filter.exclude_collider(entity);
         }
-        
+
         context.project_point(point, true, filter)
     }
 }
@@ -428,10 +437,14 @@ fn shape_to_collider(shape: &dyn Shape) -> Collider {
     if let Some(ball) = shape.as_ball() {
         Collider::ball(ball.radius)
     } else if let Some(cuboid) = shape.as_cuboid() {
-        Collider::cuboid(cuboid.half_extents.x, cuboid.half_extents.y)
+        Collider::cuboid(
+            cuboid.half_extents.x,
+            cuboid.half_extents.y,
+        )
     } else if let Some(capsule) = shape.as_capsule() {
         // Calculate half-height from segment endpoints
-        let half_height = (capsule.segment.a.y - capsule.segment.b.y).abs() * 0.5;
+        let half_height =
+            (capsule.segment.a.y - capsule.segment.b.y).abs() * 0.5;
         Collider::capsule_y(half_height, capsule.radius)
     } else if let Some(convex) = shape.as_convex_polygon() {
         // Collect the vertices and build a new convex-hull collider
@@ -481,17 +494,25 @@ impl From<&LinearVelocity> for Velocity {
 
 // Extension methods for easy migration
 pub trait ColliderExt {
-    fn cuboid(x_length: f32, y_length: f32, interaction: CollisionGroups) -> Collider;
+    fn cuboid(
+        x_length: f32,
+        y_length: f32,
+        interaction: CollisionGroups,
+    ) -> Collider;
     fn empty(interaction: CollisionGroups) -> Collider;
 }
 
 impl ColliderExt for Collider {
-    fn cuboid(x_length: f32, y_length: f32, _interaction: CollisionGroups) -> Collider {
+    fn cuboid(
+        x_length: f32,
+        y_length: f32,
+        _interaction: CollisionGroups,
+    ) -> Collider {
         // Note: bevy_rapier2d uses half-extents for cuboids
         // Collision groups are now handled separately as components
         Collider::cuboid(x_length * 0.5, y_length * 0.5)
     }
-    
+
     fn empty(_interaction: CollisionGroups) -> Collider {
         // Create a small sensor collider
         Collider::cuboid(2.5, 2.5)
@@ -508,7 +529,7 @@ impl ColliderShapeAccess for Collider {
     fn shape(&self) -> &dyn Shape {
         self.into()
     }
-    
+
     fn shared_shape(&self) -> &SharedShape {
         &self.raw
     }
@@ -516,7 +537,7 @@ impl ColliderShapeAccess for Collider {
 
 // INSERT helper module for "inside" relationship
 pub mod inside {
-    use super::{groups, ENEMY_INSIDE, CollisionGroups, Group};
+    use super::{groups, CollisionGroups, Group, ENEMY_INSIDE};
     use bevy::prelude::*;
 
     /// Marker put on the player while clipped inside an enemy.
@@ -531,7 +552,10 @@ pub mod inside {
     pub fn set(commands: &mut Commands, player: Entity, enemy: Entity) {
         commands
             .entity(player)
-            .insert(CollisionGroups::new(ENEMY_INSIDE, Group::all()))
+            .insert(CollisionGroups::new(
+                ENEMY_INSIDE,
+                Group::all(),
+            ))
             .insert(PlayerInsideEnemy);
         commands.entity(enemy).insert(EnemyInsidePlayer);
     }

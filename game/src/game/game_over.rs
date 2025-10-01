@@ -5,12 +5,10 @@ use theseeker_engine::prelude::{
 };
 
 use crate::camera::MainCamera;
-use crate::game::attack::KillCount;
+use crate::game::combat::KillCount;
 use crate::game::player::PlayerStateSet;
 use crate::gamestate::GameState;
 use crate::prelude::*;
-
-use super::pickups::DropTracker;
 
 /// A plugin that handles when the player has a game over
 pub struct GameOverPlugin;
@@ -21,7 +19,7 @@ impl Plugin for GameOverPlugin {
             GameTickUpdate,
             on_game_over
                 .run_if(in_state(GameState::Playing))
-                .after(PlayerStateSet::Transition)
+                .after(PlayerStateSet::Animation)
                 .run_if(in_state(AppState::InGame))
                 .run_if(resource_exists::<GameOver>),
         );
@@ -29,6 +27,7 @@ impl Plugin for GameOverPlugin {
     }
 }
 
+/// Fades the screen to a target opacity using real-time seconds.
 #[derive(Component)]
 #[component(storage = "SparseSet")]
 pub struct FadeIn {
@@ -143,7 +142,7 @@ pub fn on_game_over(
                     ..default()
                 })
                 .with_children(|row| {
-                    // TODO: Add behavior to buttons
+                    // Buttons are non-interactive; behavior not implemented yet
                     row.spawn((
                         Button,
                         Node {
@@ -182,7 +181,5 @@ pub fn on_game_over(
 
     kill_count.0 = 0;
 
-    // TODO: Move this to some less obscure system that resets game state.
-    commands.insert_resource(DropTracker::default());
     commands.remove_resource::<GameOver>();
 }

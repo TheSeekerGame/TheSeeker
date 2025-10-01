@@ -122,7 +122,7 @@ impl<T: Spawn> PopupUi for T {
         ));
 
         entity.with_children(|mut node| {
-            // TODO: Is this disambiguation correct?
+            // Render the control label inside the icon box
             crate::ui::Spawn::spawn(
                 node,
                 (

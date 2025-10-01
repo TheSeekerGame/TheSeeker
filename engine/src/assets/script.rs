@@ -260,33 +260,25 @@ impl<ExtParams, ExtRunIf, ExtAction>
         wa: ExtendedScriptWorkaround<ExtParams, ExtRunIf, ExtAction>,
     ) -> ExtendedScript<ExtParams, ExtRunIf, ExtAction> {
         match wa.inner {
-            ExtendedScriptWorkaroundInner::EE(x) => {
-                ExtendedScript {
-                    params: wa.params,
-                    run_if: ExtendedScriptRunIf::Extended(x.a),
-                    action: ExtendedScriptAction::Extended(x.b),
-                }
+            ExtendedScriptWorkaroundInner::EE(x) => ExtendedScript {
+                params: wa.params,
+                run_if: ExtendedScriptRunIf::Extended(x.a),
+                action: ExtendedScriptAction::Extended(x.b),
             },
-            ExtendedScriptWorkaroundInner::EC(x) => {
-                ExtendedScript {
-                    params: wa.params,
-                    run_if: ExtendedScriptRunIf::Extended(x.a),
-                    action: ExtendedScriptAction::Common(x.b),
-                }
+            ExtendedScriptWorkaroundInner::EC(x) => ExtendedScript {
+                params: wa.params,
+                run_if: ExtendedScriptRunIf::Extended(x.a),
+                action: ExtendedScriptAction::Common(x.b),
             },
-            ExtendedScriptWorkaroundInner::CE(x) => {
-                ExtendedScript {
-                    params: wa.params,
-                    run_if: ExtendedScriptRunIf::Common(x.a),
-                    action: ExtendedScriptAction::Extended(x.b),
-                }
+            ExtendedScriptWorkaroundInner::CE(x) => ExtendedScript {
+                params: wa.params,
+                run_if: ExtendedScriptRunIf::Common(x.a),
+                action: ExtendedScriptAction::Extended(x.b),
             },
-            ExtendedScriptWorkaroundInner::CC(x) => {
-                ExtendedScript {
-                    params: wa.params,
-                    run_if: ExtendedScriptRunIf::Common(x.a),
-                    action: ExtendedScriptAction::Common(x.b),
-                }
+            ExtendedScriptWorkaroundInner::CC(x) => ExtendedScript {
+                params: wa.params,
+                run_if: ExtendedScriptRunIf::Common(x.a),
+                action: ExtendedScriptAction::Common(x.b),
             },
         }
     }

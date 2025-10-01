@@ -31,12 +31,10 @@ fn toggle_console(
     kbd: Res<ButtonInput<KeyCode>>,
     query_existing: Query<Entity, With<UiConsole>>,
     ui_assets: Option<Res<UiAssets>>,
-    // mut input_switch: ResMut<InputSwitch>,
-    // appstate: Res<State<AppState>>,
 ) {
     if kbd.just_pressed(KeyCode::Backquote) {
         if query_existing.is_empty() {
-            // spawn console
+            // Spawn console UI container
             let console = commands
                 .spawn((
                     UiConsole,
@@ -82,7 +80,7 @@ fn toggle_console(
                 .add_children(&[prompt_prefix, prompt]);
             debug!("Console spawned.");
         } else {
-            // despawn console
+            // Despawn console and its children
             for e in &query_existing {
                 commands.entity(e).despawn();
             }
@@ -91,7 +89,7 @@ fn toggle_console(
     }
 }
 
-/// Implement a simple "console" to type commands in
+/// Simple console text input and history navigation.
 fn console_text_input(
     mut commands: Commands,
     mut evr_char: EventReader<KeyboardInput>,

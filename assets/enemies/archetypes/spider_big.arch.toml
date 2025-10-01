@@ -8,14 +8,15 @@ id = "spider_big"
 brain = "generic_ranged.fsm.toml"
 
 # Core stats
-spawn_hp     = 300       # 3x small spider HP
-walk_speed   = 20        # Patrol movement speed
-chase_speed  = 80        # Not used by ranged FSM but included for completeness
-fall_accel   = 4.5       # Gravity
-dmg_melee    = 12        # Defense state damage
+# Movement speeds are in pixels/tick at 96Hz
+spawn_hp     = 150       # 1.5x small spider HP (reduced from 300)
+walk_speed   = 0.208     # ~20 pixels/second (20/96 = 0.208 px/tick)
+chase_speed  = 0.833     # ~80 pixels/second (80/96 = 0.833 px/tick) - Not used by ranged FSM
+dmg_melee    = 0         # Unused - big spiders only use ranged attacks
 dmg_ranged   = 10        # Projectile damage
 vision_range = 100       # Aggro range
 melee_range  = 24        # Defense state trigger
+reaction_time = 16       # 4 ticks (~42ms) reaction delay - faster than small spiders
 
 # Animation mappings: FSM key → asset key
 [anim]

@@ -47,6 +47,7 @@ pub struct UiAssets {
     #[asset(key = "ui.font.bold")]
     pub font_bold: Handle<Font>,
     #[asset(key = "ui.font.light")]
+    #[allow(dead_code)]
     pub font_light: Handle<Font>,
 }
 
@@ -68,6 +69,8 @@ pub struct DialogAssets {
 pub struct GameUiAssets {
     #[asset(key = "ui.game.toolbar_frame")]
     pub toolbar_frame: Handle<Image>,
+    #[asset(key = "ui.game.toolbar_frame_5slots")]
+    pub toolbar_frame_5slots: Handle<Image>,
     #[asset(key = "ui.game.attack_skill_icon")]
     pub attack_skill_icon: Handle<Image>,
     #[asset(key = "ui.game.dash_skill_icon")]
@@ -76,4 +79,18 @@ pub struct GameUiAssets {
     pub whirl_skill_icon: Handle<Image>,
     #[asset(key = "ui.game.stealth_skill_icon")]
     pub stealth_skill_icon: Handle<Image>,
+    #[asset(key = "ui.game.burning_dash_skill_icon")]
+    pub burning_dash_skill_icon: Handle<Image>,
+    #[asset(key = "ui.game.flicker_strike_skill_icon")]
+    pub flicker_strike_skill_icon: Handle<Image>,
+    #[asset(key = "ui.game.amplified_bell_skill_icon")]
+    pub amplified_bell_skill_icon: Handle<Image>,
+    #[asset(key = "ui.game.spinner_skill_icon")]
+    pub spinner_skill_icon: Handle<Image>,
+    #[asset(key = "ui.game.mine_skill_icon")]
+    pub mine_skill_icon: Handle<Image>,
+    #[asset(key = "ui.game.dash_strike_skill_icon")]
+    pub dash_strike_skill_icon: Handle<Image>,
+    #[asset(key = "ui.game.ice_nova_skill_icon")]
+    pub ice_nova_skill_icon: Handle<Image>,
 }

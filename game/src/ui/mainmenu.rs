@@ -19,10 +19,7 @@ fn spawn_mainmenu(
     menuassets: Res<MainMenuAssets>,
     mut _state: ResMut<NextState<AppState>>,
 ) {
-    commands.spawn((
-        Camera2d,
-        StateDespawnMarker,
-    ));
+    commands.spawn((Camera2d, StateDespawnMarker));
 
     let e_menu_root = commands
         .spawn((
@@ -58,13 +55,13 @@ fn spawn_mainmenu(
     let e_butt_play = spawn_menuentry(
         &mut commands,
         &uiassets,
-        // OnClick::new().cli("AppState InGame"),
+        // Behavior is wired elsewhere in the appstate flow
         "mainmenu-entry-play",
     );
     let e_butt_exit = spawn_menuentry(
         &mut commands,
         &uiassets,
-        // OnClick::new().cli("exit"),
+        // Behavior is wired elsewhere in the appstate flow
         "mainmenu-entry-exit",
     );
 

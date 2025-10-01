@@ -10,9 +10,10 @@ pub mod ability_widget;
 mod controls_overlay;
 mod kill_counter;
 mod mainmenu;
-mod passives;
 mod passive_inventory;
+mod passives;
 pub mod popup;
+mod skill_inventory;
 mod skill_toolbar;
 
 #[cfg(not(feature = "release"))]
@@ -27,14 +28,13 @@ impl Plugin for UiPlugin {
             popup::plugin,
             passives::plugin,
             self::passive_inventory::PassiveInventoryPlugin,
+            self::skill_inventory::SkillInventoryPlugin,
             self::mainmenu::MainMenuPlugin,
             SkillToolbarPlugin,
             KillCounterPlugin,
         ));
         #[cfg(not(feature = "release"))]
-        app.add_plugins((
-            self::console::UiConsolePlugin,
-        ));
+        app.add_plugins((self::console::UiConsolePlugin,));
     }
 }
 

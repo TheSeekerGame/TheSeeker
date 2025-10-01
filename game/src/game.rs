@@ -8,16 +8,15 @@ use crate::game::merchant::MerchantBlueprintBundle;
 use crate::game::yak::YakBlueprintBundle;
 use crate::prelude::*;
 
-pub mod attack;
+pub mod combat;
+pub mod effects;
 pub mod enemy;
 mod game_over;
 pub mod gentstate;
 mod merchant;
 pub mod physics;
-pub mod pickups;
 pub mod player;
 mod wall;
-mod xp_orbs;
 mod yak;
 
 pub struct GameplayPlugin;
@@ -39,15 +38,15 @@ impl Plugin for GameplayPlugin {
 
         // Add the plugins for each game mechanic
         app.add_plugins((
+            combat::CombatPlugin,
+            physics::PhysicsPlugin,
+            effects::EffectsPlugin,
             player::PlayerPlugin,
             enemy::EnemyPlugin,
             merchant::MerchantPlugin,
             yak::YakPlugin,
-            attack::AttackPlugin,
             wall::WallPlugin,
             game_over::GameOverPlugin,
-            xp_orbs::XpPlugin,
-            pickups::PickupPlugin,
         ));
     }
 }

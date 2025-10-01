@@ -107,7 +107,7 @@ fn hide_level_0(
     for (_entity, name, mut visbility) in query.iter_mut() {
         if name.as_str() == "Level_0" {
             *visbility = Visibility::Hidden;
-            println!("Made 'level_0' invisible");
+
             *ran = true;
             break;
         }

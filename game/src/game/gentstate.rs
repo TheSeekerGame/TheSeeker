@@ -1,43 +1,5 @@
 use crate::prelude::*;
 
-pub fn transition(
-    mut query: Query<(Entity, &mut TransitionQueue)>,
-    mut commands: Commands,
-) {
-    for (entity, mut trans) in query.iter_mut() {
-        if !&trans.is_empty() {
-            let transitions = std::mem::take(&mut trans.0);
-            for transition in transitions {
-                transition(entity, &mut commands);
-            }
-        }
-    }
-}
-
-pub trait Transitionable<T: GentState> {
-    type Removals;
-    /// StartingState::new_transition(EndingState)
-    fn new_transition(
-        next: T,
-    ) -> Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>
-    where
-        Self: GentState + Component,
-        <Self as Transitionable<T>>::Removals: Bundle,
-    {
-        Box::new(move |entity, commands| {
-            if let Ok(mut entity_commands) = commands.get_entity(entity) {
-                entity_commands.remove::<Self::Removals>().insert(next);
-            }
-        })
-    }
-}
-
-// Component for queuing state transitions
-#[derive(Component, Deref, DerefMut, Default)]
-pub struct TransitionQueue(
-    Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>,
-);
-
 #[derive(Component, Deref, DerefMut, Default)]
 pub struct AddQueue(Vec<Box<dyn FnOnce(Entity, &mut Commands) + Send + Sync>>);
 
@@ -63,7 +25,8 @@ pub fn add_states(
     }
 }
 
-#[derive(Component, Debug, Default, Clone, PartialEq, Eq)]
+/// Horizontal facing of an entity. `Copy` for cheap propagation in hot paths.
+#[derive(Component, Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum Facing {
     #[default]
     Right,
@@ -78,7 +41,7 @@ impl Facing {
         }
     }
 
-    /// Returns the opposite of a given [`Facing`] variant.
+    /// Returns the opposite direction.
     pub fn invert(&self) -> Self {
         match self {
             Facing::Right => Facing::Left,
@@ -87,50 +50,18 @@ impl Facing {
     }
 }
 
-/// States
-/// states are components which are added to the entity on transition.
-/// an entity can be in multiple states at once, eg Grounded and Running/Idle
-/// Impl GentState for each state
-/// Impl Transitionable<T: GentState> for each state that that should be able to be transitioned
-/// from by a state
+/// Marker trait for logical states applied as components.
+/// Multiple states can coexist (e.g. locomotion + skill).
 pub trait GentState: Component {}
 
-/// A GenericState has a blanket Transitionable impl for any GentState,
-/// it will remove itself on transition
-pub trait GenericState: Component {}
-
-impl<T: GentState, N: GentState + GenericState> Transitionable<T> for N {
-    type Removals = (N, Idle);
-}
-
-// on leaving some states the state machine should ensure we are not also in other specific states,
-// in that case do not implement GenericState for the state and instead implement
-// Transitionable with type Removals = (the states to remove)
-
 // common states
-#[derive(Component, Default, Debug)]
-#[component(storage = "SparseSet")]
-pub struct Idle;
-impl GentState for Idle {}
+// Note: Idle is now defined in player/states/mod.rs as a player-specific locomotion state
 
-/// Pseudostate, currently when this is added to player it is despawned,
-/// when added to enemy it removes most components, plays a death animation and eventually despawns
+/// Terminal state. Player is despawned; enemies shed gameplay components,
+/// play their death animation, then despawn.
 #[derive(Component, Default, Debug)]
 pub struct Dead {
     pub ticks: u32,
 }
 
-// #[derive(Component, Default, Debug)]
-// #[component(storage = "SparseSet")]
-// pub struct Grounded;
-// impl GentState for Grounded {}
-//
-// #[derive(Component, Default, Debug)]
-// #[component(storage = "SparseSet")]
-// pub struct Attacking;
-// impl GentState for Attacking {}
-//
-// #[derive(Component, Default, Debug)]
-// #[component(storage = "SparseSet")]
-// pub struct Hitstun;
-// impl GentState for Hitstun {}
+// Legacy state markers kept for reference during refactor; intentionally removed.

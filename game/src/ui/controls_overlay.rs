@@ -148,7 +148,9 @@ fn toggle_control_overlay(
     action_state_q: Query<&ActionState<PlayerAction>>,
     mut control_overlay_q: Query<&mut Visibility, With<ControlsOverlay>>,
 ) {
-    let Ok(action_state) = action_state_q.single() else { return; };
+    let Ok(action_state) = action_state_q.single() else {
+        return;
+    };
     if action_state.just_pressed(&PlayerAction::ToggleControlOverlay) {
         for mut visibility in &mut control_overlay_q {
             *visibility = match *visibility {
@@ -166,7 +168,9 @@ fn hide_controls_hint(
     control_overlay_q: Query<Entity, With<ControlsHint>>,
     mut commands: Commands,
 ) {
-    let Ok(action_state) = action_state_q.single() else { return; };
+    let Ok(action_state) = action_state_q.single() else {
+        return;
+    };
 
     for entity in &control_overlay_q {
         if action_state.just_pressed(&PlayerAction::ToggleControlOverlay) {

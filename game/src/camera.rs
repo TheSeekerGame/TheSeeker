@@ -1,20 +1,22 @@
 //! Everything to do with the in-game camera(s)
 
-use std::f32::consts::PI;
 use rand::{rng, Rng};
+use std::f32::consts::PI;
 
-use crate::game::player::Player;
+use crate::game::enemy::Enemy;
+use crate::game::player::skills::types::flicker_strike_metadata;
+use crate::game::player::{states::FlickerStriking, Player};
 
 // use crate::graphics::post_processing::darkness::DarknessSettings;
 use crate::graphics::post_processing::darkness::DarknessSettings;
 use crate::graphics::post_processing::vignette::VignetteSettings;
 use crate::level::MainBackround;
 use crate::prelude::*;
-use bevy::render::view::RenderLayers;
-use bevy::ecs::schedule::IntoScheduleConfigs;
-use bevy::render::camera::{Projection, OrthographicProjection, Camera};
 use bevy::core_pipeline::core_2d::Camera2d;
 use bevy::ecs::query::QuerySingleError;
+use bevy::ecs::schedule::IntoScheduleConfigs;
+use bevy::render::camera::{Camera, OrthographicProjection, Projection};
+use bevy::render::view::RenderLayers;
 
 // Scale factor for the camera's orthographic projection.
 // 1/5 = 0.2 means 5 game pixels = 1 screen pixel at default zoom.
@@ -84,7 +86,7 @@ enum LeadDirection {
 ///
 /// The main camera should never display anything outside of these limits.
 #[derive(Component)]
-pub struct GameViewLimits(Rect);
+pub struct GameViewLimits(#[allow(dead_code)] Rect);
 
 pub(crate) fn setup_main_camera(mut commands: Commands) {
     // Custom orthographic projection with our desired scale.
@@ -125,52 +127,107 @@ fn _manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, Wi
 /// Updates the Camera rig (ie, the camera target) based on where the player is going.
 fn camera_rig_follow_player(
     mut rig: ResMut<CameraRig>,
-    player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
+    player_query: Query<
+        (&Transform, Has<FlickerStriking>),
+        (With<Player>, Without<MainCamera>),
+    >,
+    enemy_query: Query<&Transform, (With<Enemy>, Without<Player>)>,
     time: Res<Time>,
+    camera_shake: Option<Res<CameraShake>>, // pause lerp while shaking
 ) {
-    let Ok(player_transform) = player_query.single() else {
+    let Ok((player_transform, is_flicker_striking)) = player_query.single()
+    else {
         return;
     };
-    // Default state is to predict the player goes forward, ie "right"
-    let delta_x = player_transform.translation.x - rig.target.x;
 
-    match rig.lead_direction {
-        LeadDirection::Backward => {
-            if delta_x < rig.lead_amount {
-                rig.target.x = player_transform.translation.x - rig.lead_amount
-            } else if delta_x > rig.lead_amount + rig.lead_buffer {
-                rig.lead_direction = LeadDirection::Forward
+    if is_flicker_striking {
+        // During Flicker Strike: camera focuses on average of enemies in range (excluding player)
+        let player_pos = player_transform.translation.truncate();
+        let mut positions_sum = Vec2::ZERO;
+        let mut position_count = 0;
+
+        // Add all enemies within Flicker Strike range
+        for enemy_transform in enemy_query.iter() {
+            let enemy_pos = enemy_transform.translation.truncate();
+            if player_pos.distance(enemy_pos)
+                <= flicker_strike_metadata().range
+            {
+                positions_sum += enemy_pos;
+                position_count += 1;
             }
-        },
-        LeadDirection::Forward => {
-            if delta_x > -rig.lead_amount {
-                rig.target.x = player_transform.translation.x + rig.lead_amount
-            } else if delta_x < -rig.lead_amount - rig.lead_buffer {
-                rig.lead_direction = LeadDirection::Backward
+        }
+
+        // Set target to average enemy position, or player position if no enemies in range
+        if position_count > 0 {
+            rig.target = positions_sum / position_count as f32;
+        } else {
+            // Fallback to player position if no enemies in range
+            rig.target = player_pos;
+        }
+
+        // Pause lerping for the first few ticks of an active screen shake
+        let pause_follow = camera_shake
+            .as_ref()
+            .map(|s| s.pause_lerp_ticks > 0)
+            .unwrap_or(false);
+        if !pause_follow {
+            if (rig.camera_position - rig.target).length() < PROJECTION_SCALE {
+                rig.camera_position = rig.target;
+            } else {
+                rig.camera_position = rig.camera_position.lerp(
+                    rig.target,
+                    time.delta_secs() * rig.move_speed,
+                );
             }
-        },
-    }
-
-    rig.target.y = player_transform.translation.y;
-
-    if (rig.camera_position - rig.target).length() < PROJECTION_SCALE {
-        // Stop lerping if already at the target
-        rig.camera_position = rig.target;
+        }
     } else {
-        rig.camera_position = rig.camera_position.lerp(
-            rig.target,
-            time.delta_secs() * rig.move_speed,
-        );
+        // Normal camera behavior with lead/lag when not Flicker Striking
+        let delta_x = player_transform.translation.x - rig.target.x;
+
+        match rig.lead_direction {
+            LeadDirection::Backward => {
+                if delta_x < rig.lead_amount {
+                    rig.target.x =
+                        player_transform.translation.x - rig.lead_amount
+                } else if delta_x > rig.lead_amount + rig.lead_buffer {
+                    rig.lead_direction = LeadDirection::Forward
+                }
+            },
+            LeadDirection::Forward => {
+                if delta_x > -rig.lead_amount {
+                    rig.target.x =
+                        player_transform.translation.x + rig.lead_amount
+                } else if delta_x < -rig.lead_amount - rig.lead_buffer {
+                    rig.lead_direction = LeadDirection::Backward
+                }
+            },
+        }
+
+        rig.target.y = player_transform.translation.y;
+
+        // Pause lerping for the first few ticks of an active screen shake
+        let pause_follow = camera_shake
+            .as_ref()
+            .map(|s| s.pause_lerp_ticks > 0)
+            .unwrap_or(false);
+        if !pause_follow {
+            if (rig.camera_position - rig.target).length() < PROJECTION_SCALE {
+                // Stop lerping if already at the target
+                rig.camera_position = rig.target;
+            } else {
+                rig.camera_position = rig.camera_position.lerp(
+                    rig.target,
+                    time.delta_secs() * rig.move_speed,
+                );
+            }
+        }
     }
 }
 
 /// Camera updates the camera position to smoothly interpolate to the
 /// rig location. also applies camera shake, and limits camera within the level boundaries
 pub(crate) fn update_camera(
-    mut camera_query: Query<
-        (&mut Transform, &Projection),
-        With<MainCamera>,
-    >,
+    mut camera_query: Query<(&mut Transform, &Projection), With<MainCamera>>,
     rig: Res<CameraRig>,
     backround_query: Query<
         (&LayerMetadata, &Transform),
@@ -178,7 +235,7 @@ pub(crate) fn update_camera(
     >,
     camera_shake: Option<Res<CameraShake>>,
 ) {
-            let (mut camera_transform, projection) = match camera_query.single_mut() {
+    let (mut camera_transform, projection) = match camera_query.single_mut() {
         Ok(tuple) => tuple,
         Err(QuerySingleError::NoEntities(_)) => return,
         Err(QuerySingleError::MultipleEntities(_)) => {
@@ -259,6 +316,8 @@ pub struct CameraShake {
     dir: Vec2,
     timer: Timer,
     sub_timer: Timer,
+    /// Pause camera follow lerp for the first N game ticks of the shake
+    pause_lerp_ticks: u32,
 }
 
 impl CameraShake {
@@ -273,6 +332,7 @@ impl CameraShake {
             sub_timer: Timer::from_seconds(t / freq, TimerMode::Repeating),
             c_offset: Vec2::ZERO,
             dir,
+            pause_lerp_ticks: 2,
         }
     }
 
@@ -318,6 +378,10 @@ pub fn update_screen_shake(
 
     shake.timer.tick(time.delta());
     shake.sub_timer.tick(time.delta());
+    // Count down the initial lerp pause in game ticks
+    if shake.pause_lerp_ticks > 0 {
+        shake.pause_lerp_ticks -= 1;
+    }
 
     if shake.timer.finished() {
         commands.remove_resource::<CameraShake>();

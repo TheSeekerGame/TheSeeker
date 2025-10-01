@@ -1,22 +1,20 @@
 //! Data-driven AI system for enemies.
-//! 
-//! This module provides a flexible finite state machine (FSM) based AI system
-//! that replaces the hard-coded enemy behaviors with data-driven logic loaded
-//! from TOML assets.
-//! 
+//!
+//! This module provides a data-driven finite-state-machine (FSM) AI system
+//! that replaces hard-coded enemy behaviour with logic loaded from TOML.
+//!
 //! ## Architecture
-//! 
-//! The system follows a Sensor→Brain→Actuator pattern:
+//!
+//! The system follows a Sensor → Brain → Actuator pattern:
 //! - **Sensors**: Gather world information into components (target, ground, range)
 //! - **Brain**: Evaluates FSM rules using sensor data, queues actions
 //! - **Actuators**: Execute queued actions to affect the world
-//! 
+//!
 //! ## Key Design: One FSM Per Archetype
-//! 
-//! Each enemy archetype gets its own compiled FSM where animation keys
-//! are pre-resolved using that archetype's `[anim]` table. This ensures
-//! tier variants (spider_small_t2) can override animations while sharing
-//! the same base FSM logic.
+//!
+//! Each enemy archetype gets its own compiled FSM with animation keys
+//! resolved via that archetype's `[anim]` table. Tier variants can
+//! override visuals while sharing the same logic.
 
 pub mod asset;
 pub mod brain;
@@ -24,7 +22,9 @@ pub mod sensors;
 pub mod systems;
 
 pub use self::asset::{EnemyArchetype, EnemyFsm};
-pub use self::brain::{CompiledFsm, CompiledRule, CompiledAction, CompiledCondition};
+pub use self::brain::{
+    CompiledAction, CompiledCondition, CompiledFsm, CompiledRule,
+};
 
 use bevy::prelude::*;
 use std::collections::HashMap;
@@ -38,18 +38,18 @@ pub struct AiPlugin;
 
 impl Plugin for AiPlugin {
     fn build(&self, app: &mut App) {
-        // Initialize asset types
+        // Register asset types
         app.init_asset::<EnemyArchetype>();
         app.init_asset::<EnemyFsm>();
         app.init_asset::<CompiledFsm>();
-        
-        // Initialize level seed resource
+
+        // Level seed is used by deterministic RNG in AI
         app.init_resource::<LevelSeed>();
     }
 }
 
 /// Compile FSMs with archetype-specific animation mappings.
-/// Each archetype's FSM has its short animation keys (e.g. "Attack") 
+/// Each archetype's FSM has its short animation keys (e.g. "Attack")
 /// expanded to full asset keys (e.g. "anim.spider.RangedAttack").
 pub fn compile_all_fsms(
     fsm_assets: &Assets<EnemyFsm>,
@@ -70,13 +70,17 @@ pub fn compile_all_fsms(
         let brain_name_trimmed = brain_file_name.trim_end_matches(".fsm.toml");
         let fsm_key = format!("brain.{}", brain_name_trimmed);
 
-        let Some(fsm_handle) = preloaded.get_single_asset::<EnemyFsm>(&fsm_key) else {
+        let Some(fsm_handle) = preloaded.get_single_asset::<EnemyFsm>(&fsm_key)
+        else {
             error!("Archetype '{}' references brain '{}' but that asset isn't loaded.", arch_id, fsm_key);
             continue;
         };
 
         let Some(fsm_asset) = fsm_assets.get(&fsm_handle) else {
-            error!("FSM asset for '{}' not found in Assets collection", fsm_key);
+            error!(
+                "FSM asset for '{}' not found in Assets collection",
+                fsm_key
+            );
             continue;
         };
 
@@ -86,17 +90,25 @@ pub fn compile_all_fsms(
             Ok(compiled) => {
                 // Validate that all referenced animations exist
                 let animation_keys = compiled.collect_animation_keys();
-                if let Err(e) = archetype.validate_animations(preloaded, &animation_keys) {
-                    error!("Animation validation failed for archetype '{}': {}", arch_id, e);
+                if let Err(e) =
+                    archetype.validate_animations(preloaded, &animation_keys)
+                {
+                    error!(
+                        "Animation validation failed for archetype '{}': {}",
+                        arch_id, e
+                    );
                     continue;
                 }
-                
+
                 let handle = compiled_assets.add(compiled);
                 compiled_map.insert(compiled_key.clone(), handle.clone());
-            }
+            },
             Err(e) => {
-                error!("Failed to compile FSM for archetype '{}': {}", arch_id, e);
-            }
+                error!(
+                    "Failed to compile FSM for archetype '{}': {}",
+                    arch_id, e
+                );
+            },
         }
     }
 
@@ -104,14 +116,14 @@ pub fn compile_all_fsms(
 }
 
 // Re-export the main components for easier access
+pub use self::script_bundle::{EnemyArchHandle, ScriptBundle};
 pub use crate::ai::components::*;
-pub use self::script_bundle::{ScriptBundle, EnemyArchHandle};
 
 // Core components used by the AI system
 mod components {
+    use super::brain::{CompiledAction, CompiledFsm};
     use bevy::prelude::*;
-    use super::brain::{CompiledFsm, CompiledAction};
-    
+
     /// Runtime instance of an enemy's FSM state.
     #[derive(Component)]
     pub struct FsmInstance {
@@ -171,26 +183,78 @@ mod components {
         pub zero: bool,
     }
 
+    /// Ring buffer storing historical sensor values for reaction time delay
+    #[derive(Component)]
+    pub struct SensorHistory {
+        /// Ring buffers for each sensor type (32 slots max)
+        pub target_history: [(Option<Entity>, f32); 32],
+        pub ground_history: [bool; 32],
+        pub range_history: [(bool, bool); 32], // (in_melee, in_aggro)
+
+        /// Current write position in the ring buffer
+        pub write_index: u8,
+        /// Reaction time for this enemy (0-32 ticks)
+        pub reaction_time: u8,
+    }
+
+    impl SensorHistory {
+        pub fn new(reaction_time: u8) -> Self {
+            Self {
+                target_history: [(None, f32::MAX); 32],
+                ground_history: [false; 32],
+                range_history: [(false, false); 32],
+                write_index: 0,
+                reaction_time: reaction_time.min(32),
+            }
+        }
+
+        /// Get the read index for delayed sensor values
+        pub fn get_read_index(&self) -> usize {
+            let delay = self.reaction_time.min(32) as usize;
+            (self.write_index as usize + 32 - delay) % 32
+        }
+    }
+
+    /// Perceived (delayed) version of TargetSensor
+    #[derive(Component, Default)]
+    pub struct PerceivedTargetSensor {
+        pub entity: Option<Entity>,
+        pub dist2: f32,
+    }
+
+    /// Perceived (delayed) version of GroundSensor
+    #[derive(Component, Default)]
+    pub struct PerceivedGroundSensor {
+        pub on: bool,
+    }
+
+    /// Perceived (delayed) version of RangeSensor
+    #[derive(Component, Default)]
+    pub struct PerceivedRangeSensor {
+        pub in_melee: bool,
+        pub in_aggro: bool,
+    }
+
     impl Default for TurnCooldown {
         fn default() -> Self {
             Self { timer: 0 }
         }
     }
-} 
+}
 
 // Bundle construction separated for cleaner organization
 mod script_bundle {
-    use bevy::prelude::*;
-    use super::components::*;
     use super::asset::EnemyArchetype;
     use super::brain::CompiledFsm;
-    
+    use super::components::*;
+    use bevy::prelude::*;
+
     /// Handle to the archetype that spawned this enemy.
     /// Preserves deterministic archetype resolution without HashMap iteration.
     #[derive(Component, Deref, DerefMut, Clone)]
     #[repr(transparent)]
     pub struct EnemyArchHandle(pub Handle<EnemyArchetype>);
-    
+
     /// Bundle for spawning entities with the new AI system
     #[derive(Bundle)]
     pub struct ScriptBundle {
@@ -201,6 +265,9 @@ mod script_bundle {
         pub turn_cooldown: TurnCooldown,
         pub arch_handle: EnemyArchHandle,
         pub health_sensor: HealthSensor,
+        pub perceived_target_sensor: PerceivedTargetSensor,
+        pub perceived_ground_sensor: PerceivedGroundSensor,
+        pub perceived_range_sensor: PerceivedRangeSensor,
     }
 
     impl ScriptBundle {
@@ -214,27 +281,42 @@ mod script_bundle {
             level_seed: u32,
         ) -> Option<Self> {
             // Get the archetype handle from preloaded assets
-            let arch_handle = preloaded.get_single_asset(&format!("arch.{}", arch_id))?;
-            debug!("Found archetype handle for: arch.{}", arch_id);
-            
+            let arch_handle =
+                preloaded.get_single_asset(&format!("arch.{}", arch_id))?;
+            debug!(
+                "Found archetype handle for: arch.{}",
+                arch_id
+            );
+
             // Get the archetype asset
             let archetype = arch_assets.get(&arch_handle)?;
-            debug!("Got archetype asset: {:?}", archetype.id);
-            
+            debug!(
+                "Got archetype asset: {:?}",
+                archetype.id
+            );
+
             // The compiled FSM is stored per-archetype under key `brain.{arch_id}`
             // so lookup that directly.  This guarantees the animation map matches
             // the exact tier/variant of this enemy.
             let brain_key = format!("brain.{}", arch_id);
             debug!("Looking for brain key: {}", brain_key);
-            
-            let brain_handle = preloaded.get_single_asset::<CompiledFsm>(&brain_key)?;
-            debug!("Found brain handle for: {} -> {:?}", brain_key, brain_handle.id());
-            
+
+            let brain_handle =
+                preloaded.get_single_asset::<CompiledFsm>(&brain_key)?;
+            debug!(
+                "Found brain handle for: {} -> {:?}",
+                brain_key,
+                brain_handle.id()
+            );
+
             // Get the compiled FSM to find start states
             let compiled_fsm = fsm_assets.get(&brain_handle)?;
-            debug!("Got compiled FSM with start states: logic={}, movement={}", 
-                compiled_fsm.inner.start_logic, compiled_fsm.inner.start_movement);
-            
+            debug!(
+                "Got compiled FSM with start states: logic={}, movement={}",
+                compiled_fsm.inner.start_logic,
+                compiled_fsm.inner.start_movement
+            );
+
             // Create FSM instance with start states
             let fsm = FsmInstance {
                 brain: brain_handle,
@@ -244,8 +326,8 @@ mod script_bundle {
                 // Use the full 64-bit entity bits for a stronger, collision-resistant seed
                 // as per §4.4 of the specification.
                 rng_state: {
-                    let bits = entity.to_bits();          // 64-bit unique identifier
-                    // Mix upper and lower 32 bits then xor with the level seed
+                    let bits = entity.to_bits(); // 64-bit unique identifier
+                                                 // Mix upper and lower 32 bits then xor with the level seed
                     ((bits ^ (bits >> 32)) as u32) ^ level_seed
                 },
                 // Pre-allocate a slightly larger action buffer to avoid growth when
@@ -259,7 +341,7 @@ mod script_bundle {
                 state_tick: 0,
                 current_anim_key: None,
             };
-            
+
             Some(Self {
                 fsm,
                 target_sensor: TargetSensor::default(),
@@ -268,7 +350,10 @@ mod script_bundle {
                 turn_cooldown: TurnCooldown::default(),
                 arch_handle: EnemyArchHandle(arch_handle.clone()),
                 health_sensor: HealthSensor::default(),
+                perceived_target_sensor: PerceivedTargetSensor::default(),
+                perceived_ground_sensor: PerceivedGroundSensor::default(),
+                perceived_range_sensor: PerceivedRangeSensor::default(),
             })
         }
     }
-} 
+}

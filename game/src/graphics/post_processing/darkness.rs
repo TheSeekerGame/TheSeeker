@@ -11,9 +11,9 @@ use bevy::render::render_graph::{
     ViewNodeRunner,
 };
 use bevy::render::render_resource::{
-    AsBindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntry, BindingType,
-    CachedRenderPipelineId, ColorTargetState, ColorWrites, FragmentState,
-    MultisampleState, Operations, PipelineCache, PrimitiveState,
+    AsBindGroup, BindGroupEntries, BindGroupLayout, BindGroupLayoutEntry,
+    BindingType, CachedRenderPipelineId, ColorTargetState, ColorWrites,
+    FragmentState, MultisampleState, Operations, PipelineCache, PrimitiveState,
     RenderPassColorAttachment, RenderPassDescriptor, RenderPipelineDescriptor,
     Sampler, SamplerBindingType, SamplerDescriptor, ShaderStages, ShaderType,
     TextureFormat, TextureSampleType, TextureViewDimension,
@@ -22,8 +22,8 @@ use bevy::render::renderer::{RenderContext, RenderDevice};
 use bevy::render::view::{RenderLayers, ViewTarget};
 use bevy::render::RenderApp;
 
-use crate::parallax::Parallax;
 use super::vignette::VignettePostProcessLabel;
+use crate::parallax::Parallax;
 
 pub(crate) struct DarknessPlugin;
 
@@ -101,7 +101,15 @@ fn mark_light_source_layers(
     }
 }
 
-#[derive(Component, Clone, Copy, ExtractComponent, ShaderType, Reflect, AsBindGroup)]
+#[derive(
+    Component,
+    Clone,
+    Copy,
+    ExtractComponent,
+    ShaderType,
+    Reflect,
+    AsBindGroup
+)]
 pub struct DarknessSettings {
     pub bg_light_level: f32,
     pub darkness_intensity: f32,
@@ -164,15 +172,16 @@ impl ViewNode for DarknessPostProcessNode {
 
         // Pass 1: Horizontal
         let post_process = view_target.post_process_write();
-        let horizontal_bind_group = render_context.render_device().create_bind_group(
-            "darkness_h_bind_group",
-            &post_process_pipeline.layout,
-            &BindGroupEntries::sequential((
-                post_process.source,
-                &post_process_pipeline.sampler,
-                settings_binding.clone(),
-            )),
-        );
+        let horizontal_bind_group =
+            render_context.render_device().create_bind_group(
+                "darkness_h_bind_group",
+                &post_process_pipeline.layout,
+                &BindGroupEntries::sequential((
+                    post_process.source,
+                    &post_process_pipeline.sampler,
+                    settings_binding.clone(),
+                )),
+            );
 
         let mut render_pass =
             render_context.begin_tracked_render_pass(RenderPassDescriptor {
@@ -194,15 +203,16 @@ impl ViewNode for DarknessPostProcessNode {
 
         // Pass 2: Vertical
         let post_process = view_target.post_process_write();
-        let vertical_bind_group = render_context.render_device().create_bind_group(
-            "darkness_v_bind_group",
-            &post_process_pipeline.layout,
-            &BindGroupEntries::sequential((
-                post_process.source,
-                &post_process_pipeline.sampler,
-                settings_binding.clone(),
-            )),
-        );
+        let vertical_bind_group =
+            render_context.render_device().create_bind_group(
+                "darkness_v_bind_group",
+                &post_process_pipeline.layout,
+                &BindGroupEntries::sequential((
+                    post_process.source,
+                    &post_process_pipeline.sampler,
+                    settings_binding.clone(),
+                )),
+            );
 
         let mut render_pass =
             render_context.begin_tracked_render_pass(RenderPassDescriptor {

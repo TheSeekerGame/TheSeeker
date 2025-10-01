@@ -1,31 +1,23 @@
+//! Player animation helpers.
+//!
+//! Centralizes direction slot updates and small event-driven animation slot toggles
+//! (e.g., XP orb pickup, player damage).
 use bevy::ecs::event::EventReader;
-use bevy::prelude::{DetectChanges, Ref};
-use leafwing_input_manager::prelude::ActionState;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
-use theseeker_engine::physics::LinearVelocity;
-use theseeker_engine::prelude::{GameTickUpdate, GameTime};
+use theseeker_engine::prelude::GameTickUpdate;
 use theseeker_engine::script::ScriptPlayer;
 
-use super::{DashStrike, PlayerAction};
 use crate::appstate::AppState;
 use crate::game::gentstate::Facing;
-use crate::game::player::{
-    Attacking, CanAttack, Dashing, Falling, HitFreezeTime, Idle, Jumping,
-    Passive, Passives, Player, PlayerConfig, PlayerGfx, PlayerStateSet,
-    Running, WallSlideTime, Whirling,
-};
-use crate::prelude::{
-    in_state, Added, App, Has, Local, Or, Plugin, Query,
-    Res, With, Without,
-};
+use crate::game::player::{Falling, PlayerGfx, PlayerStateSet};
+use crate::prelude::{in_state, App, Local, Plugin, Query, With};
 use bevy::ecs::schedule::IntoScheduleConfigs;
 
-use super::player_weapon::CurrentWeapon;
-use crate::game::attack::DamageInfo;
-use crate::game::xp_orbs::XpOrbPickup;
+use crate::game::combat::DamageInfo;
+use crate::game::player::spawns::xp_orbs::XpOrbPickup;
 
-/// play animations here, run after transitions
+/// Player animation helper systems for direction slots and event-based animation triggers
 pub struct PlayerAnimationPlugin;
 
 impl Plugin for PlayerAnimationPlugin {
@@ -33,267 +25,63 @@ impl Plugin for PlayerAnimationPlugin {
         app.add_systems(
             GameTickUpdate,
             (
-                player_idle_animation,
-                player_falling_animation,
-                player_jumping_animation,
-                player_running_animation,
-                player_attacking_animation,
-                player_whirling_animation,
-                player_dashing_animation,
-                player_dashing_strike_animation,
-                sprite_flip.after(player_dashing_animation),
-                update_serpent_ring_slot.after(sprite_flip),
-                update_frenzied_attack_slot.after(update_serpent_ring_slot),
+                // Direction slots must reflect `Facing` before picking animation keys/frames
+                sprite_flip,
+                // Event-based animation slot handlers
                 xp_orb_animation_handler,
                 player_damage_animation_handler,
             )
                 .in_set(PlayerStateSet::Animation)
-                .after(PlayerStateSet::Transition)
                 .run_if(in_state(AppState::InGame)),
         );
     }
 }
 
-fn player_idle_animation(
-    query: Query<
-        &Gent,
-        Or<(
-            (
-                Added<Idle>,
-                Without<Attacking>,
-                Without<Whirling>,
-            ),
-            (With<Idle>, Added<CanAttack>),
-        )>,
-    >,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+/// Sets DirectionRight/DirectionLeft slots based on `Facing`.
+/// Centralized to avoid duplicated branching across states.
+pub fn set_direction_slots(
+    anim: &mut ScriptPlayer<SpriteAnimation>,
+    facing: &Facing,
 ) {
-    for gent in query.iter() {
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key("anim.player.Idle")
-        }
-    }
-}
-
-fn player_falling_animation(
-    f_query: Query<
-        (
-            &Gent,
-            &LinearVelocity,
-            Option<&WallSlideTime>,
-        ),
-        Or<(
-            (With<Falling>, Without<Attacking>),
-            (With<Falling>, Added<CanAttack>),
-        )>,
-    >,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-    config: Res<PlayerConfig>,
-) {
-    for (gent, velocity, sliding) in f_query.iter() {
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            if let Some(sliding) = sliding {
-                if sliding.sliding(&config) {
-                    if player.current_key().unwrap_or("")
-                        != "anim.player.WallSlide"
-                    {
-                        player.play_key("anim.player.WallSlide");
-                    }
-                } else if velocity.0.y < 0.
-                    && player.current_key().unwrap_or("") != "anim.player.Fall"
-                {
-                    player.play_key("anim.player.Fall");
-                }
-            } else if velocity.0.y < 0.
-                && player.current_key().unwrap_or("") != "anim.player.Fall"
-            {
-                player.play_key("anim.player.Fall");
-            }
-        }
-    }
-}
-
-fn player_jumping_animation(
-    query: Query<
-        &Gent,
-        Or<(
-            (Added<Jumping>, Without<Attacking>),
-            (With<Jumping>, Added<CanAttack>),
-        )>,
-    >,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-) {
-    for gent in query.iter() {
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key("anim.player.Jump")
-        }
-    }
-}
-
-fn player_running_animation(
-    query: Query<
-        &Gent,
-        Or<(
-            (
-                Added<Running>,
-                Without<Attacking>,
-                Without<Whirling>,
-            ),
-            (With<Running>, Added<CanAttack>),
-        )>,
-    >,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-) {
-    for gent in query.iter() {
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key("anim.player.Run")
-        }
-    }
-}
-
-fn player_attacking_animation(
-    query: Query<
-        (
-            &Gent,
-            &ActionState<PlayerAction>,
-            Has<Falling>,
-            Has<Jumping>,
-            Has<Running>,
-            Option<&HitFreezeTime>,
-            Ref<Attacking>,
-        ),
-        (With<Player>, Without<Whirling>),
-    >,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-    config: Res<PlayerConfig>,
-    weapon: CurrentWeapon,
-) {
-    for (
-        gent,
-        player_action,
-        is_falling,
-        is_jumping,
-        is_running,
-        hitfrozen,
-        attacking,
-    ) in query.iter()
-    {
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            let hitfrozen = hitfrozen
-                .map(|f| f.0 < config.hitfreeze_ticks)
-                .unwrap_or(false);
-            player.set_slot("AttackTransition", false);
-            player.set_slot("DownwardAttack", false);
-            let basic_air_anim_key_str = &weapon.get_anim_key("BasicAir");
-            let basic_run_anim_key_str = &weapon.get_anim_key("BasicRun");
-            let basic_idle_anim_key_str = &weapon.get_anim_key("BasicIdle");
-
-            if is_falling || is_jumping {
-                if player_action.pressed(&PlayerAction::Fall) {
-                    player.set_slot("DownwardAttack", true);
-                }
-                // TODO: These need a way to resume the new animation from the current frame index
-                // or specified offset
-                if player.current_key() != Some(basic_air_anim_key_str) {
-                    player.play_key(basic_air_anim_key_str);
-                    if !attacking.is_added() {
-                        player.set_slot("AttackTransition", true);
-                    }
-                }
-            } else if is_running && !hitfrozen {
-                if player.current_key() != Some(basic_run_anim_key_str) {
-                    player.play_key(basic_run_anim_key_str);
-                    if !attacking.is_added() {
-                        player.set_slot("AttackTransition", true);
-                    }
-                }
-            } else if player.current_key() != Some(basic_idle_anim_key_str) {
-                player.play_key(basic_idle_anim_key_str);
-                if !attacking.is_added() {
-                    player.set_slot("AttackTransition", true);
-                }
-            }
-        }
-    }
-}
-
-fn player_whirling_animation(
-    query: Query<&Gent, Added<Whirling>>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-    weapon: CurrentWeapon,
-) {
-    for gent in query.iter() {
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key(&weapon.whirling_anim_key());
-        }
-    }
-}
-
-fn player_dashing_animation(
-    query: Query<(&Gent, &Dashing), Added<Dashing>>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-) {
-    for (gent, dashing) in query.iter() {
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            if dashing.is_down_dash() {
-                player.play_key("anim.player.SwordDashDown")
-            } else {
-                player.play_key("anim.player.Dash")
-            }
-        }
-    }
-}
-
-fn player_dashing_strike_animation(
-    query: Query<(&Gent, &DashStrike), Added<DashStrike>>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-) {
-    for (gent, _dash_strike) in query.iter() {
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key("anim.player.SwordDashDownStrike")
-        }
+    match facing {
+        Facing::Right => {
+            anim.set_slot("DirectionRight", true);
+            anim.set_slot("DirectionLeft", false);
+        },
+        Facing::Left => {
+            anim.set_slot("DirectionRight", false);
+            anim.set_slot("DirectionLeft", true);
+        },
     }
 }
 
 fn sprite_flip(
-    query: Query<(&Facing, &Gent, Option<&WallSlideTime>)>,
+    query: Query<(&Facing, &Gent, Option<&Falling>)>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     mut current_direction: Local<bool>,
     mut old_direction: Local<bool>,
-    time: Res<GameTime>,
-    weapon: CurrentWeapon,
 ) {
-    for (facing, gent, wall_slide_time) in query.iter() {
+    for (facing, gent, maybe_falling) in query.iter() {
         if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
             *old_direction = *current_direction;
-            let mut facing = facing.clone();
 
-            // Have the player face away from the wall if they are attacking while wall sliding
-            let pressed_on_wall = wall_slide_time
-                .is_some_and(|s| s.is_pressed_against_wall(&time));
-            let is_attacking_while_falling =
-                player.current_key() == Some(&weapon.get_anim_key("BasicAir"));
-            if pressed_on_wall && is_attacking_while_falling {
-                facing = match facing {
-                    Facing::Right => Facing::Left,
-                    Facing::Left => Facing::Right,
+            // If wall sliding, defer flip control to wall-slide logic
+            if let Some(falling) = maybe_falling {
+                if falling.wall_slide.is_some() {
+                    if *old_direction != *current_direction {
+                        player.set_slot("DirectionChanged", true);
+                    } else {
+                        player.set_slot("DirectionChanged", false);
+                    }
+                    continue;
                 }
             }
-            match facing {
-                Facing::Right => {
-                    // TODO: toggle facing script action
-                    player.set_slot("DirectionRight", true);
-                    player.set_slot("DirectionLeft", false);
-                    *current_direction = true;
-                },
-                Facing::Left => {
-                    player.set_slot("DirectionRight", false);
-                    player.set_slot("DirectionLeft", true);
-                    *current_direction = false;
-                },
-            }
 
-            // lazy change detection cause I can't be asked to learn proper bevy way lel ~c12
+            // Use the facing direction as-is for non-wall-slide cases
+            set_direction_slots(&mut player, facing);
+            *current_direction = matches!(facing, Facing::Right);
+
+            // Simple change detection for DirectionChanged slot
             if *old_direction != *current_direction {
                 player.set_slot("DirectionChanged", true);
             } else {
@@ -303,37 +91,7 @@ fn sprite_flip(
     }
 }
 
-fn update_serpent_ring_slot(
-    player_query: Query<(&Gent, &Passives), With<Player>>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-) {
-    for (gent, passives) in player_query.iter() {
-        let has_serpent_ring = passives.contains(&Passive::SerpentRing);
-        if let Ok(mut anim_player) = gfx_query.get_mut(gent.e_gfx) {
-            if has_serpent_ring {
-                anim_player.set_slot("SerpentRing", true);
-            } else {
-                anim_player.set_slot("SerpentRing", false);
-            }
-        }
-    }
-}
-
-fn update_frenzied_attack_slot(
-    player_query: Query<(&Gent, &Passives), With<Player>>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-) {
-    for (gent, passives) in player_query.iter() {
-        let has_frenzied_attack = passives.contains(&Passive::FrenziedAttack);
-        if let Ok(mut anim_player) = gfx_query.get_mut(gent.e_gfx) {
-            if has_frenzied_attack {
-                anim_player.set_slot("FrenziedAttack", true);
-            } else {
-                anim_player.set_slot("FrenziedAttack", false);
-            }
-        }
-    }
-}
+// SerpentRing/FrenziedAttack slot setting moved to passive animation slot aggregator
 
 fn xp_orb_animation_handler(
     mut xp_events: EventReader<XpOrbPickup>,
@@ -352,10 +110,20 @@ fn xp_orb_animation_handler(
 fn player_damage_animation_handler(
     mut damage_events: EventReader<DamageInfo>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+    player_query: Query<(), With<crate::game::player::Player>>,
 ) {
-    let damaged_event_occurred = !damage_events.is_empty();
+    // Only set the Damaged slot when the PLAYER entity is the damage TARGET.
+    // Previously, this fired on any damage in the game and would misfire on enemy hits.
+    let mut player_was_damaged = false;
+    for dmg in damage_events.read() {
+        if player_query.get(dmg.target).is_ok() {
+            player_was_damaged = true;
+            break;
+        }
+    }
+
     for mut anim in gfx_query.iter_mut() {
-        if damaged_event_occurred {
+        if player_was_damaged {
             anim.set_slot("Damaged", true);
         } else {
             anim.set_slot("Damaged", false);

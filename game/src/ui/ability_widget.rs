@@ -7,81 +7,6 @@ use crate::prelude::*;
 #[derive(Component)]
 pub struct AbilityWidget;
 
-// FIXME: Rewrite without Sickle UI
-// pub trait UiAbilityWidgetExt<'w, 's> {
-//     fn ability_widget<'a, T: Component + Clone>(
-//         &'a mut self,
-//         config: AbilityWidgetConfig<T>,
-//     ) -> UiBuilder<'w, 's, 'a, Entity>;
-// }
-
-// impl<'w, 's> UiAbilityWidgetExt<'w, 's> for UiBuilder<'w, 's, '_, Entity> {
-//     /// Draws a 96.0x96.0 tile with a progress bar overlaid.
-//     /// modify
-//     fn ability_widget<'a, T: Component + Clone>(
-//         &'a mut self,
-//         config: AbilityWidgetConfig<T>,
-//     ) -> UiBuilder<'w, 's, 'a, Entity> {
-//         self.column(|column| {
-//             column.style().justify_content(JustifyContent::Center);
-//             column.container(
-//                 (
-//                     ImageBundle::default(),
-//                     AbilityWidget,
-//                     config.tracking_component.clone(),
-//                 ),
-//                 |ability_card| {
-//                     ability_card.named("ability");
-//                     ability_card
-//                         .style()
-//                         .width(Val::Px(60.0))
-//                         .height(Val::Px(60.0))
-//                         .image(config.image_path);
-//                 },
-//             );
-//             column.container(
-//                 (
-//                     MaterialNodeBundle::<ability_cooldown::Material>::default(),
-//                     config.tracking_component,
-//                 ),
-//                 |ability_card| {
-//                     let entity = ability_card.context();
-//                     // Adds the progress bar material to the ui node
-//                     // Someone tell me theres a better way then this. I mean it works at least
-//                     ability_card.commands().add(move |w: &mut World| {
-//                         let Some(mut ui_materials) =
-//                             w.get_resource_mut::<Assets<ability_cooldown::Material>>()
-//                         else {
-//                             return;
-//                         };
-//                         let handle =
-//                             ui_materials.add(ability_cooldown::Material {
-//                                 factor: 0.3,
-//                                 background_color: Color::rgba(0.0, 0.0, 0.0, 0.0).into(),
-//                                 filled_color: Color::rgba(0.25, 0.25, 0.0, 0.75).into(),
-//                             });
-//                         w.entity_mut(entity).insert(handle);
-//                         // Make the bar go from bottom to top
-//                         w.entity_mut(entity).insert(Transform::from_rotation(
-//                             Quat::from_axis_angle(
-//                                 Vec3::Z,
-//                                 if config.dir_up { -1.0 } else { 1.0 }
-//                                     * PI
-//                                     * 0.5,
-//                             ),
-//                         ));
-//                     });
-//                     ability_card.named("ability");
-//                     ability_card
-//                         .style()
-//                         .position_type(PositionType::Absolute)
-//                         .width(Val::Px(60.0))
-//                         .height(Val::Px(60.0));
-//                 },
-//             );
-//         })
-//     }
-// }
 
 pub struct AbilityWidgetConfig<T: Component + Clone> {
     pub image_path: String,
@@ -103,17 +28,20 @@ impl<T: Component + Clone> AbilityWidgetConfig<T> {
     }
 }
 
+/// Command to update the cooldown bar fill factor on a UI node's material.
 struct SetFactor(f32);
 
 impl EntityCommand for SetFactor {
     fn apply(self, mut entity: EntityWorldMut) {
-        // Retrieve the `MaterialNode` handle from this entity
-        let Some(handle) = entity.get::<MaterialNode<ability_cooldown::Material>>() else {
+        // Retrieve the progress material handle from this entity
+        let Some(handle) =
+            entity.get::<MaterialNode<ability_cooldown::Material>>()
+        else {
             return;
         };
         let handle = handle.clone();
 
-        // Access the world to update the underlying material asset
+        // Update the underlying material asset in-place
         entity.world_scope(|world| {
             if let Some(mut assets) =
                 world.get_resource_mut::<Assets<ability_cooldown::Material>>()

@@ -1,7 +1,7 @@
 use crate::game::player::{Passives, Player};
 use crate::prelude::*;
 
-use crate::game::pickups::PickupAssetHandles;
+// Legacy simple passives list; UI is now provided by the inventory window.
 
 pub(super) fn plugin(app: &mut App) {
     app.add_systems(
@@ -32,12 +32,11 @@ fn spawn_passive_ui_container(mut commands: Commands) {
 
 fn display_passives(
     mut commands: Commands,
-    pickup_assets: Res<PickupAssetHandles>,
-    passives: Query<&Passives, With<Player>>,
+    _passives: Query<&Passives, With<Player>>,
     passives_ui_node: Query<Entity, With<PassivesUiNode>>,
     children_q: Query<&Children>,
 ) {
-    // Remove the display since passives now show in the inventory window
+    // Clear legacy list entries; the inventory window is authoritative
     if let Ok(entity) = passives_ui_node.single() {
         if let Ok(children) = children_q.get(entity) {
             for child_entity in children.iter() {

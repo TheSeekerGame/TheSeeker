@@ -1,12 +1,13 @@
 use bevy::color::palettes;
 use bevy::prelude::*;
+use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::physics::{Collider, ColliderShapeAccess};
 use theseeker_engine::prelude::{GameTickUpdate, GameTime};
-use theseeker_engine::animation::{SpriteAnimationBundle};
 use theseeker_engine::script::ScriptPlayer;
 
 use crate::camera::MainCamera;
-use crate::game::attack::{apply_attack_damage, DamageInfo};
+use crate::game::combat::damage_source::apply_damage;
+use crate::game::combat::DamageInfo;
 use crate::game::player::Player;
 use crate::prelude::Update;
 use crate::StateDespawnMarker;
@@ -18,11 +19,21 @@ impl Plugin for DmgNumbersPlugin {
         app.init_resource::<DamageNumberZOrder>();
         app.add_systems(
             GameTickUpdate,
-            instance.after(apply_attack_damage),
+            instance.after(apply_damage),
         );
-        app.add_systems(Update, (update_number, reset_z_order_after_timeout));
+        app.add_systems(
+            Update,
+            (
+                update_number,
+                reset_z_order_after_timeout,
+            ),
+        );
     }
 }
+
+/// Marker to suppress damage numbers when an entity takes damage
+#[derive(Component)]
+pub struct NoDamageNumbers;
 
 /// Resource to track z-ordering for damage numbers
 #[derive(Resource)]
@@ -65,12 +76,17 @@ fn instance(
     game_time: Res<GameTime>,
     q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
     mut z_order: ResMut<DamageNumberZOrder>,
+    suppress_query: Query<(), With<NoDamageNumbers>>,
 ) {
     let Some((_camera_transform, _camera)) = q_cam.iter().next() else {
         return;
     };
 
     for damage_info in damage_events.read() {
+        // Skip targets that opt-out of damage numbers (e.g., Bell)
+        if suppress_query.get(damage_info.target).is_ok() {
+            continue;
+        }
         // Try the enemy query first:
         let (transform, collider, text_color) =
             if let Ok((transform, collider)) =
@@ -127,49 +143,51 @@ fn instance(
         // Convert damage amount to string to get individual digits (rounded)
         let damage_text = format!("{:.0}", damage_info.amount);
         let digit_count = damage_text.len();
-        
+
         // Calculate total width of the damage number display
         // Each digit is 3 pixels wide, with 1 pixel gap between them
         let total_width = (digit_count * 3 + (digit_count - 1)) as f32;
-        
+
         // Calculate starting x position to center the damage number
         let start_x = world_position.x - total_width / 2.0;
-        
+
         let mut digit_entities = Vec::new();
-        
+
         // Spawn each digit sprite
         for (i, digit_char) in damage_text.chars().enumerate() {
             // Calculate position for this digit
             let digit_x = start_x + (i as f32 * 4.0); // 3 pixels for digit + 1 pixel gap
             let digit_pos = Vec3::new(digit_x, world_position.y, damage_z);
-            
+
             // Get the animation key for this digit
             let anim_key = format!("anim.numbers.{}", digit_char);
-            
+
             // Create the animation player
             let mut player = ScriptPlayer::default();
             player.play_key(&anim_key);
-            
+
             // Spawn the digit entity
-            let digit_entity = commands.spawn((
-                DmgNumberDigit,
-                SpriteAnimationBundle { player },
-                Sprite {
-                    texture_atlas: Some(TextureAtlas::default()),
-                    color: text_color,
-                    ..default()
-                },
-                Transform::from_translation(digit_pos),
-                GlobalTransform::default(),
-                Visibility::Visible,
-                InheritedVisibility::VISIBLE,
-                ViewVisibility::default(),
-                StateDespawnMarker,
-            )).id();
-            
+            let digit_entity = commands
+                .spawn((
+                    DmgNumberDigit,
+                    SpriteAnimationBundle { player },
+                    Sprite {
+                        texture_atlas: Some(TextureAtlas::default()),
+                        color: text_color,
+                        ..default()
+                    },
+                    Transform::from_translation(digit_pos),
+                    GlobalTransform::default(),
+                    Visibility::Visible,
+                    InheritedVisibility::VISIBLE,
+                    ViewVisibility::default(),
+                    StateDespawnMarker,
+                ))
+                .id();
+
             digit_entities.push(digit_entity);
         }
-        
+
         // Create a parent entity to track all the digits
         commands.spawn((
             DmgNumberGroup {
@@ -201,7 +219,7 @@ fn update_number(
 
         // Apply movement and fade to all digits
         let vertical_offset = 3.0 * elapsed_time as f32;
-        
+
         // Calculate fade alpha with smooth transition
         let alpha = if elapsed_time as f32 <= fade_start_time {
             // Stay fully opaque for the first fade_start_time seconds
@@ -212,13 +230,16 @@ fn update_number(
             let fade_elapsed = elapsed_time as f32 - fade_start_time;
             1.0 - (fade_elapsed / fade_duration).min(1.0)
         };
-        
+
         // Update each digit
         for &digit_entity in &dmg_group.digit_entities {
-            if let Ok((mut transform, mut sprite)) = digit_q.get_mut(digit_entity) {
+            if let Ok((mut transform, mut sprite)) =
+                digit_q.get_mut(digit_entity)
+            {
                 // Update position (only Y changes, X stays the same)
-                transform.translation.y = dmg_group.start_pos.y + vertical_offset;
-                
+                transform.translation.y =
+                    dmg_group.start_pos.y + vertical_offset;
+
                 // Update alpha while preserving the color tint
                 sprite.color.set_alpha(alpha);
             }
@@ -241,7 +262,7 @@ fn reset_z_order_after_timeout(
     game_time: Res<GameTime>,
 ) {
     const RESET_AFTER_TICKS: u64 = 96; // 1 second at 96 Hz
-    
+
     if game_time.tick() > z_order.last_spawn_tick + RESET_AFTER_TICKS {
         // Reset z-order if no damage numbers spawned for 1 second
         z_order.current_z = 0.0;

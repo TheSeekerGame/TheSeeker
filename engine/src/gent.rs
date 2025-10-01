@@ -35,7 +35,7 @@ pub struct TransformGfxFromGent {
     pub offset: Option<Vec3>,
 }
 
-fn transform_gfx_from_gent(
+pub fn transform_gfx_from_gent(
     mut q_target: Query<(
         &mut GlobalTransform,
         &TransformGfxFromGent,
@@ -47,14 +47,14 @@ fn transform_gfx_from_gent(
             continue;
         };
         *xf_target = *xf_src;
-        
+
         // Apply offset if specified
         if let Some(offset) = gfx2gent.offset {
             let mut transform = xf_target.compute_transform();
             transform.translation += offset;
             *xf_target = transform.into();
         }
-        
+
         if gfx2gent.pixel_aligned {
             let mut xf = xf_target.compute_transform();
             xf.translation = xf.translation.round();

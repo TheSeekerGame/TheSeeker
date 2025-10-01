@@ -27,6 +27,7 @@ pub struct YakBlueprintBundle {
 
 #[derive(Component)]
 pub struct YakGfx {
+    #[allow(dead_code)] // Symmetry with other Gfx types
     pub e_gent: Entity,
 }
 

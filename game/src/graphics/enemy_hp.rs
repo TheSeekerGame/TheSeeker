@@ -9,7 +9,7 @@ use theseeker_engine::physics::{Collider, ColliderShapeAccess};
 
 use crate::appstate::StateDespawnMarker;
 use crate::camera::MainCamera;
-use crate::game::attack::Health;
+use crate::game::combat::Health;
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::Dead;
 use crate::prelude::Update;
@@ -19,8 +19,9 @@ const ANIMATION_DELAY_IN_MILLIS: u64 = 600;
 const ANIMATION_SPEED: f32 = 0.2;
 const SPARK_DURATION_MILLIS: u64 = 400;
 // UI constants
-const BAR_WIDTH: f32 = 80.0;  // Base width (actual visible width will be less due to slant)
-const BAR_HEIGHT: f32 = 16.0;  // Increased to allow spark to extend beyond visible bar
+const BAR_WIDTH: f32 = 80.0; // Base width (actual visible width will be less due to slant)
+const BAR_HEIGHT: f32 = 16.0; // Increased to allow spark to extend beyond visible bar
+#[allow(dead_code)] // Documented reference value; actual slope computed in shader
 const BAR_SLOPE_FACTOR: f32 = 0.05; // Should match shader SLOPE constant
 
 pub struct EnemyHpBarPlugin;
@@ -28,8 +29,7 @@ pub struct EnemyHpBarPlugin;
 impl Plugin for EnemyHpBarPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(UiMaterialPlugin::<Material>::default());
-        app
-            .add_systems(Update, instance)
+        app.add_systems(Update, instance)
             .add_systems(Update, update_positions)
             .add_systems(Update, update_hp)
             .add_systems(Update, update_visibility)
@@ -114,16 +114,22 @@ fn instance(
                         Bar { parent: entity },
                         DamageAnimation {
                             delay: Timer::new(
-                                Duration::from_millis(ANIMATION_DELAY_IN_MILLIS),
+                                Duration::from_millis(
+                                    ANIMATION_DELAY_IN_MILLIS,
+                                ),
                                 TimerMode::Once,
                             ),
                             spark: {
                                 let mut t = Timer::new(
-                                    Duration::from_millis(SPARK_DURATION_MILLIS),
+                                    Duration::from_millis(
+                                        SPARK_DURATION_MILLIS,
+                                    ),
                                     TimerMode::Once,
                                 );
                                 // Start in the finished state so the spark is invisible until first damage.
-                                t.tick(Duration::from_millis(SPARK_DURATION_MILLIS));
+                                t.tick(Duration::from_millis(
+                                    SPARK_DURATION_MILLIS,
+                                ));
                                 t
                             },
                         },
@@ -141,10 +147,13 @@ fn update_positions(
     mut hp_root_q: Query<(&Root, &mut Node)>,
     mut camera_q: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
 ) {
-    let Ok((camera_transform, camera)) = camera_q.single() else { return; };
+    let Ok((camera_transform, camera)) = camera_q.single() else {
+        return;
+    };
 
     for (hp_root, mut style) in hp_root_q.iter_mut() {
-        let Ok((global_transform, collider)) = enemy_q.get(hp_root.parent) else {
+        let Ok((global_transform, collider)) = enemy_q.get(hp_root.parent)
+        else {
             continue;
         };
         let mut world_position = global_transform.translation();
@@ -159,7 +168,9 @@ fn update_positions(
             None => Vec3::ZERO,
         };
 
-        let Ok(screen_position) = camera.world_to_viewport(camera_transform, world_position) else {
+        let Ok(screen_position) =
+            camera.world_to_viewport(camera_transform, world_position)
+        else {
             // Off-screen or projection failed; nothing to do for this bar this frame.
             continue;
         };
@@ -213,7 +224,8 @@ fn update_hp(
 
         // Animate trailing white bar once delay elapsed
         if damage_animation.delay.finished() {
-            material.damage = material.damage.lerp(health_factor, ANIMATION_SPEED);
+            material.damage =
+                material.damage.lerp(health_factor, ANIMATION_SPEED);
         }
 
         // Fade spark over its lifetime
@@ -256,9 +268,7 @@ fn despawn(
     for (hp_entity, hp_root) in &hp_root_q {
         match enemy_q.get(hp_root.parent) {
             // Despawn if entity can't be found or is marked as dead.
-            Ok(Some(_)) | Err(_) => {
-                commands.entity(hp_entity).despawn()
-            },
+            Ok(Some(_)) | Err(_) => commands.entity(hp_entity).despawn(),
             Ok(None) => {},
         }
     }

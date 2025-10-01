@@ -43,8 +43,8 @@ impl Plugin for VignettePlugin {
                 core_2d::graph::Core2d,
                 VignettePostProcessLabel,
             );
-            // Render graph edges are now managed by DarknessPlugin to ensure proper ordering:
-            // Main Pass → Darkness → Vignette → End Post-Processing
+        // Render graph edges are now managed by DarknessPlugin to ensure proper ordering:
+        // Main Pass → Darkness → Vignette → End Post-Processing
     }
 
     fn finish(&self, app: &mut App) {

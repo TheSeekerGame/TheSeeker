@@ -8,14 +8,15 @@ id = "spider_small"
 brain = "generic_melee.fsm.toml"
 
 # Core stats (all required for base archetypes)
+# Movement speeds are in pixels/tick at 96Hz
 spawn_hp     = 100       # from enemy.cfg.toml
-walk_speed   = 20        # walking_speed from enemy.cfg.toml
-chase_speed  = 35        # chasing_speed from enemy.cfg.toml
-fall_accel   = 4.5       # from enemy.cfg.toml
+walk_speed   = 0.208     # ~20 pixels/second (20/96 = 0.208 px/tick)
+chase_speed  = 0.365     # ~35 pixels/second (35/96 = 0.365 px/tick)
 dmg_melee    = 20        # melee_damage from enemy.cfg.toml
 dmg_ranged   = 0         # small melee spider has no ranged attack
 vision_range = 120       # updated vision range per design spec
 melee_range  = 12        # range_melee_melee from enemy.cfg.toml
+reaction_time = 32       # 8 ticks (~83ms) reaction delay
 
 # Animation mappings: FSM key → asset key
 [anim]

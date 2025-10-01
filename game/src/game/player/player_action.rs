@@ -1,5 +1,7 @@
+//! Player input action definitions and default bindings.
+//!
+//! Also provides a helper system to track the last non-zero horizontal input.
 use leafwing_input_manager::prelude::*;
-// use leafwing_input_manager::{prelude::*, InputManagerBundle};
 use theseeker_engine::input::InputManagerPlugin;
 
 use crate::prelude::*;
@@ -9,6 +11,11 @@ pub struct PlayerActionPlugin;
 impl Plugin for PlayerActionPlugin {
     fn build(&self, app: &mut App) {
         app.add_plugins(InputManagerPlugin::<PlayerAction>::default());
+        app.add_systems(
+            crate::GameTickUpdate,
+            track_last_move_dir
+                .in_set(crate::game::player::PlayerStateSet::Input),
+        );
     }
 }
 
@@ -17,10 +24,13 @@ pub enum PlayerAction {
     #[actionlike(Axis)]
     Move,
     Jump,
-    Attack,
-    Dash,
-    Whirl,
-    Stealth,
+    /// Non-jump up modifier used to select Up variants for skills (mapped to 'I')
+    UpModifier,
+    Skill1, // First equipped skill
+    Skill2, // Second equipped skill
+    Skill3, // Third equipped skill
+    Skill4, // Fourth equipped skill
+    Skill5, // Fifth equipped skill (Battery Pack)
     Fall,
     SwapCombatStyle,
     SwapMeleeWeapon,
@@ -30,25 +40,25 @@ pub enum PlayerAction {
 }
 
 impl PlayerAction {
-    pub fn input_manager_bundle() -> InputManagerBundle<Self> {
-        InputManagerBundle::<Self>::with_map(Self::input_map())
-    }
-
+    /// Default key/gamepad bindings used by the game.
     pub fn input_map() -> InputMap<Self> {
         InputMap::new([
             (Self::Jump, KeyCode::Space),
             (Self::Jump, KeyCode::KeyW),
             (Self::Jump, KeyCode::ArrowUp),
+            (Self::UpModifier, KeyCode::KeyI),
             (Self::Fall, KeyCode::ArrowDown),
             (Self::Fall, KeyCode::KeyS),
-            (Self::Attack, KeyCode::Digit1),
-            (Self::Attack, KeyCode::KeyJ),
-            (Self::Dash, KeyCode::KeyK),
-            (Self::Dash, KeyCode::Digit2),
-            (Self::Whirl, KeyCode::KeyL),
-            (Self::Whirl, KeyCode::Digit3),
-            (Self::Stealth, KeyCode::Digit4),
-            (Self::Stealth, KeyCode::Semicolon),
+            (Self::Skill1, KeyCode::Digit1),
+            (Self::Skill1, KeyCode::KeyJ),
+            (Self::Skill2, KeyCode::Digit2),
+            (Self::Skill2, KeyCode::KeyK),
+            (Self::Skill3, KeyCode::Digit3),
+            (Self::Skill3, KeyCode::KeyL),
+            (Self::Skill4, KeyCode::Digit4),
+            (Self::Skill4, KeyCode::Semicolon),
+            (Self::Skill5, KeyCode::Digit5),
+            (Self::Skill5, KeyCode::Quote),
             (Self::SwapCombatStyle, KeyCode::KeyH),
             (
                 Self::SwapCombatStyle,
@@ -79,19 +89,17 @@ impl PlayerAction {
             Self::Move,
             GamepadControlAxis::new(GamepadAxis::LeftStickX),
         )
-        // FIXME: should fall be an axis? if so we have to specifiy it in enum
-        // .with_axis(
-        //     Self::Fall,
-        //     GamepadControlAxis::new(GamepadAxis::LeftStickY)
-        //         .with_bounds(-1.0, 0.0),
-        // )
+        // Note: Fall is a button; if modeling as an axis later, the enum would need updating
         .with_multiple([
             (Self::Fall, GamepadButton::DPadDown),
             (Self::Jump, GamepadButton::LeftTrigger2),
-            (Self::Attack, GamepadButton::West),
-            (Self::Dash, GamepadButton::RightTrigger2),
-            (Self::Whirl, GamepadButton::South),
-            (Self::Stealth, GamepadButton::East),
+            (Self::Skill1, GamepadButton::West),
+            (
+                Self::Skill2,
+                GamepadButton::RightTrigger2,
+            ),
+            (Self::Skill3, GamepadButton::South),
+            (Self::Skill4, GamepadButton::East),
             (
                 Self::SwapCombatStyle,
                 GamepadButton::LeftTrigger,
@@ -106,5 +114,31 @@ impl PlayerAction {
                 GamepadButton::Start,
             ),
         ])
+    }
+}
+
+/// Maintain `LastMoveDir` as the last non-zero horizontal move input.
+fn track_last_move_dir(
+    mut query: Query<
+        (
+            &ActionState<PlayerAction>,
+            Option<&mut super::states::LastMoveDir>,
+            Entity,
+        ),
+        With<super::Player>,
+    >,
+    mut commands: Commands,
+) {
+    for (action_state, maybe_last, entity) in query.iter_mut() {
+        let dir = action_state.clamped_value(&PlayerAction::Move).signum();
+        if dir != 0.0 {
+            if let Some(mut last) = maybe_last {
+                last.0 = dir;
+            } else {
+                commands
+                    .entity(entity)
+                    .insert(super::states::LastMoveDir(dir));
+            }
+        }
     }
 }

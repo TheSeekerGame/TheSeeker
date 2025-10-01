@@ -5,7 +5,8 @@ id = "spider_big_t2"
 base = "spider_big"
 
 [override.stats]
-spawn_hp = 900    # Tier2 is 3x base HP (300 * 3)
+spawn_hp = 300    # Tier2 is 2x base HP
+dmg_ranged = 30   # Tier2 is 3x base damage (10 * 3) (150 * 3)
 
 [override.anim]
 Idle       = "anim.spider2.Idle"

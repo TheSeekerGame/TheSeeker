@@ -1,7 +1,7 @@
 [settings]
 time_base = "Relative"
 tick_quant = "8"
-ticks_per_frame = 8
+ticks_per_frame = 4
 frame_min = 1
 frame_max = 20
 frame_start = 1
@@ -58,35 +58,15 @@ volume = 0.5
 asset_key = "audio.game.SwordSlash"
 
 # if coming from another attack, pick up where we left off
-# Idle
+# Idle - using list mapping
 [[script]]
 run_on_playback_control = "Start"
 if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 1
+if_oldanim_frame_was = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14]
 action = "SetFrameNow"
-frame_index = 1
+frame_index = [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4]
 
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 2
-action = "SetFrameNow"
-frame_index = 2
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 3
-action = "SetFrameNow"
-frame_index = 3
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 4
-action = "SetFrameNow"
-frame_index = 4
-
+# Note: Commented out color change actions for frames 5, 10, 15 are preserved as comments
 # [[script]]
 # run_on_playback_control = "Start"
 # if_previous_script_key = "anim.player.SwordBasicIdle"
@@ -94,68 +74,12 @@ frame_index = 4
 # action = "SetSpriteColor"
 # color = "#ff0000"
 
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 6
-action = "SetFrameNow"
-frame_index = 5
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 7
-action = "SetFrameNow"
-frame_index = 6
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 8
-action = "SetFrameNow"
-frame_index = 7
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 9
-action = "SetFrameNow"
-frame_index = 8
-
 # [[script]]
 # run_on_playback_control = "Start"
 # if_previous_script_key = "anim.player.SwordBasicIdle"
 # if_oldanim_frame_was = 10
 # action = "SetSpriteColor"
 # color = "#ff0000"
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 11
-action = "SetFrameNow"
-frame_index = 1
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 12
-action = "SetFrameNow"
-frame_index = 2
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 13
-action = "SetFrameNow"
-frame_index = 3
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicIdle"
-if_oldanim_frame_was = 14
-action = "SetFrameNow"
-frame_index = 4
 
 # [[script]]
 # run_on_playback_control = "Start"
@@ -164,35 +88,15 @@ frame_index = 4
 # action = "SetSpriteColor"
 # color = "#ff0000"
 
-# Air
+# Air - using list mapping
 [[script]]
 run_on_playback_control = "Start"
 if_previous_script_key = "anim.player.SwordBasicAir"
-if_oldanim_frame_was = 1
+if_oldanim_frame_was = [1, 2, 3, 4, 6, 7, 8, 9, 11, 12, 13, 14]
 action = "SetFrameNow"
-frame_index = 1
+frame_index = [1, 2, 3, 4, 5, 6, 7, 8, 1, 2, 3, 4]
 
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicAir"
-if_oldanim_frame_was = 2
-action = "SetFrameNow"
-frame_index = 2
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicAir"
-if_oldanim_frame_was = 3
-action = "SetFrameNow"
-frame_index = 3
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicAir"
-if_oldanim_frame_was = 4
-action = "SetFrameNow"
-frame_index = 4
-
+# Note: Commented out color change actions for frames 5, 10, 15 are preserved as comments
 # [[script]]
 # run_on_playback_control = "Start"
 # if_previous_script_key = "anim.player.SwordBasicAir"
@@ -200,68 +104,12 @@ frame_index = 4
 # action = "SetSpriteColor"
 # color = "#ff0000"
 
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicAir"
-if_oldanim_frame_was = 6
-action = "SetFrameNow"
-frame_index = 5
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicAir"
-if_oldanim_frame_was = 7
-action = "SetFrameNow"
-frame_index = 6
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicAir"
-if_oldanim_frame_was = 8
-action = "SetFrameNow"
-frame_index = 7
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicAir"
-if_oldanim_frame_was = 9
-action = "SetFrameNow"
-frame_index = 8
-
 # [[script]]
 # run_on_playback_control = "Start"
 # if_previous_script_key = "anim.player.SwordBasicAir"
 # if_oldanim_frame_was = 10
 # action = "SetSpriteColor"
 # color = "#ff0000"
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicAir"
-if_oldanim_frame_was = 11
-action = "SetFrameNow"
-frame_index = 1
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicAir"
-if_oldanim_frame_was = 12
-action = "SetFrameNow"
-frame_index = 2
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicAir"
-if_oldanim_frame_was = 13
-action = "SetFrameNow"
-frame_index = 3
-
-[[script]]
-run_on_playback_control = "Start"
-if_previous_script_key = "anim.player.SwordBasicAir"
-if_oldanim_frame_was = 14
-action = "SetFrameNow"
-frame_index = 4
 
 # [[script]]
 # run_on_playback_control = "Start"

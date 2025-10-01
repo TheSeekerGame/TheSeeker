@@ -10,12 +10,14 @@ mod prelude {
     pub use crate::gamestate::GameState;
 }
 
-use bevy::app::{TaskPoolThreadAssignmentPolicy, TaskPoolOptions, TaskPoolPlugin};
+use bevy::app::{
+    TaskPoolOptions, TaskPoolPlugin, TaskPoolThreadAssignmentPolicy,
+};
 use bevy::ecs::schedule::ExecutorKind;
 use bevy::render::settings::{WgpuFeatures, WgpuSettings};
 use bevy::render::RenderPlugin;
-use theseeker_engine::physics::PhysicsPlugin;
 use bevy_ecs_tilemap::prelude::*;
+use theseeker_engine::physics::PhysicsPlugin;
 
 use crate::prelude::*;
 
@@ -119,11 +121,7 @@ fn main() {
     });
 
     // external plugins
-    app.add_plugins((
-        TilemapPlugin,
-        LdtkPlugin,
-        PhysicsPlugin,
-    ));
+    app.add_plugins((TilemapPlugin, LdtkPlugin, PhysicsPlugin));
 
     // our stuff
     app.add_plugins((

@@ -23,27 +23,13 @@ asset_key = "audio.game.XpOrbs"
 run_on_playback_control = "Start"
 forbid_slots_all = ["MovingSideways"]
 action = "SetFrameNow"
-frame_index = 1
+frame_index = 2
 
 [[script]]
 run_on_playback_control = "Start"
 action = "PlayAudio"
 volume = 0.5
 asset_key = "audio.game.JumpStart"
-
-[[script]]
-run_on_playback_control = "Start"
-action = "PlayAudio"
-volume = 0.16
-if_runcount_quant = "2"
-asset_key = "audio.game.Piano"
-
-[[script]]
-run_on_playback_control = "Start"
-action = "PlayAudio"
-volume = 0.16
-if_runcount_quant = "3"
-asset_key = "audio.game.Piano"
 
 [[script]]
 run_on_playback_control = "Start"

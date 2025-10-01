@@ -37,7 +37,7 @@ impl Plugin for SpriteAnimationPlugin {
             crate::time::GameTickUpdate,
             detect_animation_loop.in_set(AnimationSet::LoopDetection),
         );
-        
+
         // Clear animation loop markers after all systems that might need them
         app.add_systems(
             crate::time::GameTickUpdate,
@@ -55,16 +55,12 @@ impl SpriteAnimationBundle {
     pub fn new_play_handle(handle: Handle<SpriteAnimation>) -> Self {
         let mut player = ScriptPlayer::default();
         player.play_handle(handle);
-        Self {
-            player
-        }
+        Self { player }
     }
     pub fn new_play_key(key: &str) -> Self {
         let mut player = ScriptPlayer::default();
         player.play_key(key);
-        Self {
-            player
-        }
+        Self { player }
     }
 }
 
@@ -107,6 +103,69 @@ impl SpriteAnimationTracker {
             *i
         } else {
             default()
+        }
+    }
+
+    /// Maps a frame index based on the old animation frame and mapping lists
+    fn map_frame_index(
+        &self,
+        old_frame_list: &Option<OneOrMany<FrameId>>,
+        new_frame_list: &Option<OneOrMany<FrameId>>,
+        old_frame: FrameId,
+        default_frame: FrameId,
+    ) -> FrameId {
+        // If no old frame list specified, just use the default or specified frame
+        let Some(old_list) = old_frame_list else {
+            return new_frame_list
+                .as_ref()
+                .and_then(|list| match list {
+                    OneOrMany::Single(f) => Some(*f),
+                    OneOrMany::Many(v) => v.first().copied(),
+                })
+                .unwrap_or(default_frame);
+        };
+
+        // Check if old frame is in the list and find its position
+        let position = match old_list {
+            OneOrMany::Single(f) => {
+                if old_frame == *f {
+                    Some(0)
+                } else {
+                    None
+                }
+            },
+            OneOrMany::Many(frames) => {
+                frames.iter().position(|&f| f == old_frame)
+            },
+        };
+
+        // If old frame not in list, return default
+        let Some(pos) = position else {
+            return default_frame;
+        };
+
+        // Map to new frame based on the new frame list
+        match new_frame_list {
+            None => {
+                // No new list: preserve the old frame
+                old_frame
+            },
+            Some(OneOrMany::Single(f)) => {
+                // Single value: all old frames map to this one
+                *f
+            },
+            Some(OneOrMany::Many(new_frames)) => {
+                if new_frames.is_empty() {
+                    // Empty list: preserve the old frame
+                    old_frame
+                } else if pos < new_frames.len() {
+                    // Direct mapping
+                    new_frames[pos]
+                } else {
+                    // Beyond new list length: preserve old frame
+                    old_frame
+                }
+            },
         }
     }
 
@@ -191,10 +250,9 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
                         }
                     },
                     OneOrMany::Many(f) => {
-                        for f in f.iter() {
-                            if oldanim_index != *f {
-                                return Err(ScriptUpdateResult::NormalRun);
-                            }
+                        // Check if oldanim_index matches ANY frame in the list
+                        if !f.iter().any(|frame| oldanim_index == *frame) {
+                            return Err(ScriptUpdateResult::NormalRun);
                         }
                     },
                 }
@@ -207,17 +265,24 @@ impl ScriptActionParams for SpriteAnimationScriptParams {
                         }
                     },
                     OneOrMany::Many(f) => {
-                        for f in f.iter() {
-                            if oldanim_index == *f {
-                                return Err(ScriptUpdateResult::NormalRun);
-                            }
+                        // Check if oldanim_index matches ANY frame in the list (to exclude it)
+                        if f.iter().any(|frame| oldanim_index == *frame) {
+                            return Err(ScriptUpdateResult::NormalRun);
                         }
                     },
                 }
             }
         }
-        let current_index =
-            FrameId::from_sprite_index(q_self.get(entity).unwrap().0.texture_atlas.as_ref().unwrap().index);
+        let current_index = FrameId::from_sprite_index(
+            q_self
+                .get(entity)
+                .unwrap()
+                .0
+                .texture_atlas
+                .as_ref()
+                .unwrap()
+                .index,
+        );
         if let Some(lt) = &self.if_frame_lt {
             if current_index
                 >= tracker.resolve_frame(self.frame_bookmark.as_ref(), lt)
@@ -335,9 +400,32 @@ impl ScriptAction for SpriteAnimationScriptAction {
                         .as_ref()
                         .or(actionparams.frame_bookmark.as_ref()),
                 );
-                tracker.set_next_frame(
-                    frame_index.unwrap_or_default() + bm_offset,
-                );
+
+                // Determine the frame to set based on mapping or direct specification
+                let target_frame =
+                    if let Some(old_frame) = tracker.carryover.frame {
+                        // Use frame mapping if we have an old frame and mapping lists
+                        let default_frame = match frame_index {
+                            Some(OneOrMany::Single(f)) => *f,
+                            Some(OneOrMany::Many(v)) if !v.is_empty() => v[0],
+                            _ => FrameId::default(),
+                        };
+                        tracker.map_frame_index(
+                            &actionparams.if_oldanim_frame_was,
+                            frame_index,
+                            old_frame,
+                            default_frame,
+                        )
+                    } else {
+                        // No old frame context, use the first value from the list
+                        match frame_index {
+                            Some(OneOrMany::Single(f)) => *f,
+                            Some(OneOrMany::Many(v)) if !v.is_empty() => v[0],
+                            _ => FrameId::default(),
+                        }
+                    };
+
+                tracker.set_next_frame(target_frame + bm_offset);
                 ScriptUpdateResult::NormalRun
             },
             SpriteAnimationScriptAction::SetFrameNow {
@@ -349,7 +437,32 @@ impl ScriptAction for SpriteAnimationScriptAction {
                         .as_ref()
                         .or(actionparams.frame_bookmark.as_ref()),
                 );
-                let index = frame_index.unwrap_or_default() + bm_offset;
+
+                // Determine the frame to set based on mapping or direct specification
+                let target_frame =
+                    if let Some(old_frame) = tracker.carryover.frame {
+                        // Use frame mapping if we have an old frame and mapping lists
+                        let default_frame = match frame_index {
+                            Some(OneOrMany::Single(f)) => *f,
+                            Some(OneOrMany::Many(v)) if !v.is_empty() => v[0],
+                            _ => FrameId::default(),
+                        };
+                        tracker.map_frame_index(
+                            &actionparams.if_oldanim_frame_was,
+                            frame_index,
+                            old_frame,
+                            default_frame,
+                        )
+                    } else {
+                        // No old frame context, use the first value from the list
+                        match frame_index {
+                            Some(OneOrMany::Single(f)) => *f,
+                            Some(OneOrMany::Many(v)) if !v.is_empty() => v[0],
+                            _ => FrameId::default(),
+                        }
+                    };
+
+                let index = target_frame + bm_offset;
                 atlas.index = index.as_sprite_index();
                 tracker.set_auto_next_frame(index);
                 if tracker.ticks_remain == 0 {
@@ -516,10 +629,11 @@ impl ScriptTracker for SpriteAnimationTracker {
         (q,): &mut <Self::CarryoverParam as SystemParam>::Item<'_, '_>,
     ) -> Self::Carryover {
         SpriteAnimationCarryover {
-            frame: q
-                .get(entity)
-                .ok()
-                .map(|s| FrameId::from_sprite_index(s.texture_atlas.as_ref().unwrap().index)),
+            frame: q.get(entity).ok().map(|s| {
+                FrameId::from_sprite_index(
+                    s.texture_atlas.as_ref().unwrap().index,
+                )
+            }),
         }
     }
 
@@ -628,9 +742,7 @@ impl ScriptAsset for SpriteAnimation {
     type Action = ExtendedScriptAction<SpriteAnimationScriptAction>;
     type ActionParams = ExtendedScriptParams<SpriteAnimationScriptParams>;
     type BuildParam = (
-        SQuery<(
-            &'static mut Sprite,
-        )>,
+        SQuery<(&'static mut Sprite,)>,
         SRes<PreloadedAssets>,
     );
     type RunIf = ExtendedScriptRunIf<SpriteAnimationScriptRunIf>;
@@ -688,11 +800,15 @@ impl ScriptAsset for SpriteAnimation {
 
 /// Detect when a `SpriteAnimation` wraps from a later frame back to an earlier one.
 fn detect_animation_loop(
-    mut query: Query<(Entity, &Sprite, Option<&mut PrevFrame>), With<ScriptPlayer<SpriteAnimation>>>,
+    mut query: Query<
+        (Entity, &Sprite, Option<&mut PrevFrame>),
+        With<ScriptPlayer<SpriteAnimation>>,
+    >,
     mut commands: Commands,
 ) {
     for (entity, sprite, prev_opt) in query.iter_mut() {
-        let current_idx = sprite.texture_atlas.as_ref().map(|t| t.index).unwrap_or(0) as u32;
+        let current_idx =
+            sprite.texture_atlas.as_ref().map(|t| t.index).unwrap_or(0) as u32;
 
         let mut prev_idx = match prev_opt {
             Some(mut prev) => {
@@ -704,7 +820,7 @@ fn detect_animation_loop(
                 // First time – insert tracker component
                 commands.entity(entity).insert(PrevFrame(current_idx));
                 current_idx
-            }
+            },
         };
 
         // Loop detected if current index is less than previous index.

@@ -1,9 +1,9 @@
 #![allow(unused_mut)]
 
 pub mod prelude {
+    pub use std::collections::{HashMap, HashSet};
     pub use std::sync::Arc;
     pub use std::time::{Duration, Instant};
-    pub use std::collections::{HashMap, HashSet};
 
     pub use anyhow::{
         anyhow, bail, ensure, Context, Error as AnyError, Result as AnyResult,
@@ -37,6 +37,7 @@ pub mod audio;
 pub mod ballistics_math;
 pub mod condition;
 pub mod data;
+pub mod effects;
 pub mod gent;
 pub mod input;
 pub mod physics;
@@ -54,5 +55,7 @@ impl PluginGroup for EnginePlugins {
             .add(crate::audio::AudioPlugin)
             .add(crate::gent::GentPlugin)
             .add(crate::ai::AiPlugin)
+            .add(crate::effects::SpriteStretchPlugin)
+            .add(crate::effects::GhostingPlugin)
     }
 }

@@ -44,8 +44,8 @@
         path: "animations/player/movement/Roll.png",
     ),
     "anim.player.Roll.atlas": TextureAtlasLayout (
-        tile_size_x: 96,
-        tile_size_y: 96,
+        tile_size_x: 48,
+        tile_size_y: 48,
         rows: 1,
         columns: 4,
     ),
@@ -217,17 +217,17 @@
         rows: 1,
         columns: 6,
     ),
-    "anim.player.SwordDashDownStrike": File (
-        path: "animations/player/sword/DashDownStrike.anim.toml",
+    "anim.player.SwordDashStrike": File (
+        path: "animations/player/sword/DashStrike.anim.toml",
     ),
-    "anim.player.SwordDashDownStrike.image": File (
-        path: "animations/player/sword/DashDownSheet.png",
+    "anim.player.SwordDashStrike.image": File (
+        path: "animations/player/sword/DashStrikeSheet.png",
     ),
-    "anim.player.SwordDashDownStrike.atlas": TextureAtlasLayout (
+    "anim.player.SwordDashStrike.atlas": TextureAtlasLayout (
         tile_size_x: 48,
         tile_size_y: 48,
         rows: 1,
-        columns: 6,
+        columns: 17,
     ),
     "anim.player.HammerDashDown": File (
         path: "animations/player/hammer/DashDown.anim.toml",
@@ -590,10 +590,10 @@
         columns: 5,
     ),
      "anim.spider.Sparks": File (
-        path: "animations/spider/big/tier1/Sparks.anim.toml",
+        path: "animations/player/sparks/Sparks.anim.toml",
     ),
      "anim.spider.Sparks.image": File (
-        path: "animations/spider/big/tier1/Sparks.png",
+        path: "animations/player/sparks/Sparks.png",
     ),
     "anim.spider.Sparks.atlas": TextureAtlasLayout (
         tile_size_x: 36,
@@ -1210,20 +1210,322 @@
     ),
     "anim.ui.passivesbg.atlas": TextureAtlasLayout (
         tile_size_x: 118,
-        tile_size_y: 74,
+        tile_size_y: 118,
         rows: 1,
-        columns: 11, 
+        columns: 12, 
     ),
-    "anim.ui.abilitiesbg": File (
-        path: "animations/ui/AbilitiesBG.anim.toml",
+    "anim.ui.skillsbg": File (
+        path: "animations/ui/SkillsBG.anim.toml",
     ),
-    "anim.ui.abilitiesbg.image": File (
+    "anim.ui.skillsbg.image": File (
         path: "animations/ui/UIbg1.png",
     ),
-    "anim.ui.abilitiesbg.atlas": TextureAtlasLayout (
+    "anim.ui.skillsbg.atlas": TextureAtlasLayout (
         tile_size_x: 118,
-        tile_size_y: 74,
+        tile_size_y: 118,
         rows: 1,
-        columns: 11, 
-    )
+        columns: 12, 
+    ),
+    "anim.ui.skillsbg5slots": File (
+        path: "animations/ui/SkillsBG5Slots.anim.toml",
+    ),
+    "anim.ui.skillsbg5slots.image": File (
+        path: "animations/ui/UIbg5Slots.png",
+    ),
+    "anim.ui.skillsbg5slots.atlas": TextureAtlasLayout (
+        tile_size_x: 118,
+        tile_size_y: 118,
+        rows: 1,
+        columns: 12, 
+    ),
+    "anim.player.BurningDash": File (
+        path: "animations/player/skills/BurningDash.anim.toml",
+    ),
+    "anim.player.BurningDash.image": File (
+        path: "animations/player/skills/BurningDashSheet.png",
+    ),
+    "anim.player.BurningDash.atlas": TextureAtlasLayout (
+        tile_size_x: 84,
+        tile_size_y: 32,
+        rows: 1,
+        columns: 2, 
+    ),
+    "anim.player.ExplodingSparks": File (
+        path: "animations/player/sparks/ExplodingSparks.anim.toml",
+    ),
+    "anim.player.ExplodingSparks.image": File (
+        path: "animations/player/sparks/ExplodingSparksSheet.png",
+    ),
+    "anim.player.ExplodingSparks.atlas": TextureAtlasLayout (
+        tile_size_x: 64,
+        tile_size_y: 64,
+        rows: 1,
+        columns: 6, 
+    ),
+    // Sword Flicker animations
+    "anim.player.SwordFlickerForward": File (
+        path: "animations/player/sword/FlickerForward.anim.toml",
+    ),
+    "anim.player.SwordFlickerForward.image": File (
+        path: "animations/player/sword/FlickerForwardSheet.png",
+    ),
+    "anim.player.SwordFlickerForward.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 7,
+    ),
+    "anim.player.SwordFlickerUpward": File (
+        path: "animations/player/sword/FlickerUpward.anim.toml",
+    ),
+    "anim.player.SwordFlickerUpward.image": File (
+        path: "animations/player/sword/FlickerUpwardSheet.png",
+    ),
+    "anim.player.SwordFlickerUpward.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 7,
+    ),
+    "anim.player.SwordFlickerDownward": File (
+        path: "animations/player/sword/FlickerDownward.anim.toml",
+    ),
+    "anim.player.SwordFlickerDownward.image": File (
+        path: "animations/player/sword/FlickerDownwardSheet.png",
+    ),
+    "anim.player.SwordFlickerDownward.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 7,
+    ),
+    "anim.player.SwordFlickerFrontUpward": File (
+        path: "animations/player/sword/FlickerFrontUpward.anim.toml",
+    ),
+    "anim.player.SwordFlickerFrontUpward.image": File (
+        path: "animations/player/sword/FlickerFrontUpwardSheet.png",
+    ),
+    "anim.player.SwordFlickerFrontUpward.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 7,
+    ),
+    "anim.player.SwordFlickerFrontDownward": File (
+        path: "animations/player/sword/FlickerFrontDownward.anim.toml",
+    ),
+    "anim.player.SwordFlickerFrontDownward.image": File (
+        path: "animations/player/sword/FlickerFrontDownwardSheet.png",
+    ),
+    "anim.player.SwordFlickerFrontDownward.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 7,
+    ),
+    // Hammer Flicker animations
+    "anim.player.HammerFlickerForward": File (
+        path: "animations/player/hammer/FlickerForward.anim.toml",
+    ),
+    "anim.player.HammerFlickerForward.image": File (
+        path: "animations/player/hammer/FlickerForwardSheet.png",
+    ),
+    "anim.player.HammerFlickerForward.atlas": TextureAtlasLayout (
+        tile_size_x: 64,
+        tile_size_y: 64,
+        rows: 1,
+        columns: 9,
+    ),
+    "anim.player.HammerFlickerUpward": File (
+        path: "animations/player/hammer/FlickerUpward.anim.toml",
+    ),
+    "anim.player.HammerFlickerUpward.image": File (
+        path: "animations/player/hammer/FlickerUpwardSheet.png",
+    ),
+    "anim.player.HammerFlickerUpward.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 9,
+    ),
+    "anim.player.HammerFlickerDownward": File (
+        path: "animations/player/hammer/FlickerDownward.anim.toml",
+    ),
+    "anim.player.HammerFlickerDownward.image": File (
+        path: "animations/player/hammer/FlickerDownwardSheet.png",
+    ),
+    "anim.player.HammerFlickerDownward.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 9,
+    ),
+    "anim.player.HammerFlickerFrontUpward": File (
+        path: "animations/player/hammer/FlickerFrontUpward.anim.toml",
+    ),
+    "anim.player.HammerFlickerFrontUpward.image": File (
+        path: "animations/player/hammer/FlickerFrontUpwardSheet.png",
+    ),
+    "anim.player.HammerFlickerFrontUpward.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 9,
+    ),
+    "anim.player.HammerFlickerFrontDownward": File (
+        path: "animations/player/hammer/FlickerFrontDownward.anim.toml",
+    ),
+    "anim.player.HammerFlickerFrontDownward.image": File (
+        path: "animations/player/hammer/FlickerFrontDownwardSheet.png",
+    ),
+    "anim.player.HammerFlickerFrontDownward.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 9,
+    ),
+    "anim.player.AmplifiedBellDeploy": File (
+        path: "animations/player/skills/bell/BellDeploy.anim.toml",
+    ),
+    "anim.player.AmplifiedBellDeploy.image": File (
+        path: "animations/player/skills/bell/BellDeploySheet.png",
+    ),
+    "anim.player.AmplifiedBellDeploy.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 5, 
+    ),
+    "anim.player.AmplifiedBellEnd": File (
+        path: "animations/player/skills/bell/BellEnd.anim.toml",
+    ),
+    "anim.player.AmplifiedBellEnd.image": File (
+        path: "animations/player/skills/bell/BellEndSheet.png",
+    ),
+    "anim.player.AmplifiedBellEnd.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 6, 
+    ),
+    "anim.player.AmplifiedBellRing": File (
+        path: "animations/player/skills/bell/BellRing.anim.toml",
+    ),
+    "anim.player.AmplifiedBellRing.image": File (
+        path: "animations/player/skills/bell/BellRingSheet.png",
+    ),
+    "anim.player.AmplifiedBellRing.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.particles.Soul": File (
+        path: "animations/player/particles/Soul.anim.toml",
+    ),
+    "anim.particles.Soul.image": File (
+        path: "animations/player/particles/SoulSheet.png",
+    ),
+    "anim.particles.Soul.atlas": TextureAtlasLayout (
+        tile_size_x: 1,
+        tile_size_y: 2,
+        rows: 1,
+        columns: 3, 
+    ),
+    "anim.player.KineticOrb": File (
+        path: "animations/player/skills/KineticOrb.anim.toml",
+    ),
+    "anim.player.KineticOrb.image": File (
+        path: "animations/player/skills/KineticOrbSheet.png",
+    ),
+    "anim.player.KineticOrb.atlas": TextureAtlasLayout (
+        tile_size_x: 12,
+        tile_size_y: 12,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.player.Spinner": File (
+        path: "animations/player/skills/Spinner.anim.toml",
+    ),
+    "anim.player.Spinner.image": File (
+        path: "animations/player/skills/SpinnerSheet.png",
+    ),
+    "anim.player.Spinner.atlas": TextureAtlasLayout (
+        tile_size_x: 24,
+        tile_size_y: 24,
+        rows: 1,
+        columns: 20, 
+    ),
+    "anim.player.Death": File (
+        path: "animations/player/movement/Death.anim.toml",
+    ),
+    "anim.player.Death.image": File (
+        path: "animations/player/movement/DeathSheet.png",
+    ),
+    "anim.player.Death.atlas": TextureAtlasLayout (
+        tile_size_x: 48,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 7, 
+    ),
+    "anim.player.MineDeploy": File (
+        path: "animations/player/skills/MineDeploy.anim.toml",
+    ),
+    "anim.player.MineDeploy.image": File (
+        path: "animations/player/skills/MineDeploySheet.png",
+    ),
+    "anim.player.MineDeploy.atlas": TextureAtlasLayout (
+        tile_size_x: 8,
+        tile_size_y: 48,
+        rows: 1,
+        columns: 3, 
+    ),
+    "anim.player.MineExplosion": File (
+        path: "animations/player/skills/MineExplosion.anim.toml",
+    ),
+    "anim.player.MineExplosion.image": File (
+        path: "animations/player/skills/MineExplosionSheet.png",
+    ),
+    "anim.player.MineExplosion.atlas": TextureAtlasLayout (
+        tile_size_x: 66,
+        tile_size_y: 66,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.player.IceNova": File (
+        path: "animations/player/skills/IceNova.anim.toml",
+    ),
+    "anim.player.IceNova.image": File (
+        path: "animations/player/skills/IceNovaSheet.png",
+    ),
+    "anim.player.IceNova.atlas": TextureAtlasLayout (
+        tile_size_x: 96,
+        tile_size_y: 96,
+        rows: 1,
+        columns: 4, 
+    ),
+    "anim.player.IceBoulderBig": File (
+        path: "animations/player/skills/IceBoulderBig.anim.toml",
+    ),
+    "anim.player.IceBoulderBig.image": File (
+        path: "animations/player/skills/IceBoulderSheet.png",
+    ),
+    "anim.player.IceBoulderBig.atlas": TextureAtlasLayout (
+        tile_size_x: 43,
+        tile_size_y: 26,
+        rows: 1,
+        columns: 2, 
+    ),
+    "anim.player.IceBoulderSmall": File (
+        path: "animations/player/skills/IceBoulderSmall.anim.toml",
+    ),
+    "anim.player.IceBoulderSmall.image": File (
+        path: "animations/player/skills/IceBoulderSheet.png",
+    ),
+    "anim.player.IceBoulderSmall.atlas": TextureAtlasLayout (
+        tile_size_x: 43,
+        tile_size_y: 26,
+        rows: 1,
+        columns: 2, 
+    ),
 })

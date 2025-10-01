@@ -69,12 +69,8 @@ impl From<Color> for ColorRepr {
 impl From<ColorRepr> for Color {
     fn from(value: ColorRepr) -> Self {
         match value {
-            ColorRepr::Lcha([l, c, h, a]) => {
-                Color::lcha(l, c, h, a)
-            },
-            ColorRepr::Lch([l, c, h]) => {
-                Color::lch(l, c, h)
-            },
+            ColorRepr::Lcha([l, c, h, a]) => Color::lcha(l, c, h, a),
+            ColorRepr::Lch([l, c, h]) => Color::lch(l, c, h),
             ColorRepr::RGBHex(color) => color,
         }
     }

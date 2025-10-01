@@ -1,0 +1,46 @@
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 20
+frame_start = 1
+
+# SLOT SWITCHES
+[[script]]
+run_on_slot_enable = "Idle"
+action = "SetFrameNow"
+frame_index = 4
+
+[[script]]
+run_on_slot_enable = "Left"
+action = "SetFrameNow"
+frame_index = 8
+
+[[script]]
+run_on_slot_enable = "Right"
+action = "SetFrameNow"
+frame_index = 12
+
+[[script]]
+run_on_slot_enable = "Outro"
+action = "SetFrameNow"
+frame_index = 16
+
+# LOOP IDLE (NO MOVEMENT)
+[[script]]
+run_at_frame = 7
+action = "SetFrameNext"
+frame_index = 4
+
+# LOOP LEFTWARD MOVEMENT
+[[script]]
+run_at_frame = 11
+action = "SetFrameNext"
+frame_index = 8
+
+# LOOP RIGHTWARD MOVEMENT
+[[script]]
+run_at_frame = 15
+action = "SetFrameNext"
+frame_index = 12

@@ -1,0 +1,52 @@
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 17
+frame_start = 1
+
+# LOOP STRAIGHT DASH
+[[script]]
+run_at_frame = 1
+action = "SetFrameNext"
+frame_index = 1
+
+# LOOP UP DASH
+[[script]]
+run_at_frame = 10
+action = "SetFrameNext"
+frame_index = 8
+
+# LOOP DOWN DASH
+[[script]]
+run_at_frame = 15
+action = "SetFrameNext"
+frame_index = 13
+
+# Variant selection via slots
+[[script]]
+run_on_slot_enable = "DashStrikeVariantUp"
+action = "SetFrameNext"
+frame_index = 8
+
+[[script]]
+run_on_slot_enable = "DashStrikeVariantDown"
+action = "SetFrameNext"
+frame_index = 13
+
+# Impact/outro switches via slots
+[[script]]
+run_on_slot_enable = "DashStrikeImpactStraight"
+action = "SetFrameNow"
+frame_index = 2
+
+[[script]]
+run_on_slot_enable = "DashStrikeImpactUp"
+action = "SetFrameNow"
+frame_index = 11
+
+[[script]]
+run_on_slot_enable = "DashStrikeImpactDown"
+action = "SetFrameNow"
+frame_index = 16

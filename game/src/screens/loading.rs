@@ -14,8 +14,7 @@ impl<S: States> Plugin for LoadscreenPlugin<S> {
         );
         app.add_systems(
             Last,
-            update_loading_pct
-                .run_if(in_state(self.state.clone())),
+            update_loading_pct.run_if(in_state(self.state.clone())),
         );
     }
 }

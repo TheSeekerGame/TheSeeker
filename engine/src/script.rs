@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::marker::PhantomData;
 
 use bevy::asset::Asset;
@@ -17,7 +18,7 @@ impl Plugin for ScriptPlugin {
         app.configure_sets(
             GameTickUpdate,
             (
-                ScriptSet::Init,//.after(AssetsSet::ResolveKeys),
+                ScriptSet::Init, //.after(AssetsSet::ResolveKeys),
                 ScriptSet::Run.after(ScriptSet::Init),
             ),
         );
@@ -418,11 +419,9 @@ fn script_changeover_system<T: ScriptAsset>(
             ScriptPlayerState::ChangingHandle {
                 handle,
                 old_runtime,
-            } => {
-                ScriptPlayerState::PrePlayHandle {
-                    handle,
-                    old_runtime: Some(old_runtime),
-                }
+            } => ScriptPlayerState::PrePlayHandle {
+                handle,
+                old_runtime: Some(old_runtime),
             },
             ScriptPlayerState::ChangingKey { key, old_runtime } => {
                 ScriptPlayerState::PrePlayKey {
@@ -615,12 +614,11 @@ fn script_init_system<T: ScriptAsset>(
                 old_runtime.as_ref().and_then(|rt| rt.key.clone());
             metadata.runcount =
                 if let Some(count) = runcounts.counts.get_mut(&handle.id()) {
-                    let r = *count;
                     *count += 1;
-                    r
+                    *count
                 } else {
                     runcounts.counts.insert(handle.id(), 1);
-                    0
+                    1
                 };
             let settings = script.into_settings();
             let builder = {
@@ -646,6 +644,13 @@ fn script_init_system<T: ScriptAsset>(
             for slot in slots.iter() {
                 runtime.tracker.set_slot(timing, slot, true);
             }
+            // apply any slots that were set before a runtime existed
+            if !player.pending_slots.is_empty() {
+                for (slot, enabled) in std::mem::take(&mut player.pending_slots)
+                {
+                    runtime.tracker.set_slot(timing, &slot, enabled);
+                }
+            }
             player.state = ScriptPlayerState::Starting { runtime };
         }
     }
@@ -654,6 +659,8 @@ fn script_init_system<T: ScriptAsset>(
 #[derive(Component)]
 pub struct ScriptPlayer<T: ScriptAsset> {
     state: ScriptPlayerState<T>,
+    // Slots set before a runtime exists; applied when runtime starts
+    pending_slots: HashMap<String, bool>,
 }
 
 enum ScriptPlayerState<T: ScriptAsset> {
@@ -689,6 +696,7 @@ impl<T: ScriptAsset> Default for ScriptPlayer<T> {
     fn default() -> Self {
         Self {
             state: ScriptPlayerState::Stopped,
+            pending_slots: HashMap::new(),
         }
     }
 }
@@ -697,6 +705,7 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
     pub fn new() -> Self {
         Self {
             state: ScriptPlayerState::Stopped,
+            pending_slots: HashMap::new(),
         }
     }
 
@@ -732,11 +741,9 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
                     old_runtime: runtime,
                 }
             },
-            _ => {
-                ScriptPlayerState::PrePlayHandle {
-                    handle: script,
-                    old_runtime: None,
-                }
+            _ => ScriptPlayerState::PrePlayHandle {
+                handle: script,
+                old_runtime: None,
             },
         };
     }
@@ -765,11 +772,9 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
                     old_runtime: runtime,
                 }
             },
-            _ => {
-                ScriptPlayerState::PrePlayKey {
-                    key: key.into(),
-                    old_runtime: None,
-                }
+            _ => ScriptPlayerState::PrePlayKey {
+                key: key.into(),
+                old_runtime: None,
             },
         };
     }
@@ -814,7 +819,9 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
             | ScriptPlayerState::ChangingKey { old_runtime, .. } => {
                 old_runtime.tracker.clear_slots(timing);
             },
-            _ => {},
+            _ => {
+                self.pending_slots.clear();
+            },
         }
     }
 
@@ -840,8 +847,19 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
             | ScriptPlayerState::ChangingKey { old_runtime, .. } => {
                 old_runtime.tracker.set_slot(timing, slot, state);
             },
-            _ => {},
+            _ => {
+                // No runtime yet; remember desired slot state to apply on init
+                self.pending_slots.insert(slot.to_string(), state);
+            },
         }
+    }
+
+    pub fn enable_slot(&mut self, slot: &str) {
+        self.set_slot(slot, true);
+    }
+
+    pub fn disable_slot(&mut self, slot: &str) {
+        self.set_slot(slot, false);
     }
 
     pub fn has_slot(&self, slot: &str) -> bool {
@@ -869,7 +887,7 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
             ScriptPlayerState::ChangingKey { old_runtime, .. } => {
                 old_runtime.tracker.has_slot(slot)
             },
-            _ => false,
+            _ => self.pending_slots.get(slot).copied().unwrap_or(false),
         }
     }
 
@@ -931,9 +949,7 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
             // Key stored inside the runtime
             ScriptPlayerState::Starting { runtime }
             | ScriptPlayerState::Playing { runtime }
-            | ScriptPlayerState::Stopping { runtime } => {
-                runtime.key.as_deref()
-            },
+            | ScriptPlayerState::Stopping { runtime } => runtime.key.as_deref(),
         }
     }
 }

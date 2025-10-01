@@ -1,0 +1,20 @@
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 6
+frame_start = 1
+
+# VARIANT 1 INIT
+[[script]]
+run_on_playback_control = "Start"
+action = "SetFrameNow"
+frame_index = 1
+
+# VARIANT 2 INIT
+[[script]]
+run_on_playback_control = "Start"
+if_runcount_quant = "2"
+action = "SetFrameNow"
+frame_index = 4

@@ -3,7 +3,7 @@ use leafwing_input_manager::prelude::ActionState;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::{Gent, TransformGfxFromGent};
 use theseeker_engine::physics::{
-    CollisionGroups as InteractionGroups, ColliderShapeAccess, PhysicsWorld, 
+    ColliderShapeAccess, CollisionGroups as InteractionGroups, PhysicsWorld,
     PLAYER, SENSOR,
 };
 use theseeker_engine::script::ScriptPlayer;
@@ -52,10 +52,11 @@ impl Plugin for MerchantPlugin {
                     player_in_merchant_range
                         .after(player_enters_merchant_range)
                         .run_if(
-                            any_with_component::<MerchantInPlayerRange>
-                                .and(not(any_with_component::<
+                            any_with_component::<MerchantInPlayerRange>.and(
+                                not(any_with_component::<
                                     MerchantNonInteractable,
-                                >)),
+                                >),
+                            ),
                         ),
                     player_leaves_merchant_range.run_if(
                         |removed: RemovedComponents<MerchantInPlayerRange>| {
@@ -77,12 +78,8 @@ impl Plugin for MerchantPlugin {
                     handle_finished_dialogue_stage.before(advance_dialog),
                     advance_dialog.after(spawn_merchant_dialog_text).run_if(
                         any_with_component::<MerchantDialogueBox>
-                            .and(
-                                any_with_component::<MerchantDialogueText>,
-                            )
-                            .and(
-                                any_with_component::<MerchantInPlayerRange>,
-                            ),
+                            .and(any_with_component::<MerchantDialogueText>)
+                            .and(any_with_component::<MerchantInPlayerRange>),
                     ),
                 )
                     .after(player_in_merchant_range)
@@ -106,6 +103,7 @@ pub struct MerchantBlueprintBundle {
 
 #[derive(Component)]
 pub struct MerchantGfx {
+    #[allow(dead_code)] // Marker field for symmetry with other Gfx types
     pub e_gent: Entity,
 }
 
@@ -195,7 +193,8 @@ pub fn setup_merchant(
                     e_gfx,
                     e_effects_gfx,
                 },
-                Collider::cuboid(40.0, 40.0), // Sensor zone for player interaction (half-extents: 40x40)
+                // Player interaction sensor zone (half-extents: 40x40)
+                Collider::cuboid(40.0, 40.0),
                 InteractionGroups::new(SENSOR, PLAYER),
                 StateDespawnMarker,
             ))
@@ -244,11 +243,13 @@ fn merchant_proximity_to_player(
     >,
     spatial_query: PhysicsWorld,
 ) {
-    let Ok((entity, gent, transform, collider, maybe_groups)) = merchant_query.single()
+    let Ok((entity, gent, transform, collider, maybe_groups)) =
+        merchant_query.single()
     else {
         return;
     };
-    let collision_groups = maybe_groups.copied()
+    let collision_groups = maybe_groups
+        .copied()
         .unwrap_or_else(|| InteractionGroups::new(SENSOR, PLAYER));
     let intersections = spatial_query.intersect(
         transform.translation().xy(),
@@ -501,7 +502,8 @@ impl DialogueAssetHandles {
     }
 }
 
-// TODO: Try again with animation files instead of loading assets here.
+// Note: These dialogue images are loaded directly. If replaced with animation assets,
+// update this loader to use animation keys instead.
 pub fn load_assets(assets: Res<AssetServer>, mut commands: Commands) {
     let asset_mappings: Vec<(u8, &str)> = vec![
         (0, "animations/dialogue/000_1f.png"),

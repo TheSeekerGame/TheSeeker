@@ -15,6 +15,9 @@
     "ui.game.toolbar_frame": File (
         path: "ui/game/ToolbarFrame.png"
     ),
+    "ui.game.toolbar_frame_5slots": File (
+        path: "ui/game/ToolbarFrame5Slots.png"
+    ),
     "ui.game.attack_skill_icon": File (
         path: "ui/game/AttackSkillIcon.png"
     ),
@@ -26,5 +29,26 @@
     ),
     "ui.game.stealth_skill_icon": File (
         path: "ui/game/StealthSkillIcon.png"
+    ),
+    "ui.game.burning_dash_skill_icon": File (
+        path: "ui/game/BurningDashSkillIcon.png"
+    ),
+    "ui.game.flicker_strike_skill_icon": File (
+        path: "ui/game/FlickerStrikeSkillIcon.png"
+    ),
+    "ui.game.amplified_bell_skill_icon": File (
+        path: "ui/game/AmplifiedBellSkillIcon.png"
+    ),
+    "ui.game.spinner_skill_icon": File (
+        path: "ui/game/SpinnerSkillIcon.png"
+    ),
+    "ui.game.mine_skill_icon": File (
+        path: "ui/game/MineSkillIcon.png"
+    ),
+    "ui.game.dash_strike_skill_icon": File (
+        path: "ui/game/DashStrike.png"
+    ),
+    "ui.game.ice_nova_skill_icon": File (
+        path: "ui/game/IceNovaSkillIcon.png"
     ),
 })

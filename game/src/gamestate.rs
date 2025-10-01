@@ -5,6 +5,14 @@ pub struct GameStatePlugin;
 impl Plugin for GameStatePlugin {
     fn build(&self, app: &mut App) {
         app.init_state::<GameState>();
+        // Wire pause/unpause on P key in the standard Bevy Update schedule
+        app.add_systems(
+            Update,
+            (
+                pause.run_if(in_state(GameState::Playing)),
+                unpause.run_if(in_state(GameState::Paused)),
+            ),
+        );
     }
 }
 

@@ -1,56 +1,73 @@
 //! Core AI brain system that evaluates FSM rules.
-//! 
+//!
 //! ## Evaluation Order (per enemy per tick)
-//! 
+//!
 //! 1. Decrement cooldowns
 //! 2. Clear previous actions  
 //! 3. Evaluate transition rules (logic track, then movement)
-//! 4. Process state actions (on_enter if new state, plus tick actions)
+//! 4. Process state actions (on_enter if new state + tick actions, including delayed variants)
 //! 5. Increment timers AFTER processing (ensures frame-0 timing)
-//! 
+//!
 //! ## Timing Counters
-//! 
+//!
 //! - **timers[track]**: Ticks in current state (resets on transition)
-//! - **anim_tick**: Ticks in animation loop (resets via AnimLoop sensor)  
-//! - **state_tick**: Ticks since state OR animation change (for patrol phases)
+//! - **anim_tick**: Ticks since the current animation loop started (resets via AnimLoop sensor)  
+//! - **state_tick**: Ticks since state change or last animation change (used by `at_state_tick`)
 
+use super::brain::{
+    CompiledAction, CompiledCondition, CompiledFsm, CompiledRule,
+};
 use bevy::prelude::*;
-use super::brain::{CompiledFsm, CompiledRule, CompiledAction, CompiledCondition};
 
 // Import the components from the ai module
-use crate::ai::{FsmInstance, TargetSensor, GroundSensor, RangeSensor};
+use crate::ai::{
+    FsmInstance, PerceivedGroundSensor, PerceivedRangeSensor,
+    PerceivedTargetSensor,
+};
 
 /// Core AI brain system - evaluates FSM rules and queues actions
 pub fn ai_brain_system(
     mut query: Query<(
         Entity,
         &mut FsmInstance,
-        &TargetSensor,
-        &GroundSensor,
-        &RangeSensor,
+        &PerceivedTargetSensor,
+        &PerceivedGroundSensor,
+        &PerceivedRangeSensor,
         &crate::ai::components::HealthSensor,
     )>,
     compiled_assets: Res<Assets<CompiledFsm>>,
 ) {
-    for (entity, mut fsm, target_sensor, ground_sensor, range_sensor, health_sensor) in query.iter_mut() {
+    for (
+        entity,
+        mut fsm,
+        target_sensor,
+        ground_sensor,
+        range_sensor,
+        health_sensor,
+    ) in query.iter_mut()
+    {
         // decrement cooldown timers each tick
-        for c in &mut fsm.cooldowns { *c = c.saturating_sub(1); }
-        
+        for c in &mut fsm.cooldowns {
+            *c = c.saturating_sub(1);
+        }
+
         // Get the compiled FSM data
-        let Some(compiled) = compiled_assets.get(&fsm.brain) else { 
-            warn!("Entity {:?}: No compiled FSM found for handle {:?}", entity, fsm.brain);
-            continue; 
+        let Some(compiled) = compiled_assets.get(&fsm.brain) else {
+            warn!(
+                "Entity {:?}: No compiled FSM found for handle {:?}",
+                entity, fsm.brain
+            );
+            continue;
         };
-        
+
         // Clear previous frame's actions
         fsm.actions.clear();
-        
-        // NOTE: Do NOT advance timers here – they are incremented **after** rule evaluation
-        // and state-action processing to guarantee that `TimerGt(0)` is false on a freshly
-        // entered state
+
+        // Do not advance timers here – they are incremented after rule evaluation and
+        // action processing so `TimerGt(0)` is false immediately after entering a state.
 
         let prev_states = [fsm.logic, fsm.movement];
-        
+
         // Evaluate LOGIC track first, capture whether a *terminal* rule fired.
         let logic_terminal = evaluate_track_rules(
             &compiled.inner.logic_rules,
@@ -76,26 +93,37 @@ pub fn ai_brain_system(
                 false,
             );
         }
-        
-        // Reset state_tick if either state changed
+
+        // Reset `state_tick` if either track changed state
         if fsm.logic != prev_states[0] || fsm.movement != prev_states[1] {
             fsm.state_tick = 0;
         }
-        
+
         // Process state actions for both tracks (logic first, then movement)
         let anim_tick = fsm.anim_tick;
         let state_tick = fsm.state_tick;
 
         let tracks_data = [
-            (fsm.logic, prev_states[0], &compiled.inner.logic_state_actions),
-            (fsm.movement, prev_states[1], &compiled.inner.movement_state_actions),
+            (
+                fsm.logic,
+                prev_states[0],
+                &compiled.inner.logic_state_actions,
+            ),
+            (
+                fsm.movement,
+                prev_states[1],
+                &compiled.inner.movement_state_actions,
+            ),
         ];
 
         for (current_state, prev_state, all_actions) in tracks_data {
-            if let Some(actions_for_state) = all_actions.get(current_state as usize) {
+            if let Some(actions_for_state) =
+                all_actions.get(current_state as usize)
+            {
                 // Queue on_enter actions if the state just changed.
                 if current_state != prev_state {
-                    fsm.actions.extend(actions_for_state.on_enter.iter().cloned());
+                    fsm.actions
+                        .extend(actions_for_state.on_enter.iter().cloned());
                 }
 
                 // Always queue tick actions (handles delayed variants inside helper).
@@ -107,13 +135,12 @@ pub fn ai_brain_system(
                 );
             }
         }
-        
+
         // Increment tick counters AFTER processing actions
         fsm.anim_tick = fsm.anim_tick.saturating_add(1);
         fsm.state_tick = fsm.state_tick.saturating_add(1);
 
-        // Finally advance per-track timers. These were deliberately left untouched until now
-        // so that rules evaluated above saw the value **before** the increment.
+        // Finally advance per-track timers; rules above saw their previous values.
         fsm.timers[0] = fsm.timers[0].saturating_add(1);
         fsm.timers[1] = fsm.timers[1].saturating_add(1);
     }
@@ -148,9 +175,9 @@ fn evaluate_track_rules(
     rules: &[CompiledRule],
     current_state: u16,
     fsm: &mut FsmInstance,
-    target_sensor: &TargetSensor,
-    ground_sensor: &GroundSensor,
-    range_sensor: &RangeSensor,
+    target_sensor: &PerceivedTargetSensor,
+    ground_sensor: &PerceivedGroundSensor,
+    range_sensor: &PerceivedRangeSensor,
     health_sensor: &crate::ai::components::HealthSensor,
     is_logic_track: bool,
 ) -> bool {
@@ -161,7 +188,15 @@ fn evaluate_track_rules(
         }
 
         let conditions_met = rule.conditions.iter().all(|cond| {
-            evaluate_condition(cond, fsm, target_sensor, ground_sensor, range_sensor, health_sensor, is_logic_track)
+            evaluate_condition(
+                cond,
+                fsm,
+                target_sensor,
+                ground_sensor,
+                range_sensor,
+                health_sensor,
+                is_logic_track,
+            )
         });
 
         if !conditions_met {
@@ -194,20 +229,20 @@ fn evaluate_track_rules(
 fn evaluate_condition(
     condition: &CompiledCondition,
     fsm: &mut FsmInstance,
-    target_sensor: &TargetSensor,
-    ground_sensor: &GroundSensor,
-    _range_sensor: &RangeSensor,
+    target_sensor: &PerceivedTargetSensor,
+    ground_sensor: &PerceivedGroundSensor,
+    _range_sensor: &PerceivedRangeSensor,
     health_sensor: &crate::ai::components::HealthSensor,
     is_logic_track: bool,
 ) -> bool {
     match condition {
         CompiledCondition::Always => true,
-        
+
         CompiledCondition::DistanceLt(distance) => {
             let distance_sq = distance * distance;
             target_sensor.entity.is_some() && target_sensor.dist2 < distance_sq
         },
-        
+
         CompiledCondition::DistanceGt(distance) => {
             let distance_sq = distance * distance;
             // Missing target = infinite distance (enables clean Patrol transition)
@@ -216,34 +251,33 @@ fn evaluate_condition(
                 Some(_) => target_sensor.dist2 > distance_sq,
             }
         },
-        
+
         CompiledCondition::TimerGt(ticks) => {
             let timer_index = if is_logic_track { 0 } else { 1 };
             fsm.timers[timer_index] > *ticks
         },
-        
+
         CompiledCondition::IsGrounded(expected) => {
             ground_sensor.on == *expected
         },
-        
-        CompiledCondition::HealthZero => {
-            health_sensor.zero
-        },
-        
+
+        CompiledCondition::HealthZero => health_sensor.zero,
+
         CompiledCondition::RngChance(p) => {
             let rnd = (fsm.rng_state >> 24) as u8;
             // Advance LCG (parameters as per Numerical Recipes)
-            fsm.rng_state = fsm.rng_state.wrapping_mul(1664525).wrapping_add(1013904223);
+            fsm.rng_state =
+                fsm.rng_state.wrapping_mul(1664525).wrapping_add(1013904223);
             rnd < *p
         },
-        
+
         CompiledCondition::Slot { id, expected } => {
             let on = ((fsm.slot_bits >> id) & 1) == 1;
             on == *expected
         },
-        
+
         CompiledCondition::CooldownReady(id) => {
             fsm.cooldowns.get(*id as usize).copied().unwrap_or(0) == 0
         },
     }
-} 
+}

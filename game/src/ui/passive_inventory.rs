@@ -1,26 +1,29 @@
+use bevy::ecs::hierarchy::ChildOf;
 use bevy::prelude::*;
+use bevy::render::camera::Projection;
 use leafwing_input_manager::prelude::*;
 use theseeker_engine::animation::SpriteAnimationBundle;
 
 use crate::{
-    game::{
-        player::{Passive, Passives, Player, PlayerAction},
-        pickups::PickupAssetHandles,
-    },
+    camera::MainCamera,
+    game::player::{Passive, Passives, Player, PlayerAction},
     prelude::*,
 };
 
 const WINDOW_WIDTH: f32 = 118.0;
-const WINDOW_HEIGHT: f32 = 74.0;
+// Height accommodates an extra bottom row of 7 slots
+const WINDOW_HEIGHT: f32 = 90.0;
 const SLOT_SIZE: f32 = 12.0;
 const ICON_SIZE: f32 = 12.0;
+const VIEWPORT_MARGIN: f32 = 10.0;
 
 const TOP_ROW_Y: f32 = 26.0;
 const TOP_ROW_SLOTS: usize = 4;
 const TOP_ROW_START_X: f32 = -24.0;
 const TOP_ROW_GAP: f32 = 4.0;
 
-const BOTTOM_ROWS: usize = 3;
+// Inventory grid rows
+const BOTTOM_ROWS: usize = 4;
 const BOTTOM_ROW_SLOTS: usize = 7;
 const BOTTOM_ROW_START_X: f32 = -48.0;
 const BOTTOM_ROW_START_Y: f32 = 6.0;
@@ -38,7 +41,14 @@ impl Plugin for PassiveInventoryPlugin {
                 update_passive_slots,
                 handle_slot_clicks,
                 handle_slot_hover,
+                fix_visibility_hierarchy,
             )
+                .run_if(in_state(crate::GameState::Playing)),
+        );
+        app.add_systems(
+            GameTickUpdate,
+            reposition_passive_inventory_window
+                .after(crate::camera::update_camera)
                 .run_if(in_state(crate::GameState::Playing)),
         );
     }
@@ -46,6 +56,9 @@ impl Plugin for PassiveInventoryPlugin {
 
 #[derive(Component)]
 pub struct PassiveInventoryWindow;
+
+#[derive(Component)]
+pub struct PassiveInventoryUiRoot;
 
 #[derive(Component)]
 pub struct PassiveSlot {
@@ -56,11 +69,13 @@ pub struct PassiveSlot {
 
 #[derive(Component)]
 pub struct PassiveIcon {
-    passive: Passive,
+    // Used by click/hover handlers
+    pub(crate) passive: Passive,
 }
 
 #[derive(Component)]
 pub struct PassiveHoverPopup {
+    #[allow(dead_code)] // Used for marker/type safety; actual passive data retrieved from icon
     passive: Passive,
 }
 
@@ -70,16 +85,15 @@ pub enum SlotType {
     Inventory,
 }
 
-#[derive(Event)]
-pub struct ToggleInventoryEvent;
+// Removed: no longer used
 
 fn toggle_inventory_window(
     mut commands: Commands,
     input_query: Query<&ActionState<PlayerAction>, With<Player>>,
     window_query: Query<Entity, With<PassiveInventoryWindow>>,
-    _pickup_assets: Res<PickupAssetHandles>,
-    camera_query: Query<&GlobalTransform, With<Camera2d>>,
-    mut passives_query: Query<&mut Passives, With<Player>>,
+    ui_root_query: Query<Entity, With<PassiveInventoryUiRoot>>,
+    camera_query: Query<(&Transform, &Projection), With<MainCamera>>,
+    mut _passives_query: Query<&mut Passives, With<Player>>,
 ) {
     let Ok(action_state) = input_query.single() else {
         return;
@@ -91,18 +105,25 @@ fn toggle_inventory_window(
 
     if let Ok(window_entity) = window_query.single() {
         commands.entity(window_entity).despawn();
+        if let Ok(ui_root) = ui_root_query.single() {
+            commands.entity(ui_root).despawn();
+        }
         info!("Passive inventory window closed");
     } else {
         info!("Opening passive inventory window");
-        let Ok(camera_transform) = camera_query.single() else {
+        let Ok((camera_transform, projection)) = camera_query.single() else {
             return;
         };
 
-        let camera_pos = camera_transform.translation().truncate();
-        let top_left = camera_pos - Vec2::new(100.0, -100.0);
-        let window_pos = top_left + Vec2::new(WINDOW_WIDTH / 2.0 + 10.0, -WINDOW_HEIGHT / 2.0 - 10.0);
-        
-        info!("Camera pos: {:?}, Window pos: {:?}", camera_pos, window_pos);
+        let window_pos = anchor_top_left(
+            camera_transform,
+            projection,
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT,
+            VIEWPORT_MARGIN,
+        );
+
+        info!("Passive inventory window pos: {:?}", window_pos);
 
         let mut window = commands.spawn((
             PassiveInventoryWindow,
@@ -121,7 +142,8 @@ fn toggle_inventory_window(
 
         window.with_children(|parent| {
             for col in 0..TOP_ROW_SLOTS {
-                let x = TOP_ROW_START_X + col as f32 * (SLOT_SIZE + TOP_ROW_GAP);
+                let x =
+                    TOP_ROW_START_X + col as f32 * (SLOT_SIZE + TOP_ROW_GAP);
                 let y = TOP_ROW_Y;
 
                 parent.spawn((
@@ -131,13 +153,18 @@ fn toggle_inventory_window(
                         col,
                     },
                     Transform::from_translation(Vec3::new(x, y, 1.0)),
+                    Visibility::Visible,
+                    InheritedVisibility::default(),
+                    ViewVisibility::default(),
                 ));
             }
 
             for row in 0..BOTTOM_ROWS {
                 for col in 0..BOTTOM_ROW_SLOTS {
-                    let x = BOTTOM_ROW_START_X + col as f32 * (SLOT_SIZE + BOTTOM_ROW_GAP);
-                    let y = BOTTOM_ROW_START_Y - row as f32 * (SLOT_SIZE + BOTTOM_ROW_VERTICAL_GAP);
+                    let x = BOTTOM_ROW_START_X
+                        + col as f32 * (SLOT_SIZE + BOTTOM_ROW_GAP);
+                    let y = BOTTOM_ROW_START_Y
+                        - row as f32 * (SLOT_SIZE + BOTTOM_ROW_VERTICAL_GAP);
 
                     parent.spawn((
                         PassiveSlot {
@@ -146,15 +173,66 @@ fn toggle_inventory_window(
                             col,
                         },
                         Transform::from_translation(Vec3::new(x, y, 1.0)),
+                        Visibility::Visible,
+                        InheritedVisibility::default(),
+                        ViewVisibility::default(),
                     ));
                 }
             }
         });
-        
-        // Force update by marking passives as changed
-        if let Ok(mut passives) = passives_query.single_mut() {
-            passives.set_changed();
-        }
+
+        // Spawn a UI root overlay for popups/labels as a separate UI hierarchy
+        commands.spawn((
+            PassiveInventoryUiRoot,
+            Node {
+                position_type: bevy::ui::PositionType::Absolute,
+                width: Val::Percent(100.0),
+                height: Val::Percent(100.0),
+                ..Default::default()
+            },
+            Visibility::Visible,
+            InheritedVisibility::default(),
+            ViewVisibility::default(),
+            StateDespawnMarker,
+        ));
+    }
+}
+
+fn anchor_top_left(
+    camera_transform: &Transform,
+    projection: &Projection,
+    window_width: f32,
+    window_height: f32,
+    margin: f32,
+) -> Vec2 {
+    let cam_pos = camera_transform.translation.truncate();
+    let half_size = match projection {
+        Projection::Orthographic(ortho) => ortho.area.half_size(),
+        _ => Vec2::new(160.0, 120.0), // sensible fallback
+    };
+    Vec2::new(
+        cam_pos.x - half_size.x + margin + window_width * 0.5,
+        cam_pos.y + half_size.y - margin - window_height * 0.5,
+    )
+}
+
+fn reposition_passive_inventory_window(
+    mut window_q: Query<&mut Transform, With<PassiveInventoryWindow>>,
+    cam_q: Query<(&Transform, &Projection), (With<MainCamera>, Without<PassiveInventoryWindow>)>,
+) {
+    let Ok((cam_transform, projection)) = cam_q.single() else {
+        return;
+    };
+    for mut transform in &mut window_q {
+        let z = transform.translation.z;
+        let pos = anchor_top_left(
+            cam_transform,
+            projection,
+            WINDOW_WIDTH,
+            WINDOW_HEIGHT,
+            VIEWPORT_MARGIN,
+        );
+        transform.translation = pos.extend(z);
     }
 }
 
@@ -164,9 +242,9 @@ fn update_passive_slots(
     window_query: Query<Entity, With<PassiveInventoryWindow>>,
     slot_query: Query<(Entity, &PassiveSlot, Option<&Children>)>,
     icon_query: Query<Entity, With<PassiveIcon>>,
-    pickup_assets: Res<PickupAssetHandles>,
+    asset_server: Res<AssetServer>,
 ) {
-    let Ok(window_entity) = window_query.single() else {
+    let Ok(_window_entity) = window_query.single() else {
         return;
     };
 
@@ -174,17 +252,12 @@ fn update_passive_slots(
         return;
     };
 
-    // Clear all existing icons
-    for entity in icon_query.iter() {
-        commands.entity(entity).despawn();
-    }
-
     let equipped_passives = &passives.equipped;
     let inventory_passives = &passives.inventory;
 
-    // Update slots with new icons
+    // Rebuild slot icons from current passive inventory snapshot
     for (slot_entity, slot, children) in slot_query.iter() {
-        // Remove existing children first
+        // Remove existing icon children
         if let Some(children) = children {
             for child_entity in children.iter() {
                 if icon_query.contains(child_entity) {
@@ -196,43 +269,49 @@ fn update_passive_slots(
         match slot.slot_type {
             SlotType::Equipped => {
                 if let Some(passive) = equipped_passives.get(slot.col) {
-                    if let Some(handle) = pickup_assets.get_passive_handle(passive) {
-                        let icon_entity = commands
-                            .spawn((
-                                PassiveIcon {
-                                    passive: *passive,
-                                },
-                                Sprite {
-                                    image: handle.clone(),
-                                    ..default()
-                                },
-                                Transform::from_scale(Vec3::splat(ICON_SIZE / 12.0)),
-                            ))
-                            .id();
-                        commands.entity(slot_entity).add_child(icon_entity);
-                    }
+                    let handle = asset_server.load(passive.icon_path());
+                    let icon_entity = commands
+                        .spawn((
+                            PassiveIcon { passive: *passive },
+                            Sprite {
+                                image: handle,
+                                ..default()
+                            },
+                            Transform::from_scale(Vec3::splat(
+                                ICON_SIZE / 12.0,
+                            )),
+                            GlobalTransform::default(),
+                            Visibility::Visible,
+                            InheritedVisibility::default(),
+                            ViewVisibility::default(),
+                        ))
+                        .id();
+                    commands.entity(slot_entity).add_child(icon_entity);
                 }
-            }
+            },
             SlotType::Inventory => {
                 let index = slot.row * BOTTOM_ROW_SLOTS + slot.col;
                 if let Some(passive) = inventory_passives.get(index) {
-                    if let Some(handle) = pickup_assets.get_passive_handle(passive) {
-                        let icon_entity = commands
-                            .spawn((
-                                PassiveIcon {
-                                    passive: *passive,
-                                },
-                                Sprite {
-                                    image: handle.clone(),
-                                    ..default()
-                                },
-                                Transform::from_scale(Vec3::splat(ICON_SIZE / 12.0)),
-                            ))
-                            .id();
-                        commands.entity(slot_entity).add_child(icon_entity);
-                    }
+                    let handle = asset_server.load(passive.icon_path());
+                    let icon_entity = commands
+                        .spawn((
+                            PassiveIcon { passive: *passive },
+                            Sprite {
+                                image: handle,
+                                ..default()
+                            },
+                            Transform::from_scale(Vec3::splat(
+                                ICON_SIZE / 12.0,
+                            )),
+                            GlobalTransform::default(),
+                            Visibility::Visible,
+                            InheritedVisibility::default(),
+                            ViewVisibility::default(),
+                        ))
+                        .id();
+                    commands.entity(slot_entity).add_child(icon_entity);
                 }
-            }
+            },
         }
     }
 }
@@ -241,7 +320,11 @@ fn handle_slot_clicks(
     mouse_button: Res<ButtonInput<MouseButton>>,
     window_query: Query<&Window>,
     camera_query: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
-    slot_query: Query<(&PassiveSlot, &GlobalTransform, Option<&Children>)>,
+    slot_query: Query<(
+        &PassiveSlot,
+        &GlobalTransform,
+        Option<&Children>,
+    )>,
     icon_query: Query<&PassiveIcon>,
     mut passives_query: Query<&mut Passives, With<Player>>,
 ) {
@@ -261,7 +344,9 @@ fn handle_slot_clicks(
         return;
     };
 
-    let Ok(world_position) = camera.viewport_to_world_2d(camera_transform, cursor_position) else {
+    let Ok(world_position) =
+        camera.viewport_to_world_2d(camera_transform, cursor_position)
+    else {
         return;
     };
 
@@ -288,7 +373,7 @@ fn handle_slot_clicks(
                             }
                         }
                     }
-                }
+                },
                 SlotType::Inventory => {
                     if let Some(children) = children {
                         for child_entity in children.iter() {
@@ -298,7 +383,7 @@ fn handle_slot_clicks(
                             }
                         }
                     }
-                }
+                },
             }
             break;
         }
@@ -309,54 +394,94 @@ fn handle_slot_hover(
     mut commands: Commands,
     window_query: Query<&Window>,
     camera_query: Query<(&Camera, &GlobalTransform), With<Camera2d>>,
-    slot_query: Query<(&PassiveSlot, &GlobalTransform, Option<&Children>)>,
+    slot_query: Query<(
+        &PassiveSlot,
+        &GlobalTransform,
+        Option<&Children>,
+    )>,
     icon_query: Query<&PassiveIcon>,
-    hover_popup_query: Query<Entity, With<PassiveHoverPopup>>,
-    inventory_window_query: Query<&GlobalTransform, With<PassiveInventoryWindow>>,
+    inventory_window_query: Query<
+        &GlobalTransform,
+        With<PassiveInventoryWindow>,
+    >,
+    ui_root_query: Query<Entity, With<PassiveInventoryUiRoot>>,
+    mut popup_nodes: Query<&mut Node, With<PassiveHoverPopup>>,
+    mut current_popup: Local<Option<Entity>>,
+    mut last_passive: Local<Option<Passive>>,
 ) {
     let Ok(window) = window_query.single() else {
-        // Remove any existing hover popup if no window
-        for entity in hover_popup_query.iter() {
-            commands.entity(entity).despawn();
+        // Clean up any existing popup if window not available
+        if let Some(entity) = *current_popup {
+            if let Ok(mut ecmd) = commands.get_entity(entity) {
+                ecmd.despawn();
+            }
+            *current_popup = None;
+            *last_passive = None;
         }
         return;
     };
 
     let Ok((camera, camera_transform)) = camera_query.single() else {
-        // Remove any existing hover popup if no camera
-        for entity in hover_popup_query.iter() {
-            commands.entity(entity).despawn();
+        if let Some(entity) = *current_popup {
+            if let Ok(mut ecmd) = commands.get_entity(entity) {
+                ecmd.despawn();
+            }
+            *current_popup = None;
+            *last_passive = None;
         }
         return;
     };
 
     let Some(cursor_position) = window.cursor_position() else {
-        // Remove any existing hover popup if cursor not in window
-        for entity in hover_popup_query.iter() {
-            commands.entity(entity).despawn();
+        if let Some(entity) = *current_popup {
+            if let Ok(mut ecmd) = commands.get_entity(entity) {
+                ecmd.despawn();
+            }
+            *current_popup = None;
+            *last_passive = None;
         }
         return;
     };
 
-    let Ok(world_position) = camera.viewport_to_world_2d(camera_transform, cursor_position) else {
-        // Remove any existing hover popup if can't convert position
-        for entity in hover_popup_query.iter() {
-            commands.entity(entity).despawn();
+    let Ok(world_position) =
+        camera.viewport_to_world_2d(camera_transform, cursor_position)
+    else {
+        if let Some(entity) = *current_popup {
+            if let Ok(mut ecmd) = commands.get_entity(entity) {
+                ecmd.despawn();
+            }
+            *current_popup = None;
+            *last_passive = None;
         }
         return;
     };
 
     let Ok(inventory_transform) = inventory_window_query.single() else {
-        // Remove any existing hover popup if no inventory window
-        for entity in hover_popup_query.iter() {
-            commands.entity(entity).despawn();
+        if let Some(entity) = *current_popup {
+            if let Ok(mut ecmd) = commands.get_entity(entity) {
+                ecmd.despawn();
+            }
+            *current_popup = None;
+            *last_passive = None;
         }
         return;
     };
 
-    // Check if hovering over any slot with a passive
+    // Ensure we have a UI root to parent the popup
+    let Ok(ui_root) = ui_root_query.single() else {
+        if let Some(entity) = *current_popup {
+            if let Ok(mut ecmd) = commands.get_entity(entity) {
+                ecmd.despawn();
+            }
+            *current_popup = None;
+            *last_passive = None;
+        }
+        return;
+    };
+
+    // Determine if hovering a slot with an icon
     let mut hovering_passive = None;
-    for (slot, slot_transform, children) in slot_query.iter() {
+    for (_slot, slot_transform, children) in slot_query.iter() {
         let slot_pos = slot_transform.translation().truncate();
         let half_size = SLOT_SIZE / 2.0;
 
@@ -377,65 +502,133 @@ fn handle_slot_hover(
         }
     }
 
-    // Update hover popup
     match hovering_passive {
         Some(passive) => {
-            // Check if we already have a popup for this passive
-            let existing_popup = hover_popup_query.iter().find_map(|entity| {
-                hover_popup_query
-                    .get(entity)
-                    .ok()
-                    .filter(|_| commands.get_entity(entity).is_ok())
-                    .map(|_| entity)
-            });
-
-            if let Some(existing_entity) = existing_popup {
-                // Get the component to check if it's the same passive
-                if let Ok(mut entity_commands) = commands.get_entity(existing_entity) {
-                    // For now, just remove and recreate (simpler than checking passive type)
-                    entity_commands.despawn();
+            // Only rebuild popup if passive changed or popup missing
+            let needs_rebuild =
+                last_passive.map(|p| p != passive).unwrap_or(true)
+                    || current_popup.is_none();
+            if needs_rebuild {
+                // Despawn existing
+                if let Some(entity) = *current_popup {
+                    if let Ok(mut ecmd) = commands.get_entity(entity) {
+                        ecmd.despawn();
+                    }
+                    *current_popup = None;
+                }
+                if let Ok(screen_pos) = camera.world_to_viewport(
+                    camera_transform,
+                    inventory_transform.translation(),
+                ) {
+                    let popup_entity = commands
+                        .spawn((
+                            PassiveHoverPopup { passive },
+                            Node {
+                                position_type: bevy::ui::PositionType::Absolute,
+                                left: Val::Px(screen_pos.x - 295.0),
+                                // Place popup below the inventory window using top-origin (relative to parent height)
+                                top: Val::Px(
+                                    screen_pos.y + WINDOW_HEIGHT / 2.0 + 148.0,
+                                ),
+                                width: Val::Px(590.0),
+                                padding: bevy::ui::UiRect::all(Val::Px(12.0)),
+                                border: bevy::ui::UiRect::all(Val::Px(2.0)),
+                                ..Default::default()
+                            },
+                            BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.9)),
+                            bevy::ui::BorderColor(Color::srgba(
+                                0.4, 0.4, 0.4, 1.0,
+                            )),
+                            bevy::ui::BorderRadius::all(Val::Px(4.0)),
+                            Visibility::Visible,
+                            InheritedVisibility::default(),
+                            ViewVisibility::default(),
+                            StateDespawnMarker,
+                        ))
+                        .with_children(|parent| {
+                            parent.spawn((
+                                Text::new(format!(
+                                    "{}\n\n{}",
+                                    passive.name(),
+                                    passive.description(),
+                                )),
+                                TextFont::from_font_size(16.0),
+                                TextColor(Color::WHITE),
+                                bevy::text::TextLayout::new(
+                                    bevy::text::JustifyText::Center,
+                                    bevy::text::LineBreak::WordBoundary,
+                                ),
+                            ));
+                        })
+                        .id();
+                    // Parent to UI root to avoid non-UI hierarchy warnings and ensure correct UI layout
+                    commands.entity(ui_root).add_child(popup_entity);
+                    *current_popup = Some(popup_entity);
+                    *last_passive = Some(passive);
+                }
+            } else {
+                // Update popup position to remain locked to the window while hovering
+                if let Some(entity) = *current_popup {
+                    if let Ok(screen_pos) = camera.world_to_viewport(
+                        camera_transform,
+                        inventory_transform.translation(),
+                    ) {
+                        if let Ok(mut node) = popup_nodes.get_mut(entity) {
+                            node.left = Val::Px(screen_pos.x - 295.0);
+                            node.top = Val::Px(
+                                screen_pos.y + WINDOW_HEIGHT / 2.0 + 148.0,
+                            );
+                        }
+                    }
                 }
             }
-
-            // Create new popup below the inventory window
-            // Convert world position to screen position for the inventory window
-            if let Ok(screen_pos) = camera.world_to_viewport(camera_transform, inventory_transform.translation()) {
-                commands.spawn((
-                    PassiveHoverPopup { passive },
-                    Node {
-                        position_type: bevy::ui::PositionType::Absolute,
-                        left: Val::Px(screen_pos.x - 295.0), // Center the popup (590/2 = 295)
-                        top: Val::Px(screen_pos.y + WINDOW_HEIGHT / 2.0 + 148.0), // Position below window
-                        width: Val::Px(590.0),
-                        padding: bevy::ui::UiRect::all(Val::Px(12.0)),
-                        border: bevy::ui::UiRect::all(Val::Px(2.0)),
-                        ..Default::default()
-                    },
-                    BackgroundColor(Color::srgba(0.0, 0.0, 0.0, 0.9)),
-                    bevy::ui::BorderColor(Color::srgba(0.4, 0.4, 0.4, 1.0)),
-                    bevy::ui::BorderRadius::all(Val::Px(4.0)),
-                    StateDespawnMarker,
-                )).with_children(|parent| {
-                    parent.spawn((
-                        Text::new(format!(
-                            "{}\n\n{}",
-                            passive.name(),
-                            passive.description(),
-                        )),
-                        TextFont::from_font_size(16.0),
-                        TextColor(Color::WHITE),
-                        bevy::text::TextLayout::new(
-                            bevy::text::JustifyText::Center,
-                            bevy::text::LineBreak::WordBoundary,
-                        ),
-                    ));
-                });
-            }
-        }
+        },
         None => {
-            // Remove any existing hover popup
-            for entity in hover_popup_query.iter() {
-                commands.entity(entity).despawn();
+            if let Some(entity) = *current_popup {
+                if let Ok(mut ecmd) = commands.get_entity(entity) {
+                    ecmd.despawn();
+                }
+                *current_popup = None;
+                *last_passive = None;
+            }
+        },
+    }
+}
+
+/// Ensures that any parent of an entity with InheritedVisibility also has the full visibility trio.
+/// This prevents Bevy B0004 warnings in cases where children (UI or sprites) are parented to logic-only entities.
+fn fix_visibility_hierarchy(
+    mut commands: Commands,
+    children_with_inherited: Query<
+        (&ChildOf, Entity),
+        With<InheritedVisibility>,
+    >,
+    parent_has_visibility: Query<(), With<Visibility>>,
+    parent_has_inherited: Query<(), With<InheritedVisibility>>,
+    parent_has_view: Query<(), With<ViewVisibility>>,
+) {
+    for (child_of, _child) in children_with_inherited.iter() {
+        let parent = child_of.parent();
+
+        // Only insert missing components; do not override existing visibility state
+        let mut to_insert_visibility = None;
+        if parent_has_visibility.get(parent).is_err() {
+            to_insert_visibility = Some(Visibility::Visible);
+        }
+
+        let mut needs_inherited = parent_has_inherited.get(parent).is_err();
+        let mut needs_view = parent_has_view.get(parent).is_err();
+
+        if to_insert_visibility.is_some() || needs_inherited || needs_view {
+            let mut ecmd = commands.entity(parent);
+            if let Some(vis) = to_insert_visibility.take() {
+                ecmd.insert(vis);
+            }
+            if needs_inherited {
+                ecmd.insert(InheritedVisibility::default());
+            }
+            if needs_view {
+                ecmd.insert(ViewVisibility::default());
             }
         }
     }

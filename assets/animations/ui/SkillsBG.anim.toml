@@ -1,0 +1,25 @@
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 2
+frame_min = 1
+frame_max = 12
+frame_start = 1
+
+# INITIALIZE NUMBER
+[[script]]
+run_on_playback_control = "Start"
+action = "SetFrameNow"
+frame_index = 1
+
+# LOOP LAST FRAME
+[[script]]
+run_at_frame = 12
+action = "SetFrameNext"
+frame_index = 12
+
+# Flip the window vertically so slots appear at the bottom
+[[script]]
+run_on_playback_control = "Start"
+action = "SetSpriteFlip"
+flip_y = true
