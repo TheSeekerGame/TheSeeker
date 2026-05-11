@@ -1,6 +1,6 @@
 # The Seeker
 
-This is a metroidvania game developed in [Bevy](https://github.com/bevyengine/bevy).
+This is an extraction-vania game developed in [Bevy](https://github.com/bevyengine/bevy).
 
 ## Repo Structure
 
@@ -19,8 +19,10 @@ For docs related to the Rust source code, see: https://theseekergame.github.io/a
 
 ## License
 
-Game code is under MIT/Apache-2.
+Game code is under MIT OR Apache-2.0.
 
-Assets are under Creative Commons Attribution-ShareAlike (CC BY-SA 4.0), unless noted otherwise.
+Assets are under Creative Commons Attribution (CC BY 4.0), unless noted otherwise.
 
 Fonts are licensed under the SIL Open Font License.
+
+See [LICENSE.md](LICENSE.md) for details and attribution guidance.
