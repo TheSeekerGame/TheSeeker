@@ -689,7 +689,7 @@ enum Role {
 impl Role {
     fn random() -> Role {
         let mut rng = rand::thread_rng();
-        rng.gen()
+        rng.r#gen()
     }
 }
 

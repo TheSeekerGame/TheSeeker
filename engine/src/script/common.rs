@@ -3,7 +3,9 @@ use bevy::ecs::system::lifetimeless::*;
 
 use super::*;
 use crate::assets::script::*;
-use crate::audio::{LabeledBackgroundSound, PreciseAudioId, PrecisionMixerControl};
+use crate::audio::{
+    LabeledBackgroundSound, PreciseAudioId, PrecisionMixerControl,
+};
 use crate::data::OneOrMany;
 use crate::script::label::EntityLabels;
 
@@ -24,16 +26,12 @@ impl ScriptBundle {
     pub fn new_play_handle(handle: Handle<Script>) -> Self {
         let mut player = ScriptPlayer::default();
         player.play_handle(handle);
-        Self {
-            player
-        }
+        Self { player }
     }
     pub fn new_play_key(key: &str) -> Self {
         let mut player = ScriptPlayer::default();
         player.play_key(key);
-        Self {
-            player
-        }
+        Self { player }
     }
 }
 
@@ -85,7 +83,11 @@ impl ScriptTracker for CommonScriptTracker {
     );
     type RunIf = CommonScriptRunIf;
     type Settings = CommonScriptSettings;
-    type UpdateParam = (SRes<Time>, SRes<GameTime>, SQuery<&'static PrecisionMixerControl>,);
+    type UpdateParam = (
+        SRes<Time>,
+        SRes<GameTime>,
+        SQuery<&'static PrecisionMixerControl>,
+    );
 
     fn init(
         &mut self,
@@ -110,7 +112,9 @@ impl ScriptTracker for CommonScriptTracker {
                     self.start_tick = leveltime.tick;
                     self.start_time = leveltime.time;
                 } else {
-                    error!("Script with time base 'Level' wants to run, but level start time is unknown! (are we in-game?)");
+                    error!(
+                        "Script with time base 'Level' wants to run, but level start time is unknown! (are we in-game?)"
+                    );
                     self.start_tick = 0;
                     self.start_time = Duration::new(0, 0);
                 }
@@ -147,52 +151,46 @@ impl ScriptTracker for CommonScriptTracker {
         action_id: ActionId,
     ) {
         match run_if {
-            CommonScriptRunIf::Tick(tick) => {
-                match tick {
-                    OneOrMany::Single(tick) => {
+            CommonScriptRunIf::Tick(tick) => match tick {
+                OneOrMany::Single(tick) => {
+                    self.tick_actions.push((*tick, action_id));
+                },
+                OneOrMany::Many(ticks) => {
+                    for tick in ticks.iter() {
                         self.tick_actions.push((*tick, action_id));
-                    },
-                    OneOrMany::Many(ticks) => {
-                        for tick in ticks.iter() {
-                            self.tick_actions.push((*tick, action_id));
-                        }
-                    },
-                }
+                    }
+                },
             },
             CommonScriptRunIf::TickQuant(quant) => {
                 self.tickquant_actions.push((*quant, action_id));
             },
-            CommonScriptRunIf::Millis(millis) => {
-                match millis {
-                    OneOrMany::Single(millis) => {
+            CommonScriptRunIf::Millis(millis) => match millis {
+                OneOrMany::Single(millis) => {
+                    self.time_actions.push((
+                        Duration::from_millis(*millis),
+                        action_id,
+                    ));
+                },
+                OneOrMany::Many(millis) => {
+                    for millis in millis.iter() {
                         self.time_actions.push((
                             Duration::from_millis(*millis),
                             action_id,
                         ));
-                    },
-                    OneOrMany::Many(millis) => {
-                        for millis in millis.iter() {
-                            self.time_actions.push((
-                                Duration::from_millis(*millis),
-                                action_id,
-                            ));
-                        }
-                    },
-                }
+                    }
+                },
             },
-            CommonScriptRunIf::Time(timespec) => {
-                match timespec {
-                    OneOrMany::Single(timespec) => {
+            CommonScriptRunIf::Time(timespec) => match timespec {
+                OneOrMany::Single(timespec) => {
+                    self.time_actions
+                        .push((Duration::from(*timespec), action_id));
+                },
+                OneOrMany::Many(timespecs) => {
+                    for timespec in timespecs.iter() {
                         self.time_actions
                             .push((Duration::from(*timespec), action_id));
-                    },
-                    OneOrMany::Many(timespecs) => {
-                        for timespec in timespecs.iter() {
-                            self.time_actions
-                                .push((Duration::from(*timespec), action_id));
-                        }
-                    },
-                }
+                    }
+                },
             },
             CommonScriptRunIf::SlotEnable(slot) => {
                 if let Some(entry) =
@@ -319,11 +317,9 @@ impl ScriptTracker for CommonScriptTracker {
         queue: &mut Vec<QueuedAction>,
     ) {
         queue.extend(
-            self.start_actions.drain(..).map(|action| {
-                QueuedAction {
-                    timing: ScriptActionTiming::Tick(game_time.tick()),
-                    action,
-                }
+            self.start_actions.drain(..).map(|action| QueuedAction {
+                timing: ScriptActionTiming::Tick(game_time.tick()),
+                action,
             }),
         );
     }
@@ -339,11 +335,9 @@ impl ScriptTracker for CommonScriptTracker {
         queue: &mut Vec<QueuedAction>,
     ) {
         queue.extend(
-            self.stop_actions.drain(..).map(|action| {
-                QueuedAction {
-                    timing: ScriptActionTiming::Tick(game_time.tick()),
-                    action,
-                }
+            self.stop_actions.drain(..).map(|action| QueuedAction {
+                timing: ScriptActionTiming::Tick(game_time.tick()),
+                action,
             }),
         );
     }
@@ -543,8 +537,17 @@ impl ScriptAction for CommonScriptAction {
         SRes<EntityLabels>,
         SCommands,
         SQuery<&'static PrecisionMixerControl>,
-        SQuery<Entity, (With<PlaybackSettings>, Without<LabeledBackgroundSound>)>,
-        SQuery<(Entity, &'static LabeledBackgroundSound), With<PlaybackSettings>>,
+        SQuery<
+            Entity,
+            (
+                With<PlaybackSettings>,
+                Without<LabeledBackgroundSound>,
+            ),
+        >,
+        SQuery<
+            (Entity, &'static LabeledBackgroundSound),
+            With<PlaybackSettings>,
+        >,
     );
     type Tracker = CommonScriptTracker;
 
@@ -554,15 +557,15 @@ impl ScriptAction for CommonScriptAction {
         timing: ScriptActionTiming,
         _actionparams: &Self::ActionParams,
         tracker: &mut Self::Tracker,
-        (
+        &mut (
             ref gt,
             ref preloaded,
             ref ass_audio,
             ref elabels,
             ref mut commands,
-            q_mixer,
-            q_unlabeled_sounds,
-            q_labeled_sounds,
+            ref mut q_mixer,
+            ref mut q_unlabeled_sounds,
+            ref mut q_labeled_sounds,
         ): &mut <Self::Param as SystemParam>::Item<'_, '_>,
     ) -> ScriptUpdateResult {
         match self {
@@ -608,28 +611,33 @@ impl ScriptAction for CommonScriptAction {
                 }
                 ScriptUpdateResult::NormalRun
             },
-            CommonScriptAction::PlayBackgroundAudio { asset_key, label, volume, r#loop } => {
+            CommonScriptAction::PlayBackgroundAudio {
+                asset_key,
+                label,
+                volume,
+                r#loop,
+            } => {
                 let sounds: Vec<Handle<AudioSource>> = preloaded
                     .get_multi_asset(asset_key)
                     .unwrap_or(&[])
                     .iter()
-                    .map(|h_untyped| {
-                        h_untyped.clone().typed::<AudioSource>()
-                    })
+                    .map(|h_untyped| h_untyped.clone().typed::<AudioSource>())
                     .collect();
                 if let Some(sound) = sounds.choose(&mut rand::thread_rng()) {
-                    let e = commands.spawn(AudioBundle {
-                        source: sound.clone(),
-                        settings: PlaybackSettings {
-                            mode: if r#loop.unwrap_or(false) {
-                                PlaybackMode::Loop
-                            } else {
-                                PlaybackMode::Despawn
+                    let e = commands
+                        .spawn(AudioBundle {
+                            source: sound.clone(),
+                            settings: PlaybackSettings {
+                                mode: if r#loop.unwrap_or(false) {
+                                    PlaybackMode::Loop
+                                } else {
+                                    PlaybackMode::Despawn
+                                },
+                                volume: Volume::new(volume.unwrap_or(1.0)),
+                                ..Default::default()
                             },
-                            volume: Volume::new(volume.unwrap_or(1.0)),
-                            ..Default::default()
-                        },
-                    }).id();
+                        })
+                        .id();
                     if let Some(label) = label {
                         commands.entity(e).insert(LabeledBackgroundSound {
                             label: label.clone(),
@@ -664,14 +672,9 @@ impl ScriptAction for CommonScriptAction {
                         None
                     };
                     let audio_id = match timing {
-                        ScriptActionTiming::Unknown => {
-                            ctl.controller.play_immediately(
-                                l,
-                                sound.decoder(),
-                                volume,
-                                pan,
-                            )
-                        },
+                        ScriptActionTiming::Unknown => ctl
+                            .controller
+                            .play_immediately(l, sound.decoder(), volume, pan),
                         ScriptActionTiming::UnknownTick => {
                             ctl.controller.play_at_tick(
                                 l,
@@ -706,11 +709,17 @@ impl ScriptAction for CommonScriptAction {
                 }
                 ScriptUpdateResult::NormalRun
             },
-            CommonScriptAction::StopAudio { current_script_only, label } => {
+            CommonScriptAction::StopAudio {
+                current_script_only,
+                label,
+            } => {
                 let ctl = q_mixer.single();
                 if current_script_only.unwrap_or(true) {
                     if let Some(label) = label {
-                        ctl.controller.stop_many_with_label(&mut tracker.my_sounds, &label);
+                        ctl.controller.stop_many_with_label(
+                            &mut tracker.my_sounds,
+                            &label,
+                        );
                     } else {
                         ctl.controller.stop_many(&tracker.my_sounds);
                         tracker.my_sounds.clear();
@@ -724,7 +733,10 @@ impl ScriptAction for CommonScriptAction {
                 }
                 ScriptUpdateResult::NormalRun
             },
-            CommonScriptAction::StopBackgroundAudio { current_script_only, label } => {
+            CommonScriptAction::StopBackgroundAudio {
+                current_script_only,
+                label,
+            } => {
                 if current_script_only.unwrap_or(true) {
                     if let Some(label) = label {
                         tracker.my_background_sounds.retain(|e| {
@@ -1022,24 +1034,20 @@ where
         >,
     ) -> ScriptUpdateResult {
         match self {
-            ExtendedScriptAction::Extended(action) => {
-                action.run(
-                    entity,
-                    timing,
-                    &actionparams.extended,
-                    &mut tracker.extended,
-                    param_ext,
-                )
-            },
-            ExtendedScriptAction::Common(action) => {
-                action.run(
-                    entity,
-                    timing,
-                    &actionparams.common,
-                    &mut tracker.common,
-                    param_common,
-                )
-            },
+            ExtendedScriptAction::Extended(action) => action.run(
+                entity,
+                timing,
+                &actionparams.extended,
+                &mut tracker.extended,
+                param_ext,
+            ),
+            ExtendedScriptAction::Common(action) => action.run(
+                entity,
+                timing,
+                &actionparams.common,
+                &mut tracker.common,
+                param_common,
+            ),
         }
     }
 }
