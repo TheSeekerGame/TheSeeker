@@ -63,9 +63,12 @@ impl Plugin for PlayerBehaviorPlugin {
                     player_whirl_charge.before(player_whirl),
                     (
                         player_whirl,
-                        bow_auto_aim.after(player_move).run_if(
-                            resource_equals(PlayerCombatStyle::Ranged),
-                        ),
+                        bow_auto_aim
+                            .after(player_move)
+                            .after(player_dash)
+                            .run_if(resource_equals(
+                                PlayerCombatStyle::Ranged,
+                            )),
                     )
                         .before(player_attack),
                     player_attack.run_if(any_with_component::<Attacking>),
