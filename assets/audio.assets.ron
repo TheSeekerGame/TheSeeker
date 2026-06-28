@@ -193,8 +193,6 @@
     ),
     "audio.game.Music": Files (
         paths: [
-            "audio/music/Music2.flac",
-            "audio/music/Music3.flac",
         ],
     ),
     "audio.game.Ambience": Files (
