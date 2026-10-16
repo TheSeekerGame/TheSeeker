@@ -1,0 +1,27 @@
+[asset]
+key = "anim.bat_big.Fly"
+image = "animations/bats/big/Fly__r1c5__36x36.png"
+
+[playback]
+start = 1
+end = 5
+ticks_per_frame = 8
+mode = "loop"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 5
+frame_start = 1
+
+# LOOP
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

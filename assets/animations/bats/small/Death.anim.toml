@@ -1,0 +1,39 @@
+[asset]
+key = "anim.bat_small.Death"
+image = "animations/bats/small/Death__r1c6__36x36.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 6
+frame_start = 1
+
+# LOOP FALL SEQUENCE
+[[script]]
+run_at_frame = 4
+forbid_slots_any = ["HitGround"]
+action = "SetFrameNext"
+frame_index = 1
+
+[[script]]
+run_on_slot_enable = "HitGround"
+action = "SetFrameNow"
+frame_index = 5
+
+# LOOP LAST DECAY FRAME
+[[script]]
+run_at_frame = 6
+action = "SetFrameNext"
+frame_index = 6
+
+# Support left/right flipping
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

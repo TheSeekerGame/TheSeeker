@@ -1,59 +1,33 @@
-use bevy::audio::AddAudioSource;
-
 use crate::prelude::*;
+use crate::time::{GameTickSet, MasterClockSet};
 
+mod custom;
+mod device;
 mod mixer;
+pub mod transport;
 
-pub use mixer::PreciseAudioId;
+pub use custom::{AudioClock, AudioEngine, AudioEngineConfig, AudioInstanceId,
+    AudioPlaybackConfig, AudioSet, AudioStartTime};
+pub use mixer::{AudioBus, MixerDiagnostics};
 
 pub struct AudioPlugin;
 
+#[cfg(test)]
+pub(crate) fn test_engine(config: &AudioEngineConfig) -> AudioEngine { AudioEngine::build(config).0 }
+
 impl Plugin for AudioPlugin {
     fn build(&self, app: &mut App) {
-        app.add_audio_source::<PrecisionMixerInstance>();
-        app.add_systems(Startup, setup_precisionmixer);
+        app.init_resource::<AudioEngineConfig>()
+            .init_resource::<AudioClock>()
+            .init_asset::<bevy::audio::AudioSource>()
+            .init_asset_loader::<bevy::audio::AudioLoader>();
+        let config = app.world().resource::<AudioEngineConfig>().clone();
+        let (engine, stream) = custom::AudioEngine::build(&config);
+        app.insert_resource(engine).insert_non_send(stream);
+        app.configure_sets(Update, AudioSet::Flush.in_set(GameTickSet::Post));
+        app.add_systems(Update, (
+            (custom::update_audio_engine, custom::prepare_audio).chain().in_set(AudioSet::Update),
+            custom::flush_audio.in_set(AudioSet::Flush).after(MasterClockSet::Update),
+        ));
     }
-}
-
-fn setup_precisionmixer(
-    mut commands: Commands,
-    mut ass: ResMut<Assets<PrecisionMixerInstance>>,
-) {
-    let controller = mixer::PrecisionMixerController::new(2, 48_000, 96.0);
-    let handle = ass.add(PrecisionMixerInstance {
-        controller: controller.clone(),
-    });
-    commands.spawn((
-        PrecisionMixerControl {
-            controller: controller.clone(),
-        },
-        AudioSourceBundle {
-            source: handle,
-            ..Default::default()
-        },
-    ));
-}
-
-#[derive(Component)]
-pub struct PrecisionMixerControl {
-    pub controller: Arc<mixer::PrecisionMixerController>,
-}
-
-#[derive(Asset, TypePath)]
-struct PrecisionMixerInstance {
-    controller: Arc<mixer::PrecisionMixerController>,
-}
-
-impl Decodable for PrecisionMixerInstance {
-    type Decoder = mixer::PrecisionMixer;
-    type DecoderItem = mixer::MySample;
-
-    fn decoder(&self) -> Self::Decoder {
-        mixer::PrecisionMixer::new(self.controller.clone())
-    }
-}
-
-#[derive(Component)]
-pub struct LabeledBackgroundSound {
-    pub label: String,
 }

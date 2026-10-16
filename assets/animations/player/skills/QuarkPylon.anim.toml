@@ -1,0 +1,25 @@
+[asset]
+key = "anim.player.QuarkPylon"
+image = "animations/player/skills/QuarkPylon__r1c15__24x24.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 15
+frame_start = 1
+
+
+# OUTRO SLOT SWITCH (TODO: SET UP THE ACTUAL OUTRO SLOT)
+[[script]]
+run_on_slot_enable = "Outro"
+action = "SetFrameNow"
+frame_index = 9
+
+
+# LOOP IDLE
+[[script]]
+run_at_frame = 8
+action = "SetFrameNext"
+frame_index = 5

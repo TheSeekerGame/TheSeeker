@@ -1,0 +1,17 @@
+[asset]
+key = "anim.player.IceBoulderSmall"
+image = "animations/player/skills/IceBoulderSheet__r1c2__43x26.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 2
+frame_start = 2
+
+# LOOP
+[[script]]
+run_at_frame = 2
+action = "SetFrameNext"
+frame_index = 2

@@ -1,0 +1,3 @@
+id = "air_jump"
+base = "jump"
+presentation = { animation = "AirJump" }

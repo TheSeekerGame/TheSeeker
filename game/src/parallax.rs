@@ -1,112 +1,57 @@
-use bevy::transform::TransformSystem::TransformPropagate;
+//! Parallax: entities at a depth other than 1 shift against the camera as if nearer or farther.
+use bevy::transform::TransformSystems::Propagate;
 
 use crate::camera::MainCamera;
 use crate::prelude::*;
 
-/// A simple plugin for applying parallax to entities.
-/// Use by adding this plugin, and attaching the Parallax
-/// component to target entities.
-///
-/// Note that making parallaxed objects the child of another object will distort the calulation,
-/// since offset is calculated from difference between cameras position and the objects [`ParallaxOrigin`]
-///
-/// Also note that if you want to change the parallaxed objects position, change [`ParallaxOrigin`]
-/// instead of its Transform; since the transform is modified to make the object behave as if it was
-/// 3d and far away.
+/// Places parallaxed entities around the camera each frame, once it has moved.
 pub struct ParallaxPlugin;
 
 impl Plugin for ParallaxPlugin {
     fn build(&self, app: &mut App) {
-        // We run in post update so that changes are applied after any camera
-        // transformations.
-        app.add_systems(
-            PostUpdate,
-            init_parallax.before(apply_parallax),
-        );
-        app.add_systems(
-            PostUpdate,
-            apply_parallax.before(TransformPropagate),
-        );
+        app.add_systems(PostUpdate, (init_parallax, apply_parallax).chain().before(Propagate));
     }
 }
 
+/// How far from the camera an entity lies: 1 is the world's own distance, less is nearer and
+/// more is farther.
 #[derive(Clone, PartialEq, Debug, Default, Component)]
 pub struct Parallax {
-    /// How far away from the camera is the layer?
-    /// 0 is on top of the camera, 1.0  is "normal distance"
-    /// and larger numbers are background.
     pub depth: f32,
 }
 
-/// Stores the "base" position of the Parallaxed object
-/// if you want to move the parallaxed object around, change this instead of the transform.
-///
-/// Calculated from all parallex entities transform without this component and added to them.
+/// Where a parallaxed entity lies at depth 1, taken from its first translation. Move the entity
+/// by changing this: parallax overwrites its translation, which must therefore be in world
+/// space, so the entity's parent must sit at the world origin.
 #[derive(Clone, PartialEq, Debug, Default, Component)]
 pub struct ParallaxOrigin(pub Vec2);
 
-/// An optional component; add it if the center of the parallax'd objects
-/// "center of parallax" is different from its origin. (offset should be set relative to local origin)
-///
-/// The center of parallax, is the position compared to the cameras position in order
-/// to determine the parallax offset amount.
+/// The point, relative to the origin, whose offset from the camera the depth scales, when it
+/// is not the origin itself.
 #[derive(Clone, PartialEq, Debug, Default, Component)]
 pub struct ParallaxOffset(pub Vec2);
 
-/// Applies parallax transformations
 fn init_parallax(
     mut commands: Commands,
-    mut query: Query<
-        (Entity, &Transform),
-        (
-            Without<MainCamera>,
-            With<Parallax>,
-            Without<ParallaxOrigin>,
-        ),
-    >,
+    entities: Query<(Entity, &Transform), (With<Parallax>, Without<ParallaxOrigin>, Without<MainCamera>)>,
 ) {
-    for (entity, transform) in query.iter_mut() {
-        commands.entity(entity).insert(ParallaxOrigin(
-            transform.translation.xy(),
-        ));
+    for (entity, transform) in &entities {
+        commands.entity(entity).insert(ParallaxOrigin(transform.translation.xy()));
     }
 }
-/// Applies parallax transformations to all components with Transform, Parallax and ParallaxOrigin
-/// components
+
 fn apply_parallax(
-    mut query: Query<
-        (
-            &mut Transform,
-            &Parallax,
-            &ParallaxOrigin,
-            Option<&ParallaxOffset>,
-        ),
-        Without<MainCamera>,
-    >,
-    q_cam: Query<&Transform, With<MainCamera>>,
+    mut entities: Query<(&mut Transform, &Parallax, &ParallaxOrigin, Option<&ParallaxOffset>), Without<MainCamera>>,
+    camera: Single<&Transform, With<MainCamera>>,
 ) {
-    let Some(cam_trnsfrm) = q_cam.iter().next() else {
-        return;
-    };
-
-    for (mut transform, parallax, origin, offset) in query.iter_mut() {
-        // Same as in the wgsl fog parallax, calculates the vector from the center to the camera,
-        // and then scales it based on the depth. (only difference is applying the optional offset)
-        let offset = offset.map(|x| x.0);
-        let mut delta = cam_trnsfrm.translation.xy()
-            - (origin.0 + offset.unwrap_or_default());
-        delta = delta / (parallax.depth);
-
-        // Getting the final position is different then in wgsl fog code, since we set it in world space
-        // instead of camera space, as well as account for the offset here as well.
-        let mut pos_final =
-            cam_trnsfrm.translation.xy() - delta - offset.unwrap_or_default();
-
-        // There is another way of doing parallax, without requiring PrallaxOrigin, that just measures
-        // the camera position change, divides it by the depth, and then translates the transform.
-        // This would result in a slow drift due to floating point error accumulation however.
-
-        transform.translation.x = pos_final.x;
-        transform.translation.y = pos_final.y;
+    let camera = camera.translation.xy();
+    for (mut transform, parallax, origin, offset) in &mut entities {
+        let offset = offset.map_or(Vec2::ZERO, |offset| offset.0);
+        // Deriving the position from the origin each frame, rather than moving it with the
+        // camera, keeps floating-point error from accumulating into drift.
+        let center = camera - (camera - (origin.0 + offset)) / parallax.depth;
+        let position = center - offset;
+        transform.translation.x = position.x;
+        transform.translation.y = position.y;
     }
 }

@@ -1,0 +1,20 @@
+kind = "direct_sprite_pop"
+lifetime_ticks = 256
+
+[collider]
+half_width = 5.0
+half_height = 5.0
+
+[direct]
+speed = 80.0
+horizontal = true
+
+[sprite]
+idle_anim_key = "anim.buzzer.OrbIdle"
+pop_anim_key = "anim.buzzer.OrbPop"
+z = 0.00004
+
+[pop]
+trigger_radius = 8.0
+ignore_owner = true
+damage_ignore_arches = ["buzzer"]

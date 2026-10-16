@@ -1,0 +1,10 @@
+[book]
+authors = ["The Seeker contributors"]
+language = "en"
+multilingual = false
+src = "."
+title = "The Seeker Documentation"
+
+[output.html]
+git-repository-url = "https://github.com/TheSeekerGame/TheSeeker"
+edit-url-template = "https://github.com/TheSeekerGame/TheSeeker/edit/main/docs/{path}"

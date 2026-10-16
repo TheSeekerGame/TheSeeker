@@ -2,82 +2,55 @@
 //!
 //! Create sub-modules for different aspects of the gameplay.
 
-use switches::{PuzzleBundle, SwitchBundle};
-
-use self::enemy::{EnemyBlueprintBundle, EnemySpawnerBundle};
-use self::player::PlayerBlueprintBundle;
-use crate::game::merchant::MerchantBlueprintBundle;
-use crate::game::yak::YakBlueprintBundle;
 use crate::prelude::*;
 
-pub mod attack;
+pub mod actors;
+pub mod combat;
+pub(crate) mod capsule_commerce;
+pub mod effects;
 pub mod enemy;
 mod game_over;
+pub(crate) mod intro;
 pub mod gentstate;
-mod merchant;
+pub(crate) mod interaction;
+pub(crate) mod npc;
 pub mod physics;
-pub mod pickups;
 pub mod player;
-mod switches;
-mod wall;
-mod xp_orbs;
-mod yak;
+pub mod spikes;
+mod tick_profile;
+pub(crate) mod world_objects;
+pub(crate) mod yak;
+
+pub use game_over::GameOver;
 
 pub struct GameplayPlugin;
 
+#[cfg(test)]
+mod schedule_tests;
+
 impl Plugin for GameplayPlugin {
     fn build(&self, app: &mut App) {
-        // All LDTK stuff should be defined here,
-        // so it is all in one place and easy to change!
-        // Don't scatter it across the sub-modules/plugins!
-        app.register_ldtk_int_cell::<wall::WallBundle>(17);
-        app.register_ldtk_int_cell::<wall::WallBundle>(18);
-        app.register_ldtk_int_cell::<wall::WallBundle>(19);
-        app.register_ldtk_int_cell::<wall::WallBundle>(20);
-        app.register_ldtk_entity::<PlayerBlueprintBundle>("Player");
-        app.register_ldtk_entity::<MerchantBlueprintBundle>("Merchant");
-        app.register_ldtk_entity::<YakBlueprintBundle>("Yak");
-        app.register_ldtk_entity::<EnemyBlueprintBundle>("Enemy");
-        app.register_ldtk_entity::<EnemySpawnerBundle>("EnemySpawner");
-
-        app.register_ldtk_entity::<SwitchBundle>("Switch1")
-            .register_ldtk_entity::<SwitchBundle>("Switch2")
-            .register_ldtk_entity::<SwitchBundle>("Switch3")
-            .register_ldtk_entity::<SwitchBundle>("Switch4")
-            .register_ldtk_entity::<SwitchBundle>("Switch5")
-            .register_ldtk_entity::<SwitchBundle>("Switch6")
-            .register_ldtk_entity::<SwitchBundle>("Switch7")
-            .register_ldtk_entity::<SwitchBundle>("Switch8")
-            .register_ldtk_entity::<SwitchBundle>("Switch9")
-            .register_ldtk_entity::<SwitchBundle>("Switch10")
-            .register_ldtk_entity::<SwitchBundle>("Switch11")
-            .register_ldtk_entity::<SwitchBundle>("Switch12");
-
-        app.register_ldtk_entity::<PuzzleBundle>("Puzzle1")
-            .register_ldtk_entity::<PuzzleBundle>("Puzzle2")
-            .register_ldtk_entity::<PuzzleBundle>("Puzzle3")
-            .register_ldtk_entity::<PuzzleBundle>("Puzzle4")
-            .register_ldtk_entity::<PuzzleBundle>("Puzzle5")
-            .register_ldtk_entity::<PuzzleBundle>("Puzzle6")
-            .register_ldtk_entity::<PuzzleBundle>("Puzzle7")
-            .register_ldtk_entity::<PuzzleBundle>("Puzzle8")
-            .register_ldtk_entity::<PuzzleBundle>("Puzzle9")
-            .register_ldtk_entity::<PuzzleBundle>("Puzzle10")
-            .register_ldtk_entity::<PuzzleBundle>("Puzzle11")
-            .register_ldtk_entity::<PuzzleBundle>("Puzzle12");
+        app.add_systems(OnExit(AppState::InGame), theseeker_engine::presentation::clear_presentation);
+        app.insert_resource(theseeker_engine::assets::animation::AnimationClock(
+            theseeker_engine::assets::animation::FrameClock::Global,
+        ));
+        // LDtk registration removed; entities are spawned by PNG level pipeline
 
         // Add the plugins for each game mechanic
+        app.add_plugins(actors::ActorPlugin);
         app.add_plugins((
+            combat::CombatPlugin,
+            interaction::InteractionPlugin,
+            physics::PhysicsPlugin,
+            effects::EffectsPlugin,
             player::PlayerPlugin,
             enemy::EnemyPlugin,
-            merchant::MerchantPlugin,
+            tick_profile::TickProfilePlugin,
             yak::YakPlugin,
-            attack::AttackPlugin,
-            wall::WallPlugin,
+            world_objects::WorldObjectsPlugin,
+            spikes::SpikeHazardPlugin,
             game_over::GameOverPlugin,
-            xp_orbs::XpPlugin,
-            switches::SwitchesPlugin,
-            pickups::PickupPlugin,
+            intro::IntroPlugin,
         ));
     }
 }

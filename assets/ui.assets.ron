@@ -1,15 +1,6 @@
 /// This file is for everything related to UI, except audio / sound effects.
 ({
-    "ui.font.regular": File (
-        path: "font/Tektur-Medium.ttf"
-    ),
-    "ui.font.bold": File (
-        path: "font/Tektur-Bold.ttf"
-    ),
-    "ui.font.light": File (
-        path: "font/Tektur-Regular.ttf"
-    ),
-    "ui.mainmenu.background": File (
-        path: "ui/mainmenu/background.png"
+    "ui.game.frame_corner_bottom_left": File (
+        path: "ui/game/FrameCornerBottomLeft.png"
     ),
 })

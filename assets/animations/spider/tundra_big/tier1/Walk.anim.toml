@@ -1,0 +1,29 @@
+[asset]
+key = "anim.tundra_big.Walk"
+image = "animations/spider/tundra_big/tier1/Walk__r1c10__90x90.png"
+
+atlas_asset_key = "anim.tundra_big.Walk.sprite"
+
+[playback]
+start = 1
+end = 10
+ticks_per_frame = 8
+mode = "loop"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 10
+frame_start = 1
+
+# LOOP
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

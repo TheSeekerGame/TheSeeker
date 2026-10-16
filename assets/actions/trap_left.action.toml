@@ -1,0 +1,5 @@
+id = "trap_left"
+mechanic = { kind = "trap_strike" }
+presentation = { animation = "AttackLeft" }
+timing = { release = "kill", complete = "attack_done", repetitions = 1 }
+controls = { presentation = true }

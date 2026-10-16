@@ -1,0 +1,11 @@
+[asset]
+key = "anim.opi.InhaleLeft"
+image = "animations/opi/InhaleLeft__r1c29__84x84.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 29
+frame_start = 1

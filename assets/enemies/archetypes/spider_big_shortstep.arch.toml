@@ -1,0 +1,4 @@
+schema_version = 2
+id = "spider_big_shortstep"
+base = "spider_big"
+walking = { kind = "frame_steps", track = "Walk", scale = 0.5 }

@@ -1,0 +1,56 @@
+[asset]
+key = "anim.player.Spit"
+image = "animations/spider/big/tier1/RangedAttack__r1c15__90x90.png"
+
+# Spit ability animation - uses spider ranged attack spritesheet
+# The player briefly transforms into spider form to fire a projectile
+
+atlas_asset_key = "anim.player.Spit.sprite"
+
+[playback]
+start = 6
+end = 15
+ticks_per_frame = 8
+mode = "hold"
+
+[settings]
+time_base = "Relative"
+frame_start = 6
+tick_quant = "8"
+ticks_per_frame = 8
+frame_max = 15
+frame_min = 1
+
+[[events]]
+on = { frame_enter = 7 }
+emit = "fire_projectile"
+
+[[events]]
+on = { frame_enter = 10 }
+emit = "cancel_window"
+
+# Audio cue when projectile fires (frame 7)
+[[script]]
+run_at_frame = 7
+action = "StopAudio"
+label = "SpitAttack"
+current_script_only = false
+
+[[script]]
+run_at_frame = 7
+action = "PlayAudio"
+volume = 0.6
+asset_key = "audio.game.BigSpiderAttack"
+label = "SpitAttack"
+
+# Direction handling - spider sprites face left by default
+# Player faces right by default, so we INVERT the flip logic
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = false
+
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = true

@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.HammerBasicAir"
+image = "animations/player/hammer/BasicAirSheet__r1c18__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

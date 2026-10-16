@@ -1,0 +1,55 @@
+schema_version = 2
+id = "buzzer"
+behavior = { kind = "combat", approach = "flying", committed = true, recovery = "align" }
+actions = { Attack = "buzzer_burst" }
+spawn_hp = 90
+walk_speed = 0.48
+chase_speed = 0.0
+dmg_melee = 0
+dmg_ranged = 38
+vision_range = 240
+melee_range = 104
+reaction_time = 8
+
+[setup]
+name = "Buzzer"
+controller = "flying"
+collider = { half_extents = [8.0, 8.0] }
+spawn_offset = [0.0, 14.0, 0.000014]
+facing = "random_horizontal"
+facing_slots = { right = "DirectionLeft", left = "DirectionRight" }
+needs_line_of_sight = true
+stat_minimums = { vision_range = 180.0, melee_range = 64.0 }
+
+[setup.gfx]
+keys = ["Idle", "Fly"]
+
+[flying]
+profile = "patrol"
+patrol_radius = 150.0
+idle_wait = [48, 120]
+
+[flying.stalk]
+kind = "horizontal_line"
+target_distance = 104.0
+min_target_distance = 36.0
+x_tolerance = 8.0
+y_tolerance = 6.0
+windup_ticks = 8
+
+[flying.attack]
+kind = "stationary"
+
+[death]
+mode = "death_fall"
+anim_key = "Die"
+decay_key = "Decay"
+fall_collider_half_extents = [4.0, 2.0]
+fall_gfx_offset_y = 2.0
+
+[anim]
+Idle = "anim.buzzer.AirIdle"
+Fly = "anim.buzzer.AirIdle"
+Attack = "anim.buzzer.AirAttack"
+Die = "anim.buzzer.AirFall"
+Decay = "anim.buzzer.Death"

@@ -1,0 +1,48 @@
+{
+  "canvas": [
+    36,
+    36
+  ],
+  "visible_bounds_xyxy": [
+    2,
+    5,
+    34,
+    27
+  ],
+  "body_center_xy": [
+    18,
+    19
+  ],
+  "wing_hinges_xy": [
+    [
+      14,
+      16
+    ],
+    [
+      21,
+      16
+    ]
+  ],
+  "palette": {
+    "i": "#21252c",
+    "d": "#2b382c",
+    "s": "#405359",
+    "t": "#4f7368",
+    "f": "#557c70",
+    "h": "#8ca893",
+    "m": "#49573d",
+    "o": "#696e49",
+    "w": "#55503f",
+    "r": "#9d8a4d",
+    "e": "#d5c066",
+    "b": "#8c9245"
+  },
+  "layers_back_to_front": [
+    "wing_left",
+    "wing_right",
+    "ears",
+    "body"
+  ],
+  "asset": "assets/animations/bats/tundra/Static__r1c1__36x36.png",
+  "status": "Static design study; no gameplay or animation registration."
+}

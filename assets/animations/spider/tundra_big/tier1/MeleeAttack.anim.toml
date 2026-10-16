@@ -1,0 +1,37 @@
+[asset]
+key = "anim.tundra_big.MeleeAttack"
+image = "animations/spider/tundra_big/tier1/MeleeAttack__r1c11__90x90.png"
+
+atlas_asset_key = "anim.tundra_big.MeleeAttack.sprite"
+
+[playback]
+start = 1
+end = 11
+ticks_per_frame = 8
+mode = "loop"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 11
+frame_start = 1
+
+[[events]]
+on = { frame_enter = 8 }
+emit = "melee_active"
+
+[[events]]
+on = { frame_exit = 11 }
+emit = "attack_done"
+
+# LOOP
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

@@ -1,0 +1,11 @@
+[asset]
+key = "anim.tentacle.Head"
+image = "animations/tentacle/head__r1c1__24x24.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 1
+frame_start = 1

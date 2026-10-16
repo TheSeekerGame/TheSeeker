@@ -1,18 +1,18 @@
-use std::marker::PhantomData;
-
 use bevy::asset::{Asset, UntypedAssetId};
-use bevy::prelude::*;
-use bevy::render::render_resource::TextureFormat;
+use bevy::prelude::States;
 use bevy_common_assets::toml::TomlAssetPlugin;
-use rapier2d::geometry::SharedShape;
-use rapier2d::prelude::Point;
 
-use crate::physics::SpriteShapeMap;
 use crate::prelude::*;
 
 pub mod animation;
+pub mod attack;
 pub mod config;
+pub mod projectile;
 pub mod script;
+mod sprite_colliders;
+
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum AssetsSet { ResolveKeys, Colliders }
 
 pub struct AssetsPlugin<S: States> {
     pub loading_state: S,
@@ -26,90 +26,46 @@ impl<S: States> Plugin for AssetsPlugin<S> {
             TomlAssetPlugin::<self::animation::SpriteAnimation>::new(&[
                 "anim.toml",
             ]),
+            TomlAssetPlugin::<self::attack::AttackDescriptor>::new(&[
+                "attack.toml",
+            ]),
+            TomlAssetPlugin::<self::projectile::ProjectileDescriptor>::new(&[
+                "projectile.toml",
+            ]),
             TomlAssetPlugin::<self::config::DynamicConfig>::new(&["cfg.toml"]),
         ));
-        // dynamic key resolvers for whatever we need
-        // we want to be able to do things per-game-tick, so put this in `GameTickUpdate`
-        app.add_systems(
-            GameTickUpdate,
-            (
-                resolve_asset_keys::<self::script::Script>,
-                resolve_asset_keys::<self::animation::SpriteAnimation>,
-            )
-                .in_set(AssetsSet::ResolveKeys),
-        );
 
         // asset preloading
         app.init_resource::<PreloadedAssets>();
         app.add_systems(
             Update,
             watch_preload_dynamic_collections
-                .track_progress()
-                .run_if(in_state(self.loading_state.clone()))
-                // NOTE: this is "after" on purpose; we want to check readiness of assets
-                // even though we might be adding more handles for tracking
-                .after(AssetsTrackProgress),
+                .run_if(in_state(self.loading_state.clone())),
         );
         app.add_systems(
             OnExit(self.loading_state.clone()),
             (
-                finalize_preloaded_dynamic_assets,
-                populate_collider_map.after(finalize_preloaded_dynamic_assets),
+                finalize_preloaded_dynamic_assets.in_set(AssetsSet::ResolveKeys),
+                validate_attack_descriptors.after(finalize_preloaded_dynamic_assets),
+                validate_projectile_descriptors.after(validate_attack_descriptors).before(AssetsSet::Colliders),
+                sprite_colliders::populate_collider_map.in_set(AssetsSet::Colliders),
             ),
         );
-    }
-}
 
-/// Use this for system ordering relative to assets
-/// (within the `GameTickUpdate` schedule)
-#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum AssetsSet {
-    /// This is when `AssetKey` gets resolved to `Handle`
-    ResolveKeys,
-}
+        app.configure_sets(OnExit(self.loading_state.clone()), (AssetsSet::ResolveKeys, AssetsSet::Colliders).chain());
 
-/// Component for when we want to use a dynamic asset key string to refer to an asset
-/// on an entity, instead of a handle.
-#[derive(Component, Clone, Debug, PartialEq, Eq)]
-pub struct AssetKey<T: Asset> {
-    pub key: String,
-    pub _pd: PhantomData<T>,
-}
-
-impl<T: Asset> AssetKey<T> {
-    pub fn new(key: &str) -> Self {
-        Self {
-            key: key.to_owned(),
-            _pd: PhantomData,
-        }
-    }
-}
-
-impl<T: Asset> From<&str> for AssetKey<T> {
-    fn from(value: &str) -> Self {
-        Self::new(value)
-    }
-}
-
-impl<T: Asset> From<&String> for AssetKey<T> {
-    fn from(value: &String) -> Self {
-        Self::new(value.as_str())
-    }
-}
-
-/// System that detects `AssetKey` components on entities and inserts `Handle`.
-///
-/// This happens in `GameTickUpdate`, so it is possible to spawn and resolve
-/// things every game tick.
-pub fn resolve_asset_keys<T: Asset>(
-    mut commands: Commands,
-    preloaded: Res<PreloadedAssets>,
-    q_key: Query<(Entity, &AssetKey<T>), Without<Handle<T>>>,
-) {
-    for (e, key) in &q_key {
-        if let Some(handle) = preloaded.get_single_asset::<T>(&key.key) {
-            commands.entity(e).insert(handle);
-        }
+        // Descriptor changes are validated before gameplay consumes them.
+        app.add_systems(
+            Update,
+            (
+                validate_modified_attack_descriptors.run_if(on_message::<
+                    AssetEvent<self::attack::AttackDescriptor>,
+                >),
+                validate_modified_projectile_descriptors.run_if(on_message::<
+                    AssetEvent<self::projectile::ProjectileDescriptor>,
+                >),
+            ),
+        );
     }
 }
 
@@ -125,6 +81,27 @@ pub struct PreloadedAssets {
 }
 
 impl PreloadedAssets {
+    /// Handles requested during loading, including assets whose bytes are still in flight.
+    pub fn handles(&self) -> impl Iterator<Item = &UntypedHandle> { self.handles.iter() }
+
+    pub fn register_runtime_asset<T: Asset>(&mut self, key: String, handle: Handle<T>) {
+        let untyped = handle.untyped();
+        self.handles.insert(untyped.clone());
+        self.map_reverse.insert(untyped.id(), key.clone());
+        let previous = self.map.insert(key, Some(DynamicAssetType::Single(untyped.clone())));
+        if let Some(Some(DynamicAssetType::Single(previous))) = previous {
+            self.release_replaced_handle(&previous, &untyped);
+        }
+    }
+
+    fn release_replaced_handle(&mut self, previous: &UntypedHandle, current: &UntypedHandle) {
+        let still_referenced = self.map.values().flatten().any(|value| matches!(value, DynamicAssetType::Single(handle) if handle == previous));
+        if previous != current && !still_referenced {
+            self.handles.remove(previous);
+            self.map_reverse.remove(&previous.id());
+        }
+    }
+
     pub fn get_asset(&self, key: &str) -> Option<&DynamicAssetType> {
         if let Some(v) = self.map.get(key) {
             v.as_ref()
@@ -134,31 +111,16 @@ impl PreloadedAssets {
     }
 
     pub fn get_single_asset<T: Asset>(&self, key: &str) -> Option<Handle<T>> {
-        if let Some(d) = self.get_asset(key) {
-            if let DynamicAssetType::Single(handle) = d {
-                return Some(handle.clone().typed::<T>());
-            }
-        }
-        None
-    }
-
-    pub fn get_single_assetid<T: Asset>(
-        &self,
-        key: &str,
-    ) -> Option<AssetId<T>> {
-        if let Some(d) = self.get_asset(key) {
-            if let DynamicAssetType::Single(handle) = d {
-                return Some(handle.id().typed::<T>());
-            }
+        if let Some(DynamicAssetType::Single(handle)) = self.get_asset(key) {
+            return Some(handle.clone().typed::<T>());
         }
         None
     }
 
     pub fn get_multi_asset(&self, key: &str) -> Option<&[UntypedHandle]> {
-        if let Some(d) = self.get_asset(key) {
-            if let DynamicAssetType::Collection(handles) = d {
-                return Some(handles.as_slice());
-            }
+        if let Some(DynamicAssetType::Collection(handles)) = self.get_asset(key)
+        {
+            return Some(handles.as_slice());
         }
         None
     }
@@ -168,7 +130,7 @@ impl PreloadedAssets {
         assid: impl Into<UntypedAssetId>,
     ) -> Option<&str> {
         let assid = assid.into();
-        self.map_reverse.get(&assid).map(|x| x.as_str())
+        self.map_reverse.get(&assid).map(std::string::String::as_str)
     }
 }
 
@@ -176,41 +138,23 @@ impl PreloadedAssets {
 /// and preloads the things we want preloaded.
 fn watch_preload_dynamic_collections(
     dynamic_ass: Res<DynamicAssets>,
-    mut assets_progress: ResMut<AssetsLoading>,
     mut assets_preloaded: ResMut<PreloadedAssets>,
     ass: Res<AssetServer>,
-    progress: Res<ProgressCounter>,
-    mut done: Local<bool>,
-) -> HiddenProgress {
-    if dynamic_ass.is_changed() {
-        for (key, asset) in dynamic_ass.iter_assets() {
-            // TODO: uncomment this when we have per-level asset management
-            // skip preloading level-specific assets
-            // if key.starts_with("level.") {
-            //     continue;
-            // }
+) {
+    if !dynamic_ass.is_changed() {
+        return;
+    }
 
-            for handle in asset.load(&ass) {
-                assets_preloaded.handles.insert(handle.clone());
-                assets_progress.add(handle);
-            }
+    for (key, asset) in dynamic_ass.iter_assets() {
+        // TODO: per-level asset management
 
-            // reserve an entry in our map for later
-            assets_preloaded.map.insert(key.to_owned(), None);
+        for handle in asset.load(&ass) {
+            assets_preloaded.handles.insert(handle.clone());
         }
+
+        // reserve an entry in our map for later
+        assets_preloaded.map.insert(key.to_owned(), None);
     }
-
-    // give one frame grace, just in case
-    let r = HiddenProgress(Progress::from(*done));
-
-    // hold on until everything else (non-hidden progress) is done,
-    // and then complete ourselves to allow the iyes_progress to transition
-    let progress = progress.progress(); // NOTE: not including hidden
-    if progress.done >= progress.total {
-        *done = true;
-    }
-
-    r
 }
 
 /// At the end of the loading state, "build" any preloaded dynamic assets
@@ -225,39 +169,15 @@ fn finalize_preloaded_dynamic_assets(world: &mut World) {
         .remove_resource::<PreloadedAssets>()
         .expect("PreloadedAssets resource must exist!");
 
+    let map_reverse = &mut preloaded_ass.map_reverse;
     for (key, entry) in preloaded_ass.map.iter_mut() {
-        if let Some(dynass) = dynamic_ass.get_asset(key.as_str()) {
-            match dynass.build(world) {
-                Ok(dat) => {
-                    match &dat {
-                        DynamicAssetType::Single(handle) => {
-                            preloaded_ass
-                                .map_reverse
-                                .insert(handle.id(), key.clone());
-                        },
-                        DynamicAssetType::Collection(handles) => {
-                            for handle in handles {
-                                preloaded_ass
-                                    .map_reverse
-                                    .insert(handle.id(), key.clone());
-                            }
-                        },
-                    }
-                    *entry = Some(dat);
-                },
-                Err(e) => {
-                    error!(
-                        "Failed to build dynamic asset for key {:?}: {:#}",
-                        key, e
-                    );
-                },
-            }
-        } else {
-            error!(
-                "Dynamic asset for key {:?} does not exist!",
-                key
-            );
-        }
+        finalize_dynamic_asset_entry(
+            world,
+            &dynamic_ass,
+            map_reverse,
+            key,
+            entry,
+        );
     }
 
     // put them back
@@ -265,112 +185,121 @@ fn finalize_preloaded_dynamic_assets(world: &mut World) {
     world.insert_resource(preloaded_ass);
 }
 
-fn populate_collider_map(
-    preloaded: Res<PreloadedAssets>,
-    animations: Res<Assets<animation::SpriteAnimation>>,
-    mut images: ResMut<Assets<Image>>,
-    layouts: Res<Assets<TextureAtlasLayout>>,
-    mut collider_map: ResMut<SpriteShapeMap>,
+fn finalize_dynamic_asset_entry(
+    world: &mut World,
+    dynamic_ass: &DynamicAssets,
+    map_reverse: &mut HashMap<UntypedAssetId, String>,
+    key: &str,
+    entry: &mut Option<DynamicAssetType>,
 ) {
-    // we only want to process images that are actually used
-    // by animations, so first we need to collect a list of
-    // relevant image assets by going through all loaded
-    // animations and resolving their image and layout asset keys
-    let iter_assets = animations.iter().filter_map(|(anim_id, anim)| {
-        anim.resolve_image_atlas(
-            &preloaded,
-            preloaded.get_key_for_asset(anim_id),
-        )
-    });
+    let Some(dynass) = dynamic_ass.get_asset(key) else {
+        error!("Dynamic asset for key {:?} does not exist!", key);
+        return;
+    };
 
-    // A dummy collider that gets used when the image has no shape generated.
-    // (need to do it this way because it removes any requirements for tracking the collider component
-    // properties, so everything works as expected.)
-    let null_shape = SharedShape::convex_hull(&*vec![
-        Point::new(1000000.0f32, 1000000.0f32),
-        Point::new(1000001.0f32, 1000000.0f32),
-    ])
-    .unwrap();
-    // fun thing about shared shapes is the are arc, so clones don't use more memory.
-    collider_map.shapes.push((
-        null_shape.clone(),
-        null_shape.clone(),
-        null_shape.clone(),
-        null_shape,
-    ));
-    for (h_image, h_layout) in iter_assets {
-        let Some(image_origin) = images.get_mut(&h_image) else {
-            continue;
-        };
-        let Some(layout) = layouts.get(&h_layout) else {
-            continue;
-        };
+    let dat = match dynass.build(world) {
+        Ok(dat) => dat,
+        Err(e) => {
+            error!("Failed to build dynamic asset for key {:?}: {:#}", key, e);
+            return;
+        },
+    };
 
-        let mut collider_ids = vec![];
-        let mut image =
-            image_origin.convert(TextureFormat::Rgba8UnormSrgb).unwrap();
-        let width = image.width() as usize;
-        let mut data = &mut image.data;
-        for (i, anim_frame_rect) in layout.textures.iter().enumerate() {
-            let min = anim_frame_rect.min;
-            let max = anim_frame_rect.max;
-            let size = anim_frame_rect.size();
-            let mut collider_points = vec![];
-            for y in min.y as usize..max.y as usize {
-                for x in min.x as usize..max.x as usize {
-                    let pixel_index = (y * width + x) * 4;
+    register_dynamic_asset_handles(map_reverse, key, &dat);
+    *entry = Some(dat);
+}
 
-                    // Read the pixel values (assuming RGBA format)
-                    let pixel = &mut data[pixel_index..pixel_index + 4];
-
-                    // Any pixels with the bright Magenta color will be used for
-                    // building the collider
-                    if pixel[0] == 255
-                        && pixel[1] == 0
-                        && pixel[2] == 255
-                        && pixel[3] == 255
-                    {
-                        collider_points.push(Point::new(
-                            (0.5 + x as f32 - min.x) - size.x * 0.5,
-                            // the siz.y - flips it on y since texture coords are inverted y
-                            size.y - ((0.5 + y as f32 - min.y) + size.y * 0.5),
-                        ));
-                        // Overwrites it with an empty color
-                        pixel.copy_from_slice(&[0, 0, 0, 0]);
-                    }
-                }
+fn register_dynamic_asset_handles(
+    map_reverse: &mut HashMap<UntypedAssetId, String>,
+    key: &str,
+    dat: &DynamicAssetType,
+) {
+    match dat {
+        DynamicAssetType::Single(handle) => {
+            map_reverse.insert(handle.id(), key.to_owned());
+        },
+        DynamicAssetType::Collection(handles) => {
+            for handle in handles {
+                map_reverse.insert(handle.id(), key.to_owned());
             }
-            if collider_points.len() < 2 {
-                collider_ids.push(0);
-                continue;
-            }
-            let shape = SharedShape::convex_hull(&*collider_points)
-                .expect("Cannot build convex hull");
-            collider_points.iter_mut().for_each(|p| p.x = -p.x);
-            let shape_flipped_x =
-                SharedShape::convex_hull(&*collider_points).unwrap();
-            collider_points.iter_mut().for_each(|p| {
-                p.x = -p.x;
-                p.y = -p.y;
-            });
-            let shape_flipped_y =
-                SharedShape::convex_hull(&*collider_points).unwrap();
-            collider_points.iter_mut().for_each(|p| p.y = -p.y);
-            let shape_flipped_xy =
-                SharedShape::convex_hull(&*collider_points).unwrap();
+        },
+    }
+}
 
-            let i_new = collider_map.shapes.len();
-            collider_map.shapes.push((
-                shape,
-                shape_flipped_x,
-                shape_flipped_y,
-                shape_flipped_xy,
-            ));
-            collider_ids.push(i_new);
+/// Merge archetype override assets with their base archetypes
+fn validate_projectile_descriptors(
+    projectile_assets: Res<Assets<projectile::ProjectileDescriptor>>,
+) {
+    for (handle, descriptor) in projectile_assets.iter() {
+        if let Err(e) = descriptor.validate() {
+            error!(
+                "Projectile descriptor validation failed for {:?}: {}",
+                handle, e
+            );
         }
-        *image_origin = image.into();
-        // collider ids is either 0 or an index into shapes?
-        // could it be option instead..
-        collider_map.map.insert(h_image.id(), collider_ids);
+    }
+}
+
+fn validate_modified_projectile_descriptors(
+    mut events: MessageReader<AssetEvent<projectile::ProjectileDescriptor>>,
+    projectile_assets: Res<Assets<projectile::ProjectileDescriptor>>,
+) {
+    for event in events.read() {
+        let AssetEvent::Modified { id } = event else {
+            continue;
+        };
+        validate_modified_projectile_descriptor(*id, &projectile_assets);
+    }
+}
+
+fn validate_modified_projectile_descriptor(
+    id: AssetId<projectile::ProjectileDescriptor>,
+    projectile_assets: &Assets<projectile::ProjectileDescriptor>,
+) {
+    let Some(descriptor) = projectile_assets.get(id) else {
+        return;
+    };
+    if let Err(e) = descriptor.validate() {
+        error!(
+            "Projectile descriptor validation failed for {:?}: {}",
+            id, e
+        );
+    }
+}
+
+fn validate_attack_descriptors(
+    attack_assets: Res<Assets<attack::AttackDescriptor>>,
+) {
+    for (handle, descriptor) in attack_assets.iter() {
+        if let Err(e) = descriptor.validate() {
+            error!(
+                "Attack descriptor validation failed for {:?}: {}",
+                handle, e
+            );
+        }
+    }
+}
+
+fn validate_modified_attack_descriptors(
+    mut events: MessageReader<AssetEvent<attack::AttackDescriptor>>,
+    attack_assets: Res<Assets<attack::AttackDescriptor>>,
+) {
+    for event in events.read() {
+        let AssetEvent::Modified { id } = event else {
+            continue;
+        };
+        validate_modified_attack_descriptor(*id, &attack_assets);
+    }
+}
+
+fn validate_modified_attack_descriptor(
+    id: AssetId<attack::AttackDescriptor>,
+    attack_assets: &Assets<attack::AttackDescriptor>,
+) {
+    let Some(descriptor) = attack_assets.get(id) else {
+        return;
+    };
+    if let Err(e) = descriptor.validate() {
+        error!("Attack descriptor validation failed for {:?}: {}", id, e);
     }
 }

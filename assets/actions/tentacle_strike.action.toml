@@ -1,0 +1,5 @@
+id = "tentacle_strike"
+mechanic = { kind = "tentacle_strike", phases = { windup = 26, strike = 14, recover = 32, hit_window = [28, 46] } }
+timing = { repetitions = 1, recovery_ticks = 54 }
+damage = 24.0
+controls = { presentation = true }

@@ -1,540 +1,427 @@
-use std::sync::atomic::{
-    AtomicI64, AtomicU64, Ordering as MemOrdering,
-};
-use std::sync::Mutex;
+//! Bounded, device-independent mixer. Tests feed the same core arbitrary buffers.
+use std::sync::{atomic::{AtomicU64, Ordering}, Arc};
 
-use cpal::FromSample;
-use rodio::{Sample, Source};
+use crossbeam_channel::Receiver;
 
-use crate::prelude::*;
+#[derive(Debug)]
+pub(super) struct SampleData {
+    pub channels: usize,
+    pub frames: usize,
+    pub data: Vec<f32>,
+}
 
-pub(super) type MySample = f32;
-type BoxedSource = Box<dyn Source<Item = MySample> + Send + Sync>;
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AudioBus { Sfx, Ambience, Music }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct PreciseAudioId(u64);
+#[derive(Debug)]
+pub(super) struct Play {
+    pub id: u64,
+    pub sample: Arc<SampleData>,
+    pub ended: Arc<AtomicU64>,
+    pub bus: AudioBus,
+    pub volume: f32,
+    pub pan: f32,
+    pub loop_range: Option<(usize, usize)>,
+    pub position: usize,
+    pub fade_frames: usize,
+}
 
-impl PreciseAudioId {
-    fn new() -> Self {
-        Self(NEXT_ID.fetch_add(1, MemOrdering::Relaxed))
+#[derive(Debug)]
+pub(super) enum CommandKind {
+    Play(Play),
+    Stop(u64),
+    StopAll(u64),
+    BusGain { bus: AudioBus, volume: f32 },
+    Gain { id: u64, volume: f32, frames: usize, stop_after: bool },
+}
+
+#[derive(Debug)]
+pub(super) struct Command {
+    pub at: i64,
+    pub epoch: u64,
+    pub order: u64,
+    pub kind: CommandKind,
+}
+
+#[derive(Debug)]
+pub(super) enum Control {
+    Event(Command),
+    Pause(i64),
+    ResumeAfter(i64),
+    Reset { frame: i64, epoch: u64 },
+    Reference(bool),
+}
+
+/// Piecewise mapping survives a pause without stopping the hardware stream.
+#[derive(Clone, Copy, Debug, Default)]
+pub(super) struct Mapping {
+    pub device: i64,
+    pub transport: i64,
+    pub paused: bool,
+    pub previous_paused: bool,
+}
+
+impl Mapping {
+    pub fn position(self, device: f64) -> f64 {
+        let delta = device - self.device as f64;
+        let paused = if delta < 0.0 { self.previous_paused } else { self.paused };
+        (self.transport as f64 + if paused { 0.0 } else { delta }).max(0.0)
     }
 }
 
-static NEXT_ID: AtomicU64 = AtomicU64::new(0);
-
-/// Audio Source that mixes many sounds with accurate timings.
-///
-/// Internally everything uses `f32` sample format to ensure no clipping.
-///
-/// (largely follows the design and implementation of Rodio's DynamicMixer)
-pub struct PrecisionMixer {
-    controller: Arc<PrecisionMixerController>,
-    sample_count: i64,
-    current_channel: u16,
+struct Voice {
+    play: Play,
+    gain: f32,
+    target: f32,
+    remaining: usize,
+    stop_after: bool,
+    left: f32,
+    right: f32,
 }
 
-pub struct PrecisionMixerController {
-    sample_count: AtomicI64,
-    tick_rate: f32,
+impl Voice {
+    fn new(play: Play, late: usize) -> Self {
+        let angle = (play.pan.clamp(-1.0, 1.0) + 1.0) * std::f32::consts::FRAC_PI_4;
+        let target = play.volume;
+        let remaining = play.fade_frames.saturating_sub(late);
+        let gain = if play.fade_frames == 0 { target }
+            else { target * (late.min(play.fade_frames) as f32 / play.fade_frames as f32) };
+        let mut voice = Self {
+            play, gain, target, remaining, stop_after: false,
+            left: angle.cos(), right: angle.sin(),
+        };
+        voice.play.position = voice.play.position.saturating_add(late);
+        voice
+    }
+
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+pub struct MixerDiagnostics {
+    pub late_events: u64,
+    pub late_plays: u64,
+    pub late_controls: u64,
+    pub max_lateness_frames: u64,
+    pub rejected_events: u64,
+    pub stolen_voices: u64,
+    pub clipped_samples: u64,
+    pub callbacks: u64,
+    pub max_callback_micros: u64,
+    pub resync_requests: u64,
+    pub delayed_callbacks: u64,
+    pub timestamp_fallbacks: u64,
+}
+
+pub(super) struct Mixer {
+    commands: Receiver<Command>,
+    controls: Receiver<Control>,
+    scheduled: Vec<Command>,
+    voices: Vec<Option<Voice>>,
+    sfx_voices: usize,
+    pub device_frame: i64,
+    pub transport_frame: i64,
+    pub epoch: u64,
+    pub mapping: Mapping,
+    pub stats: MixerDiagnostics,
+    pause_at: Option<i64>,
+    resume_at: Option<i64>,
+    reference: bool,
+    reference_tick: u64,
     sample_rate: u32,
-    channels: u16,
-    tracks: Mutex<PrecisionMixerTracks>,
+    tick_rate: u32,
+    command_budget: usize,
+    cancelled_through: u64,
+    bus_gains: [f32; 3],
 }
 
-#[derive(Default)]
-struct PrecisionMixerTracks {
-    pending: HashMap<PreciseAudioId, PrecisionMixerQueuedTrack>,
-    playing: HashMap<PreciseAudioId, PrecisionMixerActiveTrack>,
-    label2id: HashMap<String, HashSet<PreciseAudioId>>,
-    id2label: HashMap<PreciseAudioId, String>,
-}
-
-impl PrecisionMixerTracks {
-    fn add_to_label(&mut self, label: &str, id: PreciseAudioId) {
-        if let Some(old_label) = self.id2label.remove(&id) {
-            if let Some(l) = self.label2id.get_mut(&old_label) {
-                l.remove(&id);
-                if l.is_empty() {
-                    self.label2id.remove(&old_label);
-                }
-            }
-        }
-
-        if let Some(l) = self.label2id.get_mut(label) {
-            l.insert(id);
-        } else {
-            let mut set = HashSet::default();
-            set.insert(id);
-            self.label2id.insert(label.to_owned(), set);
-        }
-
-        self.id2label.insert(id, label.to_owned());
-    }
-
-    fn remove(&mut self, id: PreciseAudioId) {
-        self.playing.remove(&id);
-        self.pending.remove(&id);
-
-        if let Some(label) = self.id2label.remove(&id) {
-            if let Some(l) = self.label2id.get_mut(&label) {
-                l.remove(&id);
-                if l.is_empty() {
-                    self.label2id.remove(&label);
-                }
-            }
-        }
-    }
-
-    fn remove_label(&mut self, label: &str) {
-        if let Some(l) = self.label2id.get(label) {
-            for id in l.iter() {
-                self.id2label.remove(id);
-                self.pending.remove(id);
-                self.playing.remove(id);
-            }
-            self.label2id.remove(label);
-        }
-    }
-}
-
-struct PrecisionMixerQueuedTrack {
-    start_at_sample_number: Option<i64>,
-    first_sample: MySample,
-    volume: f32,
-    pan: f32,
-    source: Option<BoxedSource>,
-}
-
-struct PrecisionMixerActiveTrack {
-    done: bool,
-    volume: f32,
-    pan: f32,
-    current_channel: u16,
-    next_sample: MySample,
-    source: BoxedSource,
-}
-
-impl PrecisionMixerController {
+impl Mixer {
     pub fn new(
-        channels: u16,
-        sample_rate: u32,
-        tick_rate: f32,
-    ) -> Arc<PrecisionMixerController> {
-        if channels > 2 {
-            panic!("PrecisionMixer does not support > 2 audio channels!");
-        }
-        Arc::new(PrecisionMixerController {
-            sample_count: AtomicI64::new(0),
-            tracks: Mutex::new(default()),
-            channels,
-            sample_rate,
-            tick_rate,
-        })
-    }
-
-    pub fn has_playing(&self) -> bool {
-        !self.tracks.lock().unwrap().playing.is_empty()
-    }
-
-    pub fn reset_sample_counter(&self, new: i64) {
-        self.sample_count.store(new, MemOrdering::Relaxed);
-    }
-
-    pub fn sample_count(&self) -> i64 {
-        self.sample_count.load(MemOrdering::Relaxed)
-    }
-
-    pub fn sample_rate(&self) -> u32 {
-        self.sample_rate
-    }
-
-    pub fn stop_one(&self, id: PreciseAudioId) {
-        let mut tracks = self.tracks.lock().unwrap();
-        tracks.remove(id);
-    }
-
-    pub fn stop_all(&self) {
-        let mut tracks = self.tracks.lock().unwrap();
-        tracks.playing.clear();
-        tracks.pending.clear();
-        tracks.label2id.clear();
-    }
-
-    pub fn stop_label(&self, label: &str) {
-        let mut tracks = self.tracks.lock().unwrap();
-        tracks.remove_label(label);
-    }
-
-    pub fn stop_many(&self, ids: &[PreciseAudioId]) {
-        let mut tracks = self.tracks.lock().unwrap();
-        for id in ids {
-            tracks.remove(*id);
+        commands: Receiver<Command>, controls: Receiver<Control>,
+        sfx_voices: usize, background_voices: usize,
+        capacity: usize, sample_rate: u32, tick_rate: u32,
+    ) -> Self {
+        Self {
+            commands, controls, scheduled: Vec::with_capacity(capacity * 2),
+            voices: (0..sfx_voices + background_voices).map(|_| None).collect(),
+            sfx_voices, device_frame: 0, transport_frame: 0, epoch: 1,
+            mapping: Mapping::default(), stats: MixerDiagnostics::default(),
+            pause_at: None, resume_at: None, reference: false, reference_tick: 0,
+            sample_rate, tick_rate, command_budget: capacity, cancelled_through: 0, bus_gains: [1.0; 3],
         }
     }
 
-    pub fn stop_many_with_label(&self, ids: &mut Vec<PreciseAudioId>, label: &str) {
-        let mut tracks = self.tracks.lock().unwrap();
-        ids.retain(|id| {
-            let has_label = tracks.id2label.get(id).map(|s| s.as_str()) == Some(label);
-            if has_label {
-                tracks.remove(*id);
-            }
-            !has_label
-        });
-    }
+    pub fn begin_callback(&mut self) { begin_callback(self); }
 
-    pub fn cleanup_stale_ids(&self, ids: &mut Vec<PreciseAudioId>) {
-        let tracks = self.tracks.lock().unwrap();
-        ids.retain(|id| {
-            tracks.playing.contains_key(id) || tracks.pending.contains_key(id)
-        });
-    }
 
-    fn play_at_sample_number<T, S>(
-        &self,
-        label: Option<&str>,
-        start_at_sample_number: Option<i64>,
-        source: T,
-        volume: f32,
-        pan: f32,
-    ) -> PreciseAudioId
-    where
-        T: Source<Item = S> + Send + Sync + 'static,
-        S: Sample + Send + 'static,
-        MySample: FromSample<S>,
-    {
-        if source.channels() > 2 {
-            panic!("GameTickMixer does not support > 2 audio channels!");
+    fn schedule(&mut self, command: Command, critical: bool) {
+        if command.epoch != self.epoch {
+            self.finish_command(command);
+            return;
         }
-        let mut source = Box::new(source.convert_samples::<MySample>());
-        let id = PreciseAudioId::new();
-        if let Some(first_sample) = (&mut *source).next() {
-            let mut tracks = self.tracks.lock().unwrap();
-            tracks.pending.insert(
-                id,
-                PrecisionMixerQueuedTrack {
-                    start_at_sample_number,
-                    first_sample,
-                    volume,
-                    pan,
-                    source: Some(source),
-                },
-            );
-            if let Some(label) = label {
-                tracks.add_to_label(label, id);
-            }
+        if self.scheduled.len() == self.scheduled.capacity() {
+            self.stats.rejected_events += 1;
+            self.reject(command, critical);
+            return;
         }
-        id
+        let index = self.scheduled.partition_point(|event| (event.at, event.order) <= (command.at, command.order));
+        self.scheduled.insert(index, command);
     }
 
-    pub fn play_immediately<T, S>(
-        &self,
-        label: Option<&str>,
-        source: T,
-        volume: f32,
-        pan: f32,
-    ) -> PreciseAudioId
-    where
-        T: Source<Item = S> + Send + Sync + 'static,
-        S: Sample + Send + 'static,
-        MySample: FromSample<S>,
-    {
-        self.play_at_sample_number(label, None, source, volume, pan)
+    fn reject(&mut self, command: Command, critical: bool) {
+        if !critical { self.finish_command(command); return; }
+        if let Some(index) = self.scheduled.iter().rposition(|event| matches!(event.kind, CommandKind::Play(_))) {
+            let rejected = self.scheduled.remove(index);
+            self.finish_command(rejected);
+            self.schedule(command, true);
+            return;
+        }
+        // Exhaustion of control storage enters an explicit silent resynchronization.
+        self.stop_all();
+        self.set_paused(true);
+        self.stats.resync_requests += 1;
+        self.apply(command);
     }
 
-    pub fn play_at_time<T, S>(
-        &self,
-        label: Option<&str>,
-        dur: Duration,
-        source: T,
-        volume: f32,
-        pan: f32,
-    ) -> PreciseAudioId
-    where
-        T: Source<Item = S> + Send + Sync + 'static,
-        S: Sample + Send + 'static,
-        MySample: FromSample<S>,
-    {
-        let seconds = dur.as_secs();
-        let nanos = dur.subsec_nanos();
-        let start_at_sample_number = (seconds as u64 * self.sample_rate as u64)
-            + (self.sample_rate as u64 * nanos as u64 / 1_000_000_000);
-        self.play_at_sample_number(
-            label,
-            Some(start_at_sample_number as i64),
-            source,
-            volume,
-            pan,
-        )
+    fn finish_command(&self, command: Command) {
+        if let CommandKind::Play(play) = command.kind {
+            play.ended.store(self.stats.callbacks, Ordering::Release);
+        }
     }
 
-    pub fn play_at_tick<T, S>(
-        &self,
-        label: Option<&str>,
-        tick: u32,
-        offset_nanos: i32,
-        source: T,
-        volume: f32,
-        pan: f32,
-    ) -> PreciseAudioId
-    where
-        T: Source<Item = S> + Send + Sync + 'static,
-        S: Sample + Send + 'static,
-        MySample: FromSample<S>,
-    {
-        let start_at_sample_number = ((tick as f64 * self.sample_rate as f64
-            / self.tick_rate as f64)
-            as i64
-            + (self.sample_rate as i64 * offset_nanos as i64 / 1_000_000_000))
-            as i64;
-        self.play_at_sample_number(
-            label,
-            Some(start_at_sample_number),
-            source,
-            volume,
-            pan,
-        )
+    fn finish_voice(&mut self, index: usize) {
+        if let Some(voice) = self.voices[index].take() {
+            voice.play.ended.store(self.stats.callbacks, Ordering::Release);
+        }
+    }
+
+    fn stop_all(&mut self) {
+        while let Some(command) = self.scheduled.pop() { self.finish_command(command); }
+        for index in 0..self.voices.len() { self.finish_voice(index); }
+    }
+
+    fn apply(&mut self, command: Command) {
+        let late = self.transport_frame.saturating_sub(command.at).max(0) as usize;
+        if late > 0 {
+            self.stats.late_events += 1;
+            self.stats.max_lateness_frames = self.stats.max_lateness_frames.max(late as u64);
+            let play = matches!(command.kind, CommandKind::Play(_));
+            self.stats.late_plays += u64::from(play);
+            self.stats.late_controls += u64::from(!play);
+        }
+        match command.kind {
+            CommandKind::Play(play) => self.start_voice(play, late),
+            CommandKind::Stop(id) => stop_id(self, id),
+            CommandKind::StopAll(id) => cancel_through(self, id),
+            CommandKind::BusGain { bus, volume } => self.bus_gains[bus as usize] = volume,
+            CommandKind::Gain { id, volume, frames, stop_after } => {
+                change_gain(self, id, volume, frames, stop_after);
+            },
+        }
+    }
+
+    fn start_voice(&mut self, play: Play, late: usize) {
+        if play.id <= self.cancelled_through || !play_has_tail(&play, late) {
+            play.ended.store(self.stats.callbacks, Ordering::Release);
+            return;
+        }
+        let range = if play.bus == AudioBus::Sfx { 0..self.sfx_voices }
+            else { self.sfx_voices..self.voices.len() };
+        let free = range.clone().find(|&index| self.voices[index].is_none());
+        let stolen = (play.bus == AudioBus::Sfx).then(|| {
+            range.min_by_key(|&index| self.voices[index].as_ref().map_or(0, |voice| voice.play.id))
+        }).flatten();
+        let Some(index) = free.or(stolen) else {
+            self.stats.rejected_events += 1;
+            play.ended.store(self.stats.callbacks, Ordering::Release);
+            return;
+        };
+        if self.voices[index].is_some() {
+            self.stats.stolen_voices += 1;
+            self.finish_voice(index);
+        }
+        self.voices[index] = Some(Voice::new(play, late));
+    }
+
+
+    fn set_paused(&mut self, paused: bool) {
+        self.mapping = Mapping {
+            device: self.device_frame, transport: self.transport_frame,
+            previous_paused: self.mapping.paused, paused,
+        };
+    }
+
+    /// Stereo interleaved scratch buffer, of any bounded size supplied by caller.
+    pub fn render(&mut self, output: &mut [f32]) { render_mixer(self, output); }
+
+    fn apply_due(&mut self) {
+        if self.pause_at.is_some_and(|at| at <= self.transport_frame) {
+            self.set_paused(true);
+            self.pause_at = None;
+        }
+        if self.resume_at.is_some_and(|at| at <= self.device_frame) {
+            self.set_paused(false);
+            self.resume_at = None;
+        }
+        while self.scheduled.first().is_some_and(|event| event.at <= self.transport_frame) {
+            let command = self.scheduled.remove(0);
+            self.apply(command);
+        }
+    }
+
+    fn span_frames(&self, remaining: usize) -> usize {
+        let boundary = if self.mapping.paused {
+            self.resume_at.map(|at| at - self.device_frame)
+        } else {
+            self.scheduled.first().map(|event| event.at).into_iter()
+                .chain(self.pause_at).min().map(|at| at - self.transport_frame)
+        };
+        boundary.map_or(remaining, |frames| remaining.min(frames.max(1) as usize))
+    }
+
+}
+
+fn play_has_tail(play: &Play, late: usize) -> bool {
+    if let Some((start, end)) = play.loop_range { return start < end && end <= play.sample.frames; }
+    play.position.saturating_add(late) < play.sample.frames
+}
+
+fn render_voice(voice: &mut Voice, out: &mut [f32], bus_gains: &[f32; 3]) -> bool {
+    for frame in out.as_chunks_mut::<2>().0 {
+        if !resolve_voice_position(voice) { return false; }
+        let position = voice.play.position * voice.play.sample.channels;
+        let left = voice.play.sample.data[position];
+        let right = voice.play.sample.data[position + usize::from(voice.play.sample.channels > 1)];
+        frame[0] += left * voice.left * voice.gain * bus_gains[voice.play.bus as usize];
+        frame[1] += right * voice.right * voice.gain * bus_gains[voice.play.bus as usize];
+        voice.play.position += 1;
+        if voice.remaining > 0 {
+            voice.gain += (voice.target - voice.gain) / voice.remaining as f32;
+            voice.remaining -= 1;
+        }
+        if voice.remaining == 0 && voice.stop_after { return false; }
+    }
+    true
+}
+
+fn resolve_voice_position(voice: &mut Voice) -> bool {
+    if let Some((start, end)) = voice.play.loop_range {
+        if voice.play.position >= end {
+            voice.play.position = start + (voice.play.position - start) % (end - start);
+        }
+    }
+    voice.play.position < voice.play.sample.frames
+}
+
+fn handle_control(mixer: &mut Mixer, control: Control) {
+    match control {
+        Control::Event(command) => mixer.schedule(command, true),
+        Control::Pause(at) => { mixer.pause_at = Some(at); mixer.resume_at = None; },
+        Control::ResumeAfter(frames) => { mixer.resume_at = Some(mixer.device_frame.saturating_add(frames.max(0))); mixer.pause_at = None; },
+        Control::Reset { frame, epoch } => {
+            mixer.stop_all();
+            mixer.epoch = epoch;
+            mixer.transport_frame = frame;
+            mixer.mapping = Mapping { device: mixer.device_frame, transport: frame, paused: true, previous_paused: true };
+            mixer.pause_at = None;
+            mixer.resume_at = None;
+            mixer.reference_tick = (frame.max(0) as u128 * u128::from(mixer.tick_rate)
+                / u128::from(mixer.sample_rate)) as u64;
+        },
+        Control::Reference(enabled) => {
+            mixer.reference = enabled;
+            mixer.reference_tick = (mixer.transport_frame.max(0) as u128 * u128::from(mixer.tick_rate)
+                / u128::from(mixer.sample_rate)) as u64;
+        },
     }
 }
 
-impl Iterator for PrecisionMixer {
-    type Item = MySample;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        self.sample_count =
-            self.controller.sample_count.load(MemOrdering::Relaxed);
-
-        let mut tracks_guard = self.controller.tracks.lock().unwrap();
-        let tracks = &mut *tracks_guard;
-
-        // PROCESS PENDING
-
-        // we must only start new tracks when our current channel is 0
-        // to ensure that channels don't get swapped around
-        if self.current_channel == 0 {
-            // we must ensure that each track is started so that it is
-            // perfectly aligned to its desired sample number
-            for (id, track) in tracks.pending.iter_mut() {
-                let start_at_sample_number =
-                    track.start_at_sample_number.unwrap_or(self.sample_count);
-
-                if start_at_sample_number > self.sample_count {
-                    // we are early, it's not time for this one yet
-                    continue;
-                }
-
-                let Some(mut source) = track.source.take() else {
-                    continue;
-                };
-
-                // if we are already late, we have to skip ahead into the source
-                let missed_by = self.sample_count - start_at_sample_number;
-                if missed_by > 0 {
-                    eprintln!("AUDIO MISSED BY {}", missed_by);
-                }
-                for _ in 0..(missed_by * source.channels() as i64) {
-                    if let Some(value) = source.next() {
-                        track.first_sample = value;
-                    } else {
-                        // the sound is already over before it even started playing ;)
-                        continue;
-                    }
-                }
-
-                tracks.playing.insert(*id, PrecisionMixerActiveTrack {
-                    done: false,
-                    current_channel: 0,
-                    pan: track.pan,
-                    volume: track.volume,
-                    next_sample: track.first_sample,
-                    source,
-                });
-            }
-
-            tracks.pending.retain(|_id, track| track.source.is_some());
+fn stop_id(mixer: &mut Mixer, id: u64) {
+    for index in 0..mixer.voices.len() {
+        if mixer.voices[index].as_ref().is_some_and(|voice| voice.play.id == id) {
+            mixer.finish_voice(index);
         }
-
-        // MIX
-
-        let mut sum = MySample::zero_value();
-        let channels = self.channels();
-        for (_id, track) in tracks.playing.iter_mut() {
-            let source_channels = track.source.channels();
-            let (pan_l, pan_r) = pan_lr(track.pan.clamp(-1.0, 1.0));
-            match (channels, source_channels) {
-                (1, 1) => {
-                    sum = sum.saturating_add(track.next_sample * track.volume);
-                    if let Some(value) = track.source.next() {
-                        track.next_sample = value;
-                    } else {
-                        track.done = true;
-                    }
-                },
-                (2, 1) => {
-                    // only advance the mono source every other sample
-                    // (mix one source sample into both L + R, with panning)
-                    if self.current_channel == 0 {
-                        sum = sum.saturating_add(
-                            track.next_sample * track.volume * pan_l,
-                        );
-                    }
-                    if self.current_channel == 1 {
-                        sum = sum.saturating_add(
-                            track.next_sample * track.volume * pan_r,
-                        );
-                        if let Some(value) = track.source.next() {
-                            track.next_sample = value;
-                        } else {
-                            track.done = true;
-                        }
-                    }
-                },
-                (1, 2) => {
-                    // consume 2 samples from source and mix them (stereo -> mono)
-                    sum = sum.saturating_add(
-                        track.next_sample * 0.5 * track.volume * pan_l,
-                    );
-                    if let Some(value) = track.source.next() {
-                        sum = sum
-                            .saturating_add(value * 0.5 * track.volume * pan_r);
-                    } else {
-                        track.done = true;
-                    }
-                    if let Some(value) = track.source.next() {
-                        track.next_sample = value;
-                    } else {
-                        track.done = true;
-                    }
-                },
-                (2, 2) => {
-                    // make sure the channels are aligned and not swapped
-                    match (
-                        self.current_channel,
-                        track.current_channel,
-                    ) {
-                        (0, 0) => {
-                            // left channel of both source and mixer
-                            sum = sum.saturating_add(
-                                track.next_sample * track.volume * pan_l,
-                            );
-                            if let Some(value) = track.source.next() {
-                                track.next_sample = value;
-                                track.current_channel += 1;
-                                if track.current_channel
-                                    >= track.source.channels()
-                                {
-                                    track.current_channel = 0;
-                                }
-                            } else {
-                                track.done = true;
-                            }
-                        },
-                        (1, 1) => {
-                            // right channel of both source and mixer
-                            sum = sum.saturating_add(
-                                track.next_sample * track.volume * pan_r,
-                            );
-                            if let Some(value) = track.source.next() {
-                                track.next_sample = value;
-                                track.current_channel += 1;
-                                if track.current_channel
-                                    >= track.source.channels()
-                                {
-                                    track.current_channel = 0;
-                                }
-                            } else {
-                                track.done = true;
-                            }
-                        },
-                        (1, 0) | (0, 1) => {
-                            // mismatch! output nothing for this sample to catch up
-                        },
-                        _ => unreachable!(),
-                    }
-                },
-                _ => {
-                    panic!("GameTickMixer does not support > 2 audio channels!")
-                },
-            }
-        }
-        tracks.playing.retain(|_id, track| !track.done);
-
-        // BOOKKEEPING
-
-        self.current_channel += 1;
-        if self.current_channel >= self.channels() {
-            self.current_channel = 0;
-            self.sample_count = self
-                .controller
-                .sample_count
-                .fetch_add(1, MemOrdering::Relaxed);
-        }
-
-        Some(sum)
+    }
+    let mut index = 0;
+    while index < mixer.scheduled.len() {
+        let matches = matches!(&mixer.scheduled[index].kind, CommandKind::Play(play) if play.id == id);
+        if matches { let command = mixer.scheduled.remove(index); mixer.finish_command(command); }
+        else { index += 1; }
     }
 }
 
-impl Source for PrecisionMixer {
-    #[inline]
-    fn current_frame_len(&self) -> Option<usize> {
-        None
+fn change_gain(mixer: &mut Mixer, id: u64, volume: f32, frames: usize, stop_after: bool) {
+    for voice in mixer.voices.iter_mut().flatten().filter(|voice| voice.play.id == id) {
+        voice.target = volume;
+        voice.remaining = frames;
+        voice.stop_after = stop_after;
+        if frames == 0 { voice.gain = volume; }
     }
-
-    #[inline]
-    fn channels(&self) -> u16 {
-        self.controller.channels
-    }
-
-    #[inline]
-    fn sample_rate(&self) -> u32 {
-        self.controller.sample_rate
-    }
-
-    #[inline]
-    fn total_duration(&self) -> Option<Duration> {
-        None
-    }
+    if frames == 0 && stop_after { stop_id(mixer, id); }
 }
 
-impl PrecisionMixer {
-    pub fn new(controller: Arc<PrecisionMixerController>) -> Self {
-        PrecisionMixer {
-            current_channel: 0,
-            sample_count: 0,
-            controller: controller.clone(),
+pub fn render_mixer(mixer: &mut Mixer, output: &mut [f32]) {
+    output.fill(0.0);
+    let frames = output.len() / 2;
+    let mut offset = 0;
+    while offset < frames {
+        mixer.apply_due();
+        let count = mixer.span_frames(frames - offset);
+        if !mixer.mapping.paused {
+            mix_span(mixer, &mut output[offset * 2..(offset + count) * 2]);
+            mixer.transport_frame += count as i64;
         }
-    }
-
-    pub fn controller(&self) -> Arc<PrecisionMixerController> {
-        self.controller.clone()
+        mixer.device_frame += count as i64;
+        offset += count;
     }
 }
 
-pub fn init_mixer(
-    channels: u16,
-    sample_rate: u32,
-    tick_rate: f32,
-) -> (
-    Arc<PrecisionMixerController>,
-    PrecisionMixer,
-) {
-    if channels > 2 {
-        panic!("GameTickMixer does not support > 2 audio channels!");
+fn mix_span(mixer: &mut Mixer, output: &mut [f32]) {
+    for index in 0..mixer.voices.len() {
+        let finished = mixer.voices[index].as_mut().is_some_and(|voice| !render_voice(voice, output, &mixer.bus_gains));
+        if finished { mixer.finish_voice(index); }
     }
-    let controller =
-        PrecisionMixerController::new(channels, sample_rate, tick_rate);
-    let mixer = PrecisionMixer::new(controller.clone());
-    (controller, mixer)
+    if mixer.reference { mix_reference(mixer, output); }
 }
 
-fn pan_lr(pan: f32) -> (f32, f32) {
-    if pan == 0.0 {
-        (1.0, 1.0)
-    } else if pan >= -1.0 && pan < 0.0 {
-        (1.0, pan + 1.0)
-    } else if pan <= 1.0 && pan > 0.0 {
-        (1.0 - pan, 1.0)
-    } else {
-        (0.0, 0.0)
+fn mix_reference(mixer: &mut Mixer, output: &mut [f32]) {
+    let end = mixer.transport_frame + (output.len() / 2) as i64;
+    loop {
+        let at = super::transport::tick_sample(mixer.reference_tick, mixer.sample_rate, mixer.tick_rate);
+        if at >= end { break; }
+        if at >= mixer.transport_frame {
+            let index = (at - mixer.transport_frame) as usize * 2;
+            output[index] += 0.1;
+            output[index + 1] += 0.1;
+        }
+        mixer.reference_tick += 1;
+    }
+}
+
+#[cfg(test)]
+mod tests;
+
+fn begin_callback(mixer: &mut Mixer) {
+    mixer.stats.callbacks += 1;
+    for _ in 0..mixer.command_budget {
+        let Ok(control) = mixer.controls.try_recv() else { break; };
+        handle_control(mixer, control);
+    }
+    for _ in 0..mixer.command_budget {
+        let Ok(command) = mixer.commands.try_recv() else { break; };
+        mixer.schedule(command, false);
+    }
+}
+
+fn cancel_through(mixer: &mut Mixer, id: u64) {
+    mixer.cancelled_through = mixer.cancelled_through.max(id);
+    for index in 0..mixer.voices.len() {
+        if mixer.voices[index].as_ref().is_some_and(|voice| voice.play.id <= id) { mixer.finish_voice(index); }
+    }
+    let mut index = 0;
+    while index < mixer.scheduled.len() {
+        if matches!(&mixer.scheduled[index].kind, CommandKind::Play(play) if play.id <= id) {
+            let command = mixer.scheduled.remove(index);
+            mixer.finish_command(command);
+        } else { index += 1; }
     }
 }

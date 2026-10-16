@@ -1,0 +1,4 @@
+id = "guard"
+mechanic = { kind = "guard" }
+presentation = { animation = "Defense" }
+controls = { motion_x = true, presentation = true }

@@ -1,0 +1,27 @@
+[asset]
+key = "anim.buzzer.Death"
+image = "animations/buzzer/Death__r1c2__48x48.png"
+
+[playback]
+start = 1
+end = 2
+ticks_per_frame = 8
+mode = "hold"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 2
+frame_start = 1
+
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

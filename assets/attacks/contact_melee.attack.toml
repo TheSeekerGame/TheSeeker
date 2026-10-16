@@ -1,0 +1,9 @@
+lifetime_ticks = 8
+stop_motion = true
+
+[collider]
+source = "animation_pixels"
+half_width = 8.0
+half_height = 8.0
+offset_x = 0.0
+offset_y = 5.0

@@ -1,145 +1,194 @@
-use bevy::ecs::system::EntityCommands;
-use sickle_ui::ui_builder::UiBuilder;
-use sickle_ui::widgets::prelude::UiContainerExt;
-
-use crate::assets::UiAssets;
-use crate::locale::L10nKey;
+use crate::camera::GameplayPixelScale;
+use crate::game::player::{Player, PlayerAction, PlayerStateSet};
+use crate::game::player::InputBuffer;
+use std::collections::HashSet;
 use crate::prelude::*;
-use crate::ui::kill_counter::KillCounterPlugin;
 use crate::ui::skill_toolbar::SkillToolbarPlugin;
+use bevy::ecs::system::SystemParam;
+use bevy::ui::UiScale;
+use leafwing_input_manager::prelude::ActionState;
 
-pub mod ability_widget;
+pub(crate) mod capsule_ui;
 mod controls_overlay;
-mod kill_counter;
-mod mainmenu;
-mod passives;
-pub mod popup;
+pub(crate) mod inventory;
+pub(crate) mod mainmenu;
+pub(crate) mod pixel_canvas;
+pub(crate) mod pixel_font;
+pub(crate) mod pixel_panel;
+mod planet_status;
+mod screen_frame;
 mod skill_toolbar;
-
-#[cfg(not(feature = "release"))]
-mod console;
 
 pub struct UiPlugin;
 
 impl Plugin for UiPlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(iyes_ui::UiExtrasPlugin);
+        app.init_resource::<pixel_canvas::ArtLibrary>();
+        app.add_systems(Update, sync_ui_scale.after(crate::camera::update_camera));
+        configure_input_ownership(app);
+        app.add_systems(OnExit(AppState::InGame), reset_ui);
         app.add_plugins((
             controls_overlay::plugin,
-            popup::plugin,
-            passives::plugin,
+            capsule_ui::CapsuleUiPlugin,
+            inventory::InventoryPlugin,
+            screen_frame::ScreenFramePlugin,
+            planet_status::PlanetStatusHudPlugin,
             self::mainmenu::MainMenuPlugin,
             SkillToolbarPlugin,
-            KillCounterPlugin,
-        ));
-        #[cfg(not(feature = "release"))]
-        app.add_plugins((
-            self::console::UiConsolePlugin,
         ));
     }
 }
 
-fn spawn_menuentry(
-    commands: &mut Commands,
-    uiassets: &UiAssets,
-    behavior: OnClick,
-    text: &'static str,
-) -> Entity {
-    let color_text = Color::WHITE;
-
-    let butt = commands
-        .spawn((
-            behavior,
-            ButtonBundle {
-                background_color: BackgroundColor(Color::NONE),
-                style: Style {
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    padding: UiRect::all(Val::Px(4.0)),
-                    margin: UiRect::all(Val::Px(4.0)),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-        ))
-        .id();
-
-    let text = commands
-        .spawn((
-            L10nKey(text.to_owned()),
-            TextBundle {
-                text: Text::from_section(
-                    text,
-                    TextStyle {
-                        color: color_text,
-                        font_size: 32.0,
-                        font: uiassets.font_regular.clone(),
-                    },
-                ),
-                ..Default::default()
-            },
-        ))
-        .id();
-
-    commands.entity(butt).push_children(&[text]);
-
-    butt
+fn configure_input_ownership(app: &mut App) {
+    app.init_resource::<GameplayInputGuard>();
+    app.configure_sets(PreUpdate, (UiInputSet::Menu, UiInputSet::Inventory, UiInputSet::Panels, UiInputSet::Pause, UiInputSet::Suppress)
+        .chain().after(theseeker_engine::input::InputManagerSystem::Update));
+    app.add_systems(PreUpdate, suppress_frame_input.in_set(UiInputSet::Suppress).run_if(in_state(AppState::InGame)));
+    app.add_systems(GameTickUpdate, suppress_gameplay_input.before(PlayerStateSet::Input)
+        .run_if(in_state(GameState::Playing).and_then(in_state(AppState::InGame))));
 }
 
-/// For use in sickle_ui contexts, use like:
-/// ```rust
-/// button(
-///     row, // any  &mut UiBuilder<Entity> type
-///     OnClick::new().system(new_game),
-///     "YourButtonTextHere",
-///     style.clone(),
-/// );
-/// ```
-pub fn button<'w, 's, 'a>(
-    parent: &'a mut UiBuilder<'w, 's, '_, Entity>,
-    behavior: OnClick,
-    text: &'static str,
-    style: TextStyle,
-) -> UiBuilder<'w, 's, 'a, Entity> {
-    parent.container(
-        (
-            behavior,
-            ButtonBundle {
-                background_color: BackgroundColor(Color::NONE),
-                style: Style {
-                    justify_content: JustifyContent::Center,
-                    align_items: AlignItems::Center,
-                    padding: UiRect::all(Val::Px(4.0)),
-                    margin: UiRect::all(Val::Px(4.0)),
-                    ..Default::default()
-                },
-                ..Default::default()
-            },
-        ),
-        |button| {
-            button.spawn((
-                L10nKey(text.to_owned()),
-                TextBundle {
-                    text: Text::from_section(text, style),
-                    ..Default::default()
-                },
-            ));
-        },
-    )
-}
+/// Frame input resolves modal ownership before state transitions and simulation admission.
+#[derive(SystemSet, Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub(crate) enum UiInputSet { Menu, Inventory, Panels, Pause, Suppress }
 
-trait Spawn {
-    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands;
-}
+/// Root of an always-on gameplay HUD element, hidden while a cinematic plays.
+#[derive(Component)]
+pub(crate) struct GameplayHud;
 
-impl Spawn for Commands<'_, '_> {
-    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
-        Commands::spawn(self, bundle)
+/// UI scales with the gameplay pixel size.
+fn sync_ui_scale(pixel_scale: Option<Res<GameplayPixelScale>>, mut ui_scale: ResMut<UiScale>) {
+    let scale = pixel_scale.map_or(1.0, |scale| scale.ui_scale_factor());
+    if (ui_scale.0 - scale).abs() > f32::EPSILON {
+        ui_scale.0 = scale;
     }
 }
 
-impl Spawn for ChildBuilder<'_> {
-    fn spawn<B: Bundle>(&mut self, bundle: B) -> EntityCommands {
-        ChildBuilder::spawn(self, bundle)
+/// Keyboard panels and the pause menu own gameplay input while open.
+#[derive(SystemParam)]
+pub(crate) struct OpenPanels<'w> {
+    capsule: Res<'w, capsule_ui::CapsuleUiState>,
+    inventory: Res<'w, inventory::InventoryState>,
+    menu: Res<'w, mainmenu::MenuState>,
+}
+
+impl OpenPanels<'_> {
+    pub(crate) fn menu_input_consumed(&self) -> bool { self.menu.blocks_panel_input() }
+
+    pub(crate) fn any(&self) -> bool {
+        self.capsule.is_open() || self.inventory.is_open() || self.menu.is_open()
+    }
+}
+
+#[derive(Resource, Default)]
+struct GameplayInputGuard {
+    blocked: HashSet<PlayerAction>,
+    was_modal: bool,
+}
+
+const GAMEPLAY_ACTIONS: [PlayerAction; 13] = [
+    PlayerAction::Move, PlayerAction::Jump, PlayerAction::Fall, PlayerAction::Interact,
+    PlayerAction::Skill1, PlayerAction::Skill2, PlayerAction::Skill3, PlayerAction::Skill4,
+    PlayerAction::Skill5, PlayerAction::SwapMeleeWeapon, PlayerAction::UpModifier,
+    PlayerAction::ToggleControlOverlay, PlayerAction::DebugUnlockAllProgression,
+];
+
+/// Drops modal input in both action banks, including edges collected on zero-tick frames.
+fn suppress_frame_input(
+    panels: OpenPanels,
+    pause: Res<crate::gamestate::PauseRequests>,
+    mut guard: ResMut<GameplayInputGuard>,
+    mut players: Query<(&mut ActionState<PlayerAction>, Option<&mut InputBuffer>), With<Player>>,
+) {
+    let modal = panels.any() || panels.menu.blocks_panel_input() || pause.is_paused();
+    for (mut actions, buffer) in &mut players {
+        suppress_frame_actions(&mut actions, &mut guard, modal);
+        if let Some(mut buffer) = buffer.filter(|_| modal || guard.was_modal) { buffer.clear_all(); }
+        if modal || guard.was_modal {
+            actions.set_update_state_from_state();
+            actions.set_fixed_update_state_from_state();
+        }
+    }
+    guard.was_modal = modal;
+}
+
+fn suppress_gameplay_input(
+    panels: OpenPanels,
+    guard: Res<GameplayInputGuard>,
+    mut players: Query<&mut ActionState<PlayerAction>, With<Player>>,
+) {
+    for mut actions in &mut players {
+        suppress_tick_actions(&mut actions, panels.any(), &guard);
+    }
+}
+
+fn suppress_frame_actions(actions: &mut ActionState<PlayerAction>, guard: &mut GameplayInputGuard, modal: bool) {
+    for action in GAMEPLAY_ACTIONS {
+        let active = if action == PlayerAction::Move { actions.value(&action).abs() > f32::EPSILON } else { actions.pressed(&action) };
+        if modal && active {
+            guard.blocked.insert(action);
+        } else if !active {
+            guard.blocked.remove(&action);
+        }
+        if modal || guard.blocked.contains(&action) { actions.reset(&action); }
+    }
+}
+
+fn suppress_tick_actions(actions: &mut ActionState<PlayerAction>, modal: bool, guard: &GameplayInputGuard) {
+    for action in GAMEPLAY_ACTIONS {
+        if modal || guard.blocked.contains(&action) { actions.reset(&action); }
+    }
+}
+
+fn reset_ui(
+    mut capsule: ResMut<capsule_ui::CapsuleUiState>,
+    mut inventory: ResMut<inventory::InventoryState>,
+    mut menu: ResMut<mainmenu::MenuState>,
+    mut guard: ResMut<GameplayInputGuard>,
+) {
+    *capsule = default();
+    *inventory = default();
+    *menu = default();
+    *guard = default();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use bevy::ecs::system::RunSystemOnce;
+    use leafwing_input_manager::systems::{swap_to_fixed_update, swap_to_update};
+
+    #[test]
+    fn modal_input_is_flushed_from_both_action_banks_and_held_keys_require_release() {
+        let mut world = World::new();
+        let mut actions = ActionState::default();
+        actions.press(&PlayerAction::Jump);
+        actions.set_update_state_from_state();
+        actions.set_fixed_update_state_from_state();
+        let player = world.spawn(actions).id();
+        let mut guard = GameplayInputGuard::default();
+        {
+            let mut actions = world.get_mut::<ActionState<PlayerAction>>(player).unwrap();
+            suppress_frame_actions(&mut actions, &mut guard, true);
+            actions.set_update_state_from_state();
+            actions.set_fixed_update_state_from_state();
+        }
+        world.run_system_once(swap_to_fixed_update::<PlayerAction>).unwrap();
+        {
+            let mut actions = world.get_mut::<ActionState<PlayerAction>>(player).unwrap();
+            assert!(!actions.just_pressed(&PlayerAction::Jump));
+            assert!(!actions.pressed(&PlayerAction::Jump));
+            actions.press(&PlayerAction::Jump);
+            suppress_tick_actions(&mut actions, false, &guard);
+            assert!(!actions.pressed(&PlayerAction::Jump), "a key held across resume stays owned by the menu");
+        }
+        world.run_system_once(swap_to_update::<PlayerAction>).unwrap();
+        let mut actions = world.get_mut::<ActionState<PlayerAction>>(player).unwrap();
+        assert!(!actions.pressed(&PlayerAction::Jump));
+        actions.release(&PlayerAction::Jump);
+        suppress_frame_actions(&mut actions, &mut guard, false);
+        actions.press(&PlayerAction::Jump);
+        suppress_frame_actions(&mut actions, &mut guard, false);
+        assert!(actions.just_pressed(&PlayerAction::Jump), "a new gameplay press is accepted after release");
     }
 }

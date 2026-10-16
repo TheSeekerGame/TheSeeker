@@ -1,0 +1,35 @@
+schema_version = 2
+id = "spider_big"
+walking = { kind = "frame_steps", track = "Walk" }
+behavior = { kind = "combat", approach = "stationary", defensive = true }
+actions = { Attack = "spider_shot", Defense = "guard" }
+spawn_hp     = 350       # Spawn health
+walk_speed   = 0.208     # ~20 pixels/second (20/96 = 0.208 px/tick)
+chase_speed  = 0.833     # ~80 pixels/second (80/96 = 0.833 px/tick) - Stationary combat does not chase
+dmg_melee    = 0         # Unused - big spiders only use ranged attacks
+dmg_ranged   = 10        # Projectile damage
+vision_range = 100       # Aggro range
+melee_range  = 24        # Defense state trigger
+reaction_time = 48       # 48 ticks (~500ms) reaction delay
+[setup]
+name = "Enemy"
+controller = "ground"
+collider = { half_extents = [4.0, 5.0] }
+spawn_offset = [0.0, 14.0, 0.000014]
+facing = "random_horizontal"
+facing_slots = { right = "DirectionLeft", left = "DirectionRight" }
+needs_line_of_sight = true
+
+[setup.gfx]
+offset = [0.0, 4.0, 0.0]
+
+[defense]
+invulnerable_from_frame = 4
+
+[anim]
+Idle       = "anim.spider.Idle"
+Attack     = "anim.spider.RangedAttack"
+Die        = "anim.spider.Death"
+Decay      = "anim.spider.Decay"
+Defense    = "anim.spider.Defense"
+Walk       = "anim.spider.Walk"        # used when patrolling 

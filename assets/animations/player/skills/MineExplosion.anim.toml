@@ -1,0 +1,11 @@
+[asset]
+key = "anim.player.MineExplosion"
+image = "animations/player/skills/MineExplosionSheet__r1c4__66x66.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 4
+frame_start = 1

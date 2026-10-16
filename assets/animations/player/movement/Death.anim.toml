@@ -1,0 +1,11 @@
+[asset]
+key = "anim.player.Death"
+image = "animations/player/movement/DeathSheet__r1c7__48x48.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 7
+frame_start = 1

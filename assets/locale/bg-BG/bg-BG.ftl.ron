@@ -1,6 +1,0 @@
-(
-    locale: "bg-BG",
-    resources: [
-        "menu.ftl"
-    ]
-)

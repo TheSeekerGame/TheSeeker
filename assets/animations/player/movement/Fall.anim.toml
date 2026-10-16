@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.Fall"
+image = "animations/player/movement/FallSheet__r2c6__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

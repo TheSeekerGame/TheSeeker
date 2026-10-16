@@ -1,0 +1,20 @@
+schema_version = 2
+id = "bat_medium"
+base = "bat_small"
+
+[override.stats]
+spawn_hp = 60
+walk_speed = 0.50
+chase_speed = 1.25
+dmg_melee = 18
+dmg_ranged = 0
+vision_range = 210
+melee_range = 26
+reaction_time = 22
+
+[override.anim]
+Fly = "anim.bat_medium.Fly"
+Attack = "anim.bat_medium.Attack"
+Die = "anim.bat_medium.Death"
+Decay = "anim.bat_medium.Death"
+Idle = "anim.bat_medium.Fly"

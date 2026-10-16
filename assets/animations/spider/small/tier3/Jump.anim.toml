@@ -1,3 +1,7 @@
+[asset]
+key = "anim.smallspider3.Jump"
+image = "animations/spider/small/tier3/Jump__r1c13__48x48.png"
+
 atlas_asset_key = "anim.smallspider3.Jump.sprite"
 
 [settings]

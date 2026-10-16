@@ -1,3 +1,7 @@
+[asset]
+key = "anim.smallspider.Death"
+image = "animations/spider/small/tier1/Death__r1c6__48x48.png"
+
 atlas_asset_key = "anim.smallspider.Death.sprite"
 
 

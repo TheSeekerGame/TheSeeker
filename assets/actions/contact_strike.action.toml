@@ -1,0 +1,5 @@
+id = "contact_strike"
+mechanic = { kind = "contact", descriptor = "attack.contact_melee" }
+presentation = { animation = "Attack" }
+timing = { release = "melee_active" }
+controls = { motion_x = true, presentation = true }

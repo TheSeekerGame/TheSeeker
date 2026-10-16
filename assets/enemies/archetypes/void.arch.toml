@@ -1,0 +1,47 @@
+schema_version = 2
+id = "void"
+behavior = { kind = "pursuit" }
+actions = {  }
+spawn_hp = 240
+walk_speed = 0.72
+chase_speed = 0.0
+dmg_melee = 0
+dmg_ranged = 0
+vision_range = 480
+melee_range = 0
+reaction_time = 0
+[setup]
+facing = "left"
+name = "Void"
+controller = "flying"
+collider = { half_extents = [8.0, 8.0] }
+spawn_offset = [0.0, 12.0, 0.000014]
+
+[setup.gfx]
+keys = ["Body", "Fly"]
+kind = "void_split"
+
+[flying]
+profile = "smooth_wave"
+patrol_radius = 180.0
+
+[flying.stalk]
+kind = "pursuit"
+
+[contact_damage]
+damage = 32.0
+cooldown_ticks = 48
+
+[contact_damage.pushback]
+horizontal = 2.0
+vertical = 1.5
+ticks = 12
+
+[death]
+mode = "despawn"
+
+[anim]
+Fly = "anim.void.Body"
+Idle = "anim.void.Body"
+Body = "anim.void.Body"
+Face = "anim.void.Face"

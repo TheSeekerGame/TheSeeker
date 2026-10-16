@@ -1,0 +1,24 @@
+[asset]
+key = "anim.player.DownwardDash"
+image = "animations/player/skills/DashForms__r1c17__48x48.png"
+
+[sections.flight]
+start = 13
+end = 15
+ticks_per_frame = 8
+mode = "loop"
+
+[sections.impact]
+start = 16
+end = 17
+ticks_per_frame = 8
+mode = "hold"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 17
+frame_start = 1
+

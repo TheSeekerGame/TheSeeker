@@ -1,0 +1,31 @@
+[asset]
+key = "anim.buzzer.AirAttack"
+image = "animations/buzzer/AirAttack__r1c3__48x48.png"
+
+[playback]
+start = 1
+end = 3
+ticks_per_frame = 8
+mode = "once"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 3
+frame_start = 1
+
+[[events]]
+on = { frame_enter = 2 }
+emit = "fire_projectile"
+
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

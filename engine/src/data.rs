@@ -21,8 +21,8 @@ pub fn deserialize_color_rgbhex<'de, D: Deserializer<'de>>(
     deserializer: D,
 ) -> Result<Color, D::Error> {
     let s: String = Deserialize::deserialize(deserializer)?;
-    match Color::hex(&s) {
-        Ok(color) => Ok(color),
+    match Srgba::hex(&s) {
+        Ok(srgba) => Ok(srgba.into()),
         Err(e) => {
             error!(
                 "Color must be specified as RGBA Hex syntax. {:?} is invalid: {}",
@@ -37,54 +37,39 @@ pub fn serialize_color_rgbhex<S: Serializer>(
     value: &Color,
     serializer: S,
 ) -> Result<S::Ok, S::Error> {
-    let [r, g, b, a] = value.as_rgba_u8();
+    let [r, g, b, a] = value.to_srgba().to_u8_array();
     let s = if a != 255 {
-        format!("#{:02x}{:02x}{:02x}{:02x}", r, g, b, a)
+        format!("#{r:02x}{g:02x}{b:02x}{a:02x}")
     } else {
-        format!("#{:02x}{:02x}{:02x}", r, g, b)
+        format!("#{r:02x}{g:02x}{b:02x}")
     };
     serializer.serialize_str(s.as_str())
 }
 
 impl From<Color> for ColorRepr {
     fn from(value: Color) -> Self {
-        if let Color::Lcha {
+        let Color::Lcha(Lcha {
             lightness,
             chroma,
             hue,
             alpha,
-        } = value
-        {
-            if alpha != 1.0 {
-                ColorRepr::Lcha([lightness, chroma, hue, alpha])
-            } else {
-                ColorRepr::Lch([lightness, chroma, hue])
-            }
-        } else {
-            ColorRepr::RGBHex(value)
+        }) = value else {
+            return ColorRepr::RGBHex(value);
+        };
+
+        if alpha != 1.0 {
+            return ColorRepr::Lcha([lightness, chroma, hue, alpha]);
         }
+
+        ColorRepr::Lch([lightness, chroma, hue])
     }
 }
 
 impl From<ColorRepr> for Color {
     fn from(value: ColorRepr) -> Self {
         match value {
-            ColorRepr::Lcha([l, c, h, a]) => {
-                Color::Lcha {
-                    lightness: l,
-                    chroma: c,
-                    hue: h,
-                    alpha: a,
-                }
-            },
-            ColorRepr::Lch([l, c, h]) => {
-                Color::Lcha {
-                    lightness: l,
-                    chroma: c,
-                    hue: h,
-                    alpha: 1.0,
-                }
-            },
+            ColorRepr::Lcha([l, c, h, a]) => Color::lcha(l, c, h, a),
+            ColorRepr::Lch([l, c, h]) => Color::lch(l, c, h),
             ColorRepr::RGBHex(color) => color,
         }
     }
@@ -174,22 +159,13 @@ impl FromStr for TimeSpec {
             return Err(ParseTimeSpecError::InvalidComponents);
         };
 
-        // parse the optional fract part (if any) into a float
-        if let Some(fract) = dotsplit.next() {
-            if !fract.is_empty() {
-                // PERF: obviously inefficient ;)
-                let tmp = format!("0.{}", fract);
-                r.fract = tmp.parse().map_err(ParseTimeSpecError::Fract)?;
-
-                // if there is a fract, the whole is optional
-                if whole.is_empty() {
-                    return Ok(r);
-                }
-            }
+        let has_fract = parse_time_spec_fraction(&mut r, dotsplit.next())?;
+        if has_fract && whole.is_empty() {
+            return Ok(r);
         }
 
         // disallow more than one dot
-        if !dotsplit.next().is_none() {
+        if dotsplit.next().is_some() {
             return Err(ParseTimeSpecError::InvalidComponents);
         }
 
@@ -202,7 +178,7 @@ impl FromStr for TimeSpec {
         let part3 = colonsplit.next();
 
         // disallow more than 3 whole parts
-        if !colonsplit.next().is_none() {
+        if colonsplit.next().is_some() {
             return Err(ParseTimeSpecError::InvalidComponents);
         }
 
@@ -226,6 +202,23 @@ impl FromStr for TimeSpec {
     }
 }
 
+fn parse_time_spec_fraction(
+    spec: &mut TimeSpec,
+    fract: Option<&str>,
+) -> Result<bool, ParseTimeSpecError> {
+    let Some(fract) = fract else {
+        return Ok(false);
+    };
+    if fract.is_empty() {
+        return Ok(false);
+    }
+
+    // PERF: obviously inefficient ;)
+    let tmp = format!("0.{fract}");
+    spec.fract = tmp.parse().map_err(ParseTimeSpecError::Fract)?;
+    Ok(true)
+}
+
 impl fmt::Display for TimeSpec {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         if self.hours > 0 {
@@ -241,16 +234,25 @@ impl fmt::Display for TimeSpec {
         }?;
 
         if self.fract != 0.0 {
-            // PERF: obviously inefficient ;)
-            let tmp = format!("{}", self.fract);
-            let mut split = tmp.split('.');
-            if let Some(substr) = split.nth(1) {
-                write!(f, ".{}", substr)?;
-            }
+            write_time_spec_fraction(f, self.fract)?;
         }
 
         Ok(())
     }
+}
+
+fn write_time_spec_fraction(
+    f: &mut fmt::Formatter<'_>,
+    fract: f64,
+) -> fmt::Result {
+    // PERF: obviously inefficient ;)
+    let tmp = format!("{fract}");
+    let mut split = tmp.split('.');
+    let Some(substr) = split.nth(1) else {
+        return Ok(());
+    };
+
+    write!(f, ".{substr}")
 }
 
 /// Special value to indicate that something should happen periodically.
@@ -294,7 +296,7 @@ impl fmt::Display for Quant {
         if self.offset > 0 {
             write!(f, "{}+{}", self.n, self.offset)
         } else if self.offset < 0 {
-            write!(f, "{}-{}", self.n, self.offset)
+            write!(f, "{}{}", self.n, self.offset)
         } else {
             write!(f, "{}", self.n)
         }
@@ -305,22 +307,33 @@ impl FromStr for Quant {
     type Err = ParseIntError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let mut r = Quant { n: 0, offset: 0 };
-
         // look for a + or - sign
         // if there is none, then we expect an integer to use for `n`
         // if there is one, we expect integers on either side to use for `n`+`offset`
-        if let Some(i) = s.find(&['+', '-']) {
-            let part0 = &s[..i];
-            let part1 = &s[i..];
-            r.n = part0.trim().parse()?;
-            r.offset = part1.trim().parse()?;
-        } else {
-            r.n = s.trim().parse()?;
-        }
+        let Some(i) = s.find(['+', '-']) else {
+            return Ok(Quant {
+                n: s.trim().parse()?,
+                offset: 0,
+            });
+        };
 
-        Ok(r)
+        parse_signed_quant(s, i)
     }
+}
+
+fn parse_signed_quant(s: &str, sign_index: usize) -> Result<Quant, ParseIntError> {
+    let part0 = &s[..sign_index];
+    let sign = &s[sign_index..=sign_index];
+    let part1 = &s[sign_index + 1..];
+    let n = part0.trim().parse()?;
+    let offset_abs = part1.trim().parse::<i64>()?;
+    let offset = if sign == "-" {
+        -offset_abs
+    } else {
+        offset_abs
+    };
+
+    Ok(Quant { n, offset })
 }
 
 #[derive(Debug, Clone)]
@@ -344,6 +357,8 @@ mod test {
         assert_eq!(x.to_string(), "0+4");
         let x = Quant { n: 8, offset: 2 };
         assert_eq!(x.to_string(), "8+2");
+        let x = Quant { n: 8, offset: -2 };
+        assert_eq!(x.to_string(), "8-2");
     }
     #[test]
     fn parse_framequant() {
@@ -355,6 +370,8 @@ mod test {
         assert_eq!(x, Ok(Quant { n: 3, offset: 1 }));
         let x = " 6 + 2  ".parse::<Quant>();
         assert_eq!(x, Ok(Quant { n: 6, offset: 2 }));
+        let x = " 6 - 2  ".parse::<Quant>();
+        assert_eq!(x, Ok(Quant { n: 6, offset: -2 }));
         let x = "garbage".parse::<Quant>();
         assert!(x.is_err());
         let x = " 4+garbage".parse::<Quant>();
@@ -425,167 +442,36 @@ mod test {
     }
     #[test]
     fn parse_timespec() {
-        let x = "0".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 0,
-                mins: 0,
-                secs: 0,
-                fract: 0.0
-            }
-        );
-        let x = "0.0".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 0,
-                mins: 0,
-                secs: 0,
-                fract: 0.0
-            }
-        );
-        let x = "139".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 0,
-                mins: 0,
-                secs: 139,
-                fract: 0.0
-            }
-        );
-        let x = "1.125".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 0,
-                mins: 0,
-                secs: 1,
-                fract: 0.125
-            }
-        );
-        let x = "6:300.75".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 0,
-                mins: 6,
-                secs: 300,
-                fract: 0.75
-            }
-        );
-        let x = "15:03".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 0,
-                mins: 15,
-                secs: 3,
-                fract: 0.0
-            }
-        );
-        let x = "16:2".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 0,
-                mins: 16,
-                secs: 2,
-                fract: 0.0
-            }
-        );
-        let x = "100:200:300".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 100,
-                mins: 200,
-                secs: 300,
-                fract: 0.0
-            }
-        );
-        let x = "123:0:9.5".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 123,
-                mins: 0,
-                secs: 9,
-                fract: 0.5
-            }
-        );
-        let x = "01:00:00".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 1,
-                mins: 0,
-                secs: 0,
-                fract: 0.0
-            }
-        );
-        let x = "1:23:0.75".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 1,
-                mins: 23,
-                secs: 0,
-                fract: 0.75
-            }
-        );
-        let x = "2:3.".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 0,
-                mins: 2,
-                secs: 3,
-                fract: 0.0
-            }
-        );
-        let x = ".5".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 0,
-                mins: 0,
-                secs: 0,
-                fract: 0.5
-            }
-        );
-        let x = "0.75".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 0,
-                mins: 0,
-                secs: 0,
-                fract: 0.75
-            }
-        );
-        let x = "3.".parse::<TimeSpec>().unwrap();
-        assert_eq!(
-            x,
-            TimeSpec {
-                hours: 0,
-                mins: 0,
-                secs: 3,
-                fract: 0.0
-            }
-        );
-        let x = "1:2:3:4".parse::<TimeSpec>();
-        assert!(x.is_err());
-        let x = ":".parse::<TimeSpec>();
-        assert!(x.is_err());
-        let x = ".".parse::<TimeSpec>();
-        assert!(x.is_err());
-        let x = "".parse::<TimeSpec>();
-        assert!(x.is_err());
-        let x = "abc".parse::<TimeSpec>();
-        assert!(x.is_err());
-        let x = "0.def".parse::<TimeSpec>();
-        assert!(x.is_err());
+        let ts = |hours, mins, secs, fract| TimeSpec {
+            hours,
+            mins,
+            secs,
+            fract,
+        };
+        let valid_cases = [
+            ("0", ts(0, 0, 0, 0.0)),
+            ("0.0", ts(0, 0, 0, 0.0)),
+            ("139", ts(0, 0, 139, 0.0)),
+            ("1.125", ts(0, 0, 1, 0.125)),
+            ("6:300.75", ts(0, 6, 300, 0.75)),
+            ("15:03", ts(0, 15, 3, 0.0)),
+            ("16:2", ts(0, 16, 2, 0.0)),
+            ("100:200:300", ts(100, 200, 300, 0.0)),
+            ("123:0:9.5", ts(123, 0, 9, 0.5)),
+            ("01:00:00", ts(1, 0, 0, 0.0)),
+            ("1:23:0.75", ts(1, 23, 0, 0.75)),
+            ("2:3.", ts(0, 2, 3, 0.0)),
+            (".5", ts(0, 0, 0, 0.5)),
+            ("0.75", ts(0, 0, 0, 0.75)),
+            ("3.", ts(0, 0, 3, 0.0)),
+        ];
+
+        for (input, expected) in valid_cases {
+            assert_eq!(input.parse::<TimeSpec>().unwrap(), expected);
+        }
+
+        for input in ["1:2:3:4", ":", ".", "", "abc", "0.def"] {
+            assert!(input.parse::<TimeSpec>().is_err());
+        }
     }
 }

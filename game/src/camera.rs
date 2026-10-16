@@ -1,408 +1,219 @@
-//! Everything to do with the in-game camera(s)
+//! The in-game cameras. The main camera shows the world through the gameplay viewport, and
+//! the player overlay camera shares its view to draw the player and the UI above the
+//! post-processing. Each frame places them between the framing rig's last two ticks, shaken.
+mod framing;
+mod scale;
 
-use std::f32::consts::PI;
+use std::f32::consts::TAU;
 
-use bevy::core_pipeline::bloom::BloomSettings;
-use bevy::core_pipeline::prepass::DepthPrepass;
-use bevy::core_pipeline::tonemapping::Tonemapping;
-use ran::ran_f64_range;
+use bevy::camera::{OrthographicProjection, Projection};
+use bevy::ui::IsDefaultUiCamera;
+use rand::{rng, Rng};
+use theseeker_engine::presentation::{PresentationSet, TickHistory};
 
-use crate::game::player::Player;
-use crate::graphics::dof::{DepthOfFieldMode, DepthOfFieldSettings};
-use crate::graphics::post_processing::floaters::FloaterSettings;
-// use crate::graphics::post_processing::darkness::DarknessSettings;
-use crate::graphics::post_processing::vignette::VignetteSettings;
-use crate::level::MainBackround;
+use crate::game::player::PlayerStateSet;
+use crate::graphics::pixel_view::RenderBand;
+use crate::levelgen::CompiledLevel;
 use crate::prelude::*;
+pub(crate) use framing::CameraRig;
+pub use framing::{ScriptedCameraFocus, SnapCameraNext};
+pub use scale::GameplayPixelScale;
+pub(crate) use scale::LETTERBOX;
 
-const PROJECTION_SCALE: f32 = 1.0 / 5.0;
+/// Temporary debug toggle: disable world-edge camera clamping to inspect generated content
+/// beyond chunk boundaries.
+const CLAMP_CAMERA_TO_LEVEL_BOUNDS: bool = false;
 
 pub struct CameraPlugin;
 
 impl Plugin for CameraPlugin {
     fn build(&self, app: &mut App) {
-        app.register_clicommand_args("camera_at", cli_camera_at);
-        app.register_clicommand_noargs(
-            "camera_limits",
-            cli_camera_limits_noargs,
-        );
-        app.register_clicommand_args("camera_limits", cli_camera_limits_args);
-        app.add_systems(
-            OnEnter(AppState::InGame),
-            setup_main_camera,
-        );
-        // app.add_systems(Update, (manage_camera_projection,));
-
-        app.insert_resource(CameraRig {
-            target: Default::default(),
-            camera_position: Default::default(),
-            move_speed: 1.9,
-            lead_direction: LeadDirection::Forward,
-            lead_amount: 20.0,
-            lead_buffer: 10.0,
-        });
-        app.add_systems(
-            GameTickUpdate,
-            (
-                camera_rig_follow_player,
-                update_camera.after(camera_rig_follow_player),
+        app.init_resource::<GameplayPixelScale>()
+            .init_resource::<CameraRig>()
+            .init_resource::<CameraHistory>()
+            .add_systems(OnEnter(AppState::InGame), (scale::fit_gameplay_pixel_scale, spawn_cameras).chain())
+            .add_systems(GameTickUpdate, (
+                framing::follow_player.after(PlayerStateSet::Collisions),
                 update_screen_shake.run_if(resource_exists::<CameraShake>),
-            ),
-        );
+            ))
+            .add_systems(GameTickPost, capture_camera_history.in_set(PresentationSet::Capture))
+            .add_systems(Update, (scale::fit_gameplay_pixel_scale, update_camera, sync_player_camera)
+                .chain()
+                .in_set(GameTickSet::Post));
     }
 }
 
-/// For spawning the main gameplay camera
-#[derive(Bundle)]
-struct MainCameraBundle {
-    camera: Camera3dBundle,
-    limits: GameViewLimits,
-    marker: MainCamera,
-    despawn: StateDespawnMarker,
-}
-
-/// Marker component for the main gameplay camera
+/// Marker component for the main gameplay camera. Each fullscreen effect's plugin makes it
+/// require that effect's settings.
 #[derive(Component)]
 pub struct MainCamera;
 
-#[derive(Resource)]
-/// Tracks the target location of the camera, as well as internal state for interpolation.
-pub struct CameraRig {
-    /// The camera is moved towards this position smoothly.
-    target: Vec2,
-    /// the "base" position of the camera before screen shake is applied.
-    camera_position: Vec2,
-    /// The factor used in lerping to move the rig.
-    move_speed: f32,
-    /// Keeps track if the camera is leading ahead, or behind the player.
-    lead_direction: LeadDirection,
-    /// Defines how far ahead the camera will lead the player by.
-    lead_amount: f32,
-    /// Defines how far away the player can get going in the unanticipated direction
-    /// before the camera switches to track that direction.
-    lead_buffer: f32,
-}
-
-enum LeadDirection {
-    Backward,
-    Forward,
-}
-
-/// Limits to the viewable gameplay area.
-///
-/// The main camera should never display anything outside of these limits.
+/// Marker component for the player camera (renders player on top of post-processing effects)
 #[derive(Component)]
-pub struct GameViewLimits(Rect);
+pub struct PlayerCamera;
 
-pub(crate) fn setup_main_camera(mut commands: Commands) {
-    #[cfg(feature = "iyes_perf_ui")]
+/// Spawns the main camera and the player overlay camera, both showing the gameplay viewport.
+fn spawn_cameras(mut commands: Commands, scale: Res<GameplayPixelScale>) {
+    let projection = Projection::Orthographic(OrthographicProjection {
+        scale: scale.projection_scale(),
+        ..OrthographicProjection::default_2d()
+    });
     commands.spawn((
-        iyes_perf_ui::PerfUiCompleteBundle::default(),
+        Camera2d,
+        Camera { viewport: scale.viewport(), output_mode: LETTERBOX, ..default() },
+        projection.clone(),
+        MainCamera,
+        // The world (0) and light sources (1); the player (2) is drawn by the overlay camera,
+        // above the pixel-perfect composite.
+        RenderBand::World.layers(),
         StateDespawnMarker,
-    ));
-
-    let mut camera = Camera2dBundle {
-        camera: Camera {
-            hdr: true,
-            ..default()
-        },
-        tonemapping: Tonemapping::None,
-        ..default()
-    };
-    camera.projection.scale = PROJECTION_SCALE;
-
-    let mut camera3d = Camera3dBundle {
-        camera: Camera {
-            hdr: true,
-            ..default()
-        },
-        tonemapping: Tonemapping::None,
-        ..default()
-    };
-
-    camera3d.projection = Projection::Orthographic(camera.projection);
-    camera3d.transform = camera.transform;
-    camera3d.frustum = camera.frustum;
-    camera3d.transform.translation.z = 0.25;
-
-    // TODO make tilemap write to depth buffer somehow.
-    // bring up in meeting!
-
-    commands.spawn((
-        MainCameraBundle {
-            camera: camera3d,
-            marker: MainCamera,
-            despawn: StateDespawnMarker,
-            // TODO: manage this from somewhere
-            limits: GameViewLimits(Rect::new(0.0, 0.0, 640.0, 480.0)),
-        },
-        // Needed so that depth buffers are stored so depth of field works
-        DepthPrepass,
-        DepthOfFieldSettings {
-            mode: DepthOfFieldMode::Bokeh,
-            focal_distance: 0.25,
-            sensor_height: 0.008,
-            aperture_f_stops: 1.0,
-            max_circle_of_confusion_diameter: 68.8,
-            max_depth: 500.0,
-        },
-        BloomSettings::OLD_SCHOOL,
-        // DarknessSettings {
-        //     bg_light_level: 1.0,
-        //     lantern_position: Default::default(),
-        //     lantern: 0.0,
-        //     lantern_color: Vec3::new(0.965, 0.882, 0.678),
-        //     bg_light_color: Vec3::new(0.761, 0.773, 0.8),
-        // },
-        VignetteSettings::default(),
-        FloaterSettings::default(),
         Name::new("MainCamera"),
     ));
+    commands.spawn((
+        Camera2d,
+        Camera { order: 1, clear_color: ClearColorConfig::None, viewport: scale.viewport(), ..default() },
+        projection,
+        PlayerCamera,
+        IsDefaultUiCamera,
+        RenderBand::ActorOverlay.layers(),
+        StateDespawnMarker,
+        Name::new("PlayerCamera"),
+    ));
 }
 
-fn _manage_camera_projection(// mut q_cam: Query<&mut OrthographicProjection, With<MainCamera>>,
-                            // mut q_window: Query<&Window, With<PrimaryWindow>>,
+/// Places the main camera between the rig's last two ticks, then shakes it.
+pub fn update_camera(
+    mut cameras: Query<(&mut Transform, &Projection), With<MainCamera>>,
+    rig: Res<CameraRig>,
+    level: Option<Res<CompiledLevel>>,
+    shake: Option<Res<CameraShake>>,
+    interpolation: Res<RenderInterpolation>,
+    history: Res<CameraHistory>,
 ) {
-    // TODO
-}
-
-/// Updates the Camera rig (ie, the camera target) based on where the player is going.
-fn camera_rig_follow_player(
-    mut rig: ResMut<CameraRig>,
-    player_query: Query<&Transform, (With<Player>, Without<MainCamera>)>,
-    time: Res<Time>,
-) {
-    let Ok(player_transform) = player_query.get_single() else {
+    let Ok((mut transform, projection)) = cameras.single_mut() else {
         return;
     };
-    // Default state is to predict the player goes forward, ie "right"
-    let delta_x = player_transform.translation.x - rig.target.x;
+    let (position, shake) = match history.0.pair(interpolation.position()) {
+        Some((previous, next, alpha)) => (
+            previous.position.lerp(next.position, if next.snap { 0.0 } else { alpha }),
+            previous.shake.lerp(next.shake, alpha),
+        ),
+        None => (
+            rig.previous.lerp(rig.position, interpolation.alpha().clamp(0.0, 1.0)),
+            shake.map_or(Vec2::ZERO, |shake| shake.offset),
+        ),
+    };
+    transform.translation.x = position.x;
+    transform.translation.y = position.y;
+    let (Some(level), Projection::Orthographic(ortho)) = (level, projection) else {
+        return;
+    };
+    // Shaking after clamping keeps the camera shaking at the level's edges, and clamping again
+    // keeps the shake from showing past them.
+    clamp_to_level(&mut transform, level.bounds, ortho.area);
+    transform.translation += shake.extend(0.0);
+    clamp_to_level(&mut transform, level.bounds, ortho.area);
+}
 
-    match rig.lead_direction {
-        LeadDirection::Backward => {
-            if delta_x < rig.lead_amount {
-                rig.target.x = player_transform.translation.x - rig.lead_amount
-            } else if delta_x > rig.lead_amount + rig.lead_buffer {
-                rig.lead_direction = LeadDirection::Forward
-            }
-        },
-        LeadDirection::Forward => {
-            if delta_x > -rig.lead_amount {
-                rig.target.x = player_transform.translation.x + rig.lead_amount
-            } else if delta_x < -rig.lead_amount - rig.lead_buffer {
-                rig.lead_direction = LeadDirection::Backward
-            }
-        },
-    }
-
-    rig.target.y = player_transform.translation.y;
-
-    if (rig.camera_position - rig.target).length() < PROJECTION_SCALE {
-        // Stop lerping if already at the target
-        rig.camera_position = rig.target;
-    } else {
-        rig.camera_position = rig.camera_position.lerp(
-            rig.target,
-            time.delta_seconds() * rig.move_speed,
-        );
+/// Keeps a `view`-sized view inside the level while `CLAMP_CAMERA_TO_LEVEL_BOUNDS` is on.
+fn clamp_to_level(transform: &mut Transform, level: Rect, view: Rect) {
+    if CLAMP_CAMERA_TO_LEVEL_BOUNDS {
+        let xy = transform.translation.xy().clamp(level.min + view.half_size(), level.max - view.half_size());
+        transform.translation = xy.extend(transform.translation.z);
     }
 }
 
-/// Camera updates the camera position to smoothly interpolate to the
-/// rig location. also applies camera shake, and limits camera within the level boundaries
-pub(crate) fn update_camera(
-    mut camera_query: Query<(&mut Transform, &Projection), With<MainCamera>>,
-    rig: Res<CameraRig>,
-    backround_query: Query<
-        (&LayerMetadata, &Transform),
-        (With<MainBackround>, Without<MainCamera>),
-    >,
-    camera_shake: Option<Res<CameraShake>>,
+fn sync_player_camera(
+    main: Query<(&Transform, &Projection, &Camera), (With<MainCamera>, Without<PlayerCamera>)>,
+    mut player: Query<(&mut Transform, &mut Projection, &mut Camera), (With<PlayerCamera>, Without<MainCamera>)>,
 ) {
-    let Ok((mut camera_transform, projection)) = camera_query.get_single_mut()
+    let (Ok((main_transform, main_projection, main_camera)), Ok((mut transform, mut projection, mut camera))) =
+        (main.single(), player.single_mut())
     else {
         return;
     };
-
-    let Projection::Orthographic(ortho_projection) = projection else {
-        return;
-    };
-
-    camera_transform.translation.x = rig.camera_position.x;
-    camera_transform.translation.y = rig.camera_position.y;
-
-    if let Ok((bg_layer, bg_transform)) = backround_query.get_single() {
-        let camera_rect = ortho_projection.area;
-        let background_rect = background_rect(bg_layer, bg_transform);
-
-        clamp_camera_to_edge(
-            &mut camera_transform,
-            background_rect,
-            camera_rect,
-        );
-
-        // Apply screen shake after camera is clamped so that camera still shakes at the edges
-        if let Some(camera_shake) = camera_shake {
-            camera_shake.apply(&mut camera_transform);
-        }
-
-        // Apply another clamp so we don't show the edge of the level
-        clamp_camera_to_edge(
-            &mut camera_transform,
-            background_rect,
-            camera_rect,
-        );
-    }
+    *transform = *main_transform;
+    *projection = main_projection.clone();
+    camera.is_active = main_camera.is_active;
+    camera.viewport.clone_from(&main_camera.viewport);
 }
 
-fn background_rect(bg_layer: &LayerMetadata, bg_transform: &Transform) -> Rect {
-    let bg_width = (bg_layer.c_wid * bg_layer.grid_size) as f32;
-    let bg_height = (bg_layer.c_hei * bg_layer.grid_size) as f32;
-
-    // The backround width and height actually have 3 pixels extra padding on the far
-    // right/upper sides. This accounts for that.
-    let bg_max = Vec2::new(bg_width - 3.0, bg_height - 3.0);
-
-    // bottom left corner of the background is zero/minimum corner, because
-    // that's how LDtk imports it.
-    Rect::from_corners(
-        bg_max + bg_transform.translation.xy(),
-        bg_transform.translation.xy(),
-    )
-}
-
-fn clamp_camera_to_edge(
-    camera_transform: &mut Transform,
-    background_rect: Rect,
-    camera_rect: Rect,
-) {
-    let xy = camera_transform.translation.xy().clamp(
-        background_rect.min + camera_rect.half_size(),
-        background_rect.max - camera_rect.half_size(),
-    );
-    camera_transform.translation = xy.extend(camera_transform.translation.z);
-}
-
+/// A decaying shake of the camera along a direction that changes at random, with a wobble
+/// across it. The camera stops following for the shake's first two ticks.
 #[derive(Resource, Clone)]
 pub struct CameraShake {
     strength: f32,
-    c_offset: Vec2,
     freq: f32,
     dir: Vec2,
+    /// The camera's current displacement.
+    offset: Vec2,
     timer: Timer,
+    /// Each period, the shake picks a new direction.
     sub_timer: Timer,
+    /// Game ticks left before the camera follows again.
+    pause_lerp_ticks: u32,
 }
 
 impl CameraShake {
     pub fn new(strength: f32, t: f32, freq: f32) -> Self {
-        let rand_a = ran_f64_range(0.0..=360.0);
-        let dir = Vec2::from_angle(rand_a as f32 * PI * 2.0);
-
         Self {
             strength,
             freq,
+            dir: random_direction(),
+            offset: Vec2::ZERO,
             timer: Timer::from_seconds(t, TimerMode::Once),
             sub_timer: Timer::from_seconds(t / freq, TimerMode::Repeating),
-            c_offset: Vec2::ZERO,
-            dir,
+            pause_lerp_ticks: 2,
         }
     }
 
-    pub fn apply(&self, camera_transform: &mut Transform) {
-        camera_transform.translation.x += self.c_offset.x;
-        camera_transform.translation.y += self.c_offset.y;
+    /// Whether the shake holds the camera where it is this tick.
+    fn pauses_follow(&self) -> bool {
+        self.pause_lerp_ticks > 0
     }
 }
 
-pub fn update_screen_shake(
-    mut commands: Commands,
-    //    mut cam_query: Query<(Entity, &mut CameraShake, &mut Transform), (With<PlayerCamera>)>,
-    time: Res<Time<Virtual>>,
-    mut shake: ResMut<CameraShake>,
-) {
-    let freq = shake.freq;
+fn random_direction() -> Vec2 {
+    Vec2::from_angle(rng().random_range(0.0..TAU))
+}
+
+/// Advances the shake, and ends it when its time runs out.
+fn update_screen_shake(mut commands: Commands, time: Res<ClockTime>, mut shake: ResMut<CameraShake>) {
+    // The wobble across the shake runs at twice its frequency and half its amplitude.
+    const WOBBLE_FREQ_SCALE: f32 = 2.0;
+    const WOBBLE_AMP_SCALE: f32 = 0.5;
     let ratio = shake.timer.fraction();
     let decay = 1.0 - ratio.powi(2);
-
-    let t = freq * ratio * PI * 2.0;
-    let s = t.sin();
-
-    const TAN_FREQ_SCALE: f32 = 2.;
-    const TAN_AMP_SCALE: f32 = 0.5;
-
-    let tan_s = (TAN_FREQ_SCALE * t).sin();
-
-    if shake.sub_timer.finished() {
-        let rand_a = ran_f64_range(0.0..=360.0);
-        shake.dir = Vec2::from_angle(rand_a as f32 * PI * 2.0);
+    let phase = shake.freq * ratio * TAU;
+    if shake.sub_timer.is_finished() {
+        shake.dir = random_direction();
     }
-
-    let val = s * decay;
-    let tan_val = tan_s * decay * TAN_AMP_SCALE;
-
-    let tan_dir = Vec3::Z.cross(shake.dir.extend(0.)).truncate();
-
-    let delta = shake.dir * val * shake.strength;
-    let tan_delta = tan_dir * tan_val * shake.strength;
-    //    let angle = val * shake.strength * 0.0001;
-
-    shake.c_offset = delta + tan_delta;
-
+    let along = shake.dir * phase.sin();
+    let across = shake.dir.perp() * (WOBBLE_FREQ_SCALE * phase).sin() * WOBBLE_AMP_SCALE;
+    shake.offset = (along + across) * decay * shake.strength;
     shake.timer.tick(time.delta());
     shake.sub_timer.tick(time.delta());
-
-    if shake.timer.finished() {
+    shake.pause_lerp_ticks = shake.pause_lerp_ticks.saturating_sub(1);
+    if shake.timer.is_finished() {
         commands.remove_resource::<CameraShake>();
     }
 }
 
-fn cli_camera_at(
-    In(args): In<Vec<String>>,
-    mut q_cam: Query<&mut Transform, With<MainCamera>>,
-) {
-    if args.len() != 2 {
-        error!("\"camera_at <x> <y>\"");
-        return;
-    }
-    if let Ok(mut xf_cam) = q_cam.get_single_mut() {
-        if let (Ok(x), Ok(y)) = (args[0].parse(), args[1].parse()) {
-            xf_cam.translation.x = x;
-            xf_cam.translation.y = y;
-        } else {
-            error!("\"camera_at <x> <y>\": args must be numeric values");
-        }
-    }
+/// The camera's pose at each recent tick, which `update_camera` interpolates between.
+#[derive(Resource, Default)]
+pub(crate) struct CameraHistory(TickHistory<CameraPose>);
+
+struct CameraPose {
+    position: Vec2,
+    shake: Vec2,
+    /// Whether the camera jumped to this pose rather than moving there.
+    snap: bool,
 }
 
-fn cli_camera_limits_noargs(q_cam: Query<&GameViewLimits, With<MainCamera>>) {
-    if let Ok(limits) = q_cam.get_single() {
-        info!(
-            "Game Camera limits: {} {} {} {}",
-            limits.0.min.x, limits.0.min.y, limits.0.max.x, limits.0.max.y
-        );
-    } else {
-        error!("Game Camera not found!");
-    }
-}
-
-fn cli_camera_limits_args(
-    In(args): In<Vec<String>>,
-    mut q_cam: Query<&mut GameViewLimits, With<MainCamera>>,
-) {
-    if args.len() != 4 {
-        error!("\"camera_limits <x0> <y0> <x1> <y1>\"");
-        return;
-    }
-    if let Ok(mut limits) = q_cam.get_single_mut() {
-        if let (Ok(x0), Ok(y0), Ok(x1), Ok(y1)) = (
-            args[0].parse(),
-            args[1].parse(),
-            args[2].parse(),
-            args[3].parse(),
-        ) {
-            limits.0 = Rect::new(x0, y0, x1, y1);
-        } else {
-            error!("\"camera_limits <x0> <y0> <x1> <y1>\": args must be numeric values");
-        }
-    }
+fn capture_camera_history(rig: Res<CameraRig>, shake: Option<Res<CameraShake>>, time: Res<GameTime>, mut history: ResMut<CameraHistory>) {
+    history.0.push(time.tick(), CameraPose {
+        position: rig.position,
+        shake: shake.map_or(Vec2::ZERO, |shake| shake.offset),
+        snap: rig.previous == rig.position,
+    });
 }

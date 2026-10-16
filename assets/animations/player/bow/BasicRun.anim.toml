@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.BowBasicRun"
+image = "animations/player/bow/BasicRunSheet__r1c8__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"
@@ -55,6 +59,13 @@ if_previous_script_key = "anim.player.BowBasicRun"
 action = "PlayAudio"
 asset_key = "audio.game.BowShoot"
 
+[[events]]
+on = { frame_enter = 3 }
+emit = "player_footstep"
+
+[[events]]
+on = { frame_enter = 7 }
+emit = "player_footstep"
 
 [[script]]
 run_at_frame = [3, 7]

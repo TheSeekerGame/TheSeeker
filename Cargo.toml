@@ -2,45 +2,10 @@
 name = "theseeker"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/TheSeekerGame/TheSeeker"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-
-# [patch."https://github.com/TheSeekerGame/seek_ecs_tilemap"]
-# seek_ecs_tilemap = { path = "../seek_ecs_tilemap" }
-
-[patch.crates-io]
-# bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_ecs = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_asset = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_utils = { git = "https://github.com/TheSeekerGame/bevy", branch = "TheSeeker" }
-# bevy_xpbd_2d = { git = "https://github.com/TheSeekerGame/bevy_xpbd", branch = "TheSeeker" }
-
-bevy = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_app = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_asset = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_core = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_core_pipeline = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_ecs = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_gizmos = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_hierarchy = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_input = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_log = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_math = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_pbr = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_reflect = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_render = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_sprite = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_text = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_time = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_transform = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_ui = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_window = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-bevy_winit = { git = "https://github.com/TheSeekerGame/bevy", branch = "sprite3d" }
-
-[patch."https://github.com/IyesGames/iyes_cli"]
-iyes_cli = { git = "https://github.com/TheSeekerGame/iyes_cli", branch = "seeker" }
 
 [lib]
 name = "theseeker_engine"
@@ -51,9 +16,9 @@ name = "theseeker_game"
 path = "game/src/main.rs"
 
 [features]
-dev = ["bevy/file_watcher"]
 release = []
-inspector = []
+
+default = []
 
 # dev: Enable max optimizations for dependencies, but not for our code
 [profile.dev.package."*"]
@@ -73,92 +38,137 @@ debug = false
 
 # Random little libraries
 [dependencies]
-anyhow = "1.0.79"
-derive_more = "0.99.17"
-directories = "5.0.1"
-enum-iterator = "1.5.0"
-enum-map = "2.7.3"
-fluent_content = "0.0.5"
-glam = "0.25.0"
-rand = "0.8.5"
-serde_with = "3.6.1"
-thiserror = "1.0.56"
-toml = "0.8.10"
-unic-langid = "0.9.4"
-ran = "2.0.1"            #for lighter weight/easier use random noise then using rand
-rodio = "0.17.3"
+anyhow = "1.0.97"
+enum-iterator = "2.1.0"
+glam = "0.32.1"
+rand = "0.9.0"
+crossbeam-channel = "0.5"
+serde_with = "3.12.0"
+serde_json = "1.0"
+thiserror = "2.0.12"
+toml = "0.8.20"
+strum = "0.27"
+strum_macros = "0.27"
 cpal = "0.15.3"
-strum = "0.26"
-strum_macros = "0.26"
+symphonium = { version = "0.6.5", features = ["flac"] }
 
-bevy_egui = "0.27"
-bevy-inspector-egui = "0.24"
-bevy_fluent = "0.9.0"
+# GPU particles use the 2D renderer; retain serialized effect asset support.
+bevy_hanabi = { version = "0.19", default-features = false, features = ["2d"] }
 
-# This specific rev was working main on may 28th.
-# needed for moveble forcefields not availible in 0.10
-# (also has some wgsl fixes)
-bevy_hanabi = { git = "https://github.com/djeedai/bevy_hanabi", rev = "cabb3cb", default-features = false, features = [
-  "3d",
-] }
-smallvec = "1.13.2"
-
-bevy_sprite3d = "2.8"
-iyes_perf_ui = { version = "0.2.3", optional = true }
-num_cpus = "1.16.0"
+rfd = "0.14"
 
 [dependencies.serde]
-version = "1.0.196"
+version = "1.0.219"
 features = ["derive"]
 
 [dependencies.bevy]
-version = "0.13"
-default-features = true
-features = ["flac", "jpeg", "wayland"]
+version = "=0.19.1"
+default-features = false
+# Keep scene authoring, diagnostics, audio assets, and desktop input alongside 2D rendering.
+features = [
+    "std",
+    "async_executor",
+    "multi_threaded",
+    "bevy_asset",
+    "bevy_audio",
+    "bevy_color",
+    "bevy_core_pipeline",
+    "bevy_post_process", # MSAA writeback preserves custom passes under overlay cameras.
+    "bevy_gilrs",
+    "bevy_gizmos",
+    "bevy_input_focus",
+    "bevy_log",
+    "bevy_render",
+    "bevy_scene",
+    "bevy_sprite",
+    "bevy_sprite_render",
+    "bevy_gizmos_render",
+    "bevy_ui_render",
+    "keyboard",
+    "mouse",
+    "bevy_state",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_window",
+    "bevy_winit",
+    "default_font",
+    "sysinfo_plugin",
+    "debug", # Retain system and type names in diagnostics.
+    "png",
+    "jpeg",
+    "flac",
+    "vorbis",
+    "wayland",
+    "x11",
+]
 
 [dependencies.bevy_asset_loader]
-version = "0.20"
+version = "0.27"
 features = ["2d", "progress_tracking", "standard_dynamic_assets"]
 
 [dependencies.bevy_common_assets]
-version = "0.10"
+version = "0.17"
+default-features = false
 features = ["toml", "ron"]
 
-[dependencies.bevy_ecs_ldtk]
-version = "0.9.17"
-git = "https://github.com/TheSeekerGame/bevy_ecs_ldtk"
-
-[dependencies.seek_ecs_tilemap]
-git = "https://github.com/TheSeekerGame/seek_ecs_tilemap"
-features = ["default", "use_3d_pipeline", "background_tiles"]
-
-[dependencies.iyes_bevy_extras]
-git = "https://github.com/IyesGames/iyes_bevy_extras"
-rev = "3b016ca6e2c3dc4b0cae1b037f0ae25c48ca0878"
-features = ["2d"]
-
-[dependencies.iyes_cli]
-git = "https://github.com/IyesGames/iyes_cli"
-
-[dependencies.iyes_progress]
-version = "0.11"
-features = ["assets"]
-
-[dependencies.iyes_ui]
-git = "https://github.com/IyesGames/iyes_ui"
-rev = "2a0314386f807715de619246c54bbfe7dbc09bea"
-features = ["iyes_cli"]
-
-[dependencies.sickle_ui]
-git = "https://github.com/TheSeekerGame/sickle_ui.git"
-
 [dependencies.leafwing-input-manager]
-git = "https://github.com/TheSeekerGame/leafwing-input-manager"
-branch = "fixed_update_0.13"
+version = "0.21"
+default-features = false
+features = ["asset", "mouse", "keyboard", "gamepad"]
 
-[dependencies.rapier2d]
-version = "0.18"
+# Pin Tracy dependencies to match Tracy 0.11.1 (Homebrew version)
+[dependencies.tracy-client]
+version = "=0.18.0"
 
-# Unavoidable with how Bevy is designed
+[dependencies.tracy-client-sys]
+version = "=0.24.3"
+
+# Tests check shader uniforms against their Rust layouts in the naga modules Bevy composes.
+[dev-dependencies.naga]
+version = "29"
+default-features = false
+
+[lints.rust]
+warnings = "deny"
+unsafe_code = "deny"
+
 [lints.clippy]
+all = { level = "deny", priority = -1 }
+perf = { level = "deny", priority = -1 }
+complexity = { level = "deny", priority = -1 }
+
+# Bevy ECS query and system types are naturally complex.
 type_complexity = "allow"
+
+# High-threshold guardrail against newly introduced deeply branching functions.
+cognitive_complexity = "deny"
+
+# Selected high-signal pedantic lints.
+allow_attributes_without_reason = "deny"
+assigning_clones = "deny"
+bool_to_int_with_if = "deny"
+cloned_instead_of_copied = "deny"
+collapsible_else_if = "deny"
+default_trait_access = "deny"
+elidable_lifetime_names = "deny"
+format_push_string = "deny"
+ignored_unit_patterns = "deny"
+inefficient_to_string = "deny"
+match_same_arms = "deny"
+match_wildcard_for_single_variants = "deny"
+manual_assert = "deny"
+manual_let_else = "deny"
+manual_string_new = "deny"
+needless_continue = "deny"
+no_effect_underscore_binding = "deny"
+range_plus_one = "deny"
+redundant_closure_for_method_calls = "deny"
+redundant_else = "deny"
+ref_option = "deny"
+return_self_not_must_use = "deny"
+single_match_else = "deny"
+too_many_lines = "deny"
+unnecessary_semicolon = "deny"
+unreadable_literal = "deny"
+uninlined_format_args = "deny"
+unnested_or_patterns = "deny"

@@ -1,0 +1,33 @@
+[asset]
+key = "anim.player.Gather"
+image = "animations/player/movement/GatherSheet__r1c1__48x48.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 1
+frame_start = 1
+
+[[script]]
+run_on_slot_enable = "Damaged"
+action = "PlayAudio"
+volume = 0.7
+asset_key = "audio.game.PlayerGetsDamaged"
+
+[[script]]
+run_on_slot_enable = "XpOrb"
+action = "PlayAudio"
+volume = 0.5
+asset_key = "audio.game.XpOrbs"
+
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

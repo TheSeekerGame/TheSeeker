@@ -1,3 +1,7 @@
+[asset]
+key = "anim.yak.Idle"
+image = "animations/yak/Idle__r1c34__64x64.png"
+
 atlas_asset_key = "anim.yak.Idle.sprite"
 
 [settings]
@@ -12,21 +16,14 @@ frame_start = 1
 run_at_frame = 1
 action = "StopBackgroundAudio"
 current_script_only = false
-label = "Music"
+label = "Ambience"
 
 [[script]]
 run_at_frame = 2
 action = "PlayBackgroundAudio"
-volume = 0.2
-asset_key = "audio.game.Music"
-label = "Music"
-
-[[script]]
-run_at_frame = 2
-action = "PlayBackgroundAudio"
-volume = 0.1
+volume = 0.04
 asset_key = "audio.game.Ambience"
-label = "Music"
+label = "Ambience"
 
 # Loop
 [[script]]

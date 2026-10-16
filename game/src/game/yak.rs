@@ -20,21 +20,24 @@ impl Plugin for YakPlugin {
 #[derive(Component, Default)]
 pub struct YakBlueprint;
 
-#[derive(Bundle, LdtkEntity, Default)]
+#[derive(Bundle, Default)]
 pub struct YakBlueprintBundle {
     marker: YakBlueprint,
 }
 
 #[derive(Component)]
-pub struct YakGfx {
-    pub e_gent: Entity,
-}
+pub struct YakGfx;
 
 #[derive(Bundle)]
 pub struct YakGfxBundle {
     marker: YakGfx,
     gent2gfx: TransformGfxFromGent,
-    sprite: SpriteSheetBundle,
+    sprite: Sprite,
+    transform: Transform,
+    global_transform: GlobalTransform,
+    visibility: Visibility,
+    inherited_visibility: InheritedVisibility,
+    view_visibility: ViewVisibility,
     animation: SpriteAnimationBundle,
 }
 
@@ -43,28 +46,32 @@ pub fn setup_yak(
     mut commands: Commands,
 ) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
-        println!("added yak");
-        xf_gent.translation.z = 12.0 * 0.000001;
+        xf_gent.translation.z = 12.0 * 0.000_001;
         xf_gent.translation.y += 5.0;
-        println!("{:?}", xf_gent);
         let e_gfx = commands.spawn(()).id();
         commands
             .entity(e_gent)
             .insert(Name::new("Yak"))
-            .remove_parent();
+            .remove::<ChildOf>();
         let mut player = ScriptPlayer::<SpriteAnimation>::default();
         player.play_key("anim.yak.Idle");
         commands.entity(e_gfx).insert((
             YakGfxBundle {
-                marker: YakGfx { e_gent },
+                marker: YakGfx,
                 gent2gfx: TransformGfxFromGent {
                     pixel_aligned: false,
                     gent: e_gent,
+                    offset: None,
                 },
-                sprite: SpriteSheetBundle {
-                    transform: *xf_gent,
-                    ..Default::default()
+                sprite: Sprite {
+                    texture_atlas: Some(TextureAtlas::default()),
+                    ..default()
                 },
+                transform: *xf_gent,
+                global_transform: GlobalTransform::default(),
+                visibility: Visibility::Visible,
+                inherited_visibility: InheritedVisibility::VISIBLE,
+                view_visibility: ViewVisibility::default(),
                 animation: SpriteAnimationBundle { player },
             },
             StateDespawnMarker,

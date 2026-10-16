@@ -1,0 +1,5 @@
+id = "buzzer_burst"
+mechanic = { kind = "projectile", descriptor = "projectile.buzzer_slime_orb" }
+presentation = { animation = "Attack" }
+timing = { release = "fire_projectile", repetitions = 3, recovery_ticks = 48 }
+controls = { motion_x = true, motion_y = true, presentation = true }

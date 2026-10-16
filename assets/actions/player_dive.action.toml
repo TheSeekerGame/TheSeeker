@@ -1,0 +1,7 @@
+id = "player_dive"
+base = "bat_dive"
+presentation = { animation = "anim.player.DownwardDash", section = "flight", impact_section = "impact" }
+timing = { duration_ticks = 16, repetitions = 1 }
+motion = { speed = 4.167, direction = [1.0, -1.0], impact_ticks = 8 }
+damage = 120.0
+hits = { kind = "sweep", radius = 8.0, impact_radius = 24.0, impact_max_targets = 64 }

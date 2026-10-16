@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.WallSlide"
+image = "animations/player/movement/WallSlide__r1c3__96x96.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

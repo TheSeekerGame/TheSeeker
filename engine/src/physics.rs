@@ -1,43 +1,33 @@
-use std::f32::consts::PI;
+pub mod geometry;
+mod tiles;
+pub use tiles::*;
 
 use bevy::prelude::*;
-use bevy::transform::TransformSystem::TransformPropagate;
-use rapier2d::na::{Unit, UnitComplex};
-use rapier2d::parry;
-use rapier2d::prelude::{Collider as RapierCollider, *};
+use bevy::transform::systems::{mark_dirty_trees, propagate_parent_transforms, sync_simple_transforms};
+use bevy::transform::TransformSystems::Propagate;
 
-use crate::prelude::{GameTickUpdate, HashMap};
+use crate::prelude::{GameTickUpdate, GameTime, HashMap, HashSet, Instant};
+use crate::profile::{profiling_enabled, TickSystemProfile};
 use crate::script::ScriptSet;
 
-/// A manual implementation of rapier to only use the features required by our project
-///
-/// It only supports setting colliders in the scene, and making shapecast queries on them.
+/// Physics plugin that wires the custom entity-collision world.
 pub struct PhysicsPlugin;
 
 impl Plugin for PhysicsPlugin {
     fn build(&self, app: &mut App) {
-        app.insert_resource(PhysicsWorld::default());
         app.init_resource::<SpriteShapeMap>();
-        app.add_systems(Startup, init_physics_world);
-        app.configure_sets(
+        app.init_resource::<EntityCollisionWorld>();
+        app.configure_sets(GameTickUpdate, PhysicsSet.after(Propagate));
+        app.add_systems(
             GameTickUpdate,
-            PhysicsSet.after(TransformPropagate),
+            (mark_dirty_trees, propagate_parent_transforms, sync_simple_transforms).chain().in_set(Propagate),
         );
         app.add_systems(
             GameTickUpdate,
             (
-                update_sprite_colliders
-                    .before(PhysicsSet)
-                    .after(ScriptSet::Run),
-                update_query_pipeline.in_set(PhysicsSet),
+                update_sprite_colliders.after(ScriptSet::Run).before(PhysicsSet),
+                rebuild_entity_collision_world.in_set(PhysicsSet),
             ),
-        );
-        #[cfg(feature = "dev")]
-        app.init_gizmo_group::<PhsyicsCollidersGizmos>();
-        #[cfg(feature = "dev")]
-        app.add_systems(
-            GameTickUpdate,
-            debug_colliders.after(PhysicsSet),
         );
     }
 }
@@ -46,512 +36,706 @@ impl Plugin for PhysicsPlugin {
 pub struct PhysicsSet;
 
 /// The player collision group
-pub const PLAYER: Group = Group::from_bits_truncate(0b0001);
+pub const PLAYER: Group = Group(1 << 0);
 /// The enemy collision group
-pub const ENEMY: Group = Group::from_bits_truncate(0b0010);
+pub const ENEMY: Group = Group(1 << 1);
 /// The player attack collision group
-pub const PLAYER_ATTACK: Group = Group::from_bits_truncate(0b0100);
+pub const PLAYER_ATTACK: Group = Group(1 << 2);
 /// The enemy attack collision group
-pub const ENEMY_ATTACK: Group = Group::from_bits_truncate(0b1000);
+pub const ENEMY_ATTACK: Group = Group(1 << 3);
 /// The ground collision group
-pub const GROUND: Group = Group::from_bits_truncate(0b10000);
-/// Use when the other groups don't make sense,
-/// and you just want to detect something
-pub const SENSOR: Group = Group::from_bits_truncate(0b100000);
-/// Applied to an enemy when player is inside it
-pub const ENEMY_INSIDE: Group = Group::from_bits_truncate(0b1000000);
-/// Combination of ENEMY and ENEMY_INSIDE,
-/// used for checking the players attacks
-pub const ENEMY_HURT: Group = Group::from_bits_truncate(0b1000010);
+pub const GROUND: Group = Group(1 << 4);
+/// Use when the other groups don't make sense, and you just want to detect something
+pub const SENSOR: Group = Group(1 << 5);
+/// Applied to the player while it is inside an enemy
+pub const ENEMY_INSIDE: Group = Group(1 << 6);
 
-#[derive(Resource, Default)]
-pub struct SpriteShapeMap {
-    /// Normal, flipped x, flipped y, and flipped x & y, respectively
-    pub shapes: Vec<(
-        SharedShape,
-        SharedShape,
-        SharedShape,
-        SharedShape,
-    )>,
-    pub map: HashMap<AssetId<Image>, Vec<usize>>,
+/// Distance we keep the shape-cast above ground.
+pub const GROUNDED_THRESHOLD: f32 = 1.0;
+
+/// Canonical collision masks. Use these instead of hand-rolling `CollisionGroups::new(...)` so the
+/// two-way membership/filter test stays consistent.
+pub mod groups {
+    use super::*;
+
+    /// The filter each high-level category uses to find the categories it interacts with.
+    pub fn default_filter(memberships: Group) -> Group {
+        match memberships {
+            PLAYER => ENEMY | ENEMY_ATTACK | GROUND,
+            ENEMY => PLAYER | PLAYER_ATTACK | GROUND,
+            PLAYER_ATTACK => ENEMY | GROUND,
+            ENEMY_ATTACK => PLAYER | ENEMY_INSIDE,
+            ENEMY_INSIDE => PLAYER,
+            _ => Group::all(),
+        }
+    }
+
+    pub fn groups(memberships: Group) -> CollisionGroups {
+        CollisionGroups::new(memberships, default_filter(memberships))
+    }
+
+    /// Player body: blocks enemy bodies and ground.
+    pub fn player_body() -> CollisionGroups {
+        groups(PLAYER)
+    }
+
+    /// Enemy body: blocks player bodies/attacks and ground.
+    pub fn enemy_body() -> CollisionGroups {
+        groups(ENEMY)
+    }
+
+    /// Player-owned hitboxes (sword, arrow, etc.).
+    pub fn player_attack() -> CollisionGroups {
+        groups(PLAYER_ATTACK)
+    }
+
+    /// Enemy-generated damage (melee hulls, projectiles, …).
+    pub fn enemy_attack() -> CollisionGroups {
+        groups(ENEMY_ATTACK)
+    }
 }
 
-#[rustfmt::skip]
-pub fn update_sprite_colliders(
-    shape_map: Res<SpriteShapeMap>,
-    mut q_sprite: Query<
-        (
-            &Handle<Image>,
-            &TextureAtlas,
-            &Sprite,
-        ),
-        (
-            Or<(
-                Changed<Handle<Image>>,
-                Changed<TextureAtlas>,
-            )>,
-        ),
-    >,
-    mut q_collider: Query<(&mut Collider, &AnimationCollider)>,
-) {
-    for (mut collider, anim_entity) in &mut q_collider {
-        match q_sprite.get(anim_entity.0) {
-            Ok((h_image, atlas, sprite)) => {
-                let Some(shapes_i) = shape_map
-                    .map
-                    .get(&h_image.id())
-                    .expect("Sprite image not found in collider map!")
-                    .get(atlas.index)
-                else {
-                    println!(
-                        "er finding collider associated with image {}",
-                        atlas.index
-                    );
-                    continue;
-                };
-                let convex_hull = &shape_map.shapes[*shapes_i];
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct Group(u32);
 
-                match (sprite.flip_x, sprite.flip_y) {
-                    (false, false) => { collider.0.set_shape(convex_hull.0.clone()); },
-                    (true , false) => { collider.0.set_shape(convex_hull.1.clone()); },
-                    (false, true ) => { collider.0.set_shape(convex_hull.2.clone()); },
-                    (true , true ) => { collider.0.set_shape(convex_hull.3.clone()); },
-                }
+impl Group {
+    pub const NONE: Group = Group(0);
+
+    pub const fn all() -> Group {
+        Group(u32::MAX)
+    }
+
+    pub const fn bits(self) -> u32 {
+        self.0
+    }
+
+    pub const fn from_bits_truncate(bits: u32) -> Group {
+        Group(bits)
+    }
+
+    pub const fn intersects(self, other: Group) -> bool {
+        self.0 & other.0 != 0
+    }
+}
+
+impl std::ops::BitOr for Group {
+    type Output = Group;
+
+    fn bitor(self, rhs: Group) -> Group {
+        Group(self.0 | rhs.0)
+    }
+}
+
+impl std::ops::BitAnd for Group {
+    type Output = Group;
+
+    fn bitand(self, rhs: Group) -> Group {
+        Group(self.0 & rhs.0)
+    }
+}
+
+impl std::ops::Not for Group {
+    type Output = Group;
+
+    fn not(self) -> Group {
+        Group(!self.0)
+    }
+}
+
+/// Two colliders interact when each one's memberships intersect the other's filters.
+#[derive(Component, Clone, Copy, Debug, PartialEq, Eq)]
+pub struct CollisionGroups {
+    memberships: Group,
+    filters: Group,
+}
+
+impl CollisionGroups {
+    pub const fn new(memberships: Group, filters: Group) -> Self {
+        Self { memberships, filters }
+    }
+
+    pub const fn memberships(self) -> Group {
+        self.memberships
+    }
+
+    pub const fn filters(self) -> Group {
+        self.filters
+    }
+
+    fn interacts_with(self, other: CollisionGroups) -> bool {
+        self.memberships.intersects(other.filters) && other.memberships.intersects(self.filters)
+    }
+}
+
+impl Default for CollisionGroups {
+    fn default() -> Self {
+        Self::new(Group::all(), Group::all())
+    }
+}
+
+/// The rectangle centered on `center`; negative extents are not normalized.
+pub fn rect_around(center: Vec2, half_extents: Vec2) -> Rect {
+    Rect { min: center - half_extents, max: center + half_extents }
+}
+
+/// Collision shape in its entity's local space.
+#[derive(Component, Clone, Debug)]
+pub enum Collider {
+    Empty,
+    Cuboid { half_extents: Vec2 },
+    Circle { radius: f32 },
+    Capsule { a: Vec2, b: Vec2, radius: f32 },
+    MultiRect { rects: Vec<Rect> },
+}
+
+impl Collider {
+    pub fn cuboid(x_half: f32, y_half: f32) -> Self {
+        Self::Cuboid { half_extents: Vec2::new(x_half, y_half) }
+    }
+
+    pub fn ball(radius: f32) -> Self {
+        Self::Circle { radius }
+    }
+
+    pub fn capsule(a: Vec2, b: Vec2, radius: f32) -> Self {
+        Self::Capsule { a, b, radius }
+    }
+
+    pub fn multi_rect(rects: Vec<Rect>) -> Self {
+        if rects.is_empty() {
+            return Self::Empty;
+        }
+        Self::MultiRect { rects }
+    }
+
+    pub fn is_empty(&self) -> bool {
+        matches!(self, Self::Empty)
+    }
+
+    pub fn cuboid_half_extents(&self) -> Option<Vec2> {
+        match self {
+            Self::Cuboid { half_extents } => Some(*half_extents),
+            _ => None,
+        }
+    }
+
+    pub fn local_aabb(&self) -> Option<Rect> {
+        match self {
+            Self::Empty => None,
+            Self::Cuboid { half_extents } => Some(rect_around(Vec2::ZERO, *half_extents)),
+            Self::Circle { radius } => Some(rect_around(Vec2::ZERO, Vec2::splat(*radius))),
+            Self::Capsule { a, b, radius } => Some(Rect { min: a.min(*b) - *radius, max: a.max(*b) + *radius }),
+            Self::MultiRect { rects } => rects.iter().copied().reduce(|a, b| a.union(b)),
+        }
+    }
+
+    /// Half extents of the local bounding box, or zero for an empty collider.
+    pub fn half_extents(&self) -> Vec2 {
+        self.local_aabb().map_or(Vec2::ZERO, |aabb| aabb.half_size())
+    }
+
+    pub fn world_aabb(&self, position: Vec2) -> Option<Rect> {
+        self.local_aabb().map(|aabb| Rect { min: aabb.min + position, max: aabb.max + position })
+    }
+
+    /// Whether this shape at `pos` overlaps `other` at `other_pos`, counting touching edges.
+    fn overlaps(&self, pos: Vec2, other: &Collider, other_pos: Vec2) -> bool {
+        match self {
+            Self::Empty => false,
+            Self::Cuboid { half_extents } => other.overlaps_rect(other_pos, rect_around(pos, *half_extents)),
+            Self::Circle { radius } => other.overlaps_circle(other_pos, pos, *radius),
+            Self::Capsule { a, b, radius } => other.overlaps_capsule(other_pos, pos + *a, pos + *b, *radius),
+            Self::MultiRect { rects } => {
+                rects.iter().any(|rect| other.overlaps_rect(other_pos, offset_rect(*rect, pos)))
             },
-            Err(e) => {},
+        }
+    }
+
+    fn overlaps_rect(&self, pos: Vec2, rect: Rect) -> bool {
+        match self {
+            Self::Empty => false,
+            Self::Cuboid { half_extents } => overlaps_aabb(rect_around(pos, *half_extents), rect),
+            Self::Circle { radius } => circle_aabb_overlap(pos, *radius, rect),
+            Self::Capsule { a, b, radius } => segment_intersects_aabb(pos + *a, pos + *b, expand(rect, *radius)),
+            Self::MultiRect { rects } => rects.iter().any(|own| overlaps_aabb(offset_rect(*own, pos), rect)),
+        }
+    }
+
+    fn overlaps_circle(&self, pos: Vec2, center: Vec2, radius: f32) -> bool {
+        match self {
+            Self::Empty => false,
+            Self::Cuboid { half_extents } => circle_aabb_overlap(center, radius, rect_around(pos, *half_extents)),
+            Self::Circle { radius: own } => pos.distance_squared(center) <= (radius + own) * (radius + own),
+            Self::Capsule { a, b, radius: own } => segment_circle_overlap(pos + *a, pos + *b, center, radius + own),
+            Self::MultiRect { rects } => {
+                rects.iter().any(|rect| circle_aabb_overlap(center, radius, offset_rect(*rect, pos)))
+            },
+        }
+    }
+
+    /// Overlap with the segment `start..end` swept by `radius`.
+    fn overlaps_capsule(&self, pos: Vec2, start: Vec2, end: Vec2, radius: f32) -> bool {
+        match self {
+            Self::Empty => false,
+            Self::Cuboid { half_extents } => {
+                segment_intersects_aabb(start, end, expand(rect_around(pos, *half_extents), radius))
+            },
+            Self::Circle { radius: own } => segment_circle_overlap(start, end, pos, radius + own),
+            Self::Capsule { a, b, radius: own } => {
+                segment_circle_overlap(pos + *a, pos + *b, start, radius + own)
+                    || segment_circle_overlap(start, end, pos + *a, radius + own)
+            },
+            Self::MultiRect { rects } => {
+                rects.iter().any(|rect| segment_intersects_aabb(start, end, expand(offset_rect(*rect, pos), radius)))
+            },
+        }
+    }
+
+    /// First hit of a normalized ray against this shape. Capsules use their bounding box.
+    fn ray_hit(&self, pos: Vec2, origin: Vec2, dir: Vec2, max_toi: f32) -> Option<(f32, Vec2)> {
+        match self {
+            Self::Empty => None,
+            Self::Cuboid { half_extents } => ray_aabb(origin, dir, max_toi, rect_around(pos, *half_extents)),
+            Self::Circle { radius } => ray_circle(origin, dir, max_toi, pos, *radius),
+            Self::Capsule { .. } => ray_aabb(origin, dir, max_toi, self.world_aabb(pos)?),
+            Self::MultiRect { rects } => ray_rects(origin, dir, max_toi, rects.iter().map(|r| offset_rect(*r, pos))),
+        }
+    }
+
+    /// Sweeps the bounding box of `moving` along a normalized ray against this shape's boxes.
+    fn sweep_hit(&self, pos: Vec2, moving: &Collider, origin: Vec2, dir: Vec2, max_toi: f32) -> Option<(f32, Vec2)> {
+        let half = moving.half_extents();
+        let grow = |rect: Rect| Rect { min: rect.min - half, max: rect.max + half };
+        match self {
+            Self::MultiRect { rects } => {
+                ray_rects(origin, dir, max_toi, rects.iter().map(|rect| grow(offset_rect(*rect, pos))))
+            },
+            _ => ray_aabb(origin, dir, max_toi, grow(self.world_aabb(pos)?)),
         }
     }
 }
 
 /// An animation collider accepts a target entity that has the image, texture atlas,
 /// and sprite animation components.
-///
-/// - You put the AnimationCollider component along with any collider type on an entity,
-/// and it will use the shapes generated by the animation on the target entity as its
-/// collider shape.
-/// - If there are no shapes generated by the frame of the animation,
-/// the shape will not collide with anything.
-/// - Shapes are generated from the *convex_hull* of magenta pixels in the animation.
-/// (ie: if you put a rubber band around the magenta pixel center points)
-///
-/// If you want to do a PhysicsWorld query on a ([`Collider`], [`AnimationCollider`]) entity,
-/// make sure the query runs *after* [`update_sprite_colliders`]
-///
-/// Also note: rotations are not currently applied to the *debug visuals* for these colliders.
 #[derive(Component)]
 pub struct AnimationCollider(pub Entity);
 
-/// Objects marked with this and a transform component will be updated in the
-/// collision scene. Parenting is not currently kept in sync; global transforms are used instead.
-/// Colliders ignore all scaling!
-///
-/// Only colliders that have an easy build wrapper are shown in the collider debug system.
-#[derive(Component)]
-pub struct Collider(pub RapierCollider);
+/// Marks colliders that are expected to remain mostly unchanged between ticks.
+#[derive(Component, Clone, Copy, Debug, Default)]
+pub struct StaticCollider;
 
-impl Collider {
-    pub fn cuboid(
-        x_length: f32,
-        y_length: f32,
-        interaction: InteractionGroups,
-    ) -> Self {
-        // Rapiers cuboid is subtely different from xpbd, as rapier is defined by its
-        // half extents, and xpbd is by its extents.
-        Self(
-            ColliderBuilder::cuboid(x_length * 0.5, y_length * 0.5)
-                .collision_groups(interaction)
-                .build(),
-        )
-    }
-
-    /// You can use this if you want to use an animation collider
-    ///
-    /// Note: not actually empty, makes a 10x10cube.
-    pub fn empty(interaction: InteractionGroups) -> Self {
-        Self(
-            ColliderBuilder::cuboid(10.0, 10.0)
-                .collision_groups(interaction)
-                .build(),
-        )
-    }
+/// The frame and flips already applied to an animation collider.
+#[derive(Component, Clone, Copy, Default, Debug, PartialEq, Eq)]
+pub struct StoredColliderFrame {
+    pub frame_index: usize,
+    pub flip_x: bool,
+    pub flip_y: bool,
 }
 
-/// Just a wrapper that lets us treat rapiers collider handle as a component
-#[derive(Component)]
-pub struct ColliderHandle(pub rapier2d::prelude::ColliderHandle);
-
-// Todo: shape caster info; process in update queries pipeline
-//  or maybe seoperate system
-#[derive(Component)]
-pub struct ShapeCaster {
-    pub shape: SharedShape,
-    /// Offsets the origin of the shape cast from the transform
-    pub origin: Vec2,
-    pub direction: Direction2d,
-    pub max_toi: f32,
-    pub interaction: InteractionGroups,
-}
-
-impl ShapeCaster {
-    pub fn cast(
-        &self,
-        physics_world: &PhysicsWorld,
-        transform: &Transform,
-        ignore: Option<Entity>,
-    ) -> Option<(Entity, parry::query::TOI)> {
-        let origin = transform.translation.xy() + self.origin;
-        let shape = &*self.shape;
-
-        physics_world.shape_cast(
-            origin,
-            self.direction,
-            shape,
-            self.max_toi,
-            self.interaction,
-            ignore,
-        )
-    }
-}
-
-/// Used to create queries on a physics world.
-///
-/// To add a collider, you don't need this Resource, instead
-/// add the [`Collider`] component with the local position relative to the entity transform
-///
-/// If you need the collider id (for building queries etc)
 #[derive(Resource, Default)]
-pub struct PhysicsWorld {
-    // Can't make query's on this without most of the other structures,
-    // so it makes sense to group them.
-    pub query_pipeline: rapier2d::prelude::QueryPipeline,
-    pub col_set: ColliderSet,
-    pub islands: IslandManager,
-    pub rb_set: RigidBodySet,
-    /// Used internally to track if any entities where removed.
-    id_tracker: HashMap<Entity, rapier2d::prelude::ColliderHandle>,
+pub struct SpriteShapeMap {
+    /// Each frame's shape for no flip, flipped x, flipped y, and both; see [`Self::shape`].
+    pub shapes: Vec<[Collider; 4]>,
+    pub map: HashMap<AssetId<Image>, Vec<usize>>,
 }
 
-impl PhysicsWorld {
-    pub fn shape_cast(
+impl SpriteShapeMap {
+    fn frame(&self, sprite: &Sprite) -> Option<StoredColliderFrame> {
+        let atlas = sprite.texture_atlas.as_ref()?;
+        let frame_index = *self.map.get(&sprite.image.id())?.get(atlas.index)?;
+        Some(StoredColliderFrame { frame_index, flip_x: sprite.flip_x, flip_y: sprite.flip_y })
+    }
+
+    fn shape(&self, frame: StoredColliderFrame) -> Option<&Collider> {
+        let shapes = self.shapes.get(frame.frame_index)?;
+        Some(&shapes[usize::from(frame.flip_x) + 2 * usize::from(frame.flip_y)])
+    }
+}
+
+#[derive(Default)]
+pub struct SpriteColliderProfile {
+    timing: TickSystemProfile,
+    updated: u32,
+    cached: u32,
+    missing: u32,
+    inserted: u32,
+}
+
+pub fn update_sprite_colliders(
+    shape_map: Res<SpriteShapeMap>,
+    sprites: Query<&Sprite>,
+    mut colliders: Query<(Entity, &mut Collider, &AnimationCollider, Option<&mut StoredColliderFrame>)>,
+    mut commands: Commands,
+    time: Res<GameTime>,
+    mut profile: Local<SpriteColliderProfile>,
+) {
+    let start = profiling_enabled().then(Instant::now);
+    for (entity, mut collider, source, stored) in &mut colliders {
+        // AnimationCollider points to the simulation sprite, never a PresentationProxy.
+        let Some(frame) = sprites.get(source.0).ok().and_then(|sprite| shape_map.frame(sprite)) else {
+            profile.missing += 1;
+            continue;
+        };
+        if stored.as_deref() == Some(&frame) {
+            profile.cached += 1;
+            continue;
+        }
+        let Some(shape) = shape_map.shape(frame) else {
+            profile.missing += 1;
+            continue;
+        };
+        *collider = shape.clone();
+        profile.updated += 1;
+        if let Some(mut stored) = stored {
+            *stored = frame;
+        } else {
+            commands.entity(entity).insert(frame);
+            profile.inserted += 1;
+        }
+    }
+    // Counts only accumulate while profiling, so they cannot overflow over a long session.
+    let Some(start) = start else {
+        *profile = SpriteColliderProfile::default();
+        return;
+    };
+    let Some((avg_ms, max_ms, ticks)) = profile.timing.sample(start.elapsed(), time.hz) else { return };
+    let SpriteColliderProfile { updated, cached, missing, inserted, .. } = std::mem::take(&mut *profile);
+    info!(
+        target: "theseeker_engine::tick_system_profile",
+        "sprite_colliders: avg_ms={avg_ms:.2} max_ms={max_ms:.2} updated={updated} cached={cached} \
+         missing={missing} inserted={inserted} ticks={ticks}"
+    );
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct CastHit {
+    pub time_of_impact: f32,
+    pub normal: Vec2,
+}
+
+const COLLISION_CELL_SIZE: f32 = 16.0;
+
+#[derive(Clone, Debug)]
+struct CollisionEntry {
+    entity: Entity,
+    position: Vec2,
+    collider: Collider,
+    groups: CollisionGroups,
+}
+
+/// Colliders bucketed by the uniform grid cells their bounds touch.
+#[derive(Default, Debug)]
+struct CollisionLayer {
+    entries: Vec<CollisionEntry>,
+    cells: HashMap<IVec2, Vec<usize>>,
+}
+
+impl CollisionLayer {
+    fn clear(&mut self) {
+        self.entries.clear();
+        self.cells.clear();
+    }
+
+    fn insert(&mut self, entity: Entity, transform: &GlobalTransform, collider: &Collider, groups: Option<&CollisionGroups>) {
+        let position = transform.translation().truncate();
+        let Some(bounds) = collider.world_aabb(position) else { return };
+        let index = self.entries.len();
+        let groups = groups.copied().unwrap_or_default();
+        self.entries.push(CollisionEntry { entity, position, collider: collider.clone(), groups });
+        for cell in grid_cells(bounds) {
+            self.cells.entry(cell).or_default().push(index);
+        }
+    }
+
+    /// Entries whose cells touch `region`, each once, in cell order.
+    fn candidates(&self, region: Rect) -> impl Iterator<Item = &CollisionEntry> {
+        let mut seen = HashSet::new();
+        let cells = (!self.entries.is_empty()).then(|| grid_cells(region)).into_iter().flatten();
+        cells
+            .filter_map(|cell| self.cells.get(&cell))
+            .flatten()
+            .filter(move |index| seen.insert(**index))
+            .map(|index| &self.entries[*index])
+    }
+}
+
+fn grid_cells(bounds: Rect) -> impl Iterator<Item = IVec2> {
+    let min = (bounds.min / COLLISION_CELL_SIZE).floor().as_ivec2();
+    let max = (bounds.max / COLLISION_CELL_SIZE).floor().as_ivec2();
+    (min.y..=max.y).flat_map(move |y| (min.x..=max.x).map(move |x| IVec2::new(x, y)))
+}
+
+/// Entity colliders indexed each tick. Static colliders are re-indexed only when they change.
+#[derive(Resource, Default, Debug)]
+pub struct EntityCollisionWorld {
+    static_layer: CollisionLayer,
+    dynamic_layer: CollisionLayer,
+}
+
+
+#[derive(Default)]
+pub struct CollisionWorldProfile {
+    timing: TickSystemProfile,
+    static_rebuilds: u32,
+}
+
+type ColliderItem<'a> = (Entity, &'a GlobalTransform, &'a Collider, Option<&'a CollisionGroups>);
+
+pub fn rebuild_entity_collision_world(
+    mut world: ResMut<EntityCollisionWorld>,
+    static_query: Query<ColliderItem, With<StaticCollider>>,
+    dynamic_query: Query<ColliderItem, Without<StaticCollider>>,
+    static_changes: Query<
+        (),
+        (
+            With<StaticCollider>,
+            Or<(
+                Added<StaticCollider>,
+                Added<Collider>,
+                Changed<GlobalTransform>,
+                Changed<Collider>,
+                Changed<CollisionGroups>,
+            )>,
+        ),
+    >,
+    mut removed_static: RemovedComponents<StaticCollider>,
+    time: Res<GameTime>,
+    mut profile: Local<CollisionWorldProfile>,
+) {
+    let start = profiling_enabled().then(Instant::now);
+    let world = &mut *world;
+    if world.static_layer.entries.is_empty() || !static_changes.is_empty() || removed_static.read().next().is_some() {
+        world.static_layer.clear();
+        for (entity, transform, collider, groups) in &static_query {
+            world.static_layer.insert(entity, transform, collider, groups);
+        }
+        profile.static_rebuilds += 1;
+    }
+    world.dynamic_layer.clear();
+    for (entity, transform, collider, groups) in &dynamic_query {
+        world.dynamic_layer.insert(entity, transform, collider, groups);
+    }
+    let Some(start) = start else { return };
+    let Some((avg_ms, max_ms, ticks)) = profile.timing.sample(start.elapsed(), time.hz) else { return };
+    let rebuilds = std::mem::take(&mut profile.static_rebuilds);
+    let (statics, dynamics) = (world.static_layer.entries.len(), world.dynamic_layer.entries.len());
+    info!(
+        target: "theseeker_engine::tick_system_profile",
+        "collision_world: avg_ms={avg_ms:.2} max_ms={max_ms:.2} static_entries={statics} \
+         dynamic_entries={dynamics} static_rebuilds={rebuilds} ticks={ticks}"
+    );
+}
+
+/// Spatial queries against the entity collision world. Terrain uses [`TileCollisionWorld`].
+pub type PhysicsWorld<'w> = Res<'w, EntityCollisionWorld>;
+
+#[derive(Clone, Copy)]
+pub struct ShapeCast<'a> {
+    pub origin: Vec2,
+    pub dir: Vec2,
+    pub shape: &'a Collider,
+    pub max_toi: f32,
+    pub interaction: CollisionGroups,
+    pub exclude: Option<Entity>,
+}
+
+impl EntityCollisionWorld {
+    /// Entities overlapping `shape` at `origin`, touching edges included.
+    pub fn intersect(
         &self,
         origin: Vec2,
-        direction: Direction2d,
-        shape: &dyn Shape,
-        max_toi: f32,
-        interaction: InteractionGroups,
+        shape: &Collider,
+        interaction: CollisionGroups,
         exclude: Option<Entity>,
-    ) -> Option<(Entity, parry::query::TOI)> {
-        let mut filter = QueryFilter::new().groups(interaction);
-        if let Some(exclude) = exclude {
-            // Entity might not be added yet; or even exist.
-            if let Some(col_id) = self.id_tracker.get(&exclude) {
-                filter = filter.exclude_collider(*col_id)
-            }
-        }
-        let result = self.query_pipeline.cast_shape(
-            &self.rb_set,
-            &self.col_set,
-            &into_vec(origin).into(),
-            &into_vec(direction.xy()).into(),
-            shape,
-            max_toi,
-            true,
-            filter,
-        );
-        if let Some((collider, toi)) = result {
-            let entity: Entity = self.collider2entity(collider)?;
-            Some((entity, toi))
-        } else {
-            None
-        }
+    ) -> Vec<Entity> {
+        let Some(region) = shape.world_aabb(origin) else { return Vec::new() };
+        self.candidates(region)
+            .filter(|entry| accepts(entry, interaction, exclude))
+            .filter(|entry| shape.overlaps(origin, &entry.collider, entry.position))
+            .map(|entry| entry.entity)
+            .collect()
     }
 
     pub fn ray_cast(
         &self,
         origin: Vec2,
-        cast: Vec2,
+        dir: Vec2,
         max_toi: f32,
-        solid: bool,
-        interaction: InteractionGroups,
+        interaction: CollisionGroups,
         exclude: Option<Entity>,
-    ) -> Option<(Entity, parry::query::RayIntersection)> {
-        let mut filter = QueryFilter::new().groups(interaction);
-        if let Some(exclude) = exclude {
-            if let Some(col_id) = self.id_tracker.get(&exclude) {
-                filter = filter.exclude_collider(*col_id)
-            }
-        }
-        let ray = Ray::new(
-            into_vec(origin).into(),
-            into_vec(cast).into(),
-        );
-        let result = self.query_pipeline.cast_ray_and_get_normal(
-            &self.rb_set,
-            &self.col_set,
-            &ray,
-            max_toi,
-            solid,
-            filter,
-        );
-        if let Some((collider, intersection)) = result {
-            let entity: Entity = self.collider2entity(collider)?;
-            Some((entity, intersection))
-        } else {
-            None
-        }
+    ) -> Option<(Entity, CastHit)> {
+        let dir = unit(dir)?;
+        let region = Rect::from_corners(origin, origin + dir * max_toi);
+        nearest(self.candidates(region), max_toi, |entry, best| {
+            accepts(entry, interaction, exclude).then(|| entry.collider.ray_hit(entry.position, origin, dir, best))?
+        })
     }
 
-    pub fn intersect(
-        &self,
-        origin: Vec2,
-        shape: &dyn Shape,
-        interaction: InteractionGroups,
-        exclude: Option<Entity>,
-    ) -> Vec<Entity> {
-        let mut filter = QueryFilter::new().groups(interaction);
-        if let Some(exclude) = exclude {
-            if let Some(col_id) = self.id_tracker.get(&exclude) {
-                filter = filter.exclude_collider(*col_id)
-            }
-        }
-        let mut intersections = Vec::new();
-        self.query_pipeline.intersections_with_shape(
-            &self.rb_set,
-            &self.col_set,
-            &into_vec(origin).into(),
-            shape,
-            filter,
-            |collider| {
-                let entity: Entity = self.collider2entity(collider).unwrap();
-                intersections.push(entity);
-                true
-            },
-        );
-        intersections
+    /// The nearest accepted entity hit by `cast.shape`'s bounding box swept along `cast.dir`.
+    pub fn cast_shape(&self, cast: ShapeCast<'_>, mut predicate: impl FnMut(Entity) -> bool) -> Option<(Entity, CastHit)> {
+        let dir = unit(cast.dir)?;
+        let start = cast.shape.world_aabb(cast.origin)?;
+        let region = start.union(cast.shape.world_aabb(cast.origin + dir * cast.max_toi)?);
+        nearest(self.candidates(region), cast.max_toi, |entry, best| {
+            let accepted = accepts(entry, cast.interaction, cast.exclude) && predicate(entry.entity);
+            accepted.then(|| entry.collider.sweep_hit(entry.position, cast.shape, cast.origin, dir, best))?
+        })
     }
 
-    pub fn point_project(
-        &self,
-        point: Vec2,
-        interaction: InteractionGroups,
-        // TODO: might want to be able to exclude multiple entities?
-        exclude: Option<Entity>,
-    ) -> Option<(Entity, parry::query::PointProjection)> {
-        let mut filter = QueryFilter::new().groups(interaction);
-        if let Some(exclude) = exclude {
-            if let Some(col_id) = self.id_tracker.get(&exclude) {
-                filter = filter.exclude_collider(*col_id)
-            }
-        }
-        if let Some((collider, point)) = self.query_pipeline.project_point(
-            &self.rb_set,
-            &self.col_set,
-            &into_vec(point).into(),
-            true,
-            filter,
-        ) {
-            let entity: Entity = self.collider2entity(collider)?;
-            Some((entity, point))
-        } else {
-            None
-        }
-    }
-
-    /// Small utility function that gets the entity associated with the collider;
-    /// panics if entity does not exist.
-    pub fn collider2entity(
-        &self,
-        handle: rapier2d::prelude::ColliderHandle,
-    ) -> Option<Entity> {
-        if let Some(result) = self.col_set.get(handle) {
-            match Entity::try_from_bits(result.user_data as u64) {
-                Ok(e) => Some(e),
-                Err(e) => {
-                    if result.user_data == 0 {
-                        println!("Warning! detected colider with no associated entity/user data!");
-                    }
-                    println!("Warning Failed to find entity for collider!: tried entity: {} with col: {handle:?}", result.user_data);
-                    None
-                },
-            }
-        } else {
-            None
-        }
+    fn candidates(&self, region: Rect) -> impl Iterator<Item = &CollisionEntry> {
+        self.static_layer.candidates(region).chain(self.dynamic_layer.candidates(region))
     }
 }
 
-fn init_physics_world(mut world: ResMut<PhysicsWorld>) {
-    let PhysicsWorld {
-        query_pipeline,
-        col_set,
-        islands,
-        rb_set,
-        id_tracker,
-    } = &mut *world;
-    query_pipeline.update(&rb_set, &col_set);
+/// Candidates are tested in order against the best time so far; later ties win.
+fn nearest<'a>(
+    candidates: impl Iterator<Item = &'a CollisionEntry>,
+    max_toi: f32,
+    mut hit: impl FnMut(&CollisionEntry, f32) -> Option<(f32, Vec2)>,
+) -> Option<(Entity, CastHit)> {
+    candidates.fold(None, |best, entry| {
+        let best_toi = best.map_or(max_toi, |(_, best): (Entity, CastHit)| best.time_of_impact);
+        let hit = hit(entry, best_toi).map(|(time_of_impact, normal)| CastHit { time_of_impact, normal });
+        hit.map(|hit| (entry.entity, hit)).or(best)
+    })
 }
 
-/// Updates the pipeline by reading all the positions/components with colliders
-///
-/// Make sure if you are reading from this in a system, you run after this finishes
-///
-/// TODO make sure this always runs after the GameTickUpdate; consider creating a separate
-/// [`ScheduleLabel`] for immediately after transform propagation
-pub fn update_query_pipeline(
-    // Mutable reference because collider data is stored in an Arena that pipeline modifies
-    mut world: ResMut<PhysicsWorld>,
-    phys_obj_query: Query<(
-        Entity,
-        &Transform,
-        Ref<GlobalTransform>,
-        Ref<Collider>,
-        Option<&ColliderHandle>,
-    )>,
-    mut removed: RemovedComponents<Collider>,
-    mut commands: Commands,
-) {
-    let PhysicsWorld {
-        query_pipeline,
-        col_set,
-        islands,
-        rb_set,
-        id_tracker,
-    } = &mut *world;
-    // query_pipeline.cast_shape()
-    let mut modified_colliders = vec![];
-    for (entity, trnsfm, transform, collider_info, handle) in &phys_obj_query {
-        let col_id = if collider_info.is_added() && handle.is_none() {
-            let col_id = col_set.insert(collider_info.0.clone());
-            modified_colliders.push(col_id);
-            id_tracker.insert(entity, col_id);
-            commands
-                .get_entity(entity)
-                .unwrap()
-                .insert(ColliderHandle(col_id));
-            // Sets the user associated data on the collider to the entity id
-            // so that when we get a query result with a collider id we can lookup
-            // what entity its associated with.
-            col_set.get_mut(col_id).unwrap().user_data =
-                entity.to_bits() as u128;
-            // println!("new collider added: {col_id:?}");
-
-            col_set
-                .get_mut(col_id)
-                .unwrap()
-                .set_translation(into_vec(transform.translation().xy()));
-            col_set
-                .get_mut(col_id)
-                .unwrap()
-                .set_rotation(UnitComplex::new(
-                    transform
-                        .compute_transform()
-                        .rotation
-                        .to_euler(EulerRot::XYZ)
-                        .2,
-                ));
-
-            col_id
-        } else {
-            handle.unwrap().0
-        };
-
-        if collider_info.is_changed() {
-            let old_entity = col_set.get(col_id).unwrap().user_data;
-            *col_set.get_mut(col_id).unwrap() = collider_info.0.clone();
-            col_set.get_mut(col_id).unwrap().user_data = old_entity;
-            modified_colliders.push(col_id);
-        }
-        if transform.is_changed() {
-            col_set
-                .get_mut(col_id)
-                .unwrap()
-                .set_translation(into_vec(transform.translation().xy()));
-            col_set
-                .get_mut(col_id)
-                .unwrap()
-                .set_rotation(UnitComplex::new(
-                    transform
-                        .compute_transform()
-                        .rotation
-                        .to_euler(EulerRot::XYZ)
-                        .2,
-                ));
-            modified_colliders.push(col_id);
-        }
-    }
-    let mut removed_colliders = vec![];
-    // Go through the col_set, and see if any are there that aren't in our collider_set.
-    for removed in removed.read() {
-        let Some(removed_id) = id_tracker.get(&removed).copied() else {
-            continue;
-        };
-        id_tracker.remove(&removed);
-        removed_colliders.push(removed_id);
-        col_set.remove(removed_id, islands, rb_set, false);
-    }
-    query_pipeline.update_incremental(
-        &col_set,
-        modified_colliders.as_slice(),
-        removed_colliders.as_slice(),
-        true,
-    );
+fn accepts(entry: &CollisionEntry, interaction: CollisionGroups, exclude: Option<Entity>) -> bool {
+    Some(entry.entity) != exclude && interaction.interacts_with(entry.groups)
 }
 
-#[derive(Default, Reflect, GizmoConfigGroup)]
-struct PhsyicsCollidersGizmos {}
-
-/// Draws colliders using bevy's gizmos to assist with debugging.
-pub fn debug_colliders(
-    world: ResMut<PhysicsWorld>,
-    // mut gizmos: Gizmos,
-    mut collider_gizmos: Gizmos<PhsyicsCollidersGizmos>,
-) {
-    for (handle, collider) in world.col_set.iter() {
-        let pos = Vec2::new(
-            collider.position().translation.x,
-            collider.position().translation.y,
-        );
-        let rotation: f32 = collider.rotation().angle();
-        if let Some(cube) = collider.shared_shape().as_cuboid() {
-            let half_extents =
-                Vec2::new(cube.half_extents.x, cube.half_extents.y);
-            collider_gizmos.rect(
-                pos.extend(0.0002),
-                Quat::from_rotation_z(rotation - PI),
-                half_extents * 2.0,
-                Color::GREEN,
-            );
-        }
-        if let Some(convex) = collider.shared_shape().as_convex_polygon() {
-            let points = convex.points();
-            let num_points = points.len();
-            for i in 0..num_points {
-                let start = points[i];
-                // modulo wraps around the first point when we get to the end
-                let end = points[(i + 1) % num_points];
-
-                collider_gizmos.line(
-                    Vec2::new(pos.x + start.x, pos.y + start.y).extend(0.0002),
-                    Vec2::new(pos.x + end.x, pos.y + end.y).extend(0.0002),
-                    Color::GREEN,
-                );
-            }
-        }
-    }
-}
-
-/// Utility to convert from [`Vec2`] to rapier compatible structure
-pub fn into_vec(vec: Vec2) -> Vector<f32> {
-    vector![vec.x, vec.y]
-}
-
-/// Utility to convert from rapier type to [`Vec2`]
-pub fn into_vec2(vec: Unit<Vector<f32>>) -> Vec2 {
-    Vec2::new(vec.x, vec.y)
-}
-
-/// A convenient component type for referring to velocity of an entity.
-///
-/// Doesn't do anything on its own, but character controllers use it.
-#[derive(Component, Deref, DerefMut, Debug)]
+/// Linear velocity is represented by the LinearVelocity component.
+#[derive(Component, Default, Clone, Copy, Debug, PartialEq)]
 pub struct LinearVelocity(pub Vec2);
+
+#[derive(Component, Default, Debug)]
+pub struct Sensor;
+
+fn offset_rect(rect: Rect, offset: Vec2) -> Rect {
+    Rect { min: rect.min + offset, max: rect.max + offset }
+}
+
+/// `dir` divided by its length, unless it is too short to have a direction.
+fn unit(dir: Vec2) -> Option<Vec2> {
+    let length = dir.length();
+    (length > f32::EPSILON).then(|| dir / length)
+}
+
+fn expand(rect: Rect, amount: f32) -> Rect {
+    Rect { min: rect.min - Vec2::splat(amount), max: rect.max + Vec2::splat(amount) }
+}
+
+fn overlaps_aabb(a: Rect, b: Rect) -> bool {
+    const EPS: f32 = 0.0001;
+    a.max.x > b.min.x - EPS && a.min.x < b.max.x + EPS && a.max.y > b.min.y - EPS && a.min.y < b.max.y + EPS
+}
+
+fn circle_aabb_overlap(center: Vec2, radius: f32, aabb: Rect) -> bool {
+    center.distance_squared(center.clamp(aabb.min, aabb.max)) <= radius * radius
+}
+
+fn segment_intersects_aabb(start: Vec2, end: Vec2, aabb: Rect) -> bool {
+    let delta = end - start;
+    let length = delta.length();
+    if length <= f32::EPSILON {
+        return aabb.contains(start);
+    }
+    ray_aabb(start, delta / length, length, aabb).is_some()
+}
+
+fn segment_circle_overlap(start: Vec2, end: Vec2, center: Vec2, radius: f32) -> bool {
+    let ab = end - start;
+    let length_squared = ab.length_squared();
+    let closest = if length_squared <= f32::EPSILON {
+        start
+    } else {
+        start + ab * ((center - start).dot(ab) / length_squared).clamp(0.0, 1.0)
+    };
+    closest.distance_squared(center) <= radius * radius
+}
+
+/// Slab test for a normalized ray. Starting inside reports distance zero and a zero normal.
+fn ray_aabb(origin: Vec2, dir: Vec2, max_toi: f32, aabb: Rect) -> Option<(f32, Vec2)> {
+    let mut t_min = 0.0;
+    let mut t_max = max_toi;
+    let mut normal = Vec2::ZERO;
+    for axis in 0..2 {
+        let (near, far) = slab(origin[axis], dir[axis], aabb.min[axis], aabb.max[axis])?;
+        if near > t_min {
+            t_min = near;
+            normal = Vec2::ZERO;
+            normal[axis] = -dir[axis].signum();
+        }
+        t_max = t_max.min(far);
+        if t_min > t_max {
+            return None;
+        }
+    }
+    Some((t_min, normal))
+}
+
+/// Parametric entry and exit of one axis slab. A parallel ray inside the slab never limits it.
+fn slab(origin: f32, dir: f32, min: f32, max: f32) -> Option<(f32, f32)> {
+    if dir.abs() >= f32::EPSILON {
+        let inverse = 1.0 / dir;
+        let (t1, t2) = ((min - origin) * inverse, (max - origin) * inverse);
+        return Some((t1.min(t2), t1.max(t2)));
+    }
+    if origin < min || origin > max {
+        return None;
+    }
+    Some((f32::NEG_INFINITY, f32::INFINITY))
+}
+
+fn ray_rects(origin: Vec2, dir: Vec2, max_toi: f32, rects: impl Iterator<Item = Rect>) -> Option<(f32, Vec2)> {
+    let mut best = (max_toi, Vec2::ZERO);
+    for rect in rects {
+        if let Some(hit) = ray_aabb(origin, dir, best.0, rect) {
+            best = hit;
+        }
+    }
+    (best.0 < max_toi).then_some(best)
+}
+
+fn ray_circle(origin: Vec2, dir: Vec2, max_toi: f32, center: Vec2, radius: f32) -> Option<(f32, Vec2)> {
+    let oc = origin - center;
+    let b = oc.dot(dir);
+    let discriminant = b * b - (oc.dot(oc) - radius * radius);
+    if discriminant < 0.0 {
+        return None;
+    }
+    let root = discriminant.sqrt();
+    let t = if -b - root < 0.0 { -b + root } else { -b - root };
+    if t < 0.0 || t > max_toi {
+        return None;
+    }
+    Some((t, (origin + dir * t - center).normalize_or_zero()))
+}
+
+pub mod inside {
+    use super::{groups, CollisionGroups, Group, ENEMY_INSIDE};
+    use bevy::prelude::*;
+
+    /// Marker put on the player while clipped inside an enemy.
+    #[derive(Component)]
+    pub struct PlayerInsideEnemy;
+
+    /// Marker put on the enemy while the player is inside it.
+    #[derive(Component)]
+    pub struct EnemyInsidePlayer;
+
+    /// Attach ENEMY_INSIDE group to `player`, add marker to `enemy`.
+    pub fn set(commands: &mut Commands, player: Entity, enemy: Entity) {
+        commands
+            .entity(player)
+            .try_insert(CollisionGroups::new(ENEMY_INSIDE, Group::all()))
+            .try_insert(PlayerInsideEnemy);
+        commands.entity(enemy).try_insert(EnemyInsidePlayer);
+    }
+
+    /// Revert both sides to their default bodies.
+    pub fn clear(commands: &mut Commands, enemy: Entity, player: Entity) {
+        commands.entity(player).try_remove::<PlayerInsideEnemy>().try_insert(groups::player_body());
+        commands.entity(enemy).try_remove::<EnemyInsidePlayer>();
+    }
+}

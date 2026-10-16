@@ -1,0 +1,38 @@
+schema_version = 2
+id = "observer_laser"
+behavior = { kind = "wander" }
+actions = {  }
+spawn_hp = 600
+walk_speed = 0.25
+chase_speed = 0.0
+dmg_melee = 0
+dmg_ranged = 0
+vision_range = 120
+melee_range = 0
+reaction_time = 0
+[setup]
+facing = "left"
+name = "Observer"
+controller = "flying"
+collider = { half_extents = [8.0, 10.0] }
+spawn_offset = [0.0, 10.0, 0.000014]
+facing_slots = { right = "DirectionLeft", left = "DirectionRight" }
+
+[setup.gfx]
+keys = ["Fly"]
+
+[flying]
+profile = "patrol"
+patrol_radius = 120.0
+idle_wait = [144, 288]
+
+[health_regen]
+amount = 1
+interval_ticks = 4
+
+[death]
+mode = "despawn"
+
+[anim]
+Fly = "anim.observer_laser.Fly"
+Idle = "anim.observer_laser.Fly"

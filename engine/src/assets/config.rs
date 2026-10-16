@@ -23,45 +23,35 @@ impl DynamicConfigValue {
     pub fn as_float(&self) -> Result<f64, String> {
         match self {
             DynamicConfigValue::Float(value) => Ok(*value),
-            other => {
-                Err(format!(
-                    "Expected float value, but found {:?}",
-                    other
-                ))
-            },
+            other => Err(format!(
+                "Expected float value, but found {other:?}"
+            )),
         }
     }
 
-    pub fn as_int(&self) -> Result<i64, String> {
-        match self {
-            DynamicConfigValue::Int(value) => Ok(*value),
-            other => {
-                Err(format!(
-                    "Expected integer value, but found {:?}",
-                    other
-                ))
-            },
-        }
-    }
-
-    pub fn as_string(&self) -> Result<&str, String> {
-        match self {
-            DynamicConfigValue::String(value) => Ok(value),
-            other => {
-                Err(format!(
-                    "Expected string value, but found {:?}",
-                    other
-                ))
-            },
-        }
-    }
 }
 
 /// A utility type for loading config values. Use like:
 ///
 /// ```
+/// use std::collections::HashMap;
+/// use theseeker_engine::assets::config::{DynamicConfigValue, update_field};
+///
+/// struct PlayerConfig {
+///     jump_vel_init: f32,
+/// }
+///
 /// let mut errors = Vec::new();
-/// update_field(&mut errors, &dynamic_cfg.0, "jump_vel_init", |val| struct_config.jump_vel_init = val);
+/// let mut dynamic_cfg = HashMap::new();
+/// dynamic_cfg.insert("jump_vel_init".to_owned(), DynamicConfigValue::Float(12.0));
+/// let mut struct_config = PlayerConfig { jump_vel_init: 0.0 };
+///
+/// update_field(&mut errors, &dynamic_cfg, "jump_vel_init", |val| {
+///     struct_config.jump_vel_init = val;
+/// });
+///
+/// assert!(errors.is_empty());
+/// assert_eq!(struct_config.jump_vel_init, 12.0);
 /// ```
 pub fn update_field<F>(
     errors: &mut Vec<String>,
@@ -74,17 +64,13 @@ pub fn update_field<F>(
     if let Some(value) = config.get(field) {
         match value.as_float() {
             Ok(val) => setter(val as f32),
-            Err(err) => {
-                errors.push(format!(
-                    "Error parsing '{}': {}",
-                    field, err
-                ))
-            },
+            Err(err) => errors.push(format!(
+                "Error parsing '{field}': {err}"
+            )),
         }
     } else {
         errors.push(format!(
-            "Missing '{}' field in the config",
-            field
+            "Missing '{field}' field in the config"
         ));
     }
 }

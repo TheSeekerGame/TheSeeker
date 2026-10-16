@@ -1,0 +1,6 @@
+id = "bat_dive"
+mechanic = { kind = "lunge" }
+presentation = { animation = "Attack", section = "flight", impact_section = "impact" }
+timing = { complete = "attack_done", repetitions = 1 }
+controls = { motion_x = true, motion_y = true, presentation = true }
+hits = { kind = "contact" }

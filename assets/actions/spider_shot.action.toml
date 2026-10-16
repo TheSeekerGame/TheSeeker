@@ -1,0 +1,5 @@
+id = "spider_shot"
+mechanic = { kind = "projectile", descriptor = "projectile.chilled_ball" }
+presentation = { animation = "Attack" }
+timing = { release = "fire_projectile" }
+controls = { motion_x = true, presentation = true }

@@ -1,0 +1,44 @@
+schema_version = 2
+id = "opi"
+behavior = { kind = "ambush" }
+actions = { AttackLeft = "trap_left", AttackRight = "trap_right" }
+spawn_hp = 100
+walk_speed = 1.0
+chase_speed = 0.0
+dmg_melee = 0
+dmg_ranged = 0
+vision_range = 1
+melee_range = 0
+reaction_time = 0
+[setup]
+name = "Opi"
+controller = "stationary_trap"
+collider = { half_extents = [8.0, 16.0] }
+spawn_offset = [0.0, 16.0, -0.0000005]
+
+[setup.gfx]
+keys = ["Idle"]
+offset = [0.0, -1.0, 0.0]
+kind = "world"
+
+[trap]
+detection_half_extents = [20.0, 10.0]
+attack_extra_x = 12.0
+attack_height = 12.0
+
+[death]
+mode = "tombstone"
+left_anim_key = "DieLeft"
+right_anim_key = "DieRight"
+
+[anim]
+Idle = "anim.opi.Idle"
+Prepare = "anim.opi.Prepare"
+AttackLeft = "anim.opi.AttackLeft"
+AttackRight = "anim.opi.AttackRight"
+DieLeft = "anim.opi.DeathLeft"
+DieRight = "anim.opi.DeathRight"
+EatLeft = "anim.opi.EatLeft"
+EatRight = "anim.opi.EatRight"
+InhaleLeft = "anim.opi.InhaleLeft"
+InhaleRight = "anim.opi.InhaleRight"

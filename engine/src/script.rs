@@ -1,14 +1,14 @@
+use std::collections::HashMap;
 use std::marker::PhantomData;
 
 use bevy::asset::Asset;
 use bevy::ecs::system::{StaticSystemParam, SystemParam};
 
-use crate::assets::config::DynamicConfigValue;
 use crate::assets::script::ScriptConfig;
 use crate::prelude::*;
+use crate::profile::TickProfiler;
 
 pub mod common;
-pub mod label;
 
 pub struct ScriptPlugin;
 
@@ -17,14 +17,11 @@ impl Plugin for ScriptPlugin {
         app.configure_sets(
             GameTickUpdate,
             (
-                ScriptSet::Init.after(AssetsSet::ResolveKeys),
+                ScriptSet::Init,
                 ScriptSet::Run.after(ScriptSet::Init),
             ),
         );
-        app.add_plugins((
-            self::label::ScriptLabelPlugin,
-            self::common::CommonScriptPlugin,
-        ));
+        app.add_plugins(self::common::CommonScriptPlugin);
     }
 }
 
@@ -80,6 +77,8 @@ impl ScriptAppExt for App {
 
 #[derive(Debug, Default)]
 pub struct ScriptMetadata {
+    pub execution: u64,
+    pub section: Option<String>,
     pub key: Option<String>,
     pub key_previous: Option<String>,
     pub runcount: u32,
@@ -109,7 +108,7 @@ pub trait ScriptAsset: Asset + Sized + Send + Sync + 'static {
         param: &mut <Self::BuildParam as SystemParam>::Item<'_, '_>,
     ) -> ScriptRuntimeBuilder<Self>;
 
-    fn into_settings(&self) -> Self::Settings;
+    fn settings(&self) -> Self::Settings;
 }
 
 pub trait ScriptTracker: Default + Send + Sync + 'static {
@@ -129,6 +128,11 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         carryover: Self::Carryover,
         param: &mut <Self::InitParam as SystemParam>::Item<'_, '_>,
     );
+    fn flush_events(
+        &mut self,
+        _entity: Entity,
+        _param: &mut <Self::UpdateParam as SystemParam>::Item<'_, '_>,
+    ) {}
     fn transfer_progress(&mut self, other: &Self);
     fn track_action(
         &mut self,
@@ -161,7 +165,7 @@ pub trait ScriptTracker: Default + Send + Sync + 'static {
         false
     }
     fn take_slots(&mut self, _timing: ScriptActionTiming) -> HashSet<String> {
-        Default::default()
+        HashSet::default()
     }
     fn clear_slots(&mut self, _timing: ScriptActionTiming) {}
     fn do_start(
@@ -252,7 +256,7 @@ pub struct ScriptRunCounts<T: ScriptAsset> {
 impl<T: ScriptAsset> Default for ScriptRunCounts<T> {
     fn default() -> Self {
         Self {
-            counts: Default::default(),
+            counts: HashMap::default(),
         }
     }
 }
@@ -284,7 +288,7 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
         ScriptRuntimeBuilder {
             runtime: ScriptRuntime {
                 key: metadata.key.clone(),
-                config: ScriptConfig(Default::default()),
+                config: ScriptConfig(HashMap::default()),
                 settings,
                 actions: vec![],
                 tracker,
@@ -293,13 +297,14 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
     }
 
     pub fn asset_key(&self) -> Option<&str> {
-        self.runtime.key.as_ref().map(|x| x.as_str())
+        self.runtime.key.as_deref()
     }
 
     pub fn replace_config(&mut self, config: &ScriptConfig) {
         self.runtime.config = config.clone();
     }
 
+    #[must_use]
     pub fn add_action(
         mut self,
         run_if: &T::RunIf,
@@ -318,11 +323,6 @@ impl<T: ScriptAsset> ScriptRuntimeBuilder<T> {
 
     pub fn tracker_mut(&mut self) -> &mut T::Tracker {
         &mut self.runtime.tracker
-    }
-
-    pub fn tracker_do(mut self, f: impl FnOnce(&mut T::Tracker)) -> Self {
-        f(self.tracker_mut());
-        self
     }
 
     fn build(mut self) -> ScriptRuntime<T> {
@@ -356,82 +356,161 @@ fn script_changeover_system<T: ScriptAsset>(
         >,
     )>,
     mut action_queue: ResMut<ScriptActionQueue<T>>,
+    mut profiler: TickProfiler,
 ) {
+    let _profile = profiler.scope("script_changeover");
     for (e, player) in &mut q_script {
-        let player = player.into_inner();
-        let mut old_state = std::mem::replace(
-            &mut player.state,
-            ScriptPlayerState::Stopped,
+        script_changeover_player(
+            e,
+            player.into_inner(),
+            &mut params,
+            &mut action_queue.0,
         );
-        let script_rt = match &mut old_state {
-            ScriptPlayerState::ChangingKey {
-                ref mut old_runtime,
-                ..
-            }
-            | ScriptPlayerState::ChangingHandle {
-                ref mut old_runtime,
-                ..
-            } => {
-                {
-                    let mut tracker_param = params.p0().into_inner();
-                    old_runtime.tracker.do_stop(
-                        e,
-                        &old_runtime.settings,
-                        &mut tracker_param,
-                        &mut action_queue.0,
-                    );
-                }
-                old_runtime
-            },
-            _ => {
-                player.state = old_state;
-                continue;
-            },
-        };
-        // Need to sort to ensure actions run in the order they were
-        // originally defined in the script asset.
-        action_queue.0.sort_unstable_by_key(|qa| qa.action);
-        for qa in action_queue.0.drain(..) {
-            let action = &script_rt.actions[qa.action];
-            {
-                let mut shouldrun_param = params.p2().into_inner();
-                action.0.should_run(
-                    e,
-                    &mut script_rt.tracker,
-                    qa.action,
-                    &mut shouldrun_param,
-                )
-            }
-            .err()
-            .unwrap_or_else(|| {
-                let mut action_param = params.p1().into_inner();
-                script_rt.actions[qa.action].1.run(
-                    e,
-                    qa.timing,
-                    &script_rt.actions[qa.action].0,
-                    &mut script_rt.tracker,
-                    &mut action_param,
-                )
-            });
+    }
+}
+
+fn script_changeover_player<T: ScriptAsset>(
+    entity: Entity,
+    player: &mut ScriptPlayer<T>,
+    params: &mut ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
+        StaticSystemParam<<T::Action as ScriptAction>::Param>,
+        StaticSystemParam<
+            <T::ActionParams as ScriptActionParams>::ShouldRunParam,
+        >,
+    )>,
+    action_queue: &mut Vec<QueuedAction>,
+) {
+    let mut old_state =
+        std::mem::replace(&mut player.state, ScriptPlayerState::Stopped);
+    let Some(script_rt) = changing_runtime_mut(&mut old_state) else {
+        player.state = old_state;
+        return;
+    };
+
+    stop_script_runtime(entity, script_rt, params, action_queue);
+    run_changeover_action_queue(entity, script_rt, params, action_queue);
+    script_rt.tracker.flush_events(entity, &mut params.p0().into_inner());
+    player.state = changeover_next_state(old_state);
+}
+
+fn changing_runtime_mut<T: ScriptAsset>(
+    state: &mut ScriptPlayerState<T>,
+) -> Option<&mut ScriptRuntime<T>> {
+    match state {
+        ScriptPlayerState::ChangingKey {
+            ref mut old_runtime,
+            ..
         }
-        player.state = match old_state {
-            ScriptPlayerState::ChangingHandle {
-                handle,
-                old_runtime,
-            } => {
-                ScriptPlayerState::PrePlayHandle {
-                    handle,
-                    old_runtime: Some(old_runtime),
-                }
-            },
-            ScriptPlayerState::ChangingKey { key, old_runtime } => {
-                ScriptPlayerState::PrePlayKey {
-                    key,
-                    old_runtime: Some(old_runtime),
-                }
-            },
-            _ => old_state,
-        }
+        | ScriptPlayerState::ChangingHandle {
+            ref mut old_runtime,
+            ..
+        } => Some(old_runtime),
+        _ => None,
+    }
+}
+
+fn start_script_runtime<T: ScriptAsset>(
+    entity: Entity,
+    runtime: &mut ScriptRuntime<T>,
+    params: &mut ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
+        StaticSystemParam<<T::Action as ScriptAction>::Param>,
+        StaticSystemParam<
+            <T::ActionParams as ScriptActionParams>::ShouldRunParam,
+        >,
+    )>,
+    action_queue: &mut Vec<QueuedAction>,
+) {
+    let mut tracker_param = params.p0().into_inner();
+    runtime.tracker.do_start(
+        entity,
+        &runtime.settings,
+        &mut tracker_param,
+        action_queue,
+    );
+}
+
+fn stop_script_runtime<T: ScriptAsset>(
+    entity: Entity,
+    runtime: &mut ScriptRuntime<T>,
+    params: &mut ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
+        StaticSystemParam<<T::Action as ScriptAction>::Param>,
+        StaticSystemParam<
+            <T::ActionParams as ScriptActionParams>::ShouldRunParam,
+        >,
+    )>,
+    action_queue: &mut Vec<QueuedAction>,
+) {
+    let mut tracker_param = params.p0().into_inner();
+    runtime.tracker.do_stop(
+        entity,
+        &runtime.settings,
+        &mut tracker_param,
+        action_queue,
+    );
+}
+
+fn update_script_runtime<T: ScriptAsset>(
+    entity: Entity,
+    runtime: &mut ScriptRuntime<T>,
+    params: &mut ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
+        StaticSystemParam<<T::Action as ScriptAction>::Param>,
+        StaticSystemParam<
+            <T::ActionParams as ScriptActionParams>::ShouldRunParam,
+        >,
+    )>,
+    action_queue: &mut Vec<QueuedAction>,
+) -> ScriptUpdateResult {
+    let mut tracker_param = params.p0().into_inner();
+    runtime.tracker.update(
+        entity,
+        &runtime.settings,
+        &mut tracker_param,
+        action_queue,
+    )
+}
+
+fn run_changeover_action_queue<T: ScriptAsset>(
+    entity: Entity,
+    script_rt: &mut ScriptRuntime<T>,
+    params: &mut ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
+        StaticSystemParam<<T::Action as ScriptAction>::Param>,
+        StaticSystemParam<
+            <T::ActionParams as ScriptActionParams>::ShouldRunParam,
+        >,
+    )>,
+    action_queue: &mut Vec<QueuedAction>,
+) {
+    // Need to sort to ensure actions run in the order they were
+    // originally defined in the script asset.
+    action_queue.sort_unstable_by_key(|qa| qa.action);
+    for queued_action in action_queue.drain(..) {
+        run_queued_script_action(entity, script_rt, params, queued_action);
+    }
+}
+
+fn changeover_next_state<T: ScriptAsset>(
+    old_state: ScriptPlayerState<T>,
+) -> ScriptPlayerState<T> {
+    match old_state {
+        ScriptPlayerState::ChangingHandle {
+            handle,
+            old_runtime,
+        } => ScriptPlayerState::PrePlayHandle {
+            handle,
+            old_runtime: Some(old_runtime),
+        },
+        ScriptPlayerState::ChangingKey { key, old_runtime } => {
+            ScriptPlayerState::PrePlayKey {
+                key,
+                old_runtime: Some(old_runtime),
+            }
+        },
+        _ => old_state,
     }
 }
 
@@ -445,118 +524,319 @@ fn script_driver_system<T: ScriptAsset>(
         >,
     )>,
     mut action_queue: ResMut<ScriptActionQueue<T>>,
+    mut profiler: TickProfiler,
 ) {
-    'outer: for (e, player) in &mut q_script {
-        let player = player.into_inner();
+    let _profile = profiler.scope("script_driver");
+    for (e, player) in &mut q_script {
+        script_driver_player(
+            e,
+            player.into_inner(),
+            &mut params,
+            &mut action_queue.0,
+        );
+    }
+}
 
-        let mut is_loop = true;
-        let mut is_end = false;
-        while is_loop {
-            is_loop = false;
-            // do the borrow checker dance ;)
-            let mut old_state = std::mem::replace(
-                &mut player.state,
-                ScriptPlayerState::Stopped,
-            );
-            // enqueue actions
-            let script_rt = match &mut old_state {
-                ScriptPlayerState::Starting { ref mut runtime } => {
-                    {
-                        let mut tracker_param = params.p0().into_inner();
-                        runtime.tracker.do_start(
-                            e,
-                            &runtime.settings,
-                            &mut tracker_param,
-                            &mut action_queue.0,
-                        );
-                    }
-                    runtime
-                },
-                ScriptPlayerState::Playing { ref mut runtime } => {
-                    {
-                        let mut tracker_param = params.p0().into_inner();
-                        let r = runtime.tracker.update(
-                            e,
-                            &runtime.settings,
-                            &mut tracker_param,
-                            &mut action_queue.0,
-                        );
-                        is_loop |= r.is_loop();
-                        is_end |= r.is_end();
-                    }
-                    runtime
-                },
-                ScriptPlayerState::Stopping { ref mut runtime } => {
-                    {
-                        let mut tracker_param = params.p0().into_inner();
-                        runtime.tracker.do_stop(
-                            e,
-                            &runtime.settings,
-                            &mut tracker_param,
-                            &mut action_queue.0,
-                        );
-                    }
-                    runtime
-                },
-                _ => {
-                    player.state = old_state;
-                    continue 'outer;
-                },
-            };
-            loop {
-                script_rt.tracker.queue_extra_actions(
-                    &script_rt.settings,
-                    &mut action_queue.0,
-                );
-                if action_queue.0.is_empty() {
-                    break;
-                }
-                // Need to sort to ensure actions run in the order they were
-                // originally defined in the script asset.
-                action_queue.0.sort_unstable_by_key(|qa| qa.action);
-                for qa in action_queue.0.drain(..) {
-                    let action = &script_rt.actions[qa.action];
-                    let r = {
-                        let mut shouldrun_param = params.p2().into_inner();
-                        action.0.should_run(
-                            e,
-                            &mut script_rt.tracker,
-                            qa.action,
-                            &mut shouldrun_param,
-                        )
-                    }
-                    .err()
-                    .unwrap_or_else(|| {
-                        let mut action_param = params.p1().into_inner();
-                        script_rt.actions[qa.action].1.run(
-                            e,
-                            qa.timing,
-                            &script_rt.actions[qa.action].0,
-                            &mut script_rt.tracker,
-                            &mut action_param,
-                        )
-                    });
-                    is_loop |= r.is_loop();
-                    is_end |= r.is_end();
-                }
-            }
-            // put back the correct state
-            player.state = match old_state {
-                ScriptPlayerState::Starting { runtime } => {
-                    ScriptPlayerState::Playing { runtime }
-                },
-                ScriptPlayerState::Playing { runtime } => {
-                    ScriptPlayerState::Playing { runtime }
-                },
-                ScriptPlayerState::Stopping { runtime: _ } => {
-                    ScriptPlayerState::Stopped
-                },
-                _ => old_state,
-            };
-            if is_end && !is_loop {
-                player.stop();
-            }
+fn script_driver_player<T: ScriptAsset>(
+    entity: Entity,
+    player: &mut ScriptPlayer<T>,
+    params: &mut ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
+        StaticSystemParam<<T::Action as ScriptAction>::Param>,
+        StaticSystemParam<
+            <T::ActionParams as ScriptActionParams>::ShouldRunParam,
+        >,
+    )>,
+    action_queue: &mut Vec<QueuedAction>,
+) {
+    if player.paused {
+        return;
+    }
+
+    let mut is_loop = true;
+    let mut is_end = false;
+    let mut keep_running = true;
+    while is_loop && keep_running {
+        is_loop = false;
+        keep_running = run_script_driver_iteration(
+            entity,
+            player,
+            params,
+            action_queue,
+            &mut is_loop,
+            &mut is_end,
+        );
+    }
+}
+
+fn run_script_driver_iteration<T: ScriptAsset>(
+    entity: Entity,
+    player: &mut ScriptPlayer<T>,
+    params: &mut ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
+        StaticSystemParam<<T::Action as ScriptAction>::Param>,
+        StaticSystemParam<
+            <T::ActionParams as ScriptActionParams>::ShouldRunParam,
+        >,
+    )>,
+    action_queue: &mut Vec<QueuedAction>,
+    is_loop: &mut bool,
+    is_end: &mut bool,
+) -> bool {
+    let mut old_state =
+        std::mem::replace(&mut player.state, ScriptPlayerState::Stopped);
+    let Some(script_rt) = enqueue_driver_state_actions(
+        entity,
+        &mut old_state,
+        params,
+        action_queue,
+        is_loop,
+        is_end,
+    ) else {
+        player.state = old_state;
+        return false;
+    };
+
+    run_script_action_queue(
+        entity,
+        script_rt,
+        params,
+        action_queue,
+        is_loop,
+        is_end,
+    );
+    script_rt.tracker.flush_events(entity, &mut params.p0().into_inner());
+    player.state = driver_next_state(old_state);
+    if *is_end && !*is_loop {
+        player.stop();
+    }
+
+    true
+}
+
+fn enqueue_driver_state_actions<'a, T: ScriptAsset>(
+    entity: Entity,
+    state: &'a mut ScriptPlayerState<T>,
+    params: &mut ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
+        StaticSystemParam<<T::Action as ScriptAction>::Param>,
+        StaticSystemParam<
+            <T::ActionParams as ScriptActionParams>::ShouldRunParam,
+        >,
+    )>,
+    action_queue: &mut Vec<QueuedAction>,
+    is_loop: &mut bool,
+    is_end: &mut bool,
+) -> Option<&'a mut ScriptRuntime<T>> {
+    match state {
+        ScriptPlayerState::Starting { runtime } => {
+            start_script_runtime(entity, runtime, params, action_queue);
+            Some(runtime)
+        },
+        ScriptPlayerState::Playing { runtime } => {
+            let result =
+                update_script_runtime(entity, runtime, params, action_queue);
+            *is_loop |= result.is_loop();
+            *is_end |= result.is_end();
+            Some(runtime)
+        },
+        ScriptPlayerState::Stopping { runtime } => {
+            stop_script_runtime(entity, runtime, params, action_queue);
+            Some(runtime)
+        },
+        _ => None,
+    }
+}
+
+fn driver_next_state<T: ScriptAsset>(
+    old_state: ScriptPlayerState<T>,
+) -> ScriptPlayerState<T> {
+    match old_state {
+        ScriptPlayerState::Starting { runtime }
+        | ScriptPlayerState::Playing { runtime } => {
+            ScriptPlayerState::Playing { runtime }
+        },
+        ScriptPlayerState::Stopping { runtime: _ } => ScriptPlayerState::Stopped,
+        _ => old_state,
+    }
+}
+
+fn run_script_action_queue<T: ScriptAsset>(
+    entity: Entity,
+    script_rt: &mut ScriptRuntime<T>,
+    params: &mut ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
+        StaticSystemParam<<T::Action as ScriptAction>::Param>,
+        StaticSystemParam<
+            <T::ActionParams as ScriptActionParams>::ShouldRunParam,
+        >,
+    )>,
+    action_queue: &mut Vec<QueuedAction>,
+    is_loop: &mut bool,
+    is_end: &mut bool,
+) {
+    loop {
+        script_rt
+            .tracker
+            .queue_extra_actions(&script_rt.settings, action_queue);
+        if action_queue.is_empty() {
+            break;
         }
+
+        action_queue.sort_unstable_by_key(|qa| qa.action);
+        for qa in action_queue.drain(..) {
+            let result =
+                run_queued_script_action(entity, script_rt, params, qa);
+            *is_loop |= result.is_loop();
+            *is_end |= result.is_end();
+        }
+    }
+}
+
+fn run_queued_script_action<T: ScriptAsset>(
+    entity: Entity,
+    script_rt: &mut ScriptRuntime<T>,
+    params: &mut ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::UpdateParam>,
+        StaticSystemParam<<T::Action as ScriptAction>::Param>,
+        StaticSystemParam<
+            <T::ActionParams as ScriptActionParams>::ShouldRunParam,
+        >,
+    )>,
+    queued_action: QueuedAction,
+) -> ScriptUpdateResult {
+    let action = &script_rt.actions[queued_action.action];
+    {
+        let mut shouldrun_param = params.p2().into_inner();
+        action.0.should_run(
+            entity,
+            &mut script_rt.tracker,
+            queued_action.action,
+            &mut shouldrun_param,
+        )
+    }
+    .err()
+    .unwrap_or_else(|| {
+        let mut action_param = params.p1().into_inner();
+        script_rt.actions[queued_action.action].1.run(
+            entity,
+            queued_action.timing,
+            &script_rt.actions[queued_action.action].0,
+            &mut script_rt.tracker,
+            &mut action_param,
+        )
+    })
+}
+
+fn pending_script_handle<T: ScriptAsset>(
+    state: &ScriptPlayerState<T>,
+    preloaded: &PreloadedAssets,
+) -> Option<Handle<T>> {
+    match state {
+        ScriptPlayerState::PrePlayHandle { handle, .. } => Some(handle.clone()),
+        ScriptPlayerState::PrePlayKey { key, .. } => {
+            preloaded.get_single_asset(key)
+        },
+        _ => None,
+    }
+}
+
+fn init_script_player<T: ScriptAsset>(
+    entity: Entity,
+    player: &mut ScriptPlayer<T>,
+    gt: &GameTime,
+    preloaded: &PreloadedAssets,
+    ass_script: &Assets<T>,
+    runcounts: &mut ScriptRunCounts<T>,
+    params: &mut ParamSet<(
+        StaticSystemParam<<T::Tracker as ScriptTracker>::InitParam>,
+        StaticSystemParam<T::BuildParam>,
+        StaticSystemParam<<T::Tracker as ScriptTracker>::CarryoverParam>,
+    )>,
+) {
+    let Some(handle) = pending_script_handle(&player.state, preloaded) else {
+        return;
+    };
+    let snapshot = player.snapshot.clone();
+    let Some(script) = snapshot.as_deref().or_else(|| ass_script.get(&handle)) else {
+        return;
+    };
+
+    let old_state =
+        std::mem::replace(&mut player.state, ScriptPlayerState::Stopped);
+    let mut metadata = ScriptMetadata { execution: player.execution, section: player.section.clone(), ..Default::default() };
+    let old_runtime = match old_state {
+        ScriptPlayerState::PrePlayHandle { old_runtime, .. } => old_runtime,
+        ScriptPlayerState::PrePlayKey {
+            old_runtime, key, ..
+        } => {
+            metadata.key = Some(key);
+            old_runtime
+        },
+        _ => None,
+    };
+    let carryover = {
+        let mut carryover_param = params.p2().into_inner();
+        old_runtime
+            .as_ref()
+            .map(|rt| rt.tracker.produce_carryover(entity, &mut carryover_param))
+            .unwrap_or_default()
+    };
+    metadata.key_previous = old_runtime.as_ref().and_then(|rt| rt.key.clone());
+    metadata.runcount =
+        if let Some(count) = runcounts.counts.get_mut(&handle.id()) {
+            *count += 1;
+            *count
+        } else {
+            runcounts.counts.insert(handle.id(), 1);
+            1
+        };
+    let settings = script.settings();
+    let builder = {
+        let mut tracker_init_param = params.p0().into_inner();
+        ScriptRuntimeBuilder::new(
+            entity,
+            settings,
+            &metadata,
+            carryover,
+            &mut tracker_init_param,
+        )
+    };
+    let builder = {
+        let mut build_param = params.p1().into_inner();
+        script.build(builder, entity, &mut build_param)
+    };
+    let mut runtime = builder.build();
+    let timing = ScriptActionTiming::Tick(gt.tick());
+    let carried_slots = old_runtime
+        .map(|mut rt| rt.tracker.take_slots(timing))
+        .unwrap_or_default();
+    apply_carried_slots(&mut runtime, timing, &carried_slots);
+    apply_pending_slots(&mut runtime, timing, &mut player.pending_slots);
+    player.state = ScriptPlayerState::Starting { runtime };
+}
+
+fn apply_carried_slots<T: ScriptAsset>(
+    runtime: &mut ScriptRuntime<T>,
+    timing: ScriptActionTiming,
+    slots: &HashSet<String>,
+) {
+    for slot in slots {
+        runtime.tracker.set_slot(timing, slot, true);
+    }
+}
+
+fn apply_pending_slots<T: ScriptAsset>(
+    runtime: &mut ScriptRuntime<T>,
+    timing: ScriptActionTiming,
+    pending_slots: &mut HashMap<String, bool>,
+) {
+    if pending_slots.is_empty() {
+        return;
+    }
+
+    for (slot, enabled) in std::mem::take(pending_slots) {
+        runtime.tracker.set_slot(timing, &slot, enabled);
     }
 }
 
@@ -571,89 +851,35 @@ fn script_init_system<T: ScriptAsset>(
         StaticSystemParam<T::BuildParam>,
         StaticSystemParam<<T::Tracker as ScriptTracker>::CarryoverParam>,
     )>,
+    mut profiler: TickProfiler,
 ) {
+    let _profile = profiler.scope("script_init");
     for (e, mut player) in &mut q_script {
-        let handle = match &player.state {
-            ScriptPlayerState::PrePlayHandle { handle, .. } => handle.clone(),
-            ScriptPlayerState::PrePlayKey { key, .. } => {
-                if let Some(handle) = preloaded.get_single_asset(&key) {
-                    handle
-                } else {
-                    continue;
-                }
-            },
-            _ => continue,
-        };
-        if let Some(script) = ass_script.get(&handle) {
-            let old_state = std::mem::replace(
-                &mut player.state,
-                ScriptPlayerState::Stopped,
-            );
-            let mut metadata = ScriptMetadata::default();
-            let old_runtime = match old_state {
-                ScriptPlayerState::PrePlayHandle { old_runtime, .. } => {
-                    old_runtime
-                },
-                ScriptPlayerState::PrePlayKey {
-                    old_runtime, key, ..
-                } => {
-                    metadata.key = Some(key);
-                    old_runtime
-                },
-                _ => None,
-            };
-            let carryover = {
-                let mut carryover_param = params.p2().into_inner();
-                old_runtime
-                    .as_ref()
-                    .map(|rt| {
-                        rt.tracker.produce_carryover(e, &mut carryover_param)
-                    })
-                    .unwrap_or_default()
-            };
-            metadata.key_previous =
-                old_runtime.as_ref().and_then(|rt| rt.key.clone());
-            metadata.runcount =
-                if let Some(count) = runcounts.counts.get_mut(&handle.id()) {
-                    let r = *count;
-                    *count += 1;
-                    r
-                } else {
-                    runcounts.counts.insert(handle.id(), 1);
-                    0
-                };
-            let settings = script.into_settings();
-            let builder = {
-                let mut tracker_init_param = params.p0().into_inner();
-                ScriptRuntimeBuilder::new(
-                    e,
-                    settings,
-                    &metadata,
-                    carryover,
-                    &mut tracker_init_param,
-                )
-            };
-            let builder = {
-                let mut build_param = params.p1().into_inner();
-                script.build(builder, e, &mut build_param)
-            };
-            let mut runtime = builder.build();
-            // transfer slots
-            let timing = ScriptActionTiming::Tick(gt.tick());
-            let slots = old_runtime
-                .map(|mut rt| rt.tracker.take_slots(timing))
-                .unwrap_or_default();
-            for slot in slots.iter() {
-                runtime.tracker.set_slot(timing, slot, true);
-            }
-            player.state = ScriptPlayerState::Starting { runtime };
-        }
+        init_script_player(
+            e,
+            player.as_mut(),
+            &gt,
+            &preloaded,
+            &ass_script,
+            &mut runcounts,
+            &mut params,
+        );
     }
 }
 
 #[derive(Component)]
 pub struct ScriptPlayer<T: ScriptAsset> {
+    execution: u64,
+    section: Option<String>,
+    snapshot: Option<std::sync::Arc<T>>,
+    background_key: Option<String>,
+    background_snapshot: Option<std::sync::Arc<T>>,
+    foreground_owner: Option<u64>,
+    presentation_slots: HashMap<String, bool>,
     state: ScriptPlayerState<T>,
+    paused: bool,
+    // Slots set before a runtime exists; applied when runtime starts
+    pending_slots: HashMap<String, bool>,
 }
 
 enum ScriptPlayerState<T: ScriptAsset> {
@@ -688,7 +914,16 @@ enum ScriptPlayerState<T: ScriptAsset> {
 impl<T: ScriptAsset> Default for ScriptPlayer<T> {
     fn default() -> Self {
         Self {
+            execution: 0,
+            section: None,
+            snapshot: None,
+            background_key: None,
+            background_snapshot: None,
+            foreground_owner: None,
+            presentation_slots: HashMap::new(),
             state: ScriptPlayerState::Stopped,
+            paused: false,
+            pending_slots: HashMap::new(),
         }
     }
 }
@@ -696,82 +931,158 @@ impl<T: ScriptAsset> Default for ScriptPlayer<T> {
 impl<T: ScriptAsset> ScriptPlayer<T> {
     pub fn new() -> Self {
         Self {
+            execution: 0,
+            section: None,
+            snapshot: None,
+            background_key: None,
+            background_snapshot: None,
+            foreground_owner: None,
+            presentation_slots: HashMap::new(),
             state: ScriptPlayerState::Stopped,
+            paused: false,
+            pending_slots: HashMap::new(),
         }
     }
 
-    pub fn is_stopped(&self) -> bool {
-        if let ScriptPlayerState::Stopped = self.state {
-            true
-        } else {
-            false
-        }
+    pub fn execution_id(&self) -> u64 {
+        self.execution
+    }
+
+    pub fn set_paused(&mut self, paused: bool) {
+        self.paused = paused;
     }
 
     pub fn play_handle(&mut self, script: Handle<T>) {
+        self.execution = self.execution.wrapping_add(1);
+        self.section = None;
+        self.snapshot = None;
         let old_state = std::mem::replace(
             &mut self.state,
             ScriptPlayerState::Stopped,
         );
         self.state = match old_state {
-            ScriptPlayerState::Playing { runtime } => {
-                ScriptPlayerState::ChangingHandle {
-                    handle: script,
-                    old_runtime: runtime,
-                }
-            },
             ScriptPlayerState::Starting { runtime } => {
                 ScriptPlayerState::PrePlayHandle {
                     handle: script,
                     old_runtime: Some(runtime),
                 }
             },
-            ScriptPlayerState::Stopping { runtime } => {
+            ScriptPlayerState::Playing { runtime }
+            | ScriptPlayerState::Stopping { runtime } => {
                 ScriptPlayerState::ChangingHandle {
                     handle: script,
                     old_runtime: runtime,
                 }
             },
-            _ => {
-                ScriptPlayerState::PrePlayHandle {
-                    handle: script,
-                    old_runtime: None,
-                }
+            ScriptPlayerState::ChangingHandle { old_runtime, .. }
+            | ScriptPlayerState::ChangingKey { old_runtime, .. } => ScriptPlayerState::ChangingHandle {
+                handle: script, old_runtime,
+            },
+            ScriptPlayerState::PrePlayHandle { old_runtime, .. }
+            | ScriptPlayerState::PrePlayKey { old_runtime, .. } => ScriptPlayerState::PrePlayHandle {
+                handle: script, old_runtime,
+            },
+            ScriptPlayerState::Stopped => ScriptPlayerState::PrePlayHandle {
+                handle: script,
+                old_runtime: None,
             },
         };
     }
 
     pub fn play_key(&mut self, key: &str) {
+        self.execution = self.execution.wrapping_add(1);
+        self.section = None;
+        self.snapshot = None;
         let old_state = std::mem::replace(
             &mut self.state,
             ScriptPlayerState::Stopped,
         );
         self.state = match old_state {
-            ScriptPlayerState::Playing { runtime } => {
-                ScriptPlayerState::ChangingKey {
-                    key: key.into(),
-                    old_runtime: runtime,
-                }
-            },
             ScriptPlayerState::Starting { runtime } => {
                 ScriptPlayerState::PrePlayKey {
                     key: key.into(),
                     old_runtime: Some(runtime),
                 }
             },
-            ScriptPlayerState::Stopping { runtime } => {
+            ScriptPlayerState::Playing { runtime }
+            | ScriptPlayerState::Stopping { runtime } => {
                 ScriptPlayerState::ChangingKey {
                     key: key.into(),
                     old_runtime: runtime,
                 }
             },
-            _ => {
-                ScriptPlayerState::PrePlayKey {
-                    key: key.into(),
-                    old_runtime: None,
-                }
+            ScriptPlayerState::ChangingHandle { old_runtime, .. }
+            | ScriptPlayerState::ChangingKey { old_runtime, .. } => ScriptPlayerState::ChangingKey {
+                key: key.into(), old_runtime,
+            },
+            ScriptPlayerState::PrePlayHandle { old_runtime, .. }
+            | ScriptPlayerState::PrePlayKey { old_runtime, .. } => ScriptPlayerState::PrePlayKey {
+                key: key.into(), old_runtime,
+            },
+            ScriptPlayerState::Stopped => ScriptPlayerState::PrePlayKey {
+                key: key.into(),
+                old_runtime: None,
             },
         };
+    }
+
+    /// Retains the current locomotion request while a foreground presentation owns playback.
+    pub fn request_background(&mut self, key: &str) {
+        self.background_key = Some(key.to_owned());
+        self.background_snapshot = None;
+        if self.foreground_owner.is_none() {
+            self.play_key(key);
+        }
+    }
+
+    pub fn request_background_snapshot(&mut self, key: &str, snapshot: std::sync::Arc<T>) {
+        self.background_key = Some(key.to_owned());
+        self.background_snapshot = Some(snapshot.clone());
+        if self.foreground_owner.is_none() { self.play_snapshot(key, snapshot, None); }
+    }
+
+    pub fn acquire_presentation(&mut self, owner: u64) {
+        if self.foreground_owner != Some(owner) { self.release_presentation_slots(); }
+        self.foreground_owner = Some(owner);
+    }
+
+    /// Owns a slot until this presentation releases it; background writes remain pending.
+    pub fn set_presentation_slot(&mut self, owner: u64, slot: &str, enabled: bool) {
+        if self.foreground_owner != Some(owner) { return; }
+        let background = self.has_slot(slot);
+        self.presentation_slots.entry(slot.to_owned()).or_insert(background);
+        self.write_slot(slot, enabled);
+    }
+
+    fn release_presentation_slots(&mut self) {
+        for (slot, background) in std::mem::take(&mut self.presentation_slots) {
+            self.write_slot(&slot, background);
+        }
+    }
+
+    pub fn revoke_presentation(&mut self, owner: u64) -> bool {
+        if self.foreground_owner != Some(owner) { return false; }
+        self.foreground_owner = None;
+        self.release_presentation_slots();
+        true
+    }
+
+    pub fn release_presentation(&mut self, owner: u64) -> bool {
+        if self.foreground_owner != Some(owner) { return false; }
+        self.foreground_owner = None;
+        self.release_presentation_slots();
+        if let Some(key) = self.background_key.clone() {
+            let snapshot = self.background_snapshot.clone();
+            self.play_key(&key);
+            self.snapshot = snapshot;
+        }
+        true
+    }
+
+    pub fn play_snapshot(&mut self, key: &str, snapshot: std::sync::Arc<T>, section: Option<&str>) {
+        self.play_key(key);
+        self.snapshot = Some(snapshot);
+        self.section = section.map(str::to_owned);
     }
 
     pub fn stop(&mut self) {
@@ -780,9 +1091,13 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
             ScriptPlayerState::Stopped,
         );
         self.state = match old_state {
-            ScriptPlayerState::Playing { runtime } => {
-                ScriptPlayerState::Stopping { runtime }
-            },
+            ScriptPlayerState::Playing { runtime }
+            | ScriptPlayerState::Starting { runtime }
+            | ScriptPlayerState::Stopping { runtime } => ScriptPlayerState::Stopping { runtime },
+            ScriptPlayerState::ChangingHandle { old_runtime, .. }
+            | ScriptPlayerState::ChangingKey { old_runtime, .. }
+            | ScriptPlayerState::PrePlayHandle { old_runtime: Some(old_runtime), .. }
+            | ScriptPlayerState::PrePlayKey { old_runtime: Some(old_runtime), .. } => ScriptPlayerState::Stopping { runtime: old_runtime },
             _ => ScriptPlayerState::Stopped,
         }
     }
@@ -790,137 +1105,88 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
     pub fn clear_slots(&mut self) {
         let timing = ScriptActionTiming::UnknownTick;
         match &mut self.state {
-            ScriptPlayerState::Playing { ref mut runtime } => {
+            // Active runtimes we can mutate directly
+            ScriptPlayerState::Playing { ref mut runtime }
+            | ScriptPlayerState::Starting { ref mut runtime }
+            | ScriptPlayerState::Stopping { ref mut runtime } => {
                 runtime.tracker.clear_slots(timing);
             },
-            ScriptPlayerState::Starting { ref mut runtime } => {
-                runtime.tracker.clear_slots(timing);
-            },
-            ScriptPlayerState::Stopping { ref mut runtime } => {
-                runtime.tracker.clear_slots(timing);
-            },
+
+            // Runtimes stored inside an Option while we are pre-playing
+            // Runtimes stored while pre-playing or changing over
             ScriptPlayerState::PrePlayHandle {
-                old_runtime: Some(ref mut old_runtime),
+                old_runtime: Some(old_runtime),
                 ..
-            } => {
-                old_runtime.tracker.clear_slots(timing);
-            },
-            ScriptPlayerState::PrePlayKey {
-                old_runtime: Some(ref mut old_runtime),
+            }
+            | ScriptPlayerState::PrePlayKey {
+                old_runtime: Some(old_runtime),
                 ..
-            } => {
+            }
+            | ScriptPlayerState::ChangingHandle { old_runtime, .. }
+            | ScriptPlayerState::ChangingKey { old_runtime, .. } => {
                 old_runtime.tracker.clear_slots(timing);
             },
-            ScriptPlayerState::ChangingHandle { old_runtime, .. } => {
-                old_runtime.tracker.clear_slots(timing);
+            _ => {
+                self.pending_slots.clear();
             },
-            ScriptPlayerState::ChangingKey { old_runtime, .. } => {
-                old_runtime.tracker.clear_slots(timing);
-            },
-            _ => {},
         }
     }
 
     pub fn set_slot(&mut self, slot: &str, state: bool) {
+        if let Some(background) = self.presentation_slots.get_mut(slot) {
+            *background = state;
+            return;
+        }
+        self.write_slot(slot, state);
+    }
+
+    fn write_slot(&mut self, slot: &str, state: bool) {
         let timing = ScriptActionTiming::UnknownTick;
         match &mut self.state {
-            ScriptPlayerState::Playing { ref mut runtime } => {
-                runtime.tracker.set_slot(timing, slot, state);
-            },
-            ScriptPlayerState::Starting { ref mut runtime } => {
-                runtime.tracker.set_slot(timing, slot, state);
-            },
-            ScriptPlayerState::Stopping { ref mut runtime } => {
+            ScriptPlayerState::Playing { ref mut runtime }
+            | ScriptPlayerState::Starting { ref mut runtime }
+            | ScriptPlayerState::Stopping { ref mut runtime } => {
                 runtime.tracker.set_slot(timing, slot, state);
             },
             ScriptPlayerState::PrePlayHandle {
-                old_runtime: Some(ref mut old_runtime),
+                old_runtime: Some(old_runtime),
                 ..
-            } => {
-                old_runtime.tracker.set_slot(timing, slot, state);
-            },
-            ScriptPlayerState::PrePlayKey {
-                old_runtime: Some(ref mut old_runtime),
+            }
+            | ScriptPlayerState::PrePlayKey {
+                old_runtime: Some(old_runtime),
                 ..
-            } => {
+            }
+            | ScriptPlayerState::ChangingHandle { old_runtime, .. }
+            | ScriptPlayerState::ChangingKey { old_runtime, .. } => {
                 old_runtime.tracker.set_slot(timing, slot, state);
             },
-            ScriptPlayerState::ChangingHandle { old_runtime, .. } => {
-                old_runtime.tracker.set_slot(timing, slot, state);
+            _ => {
+                // No runtime yet; remember desired slot state to apply on init
+                self.pending_slots.insert(slot.to_string(), state);
             },
-            ScriptPlayerState::ChangingKey { old_runtime, .. } => {
-                old_runtime.tracker.set_slot(timing, slot, state);
-            },
-            _ => {},
         }
     }
 
     pub fn has_slot(&self, slot: &str) -> bool {
         match &self.state {
-            ScriptPlayerState::Playing { ref runtime } => {
-                runtime.tracker.has_slot(slot)
-            },
-            ScriptPlayerState::Starting { ref runtime } => {
-                runtime.tracker.has_slot(slot)
-            },
-            ScriptPlayerState::Stopping { ref runtime } => {
+            ScriptPlayerState::Playing { runtime }
+            | ScriptPlayerState::Starting { runtime }
+            | ScriptPlayerState::Stopping { runtime } => {
                 runtime.tracker.has_slot(slot)
             },
             ScriptPlayerState::PrePlayHandle {
-                old_runtime: Some(ref old_runtime),
+                old_runtime: Some(old_runtime),
                 ..
-            } => old_runtime.tracker.has_slot(slot),
-            ScriptPlayerState::PrePlayKey {
-                old_runtime: Some(ref old_runtime),
+            }
+            | ScriptPlayerState::PrePlayKey {
+                old_runtime: Some(old_runtime),
                 ..
-            } => old_runtime.tracker.has_slot(slot),
-            ScriptPlayerState::ChangingHandle { old_runtime, .. } => {
+            }
+            | ScriptPlayerState::ChangingHandle { old_runtime, .. }
+            | ScriptPlayerState::ChangingKey { old_runtime, .. } => {
                 old_runtime.tracker.has_slot(slot)
             },
-            ScriptPlayerState::ChangingKey { old_runtime, .. } => {
-                old_runtime.tracker.has_slot(slot)
-            },
-            _ => false,
-        }
-    }
-
-    /// Toggles the value of a slot and returns the new value
-    pub fn toggle_slot(&mut self, slot: &str) -> bool {
-        if self.has_slot(slot) {
-            self.set_slot(slot, false);
-            false
-        } else {
-            self.set_slot(slot, true);
-            true
-        }
-    }
-
-    pub fn config_value(&self, name: &str) -> Option<DynamicConfigValue> {
-        match &self.state {
-            ScriptPlayerState::Playing { ref runtime } => {
-                runtime.config.0.get(name).cloned()
-            },
-            ScriptPlayerState::Starting { ref runtime } => {
-                runtime.config.0.get(name).cloned()
-            },
-            ScriptPlayerState::Stopping { ref runtime } => {
-                runtime.config.0.get(name).cloned()
-            },
-            ScriptPlayerState::PrePlayHandle {
-                old_runtime: Some(ref old_runtime),
-                ..
-            } => old_runtime.config.0.get(name).cloned(),
-            ScriptPlayerState::PrePlayKey {
-                old_runtime: Some(ref old_runtime),
-                ..
-            } => old_runtime.config.0.get(name).cloned(),
-            ScriptPlayerState::ChangingHandle { old_runtime, .. } => {
-                old_runtime.config.0.get(name).cloned()
-            },
-            ScriptPlayerState::ChangingKey { old_runtime, .. } => {
-                old_runtime.config.0.get(name).cloned()
-            },
-            _ => None,
+            _ => self.pending_slots.get(slot).copied().unwrap_or(false),
         }
     }
 
@@ -930,20 +1196,22 @@ impl<T: ScriptAsset> ScriptPlayer<T> {
     /// might not be known/available, even if something is currently playing.
     pub fn current_key(&self) -> Option<&str> {
         match &self.state {
-            ScriptPlayerState::Stopped => None,
-            ScriptPlayerState::PrePlayHandle { .. } => None,
-            ScriptPlayerState::PrePlayKey { key, .. } => Some(&key),
-            ScriptPlayerState::Starting { runtime } => {
-                runtime.key.as_ref().map(|x| x.as_str())
-            },
-            ScriptPlayerState::Playing { runtime } => {
-                runtime.key.as_ref().map(|x| x.as_str())
-            },
-            ScriptPlayerState::Stopping { runtime } => {
-                runtime.key.as_ref().map(|x| x.as_str())
-            },
-            ScriptPlayerState::ChangingHandle { .. } => None,
-            ScriptPlayerState::ChangingKey { key, .. } => Some(&key),
+            // Nothing playing (or handle-based variants where we don't know the key)
+            ScriptPlayerState::Stopped
+            | ScriptPlayerState::PrePlayHandle { .. }
+            | ScriptPlayerState::ChangingHandle { .. } => None,
+
+            // Key known directly on the enum variant
+            ScriptPlayerState::PrePlayKey { key, .. }
+            | ScriptPlayerState::ChangingKey { key, .. } => Some(key.as_str()),
+
+            // Key stored inside the runtime
+            ScriptPlayerState::Starting { runtime }
+            | ScriptPlayerState::Playing { runtime }
+            | ScriptPlayerState::Stopping { runtime } => runtime.key.as_deref(),
         }
     }
 }
+
+#[cfg(test)]
+mod ownership_tests;

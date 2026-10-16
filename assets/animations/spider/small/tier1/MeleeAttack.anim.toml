@@ -1,4 +1,14 @@
+[asset]
+key = "anim.smallspider.MeleeAttack"
+image = "animations/spider/small/tier1/MeleeAttack__r1c5__48x48.png"
+
 atlas_asset_key = "anim.smallspider.MeleeAttack.sprite"
+
+[playback]
+start = 1
+end = 5
+ticks_per_frame = 8
+mode = "loop"
 
 [settings]
 time_base = "Relative"
@@ -8,12 +18,11 @@ frame_min = 1
 frame_max = 5
 frame_start = 1
 
-# LOOP
-[[script]]
-run_at_frame = 5
-action = "SetFrameNext"
-frame_index = 1
+[[events]]
+on = { frame_enter = 4 }
+emit = "melee_active"
 
+# LOOP
 [[script]]
 run_at_frame = 4
 action = "PlayAudio"
@@ -28,4 +37,3 @@ flip_x = true
 run_on_slot_enable = "DirectionRight"
 action = "SetSpriteFlip"
 flip_x = false
-

@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.Dash"
+image = "animations/player/movement/Dash__r1c1__96x96.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

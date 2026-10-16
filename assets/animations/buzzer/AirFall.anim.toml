@@ -1,0 +1,38 @@
+[asset]
+key = "anim.buzzer.AirFall"
+image = "animations/buzzer/AirFall__r1c4__48x48.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 4
+frame_start = 1
+
+[[script]]
+run_at_frame = 4
+forbid_slots_any = ["HitGround"]
+action = "SetFrameNext"
+frame_index = 1
+
+[[script]]
+run_on_slot_enable = "HitGround"
+action = "SetFrameNow"
+frame_index = 4
+
+[[script]]
+run_at_frame = 4
+require_slots_any = ["HitGround"]
+action = "SetFrameNext"
+frame_index = 4
+
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

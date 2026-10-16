@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.Idle"
+image = "animations/player/movement/IdleSheet__r2c12__96x96.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"
@@ -70,6 +74,33 @@ flip_x = true
 run_on_slot_enable = "DirectionRight"
 action = "SetSpriteFlip"
 flip_x = false
+
+# Ensure correct variant when starting Idle from any previous animation
+[[script]]
+run_on_playback_control = "Start"
+require_slots_any = ["DirectionRight"]
+action = "SetFrameNow"
+frame_index = 15
+
+[[script]]
+run_on_playback_control = "Start"
+require_slots_any = ["DirectionRight"]
+if_previous_script_key = "anim.player.Fall"
+action = "SetFrameNow"
+frame_index = 13
+
+[[script]]
+run_on_playback_control = "Start"
+require_slots_any = ["DirectionLeft"]
+action = "SetFrameNow"
+frame_index = 3
+
+[[script]]
+run_on_playback_control = "Start"
+require_slots_any = ["DirectionLeft"]
+if_previous_script_key = "anim.player.Fall"
+action = "SetFrameNow"
+frame_index = 1
 
 # Blink Red on Damage
 [[script]]

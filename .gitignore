@@ -1,5 +1,24 @@
-/target
-/doc/book
+# Rust build output (also holds timing diagnostics logs)
+/target/
+
+# mdBook output (`mdbook build docs`)
+/docs/book/
+
+# Python tool environments and caches
+.venv/
+__pycache__/
+*.py[cod]
+
+# LDtk image exports, regenerated whenever the project is saved
+/assets/levels/tiles/ldtk_rules/level.01_test/
+
+# Operating system files
 .DS_Store
-Cargo.lock
-.idea
+Thumbs.db
+
+# Editor and local agent settings
+.idea/
+.vscode/
+*.swp
+*~
+.claude/settings.local.json

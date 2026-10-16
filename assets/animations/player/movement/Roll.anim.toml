@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.Roll"
+image = "animations/player/movement/Roll__r1c4__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

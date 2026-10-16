@@ -1,92 +1,59 @@
-use bevy::prelude::*;
-use bevy::reflect::TypePath;
-use bevy::render::render_resource::*;
-
-use crate::game::attack::Health;
-use crate::game::player::Player;
-use crate::prelude::Update;
+//! The low-health vignette pulse.
+use std::f32::consts::TAU;
 
 use super::post_processing::vignette::VignetteSettings;
+use crate::game::combat::Health;
+use crate::game::player::Player;
+use crate::prelude::*;
 
-pub struct PlayerHpBarPlugin;
+/// The share of health at and below which the vignette pulses.
+const LOW_HEALTH_THRESHOLD: f32 = 0.25;
+const LOW_HEALTH_PULSE_BPM: f32 = 103.0;
+/// The pulse's intensity at its weakest beat, and at the threshold.
+const LOW_HEALTH_MIN_PULSE_INTENSITY: f32 = 0.45;
+const LOW_HEALTH_MIN_DANGER_INTENSITY: f32 = 0.60;
+/// How the pulse's intensity reddens, darkens, and fogs the vignette.
+const LOW_HEALTH_COLOR_BASE: f32 = 0.42;
+const LOW_HEALTH_COLOR_PULSE_RANGE: f32 = 0.36;
+const LOW_HEALTH_BRIGHTNESS_DROP: f32 = 0.14;
+const LOW_HEALTH_FOG_STRENGTH_BOOST: f32 = 0.12;
 
-impl Plugin for PlayerHpBarPlugin {
+pub struct LowHealthVignettePlugin;
+
+impl Plugin for LowHealthVignettePlugin {
     fn build(&self, app: &mut App) {
-        app.add_plugins(UiMaterialPlugin::<Material>::default());
-        app.add_systems(Update, (update_hp, update_hp_vignette));
+        app.add_systems(Update, update_hp_vignette);
     }
 }
 
-#[derive(Component)]
-pub struct Bar(pub Entity);
-
-#[derive(Asset, TypePath, AsBindGroup, Clone, Copy, Debug)]
-pub struct Material {
-    /// A number between `0` and `1` indicating how much of the bar should be filled.
-    #[uniform(0)]
-    pub factor: f32,
-    #[uniform(1)]
-    pub background_color: Color,
-    #[uniform(2)]
-    pub filled_color: Color,
-}
-
-impl UiMaterial for Material {
-    fn fragment_shader() -> ShaderRef {
-        "shaders/player_hp.wgsl".into()
-    }
-}
-
-fn update_hp(
-    player_q: Query<&Health, With<Player>>,
-    mut hp_bar_q: Query<(&Bar, &Handle<Material>)>,
-    mut material: ResMut<Assets<Material>>,
-) {
-    for (hp_bar, material_handle) in hp_bar_q.iter() {
-        if let Ok(health) = player_q.get(hp_bar.0) {
-            if let Some(mat) = material.get_mut(material_handle) {
-                mat.factor = 1.0 * (health.current as f32 / health.max as f32)
-            }
-        } else {
-            if let Some(mat) = material.get_mut(material_handle) {
-                mat.factor = 0.0;
-            }
-        }
-    }
-}
-
+/// Pulses the vignette red to the beat while the player's health is low, stronger the lower
+/// it is, and calms it otherwise.
 fn update_hp_vignette(
-    player_q: Query<&Health, With<Player>>,
-    time: Res<Time>,
-    mut query: Query<&mut VignetteSettings>, 
+    player: Query<&Health, With<Player>>,
+    time: Res<PresentationTime>,
+    mut vignettes: Query<&mut VignetteSettings>,
 ) {
-    if let Ok(health) = player_q.get_single() {
-        let health_percentage = health.current as f32 / health.max as f32;
-        if health_percentage <= 0.25 {
-            let bpm = 103.0;
-            let frequency = bpm / 60.0; // Convert BPM to Hz
-            let elapsed = time.elapsed_seconds(); 
-            let time_cos = (elapsed * frequency * std::f32::consts::TAU).cos().abs(); // TAU = 2π
-            for mut settings in query.iter_mut() {
-                let max_red = 255.0 / 255.0; 
-                let min_other = 76.5 / 255.0; 
-
-                settings.color = Vec3::new(
-                    max_red,
-                    min_other * (1.0 - time_cos),
-                    min_other * (1.0 - time_cos),
-                );
-                settings.base_brightness = 0.15 + time_cos * 0.15; // Sharper brightness spike
-            }
+    let calm = VignetteSettings::default();
+    let low_health = player
+        .single()
+        .ok()
+        .filter(|health| health.max > 0)
+        .map(|health| health.current as f32 / health.max as f32)
+        .filter(|share| *share <= LOW_HEALTH_THRESHOLD);
+    let target = low_health.map_or(calm, |share| {
+        let beat = (time.elapsed_secs() * (LOW_HEALTH_PULSE_BPM / 60.0) * TAU).cos().abs();
+        let danger = ((LOW_HEALTH_THRESHOLD - share) / LOW_HEALTH_THRESHOLD).clamp(0.0, 1.0);
+        let intensity =
+            LOW_HEALTH_MIN_PULSE_INTENSITY.lerp(1.0, beat) * LOW_HEALTH_MIN_DANGER_INTENSITY.lerp(1.0, danger);
+        let tint = (LOW_HEALTH_COLOR_BASE - intensity * LOW_HEALTH_COLOR_PULSE_RANGE).clamp(0.0, 1.0);
+        VignetteSettings {
+            color: Vec3::new(1.0, tint, tint),
+            base_brightness: (calm.base_brightness - intensity * LOW_HEALTH_BRIGHTNESS_DROP).max(0.0),
+            fog_strength: calm.fog_strength + intensity * LOW_HEALTH_FOG_STRENGTH_BOOST,
+            ..calm
         }
-        else {
-            for mut settings in query.iter_mut() {
-                settings.base_brightness = 0.15;
-                settings.color = Vec3::new(0.0,0.0,0.0); 
-            }
-        }
-    } else {
-        return;
+    });
+    for mut settings in &mut vignettes {
+        *settings = target;
     }
-    
 }

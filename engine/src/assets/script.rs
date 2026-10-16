@@ -120,29 +120,8 @@ pub enum PlaybackControl {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "action")]
 pub enum CommonScriptAction {
-    /// Run `CliCommand`s
-    RunCli {
-        /// A list of cli command strings to evaluate
-        cli: Vec<String>,
-    },
-    /// Despawn entities
-    DespawnEntity {
-        /// If specified, lookup entities with the given label.
-        /// If unspecified, despawn ourselves.
-        label: Option<String>,
-    },
-    /// Spawn a Bevy Scene asset
-    SpawnScene {
-        /// The dynamic asset key of the scene asset to spawn
-        asset_key: String,
-        /// If true, spawn it as a child under another entity.
-        /// If false, spawn it independently (standalone).
-        #[serde(default)]
-        as_child: bool,
-        /// If `as_child` is true, optionally specify another entity (by label)
-        /// to use as the parent. If unspecified, use the current entity.
-        parent_label: Option<String>,
-    },
+    /// Despawn the script's own entity
+    DespawnEntity,
     /// Spawn a new entity to run a script
     SpawnScript { asset_key: String },
     /// Enable a Slot
@@ -166,7 +145,7 @@ pub enum CommonScriptAction {
         /// Only stop sounds with the given label. If unset, stop all sounds.
         label: Option<String>,
     },
-    /// Play a sound (using regular bevy audio, not our precise system)
+    /// Play a sound on the background track (looping optional, tick-aligned)
     PlayBackgroundAudio {
         asset_key: String,
         label: Option<String>,
@@ -265,33 +244,25 @@ impl<ExtParams, ExtRunIf, ExtAction>
         wa: ExtendedScriptWorkaround<ExtParams, ExtRunIf, ExtAction>,
     ) -> ExtendedScript<ExtParams, ExtRunIf, ExtAction> {
         match wa.inner {
-            ExtendedScriptWorkaroundInner::EE(x) => {
-                ExtendedScript {
-                    params: wa.params,
-                    run_if: ExtendedScriptRunIf::Extended(x.a),
-                    action: ExtendedScriptAction::Extended(x.b),
-                }
+            ExtendedScriptWorkaroundInner::EE(x) => ExtendedScript {
+                params: wa.params,
+                run_if: ExtendedScriptRunIf::Extended(x.a),
+                action: ExtendedScriptAction::Extended(x.b),
             },
-            ExtendedScriptWorkaroundInner::EC(x) => {
-                ExtendedScript {
-                    params: wa.params,
-                    run_if: ExtendedScriptRunIf::Extended(x.a),
-                    action: ExtendedScriptAction::Common(x.b),
-                }
+            ExtendedScriptWorkaroundInner::EC(x) => ExtendedScript {
+                params: wa.params,
+                run_if: ExtendedScriptRunIf::Extended(x.a),
+                action: ExtendedScriptAction::Common(x.b),
             },
-            ExtendedScriptWorkaroundInner::CE(x) => {
-                ExtendedScript {
-                    params: wa.params,
-                    run_if: ExtendedScriptRunIf::Common(x.a),
-                    action: ExtendedScriptAction::Extended(x.b),
-                }
+            ExtendedScriptWorkaroundInner::CE(x) => ExtendedScript {
+                params: wa.params,
+                run_if: ExtendedScriptRunIf::Common(x.a),
+                action: ExtendedScriptAction::Extended(x.b),
             },
-            ExtendedScriptWorkaroundInner::CC(x) => {
-                ExtendedScript {
-                    params: wa.params,
-                    run_if: ExtendedScriptRunIf::Common(x.a),
-                    action: ExtendedScriptAction::Common(x.b),
-                }
+            ExtendedScriptWorkaroundInner::CC(x) => ExtendedScript {
+                params: wa.params,
+                run_if: ExtendedScriptRunIf::Common(x.a),
+                action: ExtendedScriptAction::Common(x.b),
             },
         }
     }

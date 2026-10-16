@@ -1,183 +1,107 @@
-use anyhow::Result;
-use bevy::prelude::*;
-use bevy::utils;
+//! The controls reference, a pixel panel toggled by the controls action.
 use leafwing_input_manager::prelude::ActionState;
 
-use super::popup::PopupTimer;
-use super::popup::PopupUi;
-use super::AppState;
+use super::pixel_canvas::{rect, text_width, Art, ArtLibrary, Canvas, Raster};
+use super::pixel_panel::{draw_frame, key_hint_width, keycap, show_raster, Accent, PanelScroll, UiPixelGrid, MUTED, PANEL_Z_INDEX, TEXT};
 use crate::game::player::PlayerAction;
+use crate::prelude::*;
 
-#[derive(Component)]
-struct ControlsOverlay;
+const MARGIN: i32 = 7;
+const ROW: i32 = 11;
+const KEYS_LEFT: i32 = 66;
+const ACCENT: Accent = Accent { bright: Color::srgb(0.80, 0.84, 0.88), dim: Color::srgb(0.24, 0.27, 0.32) };
 
-#[derive(Component)]
-struct ControlsHint;
+/// Each action, its keys, and its gamepad buttons.
+const CONTROLS: [(&str, &[&str], &str); 12] = [
+    ("MOVE", &["A", "D", "<", ">"], "L STICK"),
+    ("JUMP", &["W", "^", "SPACE"], "L2"),
+    ("FALL", &["S", "v"], "D-PAD DOWN"),
+    ("SKILLS", &["J", "K", "L", ";", "'"], "X R2 A B"),
+    ("", &["1", "2", "3", "4", "5"], ""),
+    ("UP VARIANT", &["I"], ""),
+    ("INTERACT", &["F"], "Y"),
+    ("INVENTORY", &["M"], ""),
+    ("CONTROLS", &["C"], "START"),
+    ("MENU", &["ESC"], ""),
+    ("PAUSE", &["P"], ""),
+    ("SCROLL UI", &["PGUP", "PGDN"], "SHIFT: SIDE"),
+];
 
 pub(super) fn plugin(app: &mut App) {
-    app.add_systems(
-        OnEnter(AppState::InGame),
-        spawn_control_overlay,
-    )
-    .add_systems(
-        OnTransition {
-            from: AppState::MainMenu,
-            to: AppState::InGame,
-        },
-        spawn_control_hint,
-    )
-    .add_systems(
-        Update,
-        (
-            toggle_control_overlay.map(utils::dbg),
-            hide_controls_hint.map(utils::dbg),
-        ),
-    );
+    app.init_resource::<ControlsShown>()
+        .add_systems(OnEnter(AppState::InGame), |mut shown: ResMut<ControlsShown>| shown.0 = false)
+        .add_systems(Update, (toggle_controls.after(GameTickSet::Post), present_controls.after(super::sync_ui_scale)).chain().run_if(in_state(AppState::InGame)));
 }
 
-fn spawn_control_hint(mut commands: Commands) {
-    commands
-        .popup()
-        .insert((ControlsHint, PopupTimer::default()))
-        .with_children(|popup| {
-            popup.row().with_children(|row| {
-                row.text("Press ");
-                row.control_icon("C");
-                row.text(" or ");
-                row.control_icon("Start");
-                row.text(" to show Controls");
-            });
-        });
-}
+#[derive(Resource, Default)]
+struct ControlsShown(bool, PanelScroll);
 
-fn spawn_control_overlay(mut commands: Commands) {
-    commands
-        .root()
-        .insert(ControlsOverlay)
-        .with_children(|root| {
-            root.container().with_children(|container| {
-                container.row().with_children(|row| {
-                    row.text("Move Left: ");
-                    row.control_icon("A");
-                    row.text(" or ");
-                    row.control_icon("[<]");
-                    row.text(" or ");
-                    row.control_icon("L Stick Left");
-                });
-                container.row().with_children(|row| {
-                    row.text("Move Right: ");
-                    row.control_icon("D");
-                    row.text(" or ");
-                    row.control_icon("[>]");
-                    row.text(" or ");
-                    row.control_icon("L Stick Right");
-                });
-                container.row().with_children(|row| {
-                    row.text("Jump: ");
-                    row.control_icon("W");
-                    row.text(" or ");
-                    row.control_icon("SPACE");
-                    row.text(" or ");
-                    row.control_icon("[^]");
-                    row.text(" or ");
-                    row.control_icon("L2");
-                });
-                container.spacer();
-                container.row().with_children(|row| {
-                    row.text("Attack: ");
-                    row.control_icon("J");
-                    row.text(" or ");
-                    row.control_icon("1");
-                    row.text(" or ");
-                    row.control_icon("X / Square");
-                });
-                container.row().with_children(|row| {
-                    row.text("Dash: ");
-                    row.control_icon("K");
-                    row.text(" or ");
-                    row.control_icon("2");
-                    row.text(" or ");
-                    row.control_icon("R2");
-                });
-                container.row().with_children(|row| {
-                    row.text("Whirl: ");
-                    row.control_icon("L");
-                    row.text(" or ");
-                    row.control_icon("3");
-                    row.text(" or ");
-                    row.control_icon("A / Cross");
-                });
-                container.row().with_children(|row| {
-                    row.text("Stealth: ");
-                    row.control_icon(";");
-                    row.text(" or ");
-                    row.control_icon("4");
-                    row.text(" or ");
-                    row.control_icon("B / Circle");
-                });
-                container.row().with_children(|row| {
-                    row.text("Swap Melee/Ranged: ");
-                    row.control_icon("H");
-                    row.text(" or ");
-                    row.control_icon("`");
-                    row.text(" or ");
-                    row.control_icon("L1");
-                });
-                container.row().with_children(|row| {
-                    row.text("Swap Melee Weapon: ");
-                    row.control_icon("G");
-                    row.text(" or ");
-                    row.control_icon("R1");
-                });
-                container.spacer();
-                container.row().with_children(|row| {
-                    row.text("Interact: ");
-                    row.control_icon("F");
-                    row.text(" or ");
-                    row.control_icon("Y / Triangle");
-                });
-                container.spacer();
-                container.row().with_children(|row| {
-                    row.text("Show/Hide Controls: ");
-                    row.control_icon("C");
-                    row.text(" or ");
-                    row.control_icon("Start");
-                });
-            });
-        });
-}
+#[derive(Component)]
+struct ControlsPanel;
 
-fn toggle_control_overlay(
-    action_state_q: Query<&ActionState<PlayerAction>>,
-    mut control_overlay_q: Query<&mut Visibility, With<ControlsOverlay>>,
-) -> Result<()> {
-    let action_state = action_state_q.get_single()?;
-    if action_state.just_pressed(&PlayerAction::ToggleControlOverlay) {
-        for mut visibility in &mut control_overlay_q {
-            *visibility = match *visibility {
-                Visibility::Inherited | Visibility::Visible => {
-                    Visibility::Hidden
-                },
-                Visibility::Hidden => Visibility::Visible,
-            }
-        }
+fn toggle_controls(actions: Query<&ActionState<PlayerAction>>, mut shown: ResMut<ControlsShown>) {
+    if actions.single().is_ok_and(|actions| actions.just_pressed(&PlayerAction::ToggleControlOverlay)) {
+        shown.0 = !shown.0;
     }
-
-    Ok(())
 }
 
-fn hide_controls_hint(
-    action_state_q: Query<&ActionState<PlayerAction>>,
-    control_overlay_q: Query<Entity, With<ControlsHint>>,
+fn present_controls(
     mut commands: Commands,
-) -> Result<()> {
-    let action_state = action_state_q.get_single()?;
+    mut shown: ResMut<ControlsShown>,
+    keys: Res<ButtonInput<KeyCode>>,
+    library: Res<ArtLibrary>,
+    mut images: ResMut<Assets<Image>>,
+    mut panel: Query<(Entity, &ImageNode, &mut Node), With<ControlsPanel>>,
+    grid: UiPixelGrid,
+) {
+    let content = shown.0.then(|| draw_controls(&library.art(&images))).and_then(|raster| {
+        grid.scrollable(raster, &mut shown.1, &keys, None, Vec2::splat(0.5))
+    });
+    show_raster(&mut commands, &mut images, panel.single_mut().ok(), content, |image, node| {
+        (Name::new("ControlsPanel"), ControlsPanel, image, node, ZIndex(PANEL_Z_INDEX), StateDespawnMarker)
+    });
+}
 
-    for entity in &control_overlay_q {
-        if action_state.just_pressed(&PlayerAction::ToggleControlOverlay) {
-            commands.entity(entity).despawn_recursive();
+fn draw_controls(art: &Art) -> Raster {
+    let keys_width = |keys: &[&str]| keys.iter().map(|key| key_hint_width(key, "") - 1).sum::<i32>();
+    let pad_left = KEYS_LEFT + CONTROLS.iter().map(|(_, keys, _)| keys_width(keys)).max().unwrap_or(0) + 6;
+    let width = pad_left + CONTROLS.iter().map(|(.., pad)| text_width(pad)).max().unwrap_or(0) + MARGIN;
+    let height = 18 + CONTROLS.len() as i32 * ROW + 4;
+    let mut canvas = Canvas::new(UVec2::new(width as u32, height as u32), art);
+    draw_frame(&mut canvas, IVec2::new(width, height), ACCENT, &[14]);
+    canvas.text(IVec2::new(MARGIN, 4), "CONTROLS", ACCENT.bright);
+    canvas.text(IVec2::new(pad_left, 4), "GAMEPAD", MUTED);
+    for (index, (action, keys, pad)) in CONTROLS.into_iter().enumerate() {
+        let y = 18 + index as i32 * ROW;
+        canvas.text(IVec2::new(MARGIN, y + 1), action, TEXT);
+        let mut x = KEYS_LEFT;
+        for key in keys {
+            x += keycap(&mut canvas, IVec2::new(x, y), key) + 2;
         }
+        canvas.text(IVec2::new(pad_left, y + 1), pad, MUTED);
+    }
+    canvas.fill(rect(pad_left - 4, 15, 1, height - 16), ACCENT.dim);
+    canvas.finish()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ui::pixel_canvas::tests::{load_art, save_snapshot, snapshot_directory};
+    use crate::ui::pixel_font::FONT_IMAGE_PATH;
+
+    #[test]
+    fn controls_systems_have_compatible_parameters() {
+        let mut schedule = Schedule::default();
+        schedule.add_systems((toggle_controls, present_controls));
+        schedule.initialize(&mut World::new()).expect("controls systems initialize");
     }
 
-    Ok(())
+    /// Writes the panel as a PNG file when `SEEKER_UI_SNAPSHOTS` names a directory.
+    #[test]
+    fn controls_snapshot() {
+        let Some(directory) = snapshot_directory() else { return };
+        let (path, font) = load_art(FONT_IMAGE_PATH);
+        save_snapshot(&directory, "controls", draw_controls(&Art::from_iter([(path, &font)])));
+    }
 }
