@@ -6,6 +6,6 @@ These pages describe intent, not the current build. Some details have changed in
 
 - [Target Audience](audience.md)
 - [Art Direction](art-direction.md)
-- [Game Lore](lore.md)
+- [Lore](lore.md)
 - [Open Brand](open-brand.md)
 - [Gameplay and Mechanics](mechanics/README.md)

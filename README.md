@@ -1,6 +1,6 @@
 # The Seeker
 
-The Seeker is an open-source 2D metroidvania with action-RPG builds, written in Rust with [Bevy](https://bevyengine.org/) 0.19. A settler lands on a frozen planet whose life survives in deep, geothermally heated caves. The game is about exploring those caves out of curiosity, crafting skills and passives at capsules from materials gathered there, and combining them into builds. A procedurally generated world and a soundtrack, animation, and gameplay clock that share one musical timeline round it out.
+The Seeker is an open-source 2D metroidvania with action-RPG builds, written in Rust with [Bevy](https://bevyengine.org/) 0.19. You play a Seeker, an explorer drawn to an icy planet whose life shelters in caves that grow warmer, stranger, and more dangerous the deeper you go. The game is about exploring those caves, crafting skills and passives at capsules from materials gathered there, and combining them into builds. A procedurally generated world and a soundtrack, animation, and gameplay clock that share one musical timeline round it out.
 
 The game is in active development. Read the [design vision](docs/design/README.md) for where it is heading.
 

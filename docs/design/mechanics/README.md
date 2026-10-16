@@ -13,7 +13,7 @@ The overall idea is to have a game that combines open sandboxy exploration with 
 On the exploration front this can be seen as a combination of the overall feel of a sandbox game (Red Dead Redemption style, but in a 2D setting) with some Metroidvania mechanics (similar to Hollow Knight)
 The metroidvania mechanics here are mostly the platformer style gameplay with the typical 'teasing of certain locked areas' where the player needs to get some item or ability to access those areas.
 The locked areas don't have as much of a gamplay significance as in Metroidvanias, instead they are used more as just a way to motivate the player to explore.
-This motivation will be the core driver of progress in this game, as there won't be any explicit 'quest' given to the player. (There will be side-quests but no overarching grand mission)
+This motivation will be the core driver of progress in this game. Beyond the planet's mysterious pull toward its depths, there won't be a quest log telling the player what to do next.
 Instead the player explores the deep alien cave systems mostly out of curiosity and the will to experience more of the hidden beauty of the planet.
 Therefore various mechanics need to really prioritize feeding this curiosity to make this design work.
 

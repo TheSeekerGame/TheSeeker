@@ -1,83 +1,74 @@
-# Game Lore
+# Lore
 
-The idea behind the game is to be a kind of 'trojan horse', in the sense that is has 2 different levels of
-meaning, where one is the more surface level one that is meant to be just fun, attention grabbing and
-aesthetically pleasing and it serves as the vehicle to convey the deeper meaning that won't be told in
-any explicit way but more something that has to be discovered.
-That being said the deeper meaning will still be 'experienced' even if the player doesn't discover it.
-More on that in a bit.
+The Seeker is a science-fiction universe about curiosity, transformation, mathematics, and cosmic horror, and about what happens to someone who wants to experience everything.
 
-The surface level of meaning is that it's a sci-fi world where humanity discovers a new planet with life
-on it, but the planet is almost entirely covered by a thick ice/snow layer similar to Hoth from Star Wars.
-The planet's inhabitants all live in deep cave systems below the surface, heated by geothermal energy.
-The deeper the caves the warmer it gets, creating a deep network of biomes and ecosystems.
+This page sketches the world and the questions it explores. It deliberately leaves out the story's twists and endings. They belong to the game, and every other work set in this universe is free to find its own answers.
 
-The player is one of the first settlers on the planet, and the game is meant to be something like a Red
-Dead Redemption in space. Where the player has a lot of freedom to just explore the beautiful
-underground alien landscapes and seek their own meaning and goals within that world, while
-occasionally returning to the surface to trade and share knowledge with the other settlers.
-The main goal behind this surface layer of meaning is to create a feeling of 'awe' and curiosity and put
-the player in an engaged and attentive state.
+## The Seekers
 
-The deeper level of meaning can be split into 2 categories. The first is still told in an explicit way, in the
-form of a plot twist at the end of the game:
-It turns out the entire planet is something similar to a massive hivemind embryo, which uses one of the
-core properties of advanced civilizations - curiosity - as a way to lure them further down towards the
-planet's center.
-The various creatures the player fights on the way down are a sort of selection mechanism, a kind of
-challenge where only a new unique strategy can solve it and reach the bottom.
-Once the player reaches the bottom, the planet 'consumes' it and all the data the player generated on
-their way down. The planet then recallibrates to account for the new data, and the game starts over with
-a new settler arriving on the planet. But now the planet is evolved and the challenges it presents are
-more complex.
-This could sound like a kind of 'space horror' ending, but that's actually not the intention. This leads to
-the final layer of meaning, the one that is not told explicitly but only told through the design of the
-game itself.
+Seekers are explorers in the service of **Theorem**, a vast organization devoted to discovering and formalizing knowledge across the universe. Seeker is a role, not a species: many kinds of beings can become one.
 
-The final level of meaning is inspired by various scientific and mathematical theories, the most notable
-ones by Donald Hoffman and Stephen Wolfram.
-The concept I want to explore in the deepest level of this game is the idea that mathematics could be
-the foundational layer of reality, consciousness and even emotional states.
-For example, you can define a triangle as '3 points connected together' but you can also define a
-triangle as 'an experience'.
-Similar with colors, frequencies, etc. With those it's actually more obvious to us. We know that red
-feels different to green, and also that different musical frequencies create different experiences.
-And then from those ‘atomic’ building blocks you can form any complex emotional state.
-And the idea is to invite the player to *experience* mathematics, instead of just understanding it.
-Experience how prime numbers feel, compared to even numbers, experience the fibonacci sequence
-and how different it feels from say the mandelbrot set.
-So how we achieve this in game, is by precisely tuning various parameters, to create mathematical
-relationships between them.
-- We pick a 'fundamental frequency' that will tie everything together. In this case this ‘fundamental’ is 12.
-- All animations will play at 12fps (12hz).
-- All music will have a fundamental frequency of 48hz (exact 2 octaves above animations).
-- All rhythm will be 90bpm (again the same 'fundamental' just a few octaves lower).
-- Size of tiles will be 6x6 pixels (1/2 of 12).
-- Player height is exactly 12p pixels.
-- And many many more things like these.
+What Seekers chase are **permutations of existence**. Being a dog is one kind of existence; riding a bike, exploring Mars, and eating ice cream are others. Combine them and you get something new: a dog riding a bike on Mars while eating ice cream. Seekers crave these combinations. They have already found the familiar ingredients, so they travel ever farther in search of strange ones, the kind that make every earlier combination feel small.
 
-This is meant to create a highly 'resonant' and meditative experience, where the entire experience is
-tightly synchronized.
-It won't be made obvious to the player, at best it will just 'feel good'.
-And then once we establish the fundamental, we can start exploring different mathematical concepts
-with it.
-Create musical patterns between various mathematical sequences and see how they feel.
-Create certain levels in game let's say using only prime number multiples of the base tiles as platform
-lengths. Since animation frequency will be tied to rhythm and pitch, various lengths of animations will
-create different kinds of time divisions/polyrhythms, generating even more complex structures.
-And all of those mediums will create different kinds of synergies together.
-Say hearing prime number based music sequence while exploring a fibonacci based level, etc etc.
-Again, the goal is not to make this obvious, and make it something that the player experiences
-subconsciously, while being focused and entertained by the surface level of meaning.
-And then the idea behind the game ending, with the planet recallibrating, together with the
-mathematical meaning, is meant to touch on the topic of the ruliad / 'godel's infinite candy store'.
-The idea that as we find new potential mathematic/conscious states it opens up the doors to even newer
-ones, in an infinite loop of conscious expansion.
-Every iteration of the game open up brand new conscious experiences based on the previous
-playthrough.
-And it's important to mention the player is also an 'instrument' here.
-Due to the animation sync all their actions produce sfx sounds that will be synced to some division of
-the base fundamental frequency.
-So what the player does in each iteration, influence by the new callibration of the planet, is a key part
-of the whole experience, and those actions by the player influence the future configuration, etc, creating
-a feedback loop that keeps generates new mathematical/conscious structures.
+A few ideas shape the life of a Seeker:
+
+- **The Codex** is Theorem's shared archive of everything its Seekers have recorded. A Seeker reaches it through their visor to scan, record, and analyze what they find.
+- **Attunement** is the ability to sense the frequencies and structures of other beings and of the cosmos itself. Seekers learn it through training, collaboration, and meditation before setting out alone.
+- **Solitude.** Seekers travel and work alone, far from the organization that sent them.
+
+## The planet
+
+On a lonely expedition, a Seeker feels a pull unlike anything before and follows it to an icy planet whose richness seems almost too perfect.
+
+The surface is frozen and exposed. Life shelters in caves beneath the ice, warmed by the planet's heat. The deeper you go, the warmer it gets and the stranger, more beautiful, and more dangerous the ecosystems become. Others have come here too, scientists, opportunists, caretakers, and worshippers among them, each with their own idea of what the planet is for.
+
+Something near the planet's core seems to be calling. What it is, and why it calls, is the heart of the story.
+
+Ancient alien demigods called **Guardians** watch over the planet. Their origins are a mystery.
+
+## What the story explores
+
+The Seeker asks questions more than it answers them:
+
+- **The pull of novelty.** What draws a Seeker onward, and does the pursuit of new experiences ever end? What would "enough" mean to someone who has already tasted everything ordinary?
+- **Expansion and simplicity.** One path leads toward more: more knowledge, abilities, power, and possibility. The other leads toward less: humility, service, and letting go. Both should feel genuinely appealing, and neither is presented as obviously right.
+- **Recording versus experiencing.** Is recording something in the Codex the same as understanding it? Is understanding a creature the same as becoming it?
+- **Who benefits.** Who gains from the knowledge Theorem gathers, and at what cost?
+- **The planet's nature.** Is its richness a gift, a call, an accident, or something with no human analogue?
+
+## Permutations in play
+
+The themes are meant to be felt through play as well as story. The game aims to let players learn the abilities and even the forms of the creatures they meet. Creatures, in turn, adapt to how the player fights, and the caves themselves shift and change. Each discovery opens the way to the next, so the world responds to how it is explored.
+
+## Mathematics as experience
+
+The deepest layer of The Seeker is inspired by the idea that mathematics could be the foundation of reality, consciousness, and even emotion. A triangle can be defined as three connected points, but it can also be an experience, just as red feels different from green and one musical interval feels different from another. The aim is to let players *experience* mathematical relationships rather than only understand them: how primes feel compared with even numbers, or how a Fibonacci sequence feels compared with a fractal.
+
+Everything is tuned around one fundamental number, **12**:
+
+- Standard animations run at 12 frames per second.
+- Music is built on a 48 Hz reference, two octaves above the animation rate, using a tuning of pure mathematical ratios.
+- The rhythm is 90 BPM, the same fundamental several octaves lower.
+- Tiles are 6×6 pixels, and the player is 12 pixels tall.
+
+The result is meant to feel resonant and meditative. Players aren't told about it; at best it simply feels good. The player becomes an instrument too: steps, strikes, and impacts land on the shared musical grid. From that foundation, levels, music, and motion can explore different mathematical ideas, such as platforms sized in prime multiples or melodies built from a sequence, and combine them in unexpected ways.
+
+## Influences
+
+The universe draws on ideas from mathematics, science, and philosophy, used as inspiration rather than doctrine:
+
+- **Kurt Gödel**: the limits of formal systems and the infinite variety of what remains to be discovered.
+- **Donald Hoffman**: the idea that perception is an interface over a deeper structure, and that experience itself has mathematical structure.
+- **Stephen Wolfram's ruliad**: the space of all possible computations, endlessly branching.
+- **Contemplative traditions**: humility, service, and the freedom of letting go.
+
+## Open questions for creators
+
+These questions are left open on purpose. Any game, story, campaign, or artwork set in this universe can answer them in its own way:
+
+- What does the planet want, if it wants anything?
+- Can a Seeker stop seeking?
+- When does structure support life, and when does it become a cage?
+- What do the planet's inhabitants know that Theorem doesn't?
+
+To build your own work in this universe, see [Open Brand](open-brand.md).

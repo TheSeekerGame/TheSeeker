@@ -5,7 +5,7 @@
 - [Game Design](design/README.md)
     - [Target Audience](design/audience.md)
     - [Art Direction](design/art-direction.md)
-    - [Game Lore](design/lore.md)
+    - [Lore](design/lore.md)
     - [Open Brand](design/open-brand.md)
     - [Gameplay and Mechanics](design/mechanics/README.md)
         - [Active Skills](design/mechanics/active-skills.md)
