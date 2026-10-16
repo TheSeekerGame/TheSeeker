@@ -4,7 +4,7 @@ These pages describe the design and the technical architecture of The Seeker. Th
 
 | Section | Read it for |
 | --- | --- |
-| [Game Design](design/README.md) | The vision: audience, art direction, lore, monetization, and intended mechanics |
+| [Game Design](design/README.md) | The vision: audience, art direction, lore, the open brand, and intended mechanics |
 | [Architecture](architecture/README.md) | How the game works: actor behavior, the timing and audio model, and level generation |
 | [Authoring](authoring/README.md) | How to add content: asset guidelines and the script and animation formats |
 

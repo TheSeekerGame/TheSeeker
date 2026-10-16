@@ -6,7 +6,7 @@
     - [Target Audience](design/audience.md)
     - [Art Direction](design/art-direction.md)
     - [Game Lore](design/lore.md)
-    - [Monetization](design/monetization.md)
+    - [Open Brand](design/open-brand.md)
     - [Gameplay and Mechanics](design/mechanics/README.md)
         - [Active Skills](design/mechanics/active-skills.md)
         - [Passive Skills](design/mechanics/passive-skills.md)

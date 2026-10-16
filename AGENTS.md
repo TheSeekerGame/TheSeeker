@@ -277,7 +277,7 @@ All project documentation is GitHub-flavored Markdown under `docs/`. It renders 
 | `README.md` | Project introduction, build instructions, controls, and repository layout |
 | `CONTRIBUTING.md` | Contributor setup, verification, and pull-request workflow |
 | `AGENTS.md` (this file) | Source map, working rules, and runtime contracts; `CLAUDE.md` imports it |
-| `docs/design/` | Game design vision: audience, art direction, lore, monetization, intended mechanics. Intent, not current behavior |
+| `docs/design/` | Game design vision: audience, art direction, lore, the open brand and its collectibles, intended mechanics. Intent, not current behavior |
 | [docs/architecture/actors.md](docs/architecture/actors.md) | The single enemy/player behavior design document |
 | [docs/architecture/timing-and-audio.md](docs/architecture/timing-and-audio.md) | The single timing, audio, animation-cadence, and presentation design document |
 | [docs/architecture/level-generation.md](docs/architecture/level-generation.md) | The single level-generation design, authoring, and tool document |
