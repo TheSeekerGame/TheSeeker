@@ -6,7 +6,7 @@ This page sketches the world and the questions it explores. It deliberately leav
 
 ## The Seekers
 
-Seekers are explorers in the service of **Theorem**, a vast organization devoted to discovering and formalizing knowledge across the universe. Seeker is a role, not a species: many kinds of beings can become one.
+Seekers are explorers in the service of **Theorem**, a vast organization devoted to discovering and formalizing knowledge across the universe. Seeker is a role, not a species: humans, aliens, and robots alike can become one.
 
 What Seekers chase are **permutations of existence**. Being a dog is one kind of existence; riding a bike, exploring Mars, and eating ice cream are others. Combine them and you get something new: a dog riding a bike on Mars while eating ice cream. Seekers crave these combinations. They have already found the familiar ingredients, so they travel ever farther in search of strange ones, the kind that make every earlier combination feel small.
 
