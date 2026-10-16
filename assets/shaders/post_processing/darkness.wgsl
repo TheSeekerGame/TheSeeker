@@ -1,113 +1,77 @@
 #import bevy_core_pipeline::fullscreen_vertex_shader::FullscreenVertexOutput
 
+// Laid out and documented as `DarknessSettings` in `darkness.rs`; a test checks the layout.
 struct DarknessSettings {
-    bg_light_level: f32,
-    darkness_intensity: f32,
-    _padding: vec2<f32>,
+    view_min: vec2<f32>,
+    view_size: vec2<f32>,
+    level_min: vec2<f32>,
+    level_size: vec2<f32>,
+    lightmap_size: vec2<f32>,
+    lightmap_page_edge: f32,
+    depth_start: f32,
+    depth_ramp: f32,
+    depth_ramp_strength: f32,
+    depth_strength_per_unit: f32,
+    player_light_center: vec2<f32>,
+    player_light_radius: f32,
+    player_light_strength: f32,
+    player_light_falloff: f32,
 }
 
 @group(0) @binding(0) var screen_texture: texture_2d<f32>;
-@group(0) @binding(1) var texture_sampler: sampler;
-@group(0) @binding(2) var<uniform> settings: DarknessSettings;
+@group(0) @binding(1) var lightmap_texture: texture_2d_array<f32>;
+@group(0) @binding(2) var lightmap_sampler: sampler;
+@group(0) @binding(3) var<uniform> settings: DarknessSettings;
+@group(0) @binding(4) var lightmap_pages: texture_2d<u32>;
 
-// A simple hash function to create a pseudo-random number from a vec2.
-// Used for jittering the sampling grid to smooth out artifacts.
-fn random(co: vec2<f32>) -> f32 {
-    return fract(sin(dot(co.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
+// The baked light at `world`, and none outside the level. The lightmap lies in square atlas
+// pages, which `lightmap_pages` finds, each with a one-pixel gutter of its neighbours' light.
+fn baked_light(world: vec2<f32>) -> f32 {
+    let from_top_left = vec2<f32>(world.x - settings.level_min.x, settings.level_min.y + settings.level_size.y - world.y);
+    let uv = from_top_left / settings.level_size;
+    if (any(uv < vec2<f32>(0.0)) || any(uv > vec2<f32>(1.0))) {
+        return 0.0;
+    }
+    let edge = settings.lightmap_page_edge;
+    let pixel = min(uv * settings.lightmap_size, settings.lightmap_size - vec2<f32>(0.0001));
+    let page = vec2<i32>(floor(pixel / edge));
+    let layer = textureLoad(lightmap_pages, page, 0).r;
+    let page_uv = (pixel - vec2<f32>(page) * edge + vec2<f32>(1.0)) / (edge + 2.0);
+    return textureSampleLevel(lightmap_texture, lightmap_sampler, page_uv, i32(layer), 0.0).r;
 }
 
-// Returns 1.0 if the color is a light source, 0.0 otherwise.
-fn is_light_source(color: vec3<f32>) -> f32 {
-    let target_light_color = vec3<f32>(245.0/255.0, 250.0/255.0, 253.0/255.0);
-    let threshold = 0.05;
-    let softness = 0.02;
-
-    let color_diff = abs(color - target_light_color);
-    let max_diff = max(max(color_diff.r, color_diff.g), color_diff.b);
-
-    return 1.0 - smoothstep(threshold - softness, threshold + softness, max_diff);
+fn interleaved_gradient_noise(pixel: vec2<f32>) -> f32 {
+    return fract(52.9829189 * fract(0.06711056 * pixel.x + 0.00583715 * pixel.y));
 }
 
 @fragment
 fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
-    let screen_color = textureSample(screen_texture, texture_sampler, in.uv);
-    let pixel_size = 1.0 / vec2<f32>(textureDimensions(screen_texture, 0));
+    let pixel = floor(in.position.xy);
+    let screen_color = textureLoad(screen_texture, vec2<i32>(pixel), 0);
+    let world = settings.view_min + vec2<f32>(in.uv.x, 1.0 - in.uv.y) * settings.view_size;
 
-    let kernel_radius = 200;
-    let kernel_step = 30;
-    let sigma = 100.0;
-
-    var total_light = 0.0;
-    var total_weight = 0.0;
-
-    let jitter_angle = random(in.uv) * 6.28318; // 2 * PI
-    let jitter_radius = random(in.uv + vec2(0.1,0.2)) * f32(kernel_step);
-    let jitter = vec2(cos(jitter_angle), sin(jitter_angle)) * jitter_radius;
-
-#ifdef HORIZONTAL
-    // --- Horizontal Pass ---
-    // This pass identifies light sources and blurs their influence horizontally.
-    for (var i = -kernel_radius; i <= kernel_radius; i = i + kernel_step) {
-        let offset = vec2<f32>(f32(i) + jitter.x, jitter.y);
-        let sample_uv = in.uv + offset * pixel_size;
-        let sample_color = textureSample(screen_texture, texture_sampler, sample_uv);
-
-        let is_light = is_light_source(sample_color.rgb);
-
-        let dist = abs(f32(i));
-        let weight = exp(-(dist * dist) / (2.0 * sigma * sigma));
-
-        total_light += is_light * weight;
-        total_weight += weight;
+    // Darkness deepens below its start: eased in over the ramp, then steadily.
+    let depth = settings.depth_start - world.y;
+    if (settings.depth_ramp <= 0.0 || depth <= 0.0) {
+        return screen_color;
     }
-
-    var light_visibility = 0.0;
-    if (total_weight > 0.0) {
-        light_visibility = total_light / total_weight;
-    }
-
-    // Store horizontal visibility in the alpha channel for the next pass.
-    // We keep the original color in rgb to reconstruct it later.
-    return vec4<f32>(screen_color.rgb, light_visibility);
-
-#else
-    // --- Vertical Pass ---
-    // This pass reads the horizontally blurred light visibility and blurs it vertically.
-    for (var i = -kernel_radius; i <= kernel_radius; i = i + kernel_step) {
-        let offset = vec2<f32>(jitter.x, f32(i) + jitter.y);
-        let sample_uv = in.uv + offset * pixel_size;
-        let sample_data = textureSample(screen_texture, texture_sampler, sample_uv);
-
-        // The alpha channel now contains the horizontally-blurred light visibility.
-        let horizontal_light = sample_data.a;
-
-        let dist = abs(f32(i));
-        let weight = exp(-(dist * dist) / (2.0 * sigma * sigma));
-
-        total_light += horizontal_light * weight;
-        total_weight += weight;
-    }
-
-    var light_visibility = 0.0;
-    if (total_weight > 0.0) {
-        light_visibility = total_light / total_weight;
-    }
-
-    // If the original pixel is a light source, it should be fully bright.
-    // Otherwise, use the blurred visibility.
-    let final_light_visibility = max(is_light_source(screen_color.rgb), light_visibility);
-
-    let final_brightness = mix(
-        settings.bg_light_level,
+    let darkness = clamp(
+        settings.depth_ramp_strength * smoothstep(0.0, settings.depth_ramp, depth)
+            + max(depth - settings.depth_ramp, 0.0) * settings.depth_strength_per_unit,
+        0.0,
         1.0,
-        final_light_visibility
     );
+    if (darkness <= 0.0001) {
+        return screen_color;
+    }
 
-    // Reconstruct the original color from the G and B channels passed from the first pass
-    // and apply the final combined brightness.
-    let final_color = screen_color.rgb * final_brightness;
+    // Baked light and the player's backlight each lift a share of the darkness. The backlight
+    // fades from its very center, so it shows no flat bright disk.
+    let t = min(distance(world, settings.player_light_center) / settings.player_light_radius, 1.0);
+    let backlight = settings.player_light_strength * pow(1.0 - t, settings.player_light_falloff);
+    let overlay = darkness * (1.0 - baked_light(world)) * (1.0 - backlight);
 
-    return vec4<f32>(final_color, screen_color.a);
-
-#endif
+    // Dithering hides the banding of smooth darkness in 8-bit color.
+    let dither = (interleaved_gradient_noise(pixel) - 0.5) * step(0.0001, overlay) * mix(0.35, 1.0, overlay) / 255.0;
+    return vec4<f32>(screen_color.rgb * clamp(1.0 - overlay + dither, 0.0, 1.0), screen_color.a);
 }

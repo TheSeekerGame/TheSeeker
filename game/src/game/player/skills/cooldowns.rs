@@ -13,11 +13,25 @@ pub struct CooldownEntry {
     pub mode: CooldownMode,
 }
 
+impl CooldownEntry {
+    /// Advances one tick and returns how much of the cooldown elapsed: rate-based
+    /// cooldowns speed up with live cooldown reduction, snapshot cooldowns count one per tick.
+    fn tick(&mut self, cdr: f32) -> f32 {
+        let before = self.remaining;
+        let decrement = match self.mode {
+            CooldownMode::RateBased => cdr,
+            CooldownMode::SnapshotBased => 1.0,
+        };
+        self.remaining = (self.remaining - decrement).max(0.0);
+        (before - self.remaining).max(0.0)
+    }
+}
+
 #[derive(Resource, Default)]
 pub struct Cooldowns {
     // Keyed by (entity, skill)
     map: HashMap<(Entity, SkillId), CooldownEntry>,
-    // Natural tick-based reduction for each cooldown during the last tick_cooldowns pass
+    /// How much each cooldown elapsed in the last tick (Frenzied Attack extends it).
     pub(crate) tick_deltas: HashMap<(Entity, SkillId), f32>,
 }
 
@@ -35,18 +49,19 @@ impl Cooldowns {
         skill: SkillId,
         now_tick: u64,
     ) -> bool {
-        if let Some(entry) = self.map.get(&(entity, skill)) {
-            let elapsed = now_tick.saturating_sub(entry.started_at_tick) as u32;
-            if elapsed < entry.min_ticks {
-                return false;
-            }
-            if elapsed >= entry.max_ticks {
-                return true;
-            }
-            entry.remaining <= 0.0
-        } else {
-            true
+        let Some(entry) = self.map.get(&(entity, skill)) else {
+            return true;
+        };
+
+        let elapsed = now_tick.saturating_sub(entry.started_at_tick) as u32;
+        if elapsed < entry.min_ticks {
+            return false;
         }
+        if elapsed >= entry.max_ticks {
+            return true;
+        }
+
+        entry.remaining <= 0.0
     }
 
     /// Start or restart a cooldown for `skill` on `entity` using the provided spec.
@@ -79,19 +94,23 @@ impl Cooldowns {
 
     /// Reduce all cooldowns for `entity` by a number of ticks.
     pub fn reduce_all(&mut self, entity: Entity, delta_ticks: f32) {
-        for ((e, _), entry) in self.map.iter_mut() {
-            if *e == entity {
-                entry.remaining = (entry.remaining - delta_ticks).max(0.0);
-            }
+        for (_, entry) in self
+            .map
+            .iter_mut()
+            .filter(|(key, _)| key.0 == entity)
+        {
+            entry.remaining = (entry.remaining - delta_ticks).max(0.0);
         }
     }
 
     /// Set all cooldowns for `entity` to ready.
     pub fn reset_all(&mut self, entity: Entity) {
-        for ((e, _), entry) in self.map.iter_mut() {
-            if *e == entity {
-                entry.remaining = 0.0;
-            }
+        for (_, entry) in self
+            .map
+            .iter_mut()
+            .filter(|(key, _)| key.0 == entity)
+        {
+            entry.remaining = 0.0;
         }
     }
 
@@ -106,52 +125,22 @@ impl Cooldowns {
             entry.remaining = (entry.remaining - delta_ticks).max(0.0);
         }
     }
-
-    /// Get the natural tick-based delta recorded for this entity+skill in the last pass
-    pub fn get_tick_delta(&self, entity: Entity, skill: SkillId) -> f32 {
-        self.tick_deltas
-            .get(&(entity, skill))
-            .copied()
-            .unwrap_or(0.0)
-    }
 }
 
 /// Tick cooldowns each game tick. RateBased uses live CDR; SnapshotBased ignores CDR after start.
 pub fn tick_cooldowns(
     mut cooldowns: ResMut<Cooldowns>,
     query: Query<
-        (
-            Entity,
-            Option<&crate::game::player::PlayerStatMod>,
-        ),
+        (Entity, Option<&crate::game::player::PlayerStatMod>),
         With<crate::game::player::Player>,
     >,
-    _time: Res<theseeker_engine::time::GameTime>,
 ) {
-    let dt_ticks = 1.0; // one tick per GameTickUpdate
-                        // Clear last tick deltas at the start of processing
+    let cooldowns: &mut Cooldowns = &mut cooldowns;
     cooldowns.tick_deltas.clear();
-    for (entity, stat_mod) in query.iter() {
-        let cdr = stat_mod.map(|s| s.cdr).unwrap_or(1.0);
-        // Iterate entries we own and record natural delta per-entry
-        // Note: collect keys to avoid borrow issues while mutating
-        let keys: Vec<(Entity, SkillId)> = cooldowns
-            .map
-            .keys()
-            .filter(|(e, _)| *e == entity)
-            .copied()
-            .collect();
-        for (e, skill) in keys {
-            if let Some(entry) = cooldowns.map.get_mut(&(e, skill)) {
-                let before = entry.remaining;
-                let decrement = match entry.mode {
-                    CooldownMode::RateBased => cdr * dt_ticks,
-                    CooldownMode::SnapshotBased => dt_ticks,
-                };
-                entry.remaining = (entry.remaining - decrement).max(0.0);
-                let actual = (before - entry.remaining).max(0.0);
-                cooldowns.tick_deltas.insert((e, skill), actual);
-            }
+    for (entity, stat_mod) in &query {
+        let cdr = stat_mod.map_or(1.0, |stat_mod| stat_mod.cdr);
+        for (&key, entry) in cooldowns.map.iter_mut().filter(|((owner, _), _)| *owner == entity) {
+            cooldowns.tick_deltas.insert(key, entry.tick(cdr));
         }
     }
 }

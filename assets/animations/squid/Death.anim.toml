@@ -1,0 +1,23 @@
+[asset]
+key = "anim.squid.Death"
+image = "animations/squid/Death__r1c4__32x32.png"
+
+atlas_asset_key = "anim.squid.Death.sprite"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 4
+frame_start = 1
+
+# Flip with facing slots
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = false
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = true

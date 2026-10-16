@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.Spinner"
+image = "animations/player/skills/SpinnerSheet__r1c20__24x24.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"
@@ -5,6 +9,30 @@ ticks_per_frame = 8
 frame_min = 1
 frame_max = 20
 frame_start = 1
+
+[[events]]
+on = { frame_enter = 4 }
+emit = "damage_pulse"
+
+[[events]]
+on = { frame_enter = 6 }
+emit = "damage_pulse"
+
+[[events]]
+on = { frame_enter = 8 }
+emit = "damage_pulse"
+
+[[events]]
+on = { frame_enter = 10 }
+emit = "damage_pulse"
+
+[[events]]
+on = { frame_enter = 12 }
+emit = "damage_pulse"
+
+[[events]]
+on = { frame_enter = 14 }
+emit = "damage_pulse"
 
 # SLOT SWITCHES
 [[script]]

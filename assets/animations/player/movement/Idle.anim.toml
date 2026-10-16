@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.Idle"
+image = "animations/player/movement/IdleSheet__r2c12__96x96.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

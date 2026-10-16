@@ -1,16 +1,17 @@
+use crate::game::player::foreground::{ActionMut, ActionTag};
 use bevy::prelude::*;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::LinearVelocity;
 use theseeker_engine::script::ScriptPlayer;
-use theseeker_engine::time::{GameTickUpdate, GameTime};
+use theseeker_engine::time::GameTickUpdate;
 
 use crate::game::gentstate::Facing;
-use crate::game::player::states::{transition_action, Dashing, Falling, Ready};
+use crate::game::player::player_anim::set_direction_slots;
 use crate::game::player::skills::types::DASH_METADATA;
+use crate::game::player::states::{Dashing, Falling};
 use crate::game::player::HitFreezeTime;
 use crate::game::player::{Player, PlayerStateSet};
-use crate::game::player::player_anim::set_direction_slots;
 
 pub struct DashingStatePlugin;
 
@@ -23,16 +24,14 @@ impl Plugin for DashingStatePlugin {
                 dashing_update_system,
             )
                 .chain()
-                .run_if(any_with_component::<Dashing>)
-                .in_set(PlayerStateSet::Behavior),
+                .in_set(PlayerStateSet::Behavior)
+                .in_set(crate::game::player::PlayerBehaviorSet::Execution),
         );
     }
 }
 
-// Dash tuning – per-tick displacements (units per tick), not px/s
-// Durations are owned by the dash skill; constants kept for reference
-pub(crate) const DASH_VELOCITY: f32 = 4.167; // ~400 px/s at 96 Hz
-// Cooldown tuning lives in `skills::types::DASH_METADATA`.
+/// Horizontal dash displacement in pixels per tick. Duration comes from `DASH_METADATA`.
+pub(crate) const DASH_VELOCITY: f32 = 4.167;
 
 // System that runs when entering Dashing state
 fn dashing_enter_system(
@@ -40,59 +39,91 @@ fn dashing_enter_system(
     mut query: Query<
         (
             Entity,
-            &Dashing,
+            ActionMut<Dashing>,
             &Facing,
             &mut LinearVelocity,
             &Gent,
             Option<&HitFreezeTime>,
             Option<&mut Falling>,
         ),
-        (With<Player>, Added<Dashing>),
+        (With<Player>, Added<ActionTag<Dashing>>),
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>>,
 ) {
     for (
         entity,
-        dashing,
+        mut dashing,
         facing,
         mut velocity,
         gent,
         hit_freeze,
-        mut maybe_falling,
+        maybe_falling,
     ) in query.iter_mut()
     {
-        // Seed velocity; use stored dash direction if provided, otherwise fallback to facing
-        let dir = if dashing.dir.abs() > 0.0 {
-            dashing.dir.signum()
-        } else {
-            facing.direction()
-        };
-        velocity.0.x = dir * DASH_VELOCITY * dashing.speed_mod;
-        velocity.0.y = 0.0;
-
-        // Re-apply hit freeze if present
-        if let Some(hit_freeze) = hit_freeze {
-            if hit_freeze.0 > 0 {
-                commands.entity(entity).insert(HitFreezeTime(
-                    hit_freeze.0,
-                    hit_freeze.1,
-                ));
-            }
-        }
-
-        // Reset falling curve so that post-dash falling starts from the beginning
-        if let Some(ref mut falling) = maybe_falling {
-            falling.fall_ticks = 0;
-            falling.wall_slide = None;
-        }
-
-        // Play dash animation
-        if let Ok(mut script_player) = gfx_query.get_mut(gent.e_gfx) {
-            // Ensure direction slots reflect current Facing before playing a key
-            set_direction_slots(&mut script_player, facing);
-            script_player.play_key(DASH_METADATA.animation_key);
-        }
+        apply_dash_velocity(&mut velocity, &dashing, facing);
+        reinsert_hit_freeze_if_active(&mut commands, entity, hit_freeze);
+        reset_falling_curve(maybe_falling);
+        play_dash_animation(&mut gfx_query, gent, facing, dashing.execution_mut());
     }
+}
+
+fn dash_direction(dashing: &Dashing, facing: &Facing) -> f32 {
+    if dashing.dir.abs() > 0.0 {
+        return dashing.dir.signum();
+    }
+
+    facing.direction()
+}
+
+fn apply_dash_velocity(
+    velocity: &mut LinearVelocity,
+    dashing: &Dashing,
+    facing: &Facing,
+) {
+    let dir = dash_direction(dashing, facing);
+    velocity.0.x = dir * DASH_VELOCITY * dashing.speed_mod;
+    velocity.0.y = 0.0;
+}
+
+fn reinsert_hit_freeze_if_active(
+    commands: &mut Commands,
+    entity: Entity,
+    hit_freeze: Option<&HitFreezeTime>,
+) {
+    let Some(hit_freeze) = hit_freeze else {
+        return;
+    };
+    if hit_freeze.0 == 0 {
+        return;
+    }
+
+    commands.entity(entity).insert(HitFreezeTime(
+        hit_freeze.0,
+        hit_freeze.1,
+    ));
+}
+
+fn reset_falling_curve(maybe_falling: Option<Mut<'_, Falling>>) {
+    let Some(mut falling) = maybe_falling else {
+        return;
+    };
+
+    falling.fall_ticks = 0;
+    falling.wall_slide = None;
+}
+
+fn play_dash_animation(
+    gfx_query: &mut Query<&mut ScriptPlayer<SpriteAnimation>>,
+    gent: &Gent,
+    facing: &Facing,
+    execution: &mut crate::game::player::foreground::ForegroundAction,
+) {
+    let Ok(mut script_player) = gfx_query.get_mut(gent.e_gfx) else {
+        return;
+    };
+
+    set_direction_slots(&mut script_player, facing);
+    execution.play(&mut script_player, DASH_METADATA.animation_key);
 }
 
 // System that updates dashing state each tick
@@ -101,55 +132,37 @@ fn dashing_update_system(
     mut query: Query<
         (
             Entity,
-            &mut Dashing,
+            ActionMut<Dashing>,
             &mut LinearVelocity,
             &Facing,
         ),
         (
             With<Player>,
-            With<crate::game::player::Dashing>,
+            With<ActionTag<crate::game::player::Dashing>>,
         ),
     >,
-    time: Res<GameTime>,
 ) {
     for (entity, mut dashing, mut velocity, facing) in query.iter_mut() {
-        // Advance lifetime counter (ticks at 96 Hz)
         dashing.tick = dashing.tick.saturating_add(1);
-        // Maintain dash velocity every frame to override locomotion states (applying speed modifier)
-        if !dashing.hit {
-            let dir = if dashing.dir.abs() > 0.0 {
-                dashing.dir.signum()
-            } else {
-                facing.direction()
-            };
-            velocity.0.x = dir * DASH_VELOCITY * dashing.speed_mod;
-            velocity.0.y = 0.0;
+
+        apply_dash_velocity(&mut velocity, &dashing, facing);
+
+        if dashing.tick >= dashing.max_ticks {
+            finish_dash(&mut commands, entity, &mut velocity, dashing.execution().id);
         }
 
-        // Increment duration by one tick (duration is seconds-like only for FX)
-        dashing.duration += 1.0 / time.hz as f32;
-
-        // Ground impact dash strike is handled by collision system to avoid duplication
-
-        // End when tick >= max_ticks
-        if dashing.tick >= dashing.max_ticks && !dashing.hit {
-            // Zero velocity on exit before handing control back
-            velocity.0 = Vec2::ZERO;
-            end_dash(&mut commands, entity);
-            // No forced locomotion transitions; locomotion resumes next tick
-        }
-
-        // Cancel dash if horizontal movement is stopped by collision
         if velocity.0.x.abs() < 0.01 {
-            // Exit dash early and zero velocity to avoid carry-over
-            velocity.0 = Vec2::ZERO;
-            end_dash(&mut commands, entity);
+            finish_dash(&mut commands, entity, &mut velocity, dashing.execution().id);
         }
     }
 }
 
-fn end_dash(commands: &mut Commands, entity: Entity) {
-    transition_action(commands, entity, Ready);
+fn finish_dash(
+    commands: &mut Commands,
+    entity: Entity,
+    velocity: &mut LinearVelocity,
+    execution: u64,
+) {
+    velocity.0 = Vec2::ZERO;
+    crate::game::player::foreground::finish_action(commands, entity, execution);
 }
-
-// Dash strike trigger centralized in player_collision

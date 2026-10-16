@@ -1,5 +1,5 @@
 use bevy::prelude::*;
-use bevy::render::view::RenderLayers;
+use bevy::camera::visibility::RenderLayers;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::{Gent, TransformGfxFromGent};
 use theseeker_engine::physics::{groups, Collider};
@@ -8,6 +8,7 @@ use theseeker_engine::time::GameTickUpdate;
 
 use crate::game::combat::damage_source::DamageSource;
 use crate::game::combat::Stealthed;
+use crate::levelgen::foliage::FoliageImpulseEvent;
 use crate::StateDespawnMarker;
 
 /// Marker for the mine logic entity
@@ -38,7 +39,7 @@ impl Plugin for ExplosiveMinePlugin {
             GameTickUpdate,
             (
                 mine_armed_tick
-                    .before(bevy::transform::TransformSystem::TransformPropagate)
+                    .before(bevy::transform::TransformSystems::Propagate)
                     .before(crate::game::combat::damage_source::determine_damage_targets),
                 mine_exploding_tick,
             ).chain(),
@@ -54,7 +55,7 @@ pub fn spawn_mine(
     _facing_dir: f32,
 ) {
     // Render above the player: player gent z is ~15e-6; use a higher z
-    let base_z = 17.0 * 0.000001;
+    let base_z = 17.0 * 0.000_001;
     let gfx = commands
         .spawn((
             MineGfx,
@@ -126,24 +127,12 @@ fn mine_armed_tick(
         With<crate::game::effects::stealthed::StealthEffect>,
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<MineGfx>>,
+    mut foliage_impulses: MessageWriter<FoliageImpulseEvent>,
 ) {
     for (entity, mut xf, tf, armed, gent) in query.iter_mut() {
         let pos = tf.translation();
-        // Check if any enemy within trigger radius
-        let mut should_explode = false;
-        // Transform-based proximity scan (cheap and robust)
-        for e in enemy_query.iter() {
-            if let Ok(target_tf) = enemy_tf.get(e) {
-                let d2 = target_tf
-                    .translation()
-                    .truncate()
-                    .distance_squared(pos.truncate());
-                if d2 <= TRIGGER_RADIUS * TRIGGER_RADIUS {
-                    should_explode = true;
-                    break;
-                }
-            }
-        }
+        let should_explode =
+            mine_has_trigger_target(pos.truncate(), &enemy_query, &enemy_tf);
 
         if should_explode {
             // Switch to exploding state and play explosion animation
@@ -152,25 +141,91 @@ fn mine_armed_tick(
                 ticks_left: EXPLOSION_TICKS,
             });
             // Place explosion behind player but in front of enemies
-            xf.translation.z = 14.0 * 0.000001;
-            if let Ok(mut anim) = gfx_query.get_mut(gent.e_gfx) {
-                anim.play_key("anim.player.MineExplosion");
-            }
+            xf.translation.z = 14.0 * 0.000_001;
+            play_mine_explosion_animation(gent, &mut gfx_query);
             // Spawn AoE damage only for 1 tick, marking stealthed if owner is currently stealthed
-            let ds = DamageSource::new(1, armed.owner, EXPLOSION_DAMAGE)
-                .with_max_targets(64);
-            let mut builder = commands.spawn((
-                ds,
-                Collider::ball(EXPLOSION_RADIUS),
-                groups::player_attack(),
-                Transform::from_translation(pos),
-                GlobalTransform::from_translation(pos),
-                StateDespawnMarker,
+            spawn_mine_explosion_damage(
+                &mut commands,
+                &owner_stealth,
+                armed.owner,
+                pos,
+            );
+            foliage_impulses.write(FoliageImpulseEvent::instant(
+                pos.truncate(),
+                EXPLOSION_RADIUS,
+                4.0,
             ));
-            if owner_stealth.get(armed.owner).is_ok() {
-                builder.insert(Stealthed);
-            }
         }
+    }
+}
+
+fn mine_has_trigger_target(
+    mine_pos: Vec2,
+    enemy_query: &Query<
+        Entity,
+        Or<(
+            With<crate::game::enemy::Enemy>,
+            With<crate::game::player::spawns::amplified_bell::Bell>,
+        )>,
+    >,
+    enemy_tf: &Query<&GlobalTransform>,
+) -> bool {
+    enemy_query
+        .iter()
+        .any(|enemy| mine_target_in_trigger_radius(enemy, mine_pos, enemy_tf))
+}
+
+fn mine_target_in_trigger_radius(
+    enemy: Entity,
+    mine_pos: Vec2,
+    enemy_tf: &Query<&GlobalTransform>,
+) -> bool {
+    let Ok(target_tf) = enemy_tf.get(enemy) else {
+        return false;
+    };
+
+    let d2 = target_tf
+        .translation()
+        .truncate()
+        .distance_squared(mine_pos);
+    d2 <= TRIGGER_RADIUS * TRIGGER_RADIUS
+}
+
+fn play_mine_explosion_animation(
+    gent: &Gent,
+    gfx_query: &mut Query<&mut ScriptPlayer<SpriteAnimation>, With<MineGfx>>,
+) {
+    let Ok(mut anim) = gfx_query.get_mut(gent.e_gfx) else {
+        return;
+    };
+
+    anim.play_key("anim.player.MineExplosion");
+}
+
+fn spawn_mine_explosion_damage(
+    commands: &mut Commands,
+    owner_stealth: &Query<
+        (),
+        With<crate::game::effects::stealthed::StealthEffect>,
+    >,
+    owner: Entity,
+    pos: Vec3,
+) {
+    let ds =
+        DamageSource::new(1, owner, EXPLOSION_DAMAGE).with_max_targets(64);
+    let damage_entity = commands
+        .spawn((
+            ds,
+            Collider::ball(EXPLOSION_RADIUS),
+            groups::player_attack(),
+            Transform::from_translation(pos),
+            GlobalTransform::from_translation(pos),
+            StateDespawnMarker,
+        ))
+        .id();
+
+    if owner_stealth.get(owner).is_ok() {
+        commands.entity(damage_entity).insert(Stealthed);
     }
 }
 

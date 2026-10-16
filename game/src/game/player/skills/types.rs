@@ -1,10 +1,10 @@
-// use bevy::prelude::*; // not needed here
-
-use crate::game::player::weapon::{PlayerMeleeWeapon, PlayerRangedWeapon};
+use crate::game::player::material_inventory::CraftMaterial;
+use crate::game::player::weapon::PlayerMeleeWeapon;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum SkillId {
     Attack,
+    BowAttack,
     Dash,
     DashStrike,
     Whirl,
@@ -15,16 +15,13 @@ pub enum SkillId {
     Spinner,
     ExplosiveMine,
     IceNova,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum Variant {
-    // For Attack
-    Forward,
-    Up,
-    Down,
-    // For Dash
-    Horizontal,
+    QuarkPylon,
+    Spit,
+    RedBerry,
+    BlueBerry,
+    MossBerry,
+    PortableTent,
+    TetherNode,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -32,7 +29,10 @@ pub enum CooldownMode {
     /// Tick down using current CDR each tick (affected by mid-cooldown changes)
     RateBased,
     /// Snapshot duration at start; tick down by 1 per tick
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "Snapshot cooldowns are supported by the skill data model even when no active skill selects them."
+    )]
     SnapshotBased,
 }
 
@@ -44,145 +44,13 @@ pub struct CooldownSpec {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct ActiveWindowSpec {
-    pub duration_ticks: u32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-#[repr(u8)]
-pub enum SkillWeaponKind {
-    Sword = 0,
-    Hammer = 1,
-    Bow = 2,
-}
-
-impl SkillWeaponKind {
-    #[allow(dead_code)]
-    pub const ALL: [SkillWeaponKind; 3] = [
-        SkillWeaponKind::Sword,
-        SkillWeaponKind::Hammer,
-        SkillWeaponKind::Bow,
-    ];
-
-    pub const fn as_index(self) -> usize {
-        self as usize
-    }
-}
-
-impl From<PlayerMeleeWeapon> for SkillWeaponKind {
-    fn from(value: PlayerMeleeWeapon) -> Self {
-        match value {
-            PlayerMeleeWeapon::Sword => SkillWeaponKind::Sword,
-            PlayerMeleeWeapon::Hammer => SkillWeaponKind::Hammer,
-        }
-    }
-}
-
-impl From<PlayerRangedWeapon> for SkillWeaponKind {
-    fn from(value: PlayerRangedWeapon) -> Self {
-        match value {
-            PlayerRangedWeapon::Bow => SkillWeaponKind::Bow,
-        }
-    }
-}
-
-impl Variant {
-    #[allow(dead_code)]
-    pub const ATTACK_VARIANTS: [Variant; 3] = [
-        Variant::Forward,
-        Variant::Up,
-        Variant::Down,
-    ];
-
-    pub fn attack_index(self) -> Option<usize> {
-        match self {
-            Variant::Forward => Some(0),
-            Variant::Up => Some(1),
-            Variant::Down => Some(2),
-            _ => None,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AttackVariantMetadata {
-    pub active_window: ActiveWindowSpec,
-    pub state_duration_ticks: u32,
-    pub cooldown: CooldownSpec,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AttackAnimationMetadata {
-    pub idle: &'static str,
-    pub run: &'static str,
-    pub air: &'static str,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct AttackWeaponMetadata {
-    pub weapon: SkillWeaponKind,
-    pub variants: [AttackVariantMetadata; 3],
-    pub animations: AttackAnimationMetadata,
-}
-
-pub fn attack_variant_metadata(
-    weapon: SkillWeaponKind,
-    variant: Variant,
-) -> &'static AttackVariantMetadata {
-    let weapon_index = weapon.as_index();
-    let variant_index = variant.attack_index().unwrap_or(0);
-    debug_assert!(
-        variant_index
-            < super::attack::ATTACK_METADATA[weapon_index]
-                .variants
-                .len()
-    );
-    &super::attack::ATTACK_METADATA[weapon_index].variants[variant_index]
-}
-
-pub fn attack_animation_metadata(
-    weapon: SkillWeaponKind,
-) -> &'static AttackAnimationMetadata {
-    &super::attack::ATTACK_METADATA[weapon.as_index()].animations
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DashMetadata {
     pub duration_ticks: u32,
     pub cooldown: CooldownSpec,
     pub animation_key: &'static str,
-    pub overrides_locomotion: bool,
 }
 
 pub(crate) use super::dash::DASH_METADATA;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DashStrikeVariantMetadata {
-    pub state_duration_ticks: u32,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct DashStrikeMetadata {
-    pub cooldown: CooldownSpec,
-    pub animation_key: &'static str,
-    pub variants: [DashStrikeVariantMetadata; 3],
-}
-
-pub fn dash_strike_metadata() -> &'static DashStrikeMetadata {
-    &super::dash_strike::DASH_STRIKE_METADATA
-}
-
-pub fn dash_strike_variant_metadata(
-    variant: Variant,
-) -> &'static DashStrikeVariantMetadata {
-    let index = match variant {
-        Variant::Forward => 0,
-        Variant::Up => 1,
-        Variant::Down => 2,
-        Variant::Horizontal => 0,
-    };
-    &super::dash_strike::DASH_STRIKE_METADATA.variants[index]
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct WhirlMetadata {
@@ -190,15 +58,10 @@ pub struct WhirlMetadata {
     pub min_energy_to_start: f32,
     pub drain_per_second: f32,
     pub regen_per_second: f32,
-    pub animations: [&'static str; 3],
 }
 
 pub fn whirl_metadata() -> &'static WhirlMetadata {
     &super::whirl::WHIRL_METADATA
-}
-
-pub fn whirl_animation_key(kind: SkillWeaponKind) -> &'static str {
-    &whirl_metadata().animations[kind.as_index()]
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -239,6 +102,17 @@ pub fn ice_nova_metadata() -> &'static IceNovaMetadata {
     &super::ice_nova::ICE_NOVA_METADATA
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct QuarkPylonMetadata {
+    pub cooldown: CooldownSpec,
+    pub lifetime_ticks: u32,
+    pub pulse_interval_ticks: u32,
+}
+
+pub fn quark_pylon_metadata() -> &'static QuarkPylonMetadata {
+    &super::quark_pylon::QUARK_PYLON_METADATA
+}
+
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct StealthMetadata {
     pub cooldown: CooldownSpec,
@@ -250,9 +124,7 @@ pub fn stealth_metadata() -> &'static StealthMetadata {
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct ExplosiveMineMetadata {
-    pub max_energy: f32,
-    pub chunk_cost: f32,
-    pub regen_per_tick: f32,
+    pub cooldown: CooldownSpec,
 }
 
 pub fn explosive_mine_metadata() -> &'static ExplosiveMineMetadata {
@@ -271,18 +143,178 @@ pub fn flicker_strike_metadata() -> &'static FlickerStrikeMetadata {
     &super::flicker_strike::FLICKER_STRIKE_METADATA
 }
 
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub enum ConsumableEffect {
+    Regeneration {
+        total_heal: u32,
+        duration_ticks: u32,
+    },
+    CooldownRateMultiplier {
+        multiplier: f32,
+        duration_ticks: u32,
+    },
+    DamageMultiplier {
+        multiplier: f32,
+        duration_ticks: u32,
+    },
+}
+
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct ConsumableMetadata {
+    pub material: CraftMaterial,
+    pub effect: ConsumableEffect,
+    pub cooldown: CooldownSpec,
+}
+
+pub fn consumable_metadata(skill: SkillId) -> Option<&'static ConsumableMetadata> {
+    match skill {
+        SkillId::RedBerry => Some(&super::consumables::RED_BERRY_METADATA),
+        SkillId::BlueBerry => Some(&super::consumables::BLUE_BERRY_METADATA),
+        SkillId::MossBerry => Some(&super::consumables::MOSS_BERRY_METADATA),
+        _ => None,
+    }
+}
+
+struct SkillDefinition {
+    name: &'static str,
+    description: &'static str,
+    icon_path: &'static str,
+}
+
 impl SkillId {
+    fn definition(self) -> SkillDefinition {
+        let (name, description, icon_path) = match self {
+            Self::Attack => ("Basic Attack",
+                "Strike with your melee weapon.",
+                "ui/game/AttackSkillIcon.png"),
+            Self::BowAttack => ("Bow Attack",
+                "Loose an arrow from your bow.",
+                "ui/game/BowAttackSkillIcon.png"),
+            Self::Dash => ("Dash",
+                "Slip past danger in a burst of speed.",
+                "ui/game/DashSkillIcon.png"),
+            Self::DashStrike => ("Dash Strike",
+                "Dive down through foes and burst on landing.",
+                "ui/game/DashStrike.png"),
+            Self::Whirl => ("Whirling Strike",
+                "Spin, striking everything around you.",
+                "ui/game/WhirlSkillIcon.png"),
+            Self::Stealth => ("Stealth",
+                "Vanish from sight. Striking from hiding heals 20% health.",
+                "ui/game/StealthSkillIcon.png"),
+            Self::BurningDash => ("Burning Dash",
+                "Dash aflame through foes, burning health while active.",
+                "ui/game/BurningDashSkillIcon.png"),
+            Self::FlickerStrike => ("Flicker Strike",
+                "Flicker from foe to foe, draining energy while active.",
+                "ui/game/FlickerStrikeSkillIcon.png"),
+            Self::AmplifiedBell => ("Amplified Bell",
+                "Plant a bell. Strike it to send out shocks.",
+                "ui/game/AmplifiedBellSkillIcon.png"),
+            Self::Spinner => ("Spinner",
+                "Launch a drone that darts out and returns.",
+                "ui/game/SpinnerSkillIcon.png"),
+            Self::ExplosiveMine => ("Explosive Mine",
+                "Plant a mine that bursts when foes draw near.",
+                "ui/game/MineSkillIcon.png"),
+            Self::IceNova => ("Frost Bomb",
+                "A blast that freezes nearby foes solid.",
+                "ui/game/IceNovaSkillIcon.png"),
+            Self::QuarkPylon => ("Quark Pylon",
+                "Drop a pylon. A second one completes the pair.",
+                "ui/game/PylonSkillIcon.png"),
+            Self::Spit => ("Spit",
+                "Take spider form and spit venom at the nearest foe.",
+                "ui/game/SpitSkillIcon.png"),
+            Self::RedBerry => ("Red Berry",
+                "Heal 12 over 1s.",
+                "ui/game/RedBerrySkillIcon.png"),
+            Self::BlueBerry => ("Blue Berry",
+                "x1.33 cooldown speed for 2s.",
+                "ui/game/BlueBerrySkillIcon.png"),
+            Self::MossBerry => ("Moss Berry",
+                "x1.5 damage for 2s.",
+                "ui/game/MossBerrySkillIcon.png"),
+            Self::PortableTent => ("Portable Tent",
+                "Hold to aim, release on solid ground to pitch a shelter.",
+                "ui/game/TentSkillIcon.png"),
+            Self::TetherNode => ("Tether Node",
+                "Hold to aim, release on solid ground to extend the network.",
+                "ui/game/TetherSkillIcon.png"),
+        };
+        SkillDefinition { name, description, icon_path }
+    }
+
     /// Skills that can be triggered instantly without interrupting core state machines.
-    pub fn is_instant(self) -> bool {
-        matches!(
+    pub fn activation_mode(self) -> super::activation::ActivationMode {
+        if matches!(
             self,
             SkillId::Stealth
                 | SkillId::Spinner
                 | SkillId::IceNova
                 | SkillId::ExplosiveMine
                 | SkillId::AmplifiedBell
+                | SkillId::QuarkPylon
+                | SkillId::RedBerry
+                | SkillId::BlueBerry
+                | SkillId::MossBerry
+                | SkillId::PortableTent
+                | SkillId::TetherNode
+        ) { super::activation::ActivationMode::Instant } else { super::activation::ActivationMode::Foreground }
+    }
+
+    pub fn is_instant(self) -> bool { self.activation_mode() == super::activation::ActivationMode::Instant }
+
+    pub fn is_consumable(self) -> bool {
+        matches!(
+            self,
+            SkillId::RedBerry | SkillId::BlueBerry | SkillId::MossBerry
         )
     }
-}
 
-// Removed unused SkillsStatsContext resource
+    pub fn is_stackable(self) -> bool {
+        self.stackable_material().is_some()
+    }
+
+    pub fn stackable_material(self) -> Option<CraftMaterial> {
+        match self {
+            SkillId::RedBerry => Some(CraftMaterial::RedBerry),
+            SkillId::BlueBerry => Some(CraftMaterial::BlueBerry),
+            SkillId::MossBerry => Some(CraftMaterial::MossBerry),
+            SkillId::PortableTent => Some(CraftMaterial::Tent),
+            SkillId::TetherNode => Some(CraftMaterial::Tether),
+            _ => None,
+        }
+    }
+
+    /// The material this skill spends as stock, as bound in the material table.
+    pub fn stock_material(self) -> Option<CraftMaterial> {
+        CraftMaterial::SKILL_STOCK_MATERIALS
+            .into_iter()
+            .find(|material| material.stock_skill() == Some(self))
+    }
+
+    /// Human-readable display name for the skill.
+    pub fn name(self) -> &'static str { self.definition().name }
+
+    /// Gameplay description for the skill (shown in UI tooltips).
+    pub fn description(self) -> &'static str { self.definition().description }
+
+    /// Asset path for the skill's icon image.
+    pub fn icon_path(self) -> &'static str { self.definition().icon_path }
+
+    pub fn icon_path_with_melee_weapon(
+        self,
+        melee_weapon: PlayerMeleeWeapon,
+    ) -> &'static str {
+        match (self, melee_weapon) {
+            (SkillId::Attack, PlayerMeleeWeapon::Hammer) => {
+                "ui/game/HammerAttackSkillIcon.png"
+            },
+            (SkillId::Whirl, PlayerMeleeWeapon::Hammer) => {
+                "ui/game/HammerWhirlSkillIcon.png"
+            },
+            _ => self.icon_path(),
+        }
+    }
+}

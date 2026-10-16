@@ -5,20 +5,6 @@
     "audio.game.Footstep": Files (
         paths: [
             "audio/movement/Step1.flac",
-            "audio/movement/Step2.flac",
-            "audio/movement/Step3.flac",
-            "audio/movement/Step4.flac",
-            "audio/movement/Step5.flac",
-            "audio/movement/Step6.flac",
-            "audio/movement/Step7.flac",
-            "audio/movement/Step8.flac",
-            "audio/movement/Step9.flac",
-            "audio/movement/Step10.flac",
-            "audio/movement/Step11.flac",
-            "audio/movement/Step12.flac",
-            "audio/movement/Step13.flac",
-            "audio/movement/Step14.flac",
-            "audio/movement/Step15.flac",
         ],
     ),
     "audio.game.JumpStart": Files (

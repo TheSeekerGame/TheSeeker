@@ -62,16 +62,10 @@ impl Plugin for SpriteStretchPlugin {
         app.add_systems(
             GameTickUpdate,
             update_sprite_stretch
-                .after(crate::animation::AnimationSet::LoopClear),
+                .after(crate::animation::AnimationSet::Signals),
         );
 
-        // Apply scale to `GlobalTransform` during rendering.
-        // Must run AFTER `transform_gfx_from_gent` to avoid being overwritten.
-        app.add_systems(
-            PostUpdate,
-            apply_sprite_scale_to_global
-                .after(crate::gent::transform_gfx_from_gent),
-        );
+
     }
 }
 
@@ -133,47 +127,37 @@ fn update_sprite_stretch(
     }
 }
 
-/// Applies sprite scale to the entity's global transform
-fn apply_sprite_scale_to_global(
-    mut query: Query<
-        (
-            &SpriteScale,
-            Option<&SpriteStretch>,
-            &mut GlobalTransform,
-        ),
-        With<Sprite>,
-    >,
+pub(crate) fn apply_render_stretch(
+    scale: &SpriteScale,
+    stretch_opt: Option<&SpriteStretch>,
+    global_transform: &mut GlobalTransform,
 ) {
-    for (scale, stretch_opt, mut global_transform) in query.iter_mut() {
-        // Only apply if scale is not default (1.0, 1.0)
-        if (scale.x - 1.0).abs() > 0.001 || (scale.y - 1.0).abs() > 0.001 {
-            // Get the current transform
-            let mut transform = global_transform.compute_transform();
+    let mut transform = global_transform.compute_transform();
 
-            // Store original scale signs to preserve flip states
-            let x_sign = transform.scale.x.signum();
-            let y_sign = transform.scale.y.signum();
+    let x_sign = transform.scale.x.signum();
+    let y_sign = transform.scale.y.signum();
+    transform.scale.x = x_sign * scale.x.abs();
+    transform.scale.y = y_sign * scale.y.abs();
+    transform.scale.z = 1.0;
 
-            // Apply scale while preserving flip
-            transform.scale.x = x_sign * scale.x.abs();
-            transform.scale.y = y_sign * scale.y.abs();
-            transform.scale.z = 1.0; // Keep Z scale at 1.0
+    apply_bottom_stretch_offset(scale, stretch_opt, &mut transform);
+    *global_transform = transform.into();
+}
 
-            // Apply vertical offset for bottom-anchored stretching
-            if let Some(stretch) = stretch_opt {
-                if stretch.anchor == StretchAnchor::Bottom {
-                    // When scaling from center, the bottom edge moves down by (scale_y - 1) * height / 2
-                    // To keep it fixed, we offset upward by that amount
-                    let vertical_offset =
-                        (scale.y - 1.0) * stretch.sprite_height * 0.5;
-                    transform.translation.y += vertical_offset;
-                }
-            }
-
-            // Update the global transform
-            *global_transform = transform.into();
-        }
+fn apply_bottom_stretch_offset(
+    scale: &SpriteScale,
+    stretch_opt: Option<&SpriteStretch>,
+    transform: &mut Transform,
+) {
+    let Some(stretch) = stretch_opt else {
+        return;
+    };
+    if stretch.anchor != StretchAnchor::Bottom {
+        return;
     }
+
+    let vertical_offset = (scale.y - 1.0) * stretch.sprite_height * 0.5;
+    transform.translation.y += vertical_offset;
 }
 
 /// Cubic easing function for smooth animation

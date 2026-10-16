@@ -1,0 +1,42 @@
+schema_version = 2
+id = "bat_small"
+behavior = { kind = "combat", approach = "flying", committed = true }
+actions = { Attack = "bat_dive" }
+spawn_hp = 40
+walk_speed = 0.55
+chase_speed = 1.35
+dmg_melee = 14
+dmg_ranged = 0
+vision_range = 200
+melee_range = 24
+reaction_time = 20
+[setup]
+trap_prey = true
+name = "Bat"
+controller = "flying"
+collider = { half_extents = [3.75, 2.0] }
+spawn_offset = [0.0, 14.0, 0.000014]
+facing = "random_horizontal"
+facing_slots = { right = "DirectionLeft", left = "DirectionRight" }
+needs_line_of_sight = true
+stat_minimums = { vision_range = 160.0, melee_range = 24.0 }
+
+[setup.gfx]
+keys = ["Fly"]
+
+[flying]
+profile = "diving"
+patrol_radius = 180.0
+idle_wait = [0, 96]
+
+[death]
+mode = "death_fall"
+anim_key = "Die"
+decay_key = "Decay"
+
+[anim]
+Fly = "anim.bat_small.Fly"
+Attack = "anim.bat_small.Attack"
+Die = "anim.bat_small.Death"
+Decay = "anim.bat_small.Death"
+Idle = "anim.bat_small.Fly"

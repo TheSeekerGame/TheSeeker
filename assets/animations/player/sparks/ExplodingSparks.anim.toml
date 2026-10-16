@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.ExplodingSparks"
+image = "animations/player/sparks/ExplodingSparksSheet__r1c6__64x64.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

@@ -1,304 +1,267 @@
-/// Bow auto-aim helper.
-///
-/// Behaviour overview:
-/// - Scans left/right each tick and becomes decisive only when exactly one side has a hittable enemy (XOR).
-/// - Applies a short hysteresis lock to avoid flicker at boundaries and a cooldown between direction flips.
-/// - While airborne, can linger for a short time after conditions break to preserve shot intent.
-/// - Opts out entirely during burning dash; resets on stealth boundary changes via `reset_autoaim_on_stealth_change`.
-use crate::game::enemy::Enemy;
-use crate::game::gentstate::Facing;
-use crate::game::player::weapon::CurrentWeapon;
+//! Attack auto-aim: basic ranged attacks turn toward the nearest enemy, and airborne
+//! melee swings turn downward onto an enemy below.
 use bevy::prelude::*;
+use theseeker_engine::physics::Collider;
+use theseeker_engine::time::{GameTickUpdate, GameTime};
 
-// Ranged auto-aim detection range
-const RANGED_AUTO_AIM_RANGE: f32 = 200.0;
-// Minimum ticks between auto-aim direction changes (to prevent rapid flickering)
-const AUTO_AIM_COOLDOWN_TICKS: u16 = 16;
-// Ticks to maintain auto-aim when airborne after conditions break
-const AUTO_AIM_AIRBORNE_LINGER_TICKS: u16 = 48;
+use crate::appstate::AppState;
+use crate::camera::GameplayPixelScale;
+use crate::game::enemy::Enemy;
+use crate::game::gentstate::{Dead, Facing};
+use crate::game::player::{Player, PlayerStateSet};
 
-use super::{states::BurningDashing, Grounded, Player};
+const RANGED_BASIC_ATTACK_FACING_LOCK_TICKS: u64 = 48;
+/// Reach used when the visible area is unknown.
+const FALLBACK_VISIBLE_REACH: f32 = 160.0;
+/// The area below an airborne player that turns a forward swing downward.
+const MELEE_DOWNWARD_REACH: f32 = 48.0;
+const MELEE_DOWNWARD_HALF_WIDTH: f32 = 10.0;
+const MELEE_DOWNWARD_HALF_HEIGHT: f32 = 2.0;
 
-#[derive(Resource, Debug, Clone)]
-pub struct BowAutoAimState {
-    /// True when a single side has clear line-of-sight to an enemy and auto-aim should drive facing
-    pub(crate) decisive: bool,
-    /// Facing chosen by auto-aim when decisive
-    pub(crate) target: Option<Facing>,
-    /// Small hysteresis to prevent flickering when LOS alternates around boundaries
-    pub(crate) lock_ticks: u8,
-    /// Cooldown timer preventing rapid auto-aim direction changes (counts down to 0)
-    pub(crate) cooldown_ticks: u16,
-    /// Airborne linger timer - maintains auto-aim after conditions break while in air (counts down to 0)
-    pub(crate) linger_ticks: u16,
-    /// True when linger has been activated during current airborne session (reset on landing)
-    pub(crate) linger_used: bool,
-    /// The enemy entity that triggered auto-aim (used to check relative position during linger)
-    pub(crate) target_enemy: Option<Entity>,
+pub(super) type LiveEnemies<'w, 's> = Query<
+    'w,
+    's,
+    (&'static GlobalTransform, &'static Collider),
+    (With<Enemy>, Without<Dead>),
+>;
+
+pub(super) struct RangedAutoAimPlugin;
+
+impl Plugin for RangedAutoAimPlugin {
+    fn build(&self, app: &mut App) {
+        app.add_systems(
+            GameTickUpdate,
+            enforce_ranged_attack_facing_lock
+                .in_set(PlayerStateSet::Collisions)
+                .run_if(in_state(AppState::InGame)),
+        );
+    }
 }
 
-impl Default for BowAutoAimState {
-    fn default() -> Self {
+#[derive(Component, Debug, Clone, Copy)]
+pub(super) struct RangedAttackFacingLock {
+    facing: Facing,
+    expires_at_tick: u64,
+}
+
+impl RangedAttackFacingLock {
+    pub(super) fn new(facing: Facing, current_tick: u64) -> Self {
         Self {
-            decisive: false,
-            target: None,
-            lock_ticks: 0,
-            cooldown_ticks: 0,
-            linger_ticks: 0,
-            linger_used: false,
-            target_enemy: None,
+            facing,
+            expires_at_tick: current_tick
+                + RANGED_BASIC_ATTACK_FACING_LOCK_TICKS,
         }
+    }
+
+    pub(super) fn active_facing(self, current_tick: u64) -> Option<Facing> {
+        (current_tick < self.expires_at_tick).then_some(self.facing)
     }
 }
 
-impl BowAutoAimState {
-    /// Returns true if auto-aim should block manual-facing updates.
-    /// Blocks when: decisive, and either (a) we can apply the desired facing now (cooldown 0)
-    /// or (b) the player is already facing the desired target. This avoids "stuck"
-    /// windows where auto-aim wants to flip but is still in cooldown — manual input
-    /// remains responsive in that gap.
-    pub(crate) fn blocks_manual(&self, current: Facing) -> bool {
-        if !self.decisive {
-            return false;
-        }
-        if let Some(target) = &self.target {
-            self.cooldown_ticks == 0 || current == *target
-        } else {
-            false
-        }
+pub(super) fn effective_facing(
+    facing: &Facing,
+    lock: Option<&RangedAttackFacingLock>,
+    current_tick: u64,
+) -> Facing {
+    lock.and_then(|lock| lock.active_facing(current_tick))
+        .unwrap_or(*facing)
+}
+
+pub(super) fn ranged_basic_attack_auto_aim_facing(
+    player_pos: Vec2,
+    fallback_facing: Facing,
+    gameplay_pixel_scale: Option<&GameplayPixelScale>,
+    enemy_query: &LiveEnemies,
+) -> Facing {
+    let horizontal_range = visible_reach(gameplay_pixel_scale);
+    let enemy_aabbs = enemy_query.iter().filter_map(|(transform, collider)| {
+        collider.world_aabb(transform.translation().xy())
+    });
+
+    ranged_basic_attack_auto_aim_facing_from_aabbs(
+        player_pos,
+        fallback_facing,
+        horizontal_range,
+        enemy_aabbs,
+    )
+}
+
+/// Half the visible width: how far the player can see ahead.
+pub(super) fn visible_reach(
+    gameplay_pixel_scale: Option<&GameplayPixelScale>,
+) -> f32 {
+    gameplay_pixel_scale
+        .map(|scale| scale.visible_game_size().x * 0.5)
+        .filter(|range| *range > 0.0)
+        .unwrap_or(FALLBACK_VISIBLE_REACH)
+}
+
+/// Whether an enemy is close below the player, which turns an airborne forward swing
+/// into a downward one.
+pub(super) fn melee_target_below(player_pos: Vec2, enemy_query: &LiveEnemies) -> bool {
+    let min = Vec2::new(
+        player_pos.x - MELEE_DOWNWARD_HALF_WIDTH,
+        player_pos.y - MELEE_DOWNWARD_REACH - MELEE_DOWNWARD_HALF_HEIGHT,
+    );
+    let max = Vec2::new(
+        player_pos.x + MELEE_DOWNWARD_HALF_WIDTH,
+        player_pos.y + MELEE_DOWNWARD_HALF_HEIGHT,
+    );
+    enemy_query
+        .iter()
+        .filter_map(|(transform, collider)| collider.world_aabb(transform.translation().xy()))
+        .any(|aabb| {
+            max.x >= aabb.min.x && min.x <= aabb.max.x && max.y >= aabb.min.y && min.y <= aabb.max.y
+        })
+}
+
+fn ranged_basic_attack_auto_aim_facing_from_aabbs(
+    player_pos: Vec2,
+    fallback_facing: Facing,
+    horizontal_range: f32,
+    enemy_aabbs: impl IntoIterator<Item = Rect>,
+) -> Facing {
+    enemy_aabbs
+        .into_iter()
+        .filter_map(|aabb| {
+            ranged_basic_attack_auto_aim_candidate(
+                player_pos,
+                fallback_facing,
+                horizontal_range,
+                aabb,
+            )
+        })
+        .min_by(|a, b| {
+            a.vertical_distance
+                .total_cmp(&b.vertical_distance)
+                .then_with(|| {
+                    a.horizontal_distance.total_cmp(&b.horizontal_distance)
+                })
+        })
+        .map(|candidate| candidate.facing)
+        .unwrap_or(fallback_facing)
+}
+
+#[derive(Clone, Copy)]
+struct RangedAutoAimCandidate {
+    facing: Facing,
+    vertical_distance: f32,
+    horizontal_distance: f32,
+}
+
+fn ranged_basic_attack_auto_aim_candidate(
+    player_pos: Vec2,
+    fallback_facing: Facing,
+    horizontal_range: f32,
+    enemy_aabb: Rect,
+) -> Option<RangedAutoAimCandidate> {
+    let horizontal_distance = horizontal_gap(player_pos.x, enemy_aabb);
+    if horizontal_distance > horizontal_range {
+        return None;
+    }
+
+    Some(RangedAutoAimCandidate {
+        facing: horizontal_facing_to_aabb(player_pos.x, enemy_aabb)
+            .unwrap_or(fallback_facing),
+        vertical_distance: vertical_gap(player_pos.y, enemy_aabb),
+        horizontal_distance,
+    })
+}
+
+fn horizontal_gap(player_x: f32, aabb: Rect) -> f32 {
+    if player_x < aabb.min.x {
+        aabb.min.x - player_x
+    } else if player_x > aabb.max.x {
+        player_x - aabb.max.x
+    } else {
+        0.0
     }
 }
 
-/// Continuously adjusts facing when the bow is equipped.
-/// Works in all player states (locomotion and skill states).
-/// Chooses the side with an unobstructed enemy within range and applies lock + cooldown.
-/// When airborne, auto-aim can linger for a few ticks after conditions break (see constant).
-pub fn continuous_bow_auto_aim(
+fn vertical_gap(player_y: f32, aabb: Rect) -> f32 {
+    if player_y < aabb.min.y {
+        aabb.min.y - player_y
+    } else if player_y > aabb.max.y {
+        player_y - aabb.max.y
+    } else {
+        0.0
+    }
+}
+
+fn horizontal_facing_to_aabb(player_x: f32, aabb: Rect) -> Option<Facing> {
+    let center_x = (aabb.min.x + aabb.max.x) * 0.5;
+    match center_x.total_cmp(&player_x) {
+        std::cmp::Ordering::Greater => Some(Facing::Right),
+        std::cmp::Ordering::Less => Some(Facing::Left),
+        std::cmp::Ordering::Equal => None,
+    }
+}
+
+fn enforce_ranged_attack_facing_lock(
+    mut commands: Commands,
+    time: Res<GameTime>,
     mut query: Query<
-        (
-            &mut Facing,
-            &Transform,
-            Has<Grounded>,
-            Has<BurningDashing>,
-        ),
+        (Entity, &mut Facing, &RangedAttackFacingLock),
         With<Player>,
     >,
-    _enemy_query: Query<&Transform, With<Enemy>>,
-    weapon: CurrentWeapon,
-    spatial_query: theseeker_engine::physics::PhysicsWorld,
-    mut bow_autoaim_state: ResMut<BowAutoAimState>,
 ) {
-    // Clear auto-aim state if bow is not equipped
-    if !weapon.has_bow_equipped() {
-        bow_autoaim_state.decisive = false;
-        bow_autoaim_state.target = None;
-        bow_autoaim_state.lock_ticks = 0;
-        bow_autoaim_state.cooldown_ticks = 0;
-        bow_autoaim_state.linger_ticks = 0;
-        bow_autoaim_state.linger_used = false;
-        bow_autoaim_state.target_enemy = None;
-        return;
-    }
-
-    // Tick timers once per frame
-    if bow_autoaim_state.cooldown_ticks > 0 {
-        bow_autoaim_state.cooldown_ticks =
-            bow_autoaim_state.cooldown_ticks.saturating_sub(1);
-    }
-
-    if bow_autoaim_state.linger_ticks > 0 {
-        bow_autoaim_state.linger_ticks =
-            bow_autoaim_state.linger_ticks.saturating_sub(1);
-    }
-
-    for (mut facing, transform, is_grounded, is_burning_dashing) in
-        query.iter_mut()
-    {
-        // Skip auto-aim when burning dashing
-        if is_burning_dashing {
-            bow_autoaim_state.decisive = false;
-            bow_autoaim_state.target = None;
-            bow_autoaim_state.lock_ticks = 0;
-            bow_autoaim_state.linger_ticks = 0;
-            bow_autoaim_state.linger_used = false;
-            bow_autoaim_state.target_enemy = None;
+    for (entity, mut facing, lock) in query.iter_mut() {
+        let Some(locked_facing) = lock.active_facing(time.tick()) else {
+            commands.entity(entity).remove::<RangedAttackFacingLock>();
             continue;
-        }
+        };
 
-        let origin = transform.translation.truncate();
-        let max_dist = RANGED_AUTO_AIM_RANGE;
+        *facing = locked_facing;
+    }
+}
 
-        // Check for enemies on both sides and capture entities.
-        // Cast to the right: skip non-enemy hits by excluding and retrying.
-        let mut right_hit = None;
-        let mut exclude: Option<Entity> = None;
-        let mut remaining = 3; // limit retries
-        while remaining > 0 {
-            remaining -= 1;
-            if let Some((hit_e, toi)) = spatial_query.ray_cast(
-                origin,
-                Vec2::X,
-                max_dist,
-                true,
-                theseeker_engine::physics::groups::player_body(),
-                exclude,
-            ) {
-                if _enemy_query.get(hit_e).is_ok() {
-                    right_hit = Some((hit_e, toi));
-                    break;
-                } else {
-                    exclude = Some(hit_e);
-                    continue;
-                }
-            } else {
-                break;
-            }
-        }
-        // Cast to the left with the same skip logic.
-        let mut left_hit = None;
-        let mut exclude_l: Option<Entity> = None;
-        let mut remaining_l = 3;
-        while remaining_l > 0 {
-            remaining_l -= 1;
-            if let Some((hit_e, toi)) = spatial_query.ray_cast(
-                origin,
-                Vec2::NEG_X,
-                max_dist,
-                true,
-                theseeker_engine::physics::groups::player_body(),
-                exclude_l,
-            ) {
-                if _enemy_query.get(hit_e).is_ok() {
-                    left_hit = Some((hit_e, toi));
-                    break;
-                } else {
-                    exclude_l = Some(hit_e);
-                    continue;
-                }
-            } else {
-                break;
-            }
-        }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-        const AUTOAIM_LOCK_TICKS: u8 = 6; // ~62ms at 96Hz - hysteresis to prevent flicker
+    fn aabb(center: Vec2, half_extents: Vec2) -> Rect {
+        theseeker_engine::physics::rect_around(center, half_extents)
+    }
 
-        // Auto-aim triggers when exactly one side has an enemy (XOR condition)
-        if right_hit.is_some() ^ left_hit.is_some() {
-            // Valid auto-aim conditions - clear linger and reset availability
-            bow_autoaim_state.linger_ticks = 0;
-            bow_autoaim_state.linger_used = false; // Reset so linger can be used when conditions break again
+    #[test]
+    fn chooses_vertically_nearest_enemy_within_horizontal_range() {
+        let player_pos = Vec2::ZERO;
+        let facing = ranged_basic_attack_auto_aim_facing_from_aabbs(
+            player_pos,
+            Facing::Right,
+            100.0,
+            [
+                aabb(Vec2::new(20.0, 60.0), Vec2::splat(4.0)),
+                aabb(Vec2::new(-40.0, 8.0), Vec2::splat(4.0)),
+            ],
+        );
 
-            let (desired, enemy_entity) = if let Some((entity, _)) = right_hit {
-                (Facing::Right, entity)
-            } else if let Some((entity, _)) = left_hit {
-                (Facing::Left, entity)
-            } else {
-                unreachable!()
-            };
+        assert_eq!(facing, Facing::Left);
+    }
 
-            // Store the enemy entity for linger position checks
-            bow_autoaim_state.target_enemy = Some(enemy_entity);
+    #[test]
+    fn ignores_enemies_outside_horizontal_range() {
+        let player_pos = Vec2::ZERO;
+        let facing = ranged_basic_attack_auto_aim_facing_from_aabbs(
+            player_pos,
+            Facing::Right,
+            20.0,
+            [aabb(Vec2::new(-40.0, 0.0), Vec2::splat(4.0))],
+        );
 
-            // Check if we should change facing (respecting cooldown)
-            let should_change_facing =
-                if let Some(current_target) = &bow_autoaim_state.target {
-                    // Only change if: different direction AND cooldown expired
-                    *current_target != desired
-                        && bow_autoaim_state.cooldown_ticks == 0
-                } else {
-                    // No previous target, can change immediately
-                    true
-                };
+        assert_eq!(facing, Facing::Right);
+    }
 
-            if should_change_facing {
-                // Apply the facing change and reset cooldown
-                *facing = desired.clone();
-                bow_autoaim_state.cooldown_ticks = AUTO_AIM_COOLDOWN_TICKS;
-            }
+    #[test]
+    fn keeps_fallback_direction_when_enemy_is_centered_on_player() {
+        let player_pos = Vec2::ZERO;
+        let facing = ranged_basic_attack_auto_aim_facing_from_aabbs(
+            player_pos,
+            Facing::Left,
+            20.0,
+            [aabb(Vec2::new(0.0, 4.0), Vec2::splat(4.0))],
+        );
 
-            // Update state (even if we didn't change facing due to cooldown)
-            bow_autoaim_state.decisive = true;
-            bow_autoaim_state.target = Some(desired);
-            bow_autoaim_state.lock_ticks = AUTOAIM_LOCK_TICKS;
-        } else if bow_autoaim_state.lock_ticks > 0 {
-            // Maintain previous target during lock period (hysteresis)
-            bow_autoaim_state.lock_ticks =
-                bow_autoaim_state.lock_ticks.saturating_sub(1);
-            bow_autoaim_state.decisive = true;
-            // Don't reset linger_used here either - lock period is just hysteresis
-            // Apply the locked facing if cooldown allows
-            if let Some(target) = &bow_autoaim_state.target {
-                if bow_autoaim_state.cooldown_ticks == 0 || *facing == *target {
-                    *facing = target.clone();
-                }
-            }
-        } else {
-            // No valid auto-aim conditions (no enemies or enemies on both sides)
-            let is_airborne = !is_grounded;
-
-            // Check if we should start linger
-            // This happens when auto-aim WAS active but now isn't, while airborne
-            let should_start_linger = is_airborne 
-                && bow_autoaim_state.decisive  // Was active
-                && bow_autoaim_state.target.is_some()  // Had a target
-                && !bow_autoaim_state.linger_used  // Haven't used linger this jump
-                && bow_autoaim_state.linger_ticks == 0; // Not currently lingering
-
-            if should_start_linger {
-                // Start linger timer
-                bow_autoaim_state.linger_ticks = AUTO_AIM_AIRBORNE_LINGER_TICKS;
-                bow_autoaim_state.linger_used = true;
-                // Keep decisive true during linger
-                bow_autoaim_state.decisive = true;
-            } else if bow_autoaim_state.linger_ticks > 0 {
-                // Currently lingering - check if we should break linger
-                let should_break_linger = if let Some(enemy_entity) =
-                    bow_autoaim_state.target_enemy
-                {
-                    // Check if player is 2 pixels below the target enemy
-                    if let Ok(enemy_transform) = _enemy_query.get(enemy_entity)
-                    {
-                        let player_y = transform.translation.y;
-                        let enemy_y = enemy_transform.translation.y;
-                        player_y < enemy_y - 2.0 // Break linger if player is 2+ pixels below enemy
-                    } else {
-                        false // Enemy no longer exists, keep lingering
-                    }
-                } else {
-                    false
-                };
-
-                if should_break_linger {
-                    // Break the linger
-                    bow_autoaim_state.linger_ticks = 0;
-                    bow_autoaim_state.decisive = false;
-                    bow_autoaim_state.target = None;
-                    bow_autoaim_state.target_enemy = None;
-                } else {
-                    // Continue lingering - maintain auto-aim
-                    bow_autoaim_state.decisive = true;
-                    // Maintain facing during linger (respecting cooldown)
-                    if let Some(target) = &bow_autoaim_state.target {
-                        if bow_autoaim_state.cooldown_ticks == 0
-                            || *facing == *target
-                        {
-                            *facing = target.clone();
-                        }
-                    }
-                }
-            } else {
-                // No linger and no valid conditions - deactivate auto-aim
-                bow_autoaim_state.decisive = false;
-                bow_autoaim_state.target = None;
-                bow_autoaim_state.target_enemy = None;
-            }
-
-            // Reset linger availability when grounded
-            if is_grounded {
-                bow_autoaim_state.linger_ticks = 0;
-                bow_autoaim_state.linger_used = false;
-                bow_autoaim_state.target_enemy = None;
-            }
-        }
+        assert_eq!(facing, Facing::Left);
     }
 }

@@ -1,4 +1,14 @@
+[asset]
+key = "anim.smallspider.Idle"
+image = "animations/spider/small/tier1/Idle__r1c6__48x48.png"
+
 atlas_asset_key = "anim.smallspider.Idle.sprite"
+
+[playback]
+start = 1
+end = 6
+ticks_per_frame = 8
+mode = "loop"
 
 [settings]
 time_base = "Relative"
@@ -9,12 +19,6 @@ frame_max = 6
 frame_start = 1
 
 # Loop
-[[script]]
-run_at_frame = 6
-action = "SetFrameNext"
-frame_index = 1
-
-# needed for expected flip behavior
 [[script]]
 run_on_slot_enable = "DirectionLeft"
 action = "SetSpriteFlip"

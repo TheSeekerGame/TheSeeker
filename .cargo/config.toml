@@ -1,0 +1,3 @@
+[build]
+# Run Clippy for workspace crates during ordinary Cargo builds.
+rustc-workspace-wrapper = "clippy-driver"

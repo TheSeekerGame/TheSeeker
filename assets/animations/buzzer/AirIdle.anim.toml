@@ -1,0 +1,27 @@
+[asset]
+key = "anim.buzzer.AirIdle"
+image = "animations/buzzer/AirIdle__r1c6__48x48.png"
+
+[playback]
+start = 1
+end = 6
+ticks_per_frame = 8
+mode = "loop"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 6
+frame_start = 1
+
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

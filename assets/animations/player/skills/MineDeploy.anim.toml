@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.MineDeploy"
+image = "animations/player/skills/MineDeploySheet__r1c3__8x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

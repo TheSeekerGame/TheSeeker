@@ -1,12 +1,14 @@
 #import bevy_ui::ui_vertex_output::UiVertexOutput;
 
 @group(1) @binding(0) var<uniform> health: f32;
-@group(1) @binding(1) var<uniform> damage: f32;
+@group(1) @binding(1) var<uniform> trail: f32;
 @group(1) @binding(2) var<uniform> spark: f32;
+@group(1) @binding(3) var<uniform> invulnerable: f32;
 
 // --- Style constants -------------------------------------------------------
 const INNER_COLOR   = vec4(0.0, 0.0, 0.0, 0.5);  // semi-transparent "empty" bar fill
 const HEALTH_COLOR  = vec4(0.635, 0.196, 0.306, 1.0); // red current HP
+const INVULNERABLE_HEALTH_COLOR = vec4(0.62, 0.66, 0.68, 1.0); // silver current HP
 const DAMAGE_COLOR  = vec4(1.0);                     // white damage trail
 const BORDER_COLOR  = vec4(0.0);                     // black thin border
 
@@ -70,11 +72,15 @@ fn fragment(mesh: UiVertexOutput) -> @location(0) vec4<f32> {
         // Only show damage/health inside inner area
         let inner_progress = (uv.x - e.x - BORDER_THICKNESS) / (e.y - e.x - 2.0 * BORDER_THICKNESS);
 
-        if inner_progress >= 0.0 && inner_progress <= damage {
+        if inner_progress >= 0.0 && inner_progress <= trail {
             color = DAMAGE_COLOR;
         }
         if inner_progress >= 0.0 && inner_progress <= health {
-            color = HEALTH_COLOR;
+            color = select(
+                HEALTH_COLOR,
+                INVULNERABLE_HEALTH_COLOR,
+                invulnerable > 0.5
+            );
         }
 
         // Border overlay

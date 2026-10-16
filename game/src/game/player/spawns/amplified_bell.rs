@@ -1,18 +1,19 @@
 use bevy::prelude::*;
-use bevy_rapier2d::prelude::Sensor;
 use std::collections::BTreeMap;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::{Gent, TransformGfxFromGent};
-use theseeker_engine::physics::{groups, Collider};
+use theseeker_engine::physics::{groups, Collider, Sensor};
 use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::time::{GameTickUpdate, GameTime};
 
 use crate::game::combat::damage_source::DamageSource;
 use crate::game::combat::Stealthed;
-use crate::game::gentstate::Facing;
 use crate::game::effects::stealthed::StealthEffect;
+use crate::game::gentstate::Facing;
+use crate::graphics::ripple::{RippleDescriptor, RippleEvent};
+use crate::levelgen::foliage::FoliageImpulseEvent;
 use crate::StateDespawnMarker;
-use bevy::render::view::RenderLayers;
+use bevy::camera::visibility::RenderLayers;
 
 /// Marker identifying the bell gent (logic entity)
 #[derive(Component)]
@@ -62,9 +63,9 @@ impl Plugin for AmplifiedBellPlugin {
                 on_bell_alive_enter,
                 // Spawn rings before transform propagation so GlobalTransform is valid
                 // for the damage query on the same tick. This also guarantees we run
-                // before determine_damage_targets (which is after TransformPropagate).
+                // before determine_damage_targets (which is after Propagate).
                 tick_bell_alive
-                    .before(bevy::transform::TransformSystem::TransformPropagate)
+                    .before(bevy::transform::TransformSystems::Propagate)
                     .before(crate::game::combat::damage_source::determine_damage_targets),
                 tick_bell_ending,
             )
@@ -117,7 +118,7 @@ pub fn spawn_bell(
 ) {
     // Spawn logic entity (gent)
     // Use a Z below enemies (0.000014) and player (0.000015)
-    let base_z = 13.0 * 0.000001;
+    let base_z = 13.0 * 0.000_001;
     let gfx = commands
         .spawn((
             BellGfx,
@@ -223,52 +224,124 @@ fn tick_bell_alive(
             commands.entity(entity).insert(BellEnding {
                 ticks_left: END_ANIM_TICKS,
             });
-            if let Ok((_vis, mut anim)) = gfx_query.get_mut(gent.e_gfx) {
-                anim.play_key("anim.player.AmplifiedBellEnd");
-            }
+            play_bell_end_animation(gent, &mut gfx_query);
             continue;
         }
 
         // Handle visibility during spark
-        if alive.hide_ticks_remaining > 0 {
-            if let Ok((mut vis, _anim)) = gfx_query.get_mut(gent.e_gfx) {
-                *vis = Visibility::Hidden;
-            }
-            alive.hide_ticks_remaining -= 1;
-        } else {
-            if let Ok((mut vis, _anim)) = gfx_query.get_mut(gent.e_gfx) {
-                *vis = Visibility::Visible;
-            }
-        }
+        update_bell_spark_visibility(&mut alive, gent, &mut gfx_query);
 
         // Fire due rings (spawn AoE damage)
         // Drain triggers <= now and aggregate by scheduled tick so multiple hits in
         // the same originating tick produce a single ring with multiplied damage.
-        let mut remaining = Vec::with_capacity(schedule.triggers.len());
-        let mut due_counts: BTreeMap<u64, u32> = BTreeMap::new();
-        for &t in schedule.triggers.iter() {
-            if t <= now {
-                *due_counts.entry(t).or_insert(0) += 1;
-            } else {
-                remaining.push(t);
-            }
-        }
-        schedule.triggers = remaining;
+        let due_counts = drain_due_bell_ring_counts(&mut schedule, now);
+        spawn_due_bell_rings(
+            &mut commands,
+            &stealthed_owner,
+            bell_tf,
+            &alive,
+            due_counts,
+        );
+    }
+}
 
-        if !due_counts.is_empty() {
-            let world_pos = bell_tf.translation();
-            let owner_is_stealthed = stealthed_owner.get(alive.owner).is_ok();
-            for (_scheduled_tick, count) in due_counts.into_iter() {
-                let scaled_damage = RING_DAMAGE * (count as f32);
-                spawn_ring_damage(
-                    &mut commands,
-                    world_pos,
-                    alive.owner,
-                    owner_is_stealthed,
-                    scaled_damage,
-                );
-            }
-        }
+fn play_bell_end_animation(
+    gent: &Gent,
+    gfx_query: &mut Query<
+        (
+            &mut Visibility,
+            &mut ScriptPlayer<SpriteAnimation>,
+        ),
+        With<BellGfx>,
+    >,
+) {
+    let Ok((_vis, mut anim)) = gfx_query.get_mut(gent.e_gfx) else {
+        return;
+    };
+
+    anim.play_key("anim.player.AmplifiedBellEnd");
+}
+
+fn update_bell_spark_visibility(
+    alive: &mut BellAlive,
+    gent: &Gent,
+    gfx_query: &mut Query<
+        (
+            &mut Visibility,
+            &mut ScriptPlayer<SpriteAnimation>,
+        ),
+        With<BellGfx>,
+    >,
+) {
+    let target_visibility = if alive.hide_ticks_remaining > 0 {
+        alive.hide_ticks_remaining -= 1;
+        Visibility::Hidden
+    } else {
+        Visibility::Visible
+    };
+
+    let Ok((mut vis, _anim)) = gfx_query.get_mut(gent.e_gfx) else {
+        return;
+    };
+
+    *vis = target_visibility;
+}
+
+fn drain_due_bell_ring_counts(
+    schedule: &mut BellRingSchedule,
+    now: u64,
+) -> BTreeMap<u64, u32> {
+    let mut remaining = Vec::with_capacity(schedule.triggers.len());
+    let mut due_counts = BTreeMap::new();
+    for &trigger_tick in schedule.triggers.iter() {
+        record_bell_ring_trigger(
+            trigger_tick,
+            now,
+            &mut due_counts,
+            &mut remaining,
+        );
+    }
+    schedule.triggers = remaining;
+
+    due_counts
+}
+
+fn record_bell_ring_trigger(
+    trigger_tick: u64,
+    now: u64,
+    due_counts: &mut BTreeMap<u64, u32>,
+    remaining: &mut Vec<u64>,
+) {
+    if trigger_tick > now {
+        remaining.push(trigger_tick);
+        return;
+    }
+
+    *due_counts.entry(trigger_tick).or_insert(0) += 1;
+}
+
+fn spawn_due_bell_rings(
+    commands: &mut Commands,
+    stealthed_owner: &Query<(), With<StealthEffect>>,
+    bell_tf: &GlobalTransform,
+    alive: &BellAlive,
+    due_counts: BTreeMap<u64, u32>,
+) {
+    if due_counts.is_empty() {
+        return;
+    }
+
+    let world_pos = bell_tf.translation();
+    let owner_is_stealthed = stealthed_owner.get(alive.owner).is_ok();
+    for (_scheduled_tick, count) in due_counts {
+        let scaled_damage = RING_DAMAGE * (count as f32);
+        spawn_ring_damage(
+            commands,
+            world_pos,
+            alive.owner,
+            owner_is_stealthed,
+            scaled_damage,
+        );
     }
 }
 
@@ -289,19 +362,20 @@ fn tick_bell_ending(
 
 fn bell_damage_event_listener(
     mut commands: Commands,
-    mut damage_events: EventReader<crate::game::combat::DamageInfo>,
+    mut damage_events: MessageReader<crate::game::combat::DamageInfo>,
     mut query: Query<(
         Entity,
         &mut BellAlive,
-        &Gent,
         &mut BellRingSchedule,
     )>,
-    mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<BellGfx>>,
     time: Res<GameTime>,
+    mut ripple_events: MessageWriter<RippleEvent>,
+    mut foliage_impulses: MessageWriter<FoliageImpulseEvent>,
+    bell_tf_query: Query<&GlobalTransform>,
 ) {
     let now = time.tick();
     for dmg in damage_events.read() {
-        if let Ok((_entity, mut alive, gent, mut schedule)) =
+        if let Ok((bell_entity, mut alive, mut schedule)) =
             query.get_mut(dmg.target)
         {
             // Schedule ring with delay
@@ -309,23 +383,50 @@ fn bell_damage_event_listener(
             // Spawn ring visual spark immediately (as independent entity followed to gent)
             spawn_ring_visual(
                 &mut commands,
-                _entity,
+                bell_entity,
                 alive.ring_z_counter,
             );
             // Keep Z deltas tiny to remain behind player (player ~15e-6)
-            alive.ring_z_counter += 0.00000001; // 1e-8 per ring
+            alive.ring_z_counter += 0.000_000_01; // 1e-8 per ring
             alive.hide_ticks_remaining = RING_SPARK_TICKS;
-            // Optionally restart deploy anim to ensure idle frame locks; not necessary if deploy contains idle loop
-            if let Ok(mut anim) = gfx_query.get_mut(gent.e_gfx) {
-                // No-op here; bell stays hidden while spark plays
-                let _ = &mut anim;
-            }
+            write_bell_ring_ripple(
+                bell_entity,
+                &bell_tf_query,
+                &mut ripple_events,
+                &mut foliage_impulses,
+            );
         }
     }
 }
 
-/// Fallback/robust trigger: detect direct overlaps between the bell collider and any player attack colliders.
-/// This allows the bell to ring even if the damage event route misses for any reason.
+fn write_bell_ring_ripple(
+    bell_entity: Entity,
+    bell_tf_query: &Query<&GlobalTransform>,
+    ripple_events: &mut MessageWriter<RippleEvent>,
+    foliage_impulses: &mut MessageWriter<FoliageImpulseEvent>,
+) {
+    let Ok(tf) = bell_tf_query.get(bell_entity) else {
+        return;
+    };
+
+    let descriptor = RippleDescriptor::shockwave();
+    ripple_events.write(RippleEvent {
+        origin: tf.translation(),
+        descriptor,
+    });
+    foliage_impulses.write(FoliageImpulseEvent::ring(
+        tf.translation().truncate(),
+        descriptor.start_radius,
+        descriptor.max_radius,
+        descriptor.speed_per_tick,
+        descriptor.width,
+        4.0,
+        descriptor.fade_power,
+    ));
+}
+
+// Fallback/robust trigger: detect direct overlaps between the bell collider and any player attack colliders.
+// This allows the bell to ring even if the damage event route misses for any reason.
 // Removed fallback contact-based ring trigger to avoid false positives
 
 fn spawn_ring_visual(
@@ -441,22 +542,31 @@ fn prune_bell_aoe_targets(
     for (src_tf, mut src) in query.iter_mut() {
         let src_pos = src_tf.translation();
         let mut new_set = src.target_set.clone();
-        for t in src.target_set.iter() {
-            // Remove if target is a bell
-            if is_bell.get(*t).is_ok() {
-                new_set.remove(t);
-                continue;
-            }
-            // Remove if below bell bottom (exclude downward only)
-            if let Ok(tf) = target_tf.get(*t) {
-                let bell_bottom = src_pos.y - (BELL_HALF_HEIGHT as f32) - 1.0;
-                if tf.translation().y < bell_bottom {
-                    new_set.remove(t);
-                }
-            }
-        }
+        new_set.retain(|target| {
+            !should_prune_bell_aoe_target(
+                *target, src_pos, &target_tf, &is_bell,
+            )
+        });
         src.target_set = new_set;
     }
+}
+
+fn should_prune_bell_aoe_target(
+    target: Entity,
+    src_pos: Vec3,
+    target_tf: &Query<&GlobalTransform>,
+    is_bell: &Query<(), With<Bell>>,
+) -> bool {
+    if is_bell.get(target).is_ok() {
+        return true;
+    }
+
+    let Ok(tf) = target_tf.get(target) else {
+        return false;
+    };
+
+    let bell_bottom = src_pos.y - BELL_HALF_HEIGHT - 1.0;
+    tf.translation().y < bell_bottom
 }
 
 // Helper bundle to use ScriptPlayer in this module

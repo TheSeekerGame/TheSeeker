@@ -1,0 +1,36 @@
+name: rust quality
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  lint-and-test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Tests read level rules and artwork stored in Git LFS. They do not need the soundtrack.
+      - name: Fetch Git LFS assets
+        run: git lfs pull --exclude "assets/audio/music/**"
+
+      - name: Install Dependencies
+        run: sudo apt-get update && sudo apt-get install --no-install-recommends pkg-config libx11-dev libasound2-dev libudev-dev libwayland-dev libxkbcommon-dev
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      - name: Test
+        run: cargo test --workspace

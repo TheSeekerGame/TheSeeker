@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.AmplifiedBellDeploy"
+image = "animations/player/skills/bell/BellDeploySheet__r1c5__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

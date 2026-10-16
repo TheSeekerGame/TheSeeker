@@ -120,24 +120,8 @@ pub enum PlaybackControl {
 #[derive(Serialize, Deserialize)]
 #[serde(tag = "action")]
 pub enum CommonScriptAction {
-    /// Despawn entities
-    DespawnEntity {
-        /// If specified, lookup entities with the given label.
-        /// If unspecified, despawn ourselves.
-        label: Option<String>,
-    },
-    /// Spawn a Bevy Scene asset
-    SpawnScene {
-        /// The dynamic asset key of the scene asset to spawn
-        asset_key: String,
-        /// If true, spawn it as a child under another entity.
-        /// If false, spawn it independently (standalone).
-        #[serde(default)]
-        as_child: bool,
-        /// If `as_child` is true, optionally specify another entity (by label)
-        /// to use as the parent. If unspecified, use the current entity.
-        parent_label: Option<String>,
-    },
+    /// Despawn the script's own entity
+    DespawnEntity,
     /// Spawn a new entity to run a script
     SpawnScript { asset_key: String },
     /// Enable a Slot
@@ -161,7 +145,7 @@ pub enum CommonScriptAction {
         /// Only stop sounds with the given label. If unset, stop all sounds.
         label: Option<String>,
     },
-    /// Play a sound (using regular bevy audio, not our precise system)
+    /// Play a sound on the background track (looping optional, tick-aligned)
     PlayBackgroundAudio {
         asset_key: String,
         label: Option<String>,

@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.HammerFlickerForward"
+image = "animations/player/hammer/FlickerForwardSheet__r1c9__64x64.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"
@@ -5,6 +9,14 @@ ticks_per_frame = 8
 frame_min = 1
 frame_max = 9  # 2 intro + 1 dash + 2 damage + 4 outro
 frame_start = 1
+
+[[events]]
+on = { frame_enter = 3 }
+emit = "flicker_intro_done"
+
+[[events]]
+on = { frame_enter = 6 }
+emit = "flicker_damage_done"
 
 # Speed modification for CDR passives (CRITICAL)
 [[script]]

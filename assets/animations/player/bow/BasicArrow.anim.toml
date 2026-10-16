@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.BowBasicArrow"
+image = "animations/player/bow/BasicArrowSheet__r1c1__12x12.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

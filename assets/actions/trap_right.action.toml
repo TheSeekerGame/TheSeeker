@@ -1,0 +1,3 @@
+id = "trap_right"
+base = "trap_left"
+presentation = { animation = "AttackRight" }

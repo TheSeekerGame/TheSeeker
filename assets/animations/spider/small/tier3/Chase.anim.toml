@@ -1,4 +1,14 @@
+[asset]
+key = "anim.smallspider3.Chase"
+image = "animations/spider/small/tier3/Chase__r1c4__48x48.png"
+
 atlas_asset_key = "anim.smallspider3.Chase.sprite"
+
+[playback]
+start = 1
+end = 4
+ticks_per_frame = 8
+mode = "loop"
 
 [settings]
 time_base = "Relative"
@@ -9,12 +19,6 @@ frame_max = 4
 frame_start = 1
 
 # LOOP
-[[script]]
-run_at_frame = 4
-action = "SetFrameNext"
-frame_index = 1
-
-# Support left/right flipping
 [[script]]
 run_on_slot_enable = "DirectionLeft"
 action = "SetSpriteFlip"

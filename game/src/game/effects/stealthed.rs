@@ -12,7 +12,6 @@
 //! changing velocity, ensuring it works across all movement states and stacks
 //! properly with other modifiers.
 
-use bevy::prelude::*;
 
 use crate::game::combat::DamageInfo;
 use crate::game::player::skills::cooldowns::Cooldowns;
@@ -93,12 +92,23 @@ pub fn stealth_exit_visibility_system(
     mut gfx_query: Query<&mut Sprite, With<PlayerGfx>>,
 ) {
     for entity in removed.read() {
-        if let Ok(gent) = query.get(entity) {
-            if let Ok(mut sprite) = gfx_query.get_mut(gent.e_gfx) {
-                sprite.color.set_alpha(1.0);
-            }
-        }
+        restore_stealth_sprite_alpha(entity, &query, &mut gfx_query);
     }
+}
+
+fn restore_stealth_sprite_alpha(
+    entity: Entity,
+    query: &Query<&Gent, With<Player>>,
+    gfx_query: &mut Query<&mut Sprite, With<PlayerGfx>>,
+) {
+    let Ok(gent) = query.get(entity) else {
+        return;
+    };
+    let Ok(mut sprite) = gfx_query.get_mut(gent.e_gfx) else {
+        return;
+    };
+
+    sprite.color.set_alpha(1.0);
 }
 
 /// When stealth ends (duration expired or broken by damage), stamp the stealth cooldown.
@@ -109,7 +119,7 @@ pub fn start_stealth_cooldown_on_remove(
     time: Res<GameTime>,
     stats: Query<Option<&PlayerStatMod>, With<Player>>,
 ) {
-    let now_tick = time.tick() as u64;
+    let now_tick = time.tick();
     for entity in removed.read() {
         if players.contains(entity) {
             let cdr_snapshot = stats
@@ -132,7 +142,7 @@ pub fn start_stealth_cooldown_on_remove(
 /// Break stealth if the player deals damage.
 pub fn stealth_damage_break_system(
     mut commands: Commands,
-    mut damage_events: EventReader<DamageInfo>,
+    mut damage_events: MessageReader<DamageInfo>,
     query: Query<Option<&StealthEffect>, With<Player>>,
     // Do not break stealth when the player hits the bell
     is_bell: Query<(), With<crate::game::player::spawns::amplified_bell::Bell>>,
@@ -155,20 +165,24 @@ pub fn stealth_damage_break_system(
             continue;
         }
 
-        // Only break stealth if the target is NOT a bell
-        if is_bell.get(event.target).is_err() {
-            // If Shadow Cloak is equipped, do not break stealth on damage
-            let has_shadow_cloak = passives_q
-                .get(event.owner)
-                .ok()
-                .map(|p| p.contains(&Passive::ShadowCloak))
-                .unwrap_or(false);
-            if !has_shadow_cloak {
-                commands.entity(event.owner).remove::<StealthEffect>();
-            }
+        if should_remove_stealth_after_damage(event, &is_bell, &passives_q) {
+            commands.entity(event.owner).remove::<StealthEffect>();
         }
     }
 }
 
-// Removed: legacy stealthed-crit cooldown reset behavior. This functionality is now
-// owned by the Ice Dagger passive on backstab kill.
+fn should_remove_stealth_after_damage(
+    event: &DamageInfo,
+    is_bell: &Query<(), With<crate::game::player::spawns::amplified_bell::Bell>>,
+    passives_q: &Query<&Passives>,
+) -> bool {
+    is_bell.get(event.target).is_err() && !has_shadow_cloak(event.owner, passives_q)
+}
+
+fn has_shadow_cloak(owner: Entity, passives_q: &Query<&Passives>) -> bool {
+    passives_q
+        .get(owner)
+        .ok()
+        .map(|p| p.contains(&Passive::ShadowCloak))
+        .unwrap_or(false)
+}

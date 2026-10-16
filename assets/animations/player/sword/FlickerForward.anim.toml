@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.SwordFlickerForward"
+image = "animations/player/sword/FlickerForwardSheet__r1c7__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"
@@ -5,6 +9,14 @@ ticks_per_frame = 8
 frame_min = 1
 frame_max = 7  # 1 intro + 1 dash + 1 damage + 4 outro
 frame_start = 1
+
+[[events]]
+on = { frame_enter = 2 }
+emit = "flicker_intro_done"
+
+[[events]]
+on = { frame_enter = 4 }
+emit = "flicker_damage_done"
 
 # Speed modification for CDR passives (CRITICAL)
 [[script]]

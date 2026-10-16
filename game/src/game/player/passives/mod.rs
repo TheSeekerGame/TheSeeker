@@ -1,59 +1,25 @@
 use crate::game::player::skills::types;
+use crate::game::player::states::{HorizontalInputIntent, InAir};
+use crate::game::player::{EnemiesNearby, EnemyProximitySensor, LastGroundedPosition, PlayerAction};
 use crate::game::{
     combat::{DamageInfo, Health},
-    player::PlayerStatMod,
 };
-/// Trait-based passive system: each passive encapsulates its own stat mods and event reactions.
+use bevy::ecs::query::QueryData;
 use bevy::prelude::*;
+use leafwing_input_manager::prelude::ActionState;
+use theseeker_engine::physics::LinearVelocity;
 
-// Re-export individual passive implementations
-pub mod battery_pack;
-pub mod bloodstone;
-pub mod critical_regeneration;
-pub mod deadly_feather;
-pub mod flaming_heart;
+pub mod definition;
+pub mod blood_shards;
 pub mod frenzied_attack;
-pub mod glowing_shard;
-pub mod heavy_boots;
-pub mod ice_dagger;
-pub mod kinetic_orb;
-pub mod obsidian_necklace;
-pub mod pack_killer;
 pub mod permutator;
-pub mod prime_sygil;
-pub mod protective_spirit;
-pub mod pulse_drive;
-pub mod rabbits_foot;
+pub mod pulse_echo;
 pub mod runtime;
-pub mod serpent_ring;
-pub mod shadow_cloak;
-pub mod sharpshooter;
-pub mod vitality_overclock;
+mod evaluation;
+pub use evaluation::{ordered_passives, PassiveEvaluation};
 
-use battery_pack::BatteryPackEffect;
-use bloodstone::BloodstoneEffect;
-use critical_regeneration::CriticalRegenerationEffect;
-use deadly_feather::DeadlyFeatherEffect;
-use flaming_heart::FlamingHeartEffect;
-use frenzied_attack::FrenziedAttackEffect;
-use glowing_shard::GlowingShardEffect;
-use heavy_boots::HeavyBootsEffect;
-use ice_dagger::IceDaggerEffect;
-use kinetic_orb::KineticOrbEffect;
-use obsidian_necklace::ObsidianNecklaceEffect;
-use pack_killer::PackKillerEffect;
-use permutator::PermutatorEffect;
-use prime_sygil::PrimeSygilEffect;
-use protective_spirit::ProtectiveSpiritEffect;
-use pulse_drive::PulseDriveEffect;
-use rabbits_foot::RabbitsFootEffect;
-use serpent_ring::SerpentRingEffect;
-use shadow_cloak::ShadowCloakEffect;
-use sharpshooter::SharpshooterEffect;
-use vitality_overclock::VitalityOverclockEffect;
-
-/// Events that passives can respond to.
-#[derive(Event, Clone, Copy)]
+/// Messages that passives can respond to.
+#[derive(Message, Clone, Copy)]
 pub enum PassiveEvent {
     /// Active skill was used by the player (emitted on activation)
     SkillUsed {
@@ -86,8 +52,6 @@ pub enum PassiveEvent {
 pub enum PassiveAction {
     /// Heal the player by a specified amount
     Heal(u32),
-    /// Damage the player by a specified amount
-    Damage(u32),
     /// Reduce all cooldowns by the given seconds
     ReduceCooldowns(f32),
     /// Reset all cooldowns
@@ -96,14 +60,6 @@ pub enum PassiveAction {
     AddEnergy(f32),
     /// Fully refill energy for all channeled skills (e.g., Whirl, Flicker)
     RefillEnergyFull,
-    /// Deprecated: legacy variant that only added Whirl energy
-    /// Retained for backward compatibility; treated as `AddEnergy`.
-    AddWhirlEnergy(f32),
-    /// Modify a damage entity's properties
-    ModifyDamage {
-        damage_source: Entity,
-        damage_multiplier: f32,
-    },
     /// Schedule the next hit to be a critical strike for this player
     ScheduleNextCrit,
     /// Trigger all instant-cast skills currently equipped (ignores cooldowns)
@@ -118,14 +74,8 @@ pub struct PassiveContext<'a> {
     pub health: &'a Health,
     pub velocity: Vec2,
     pub enemies_nearby: u32,
-    pub grounded: bool,
     /// True if player has InAir marker (more truthful than !grounded due to predictive grounding)
     pub in_air: bool,
-    pub buff_stacks: u32,
-    /// Closest enemy distance if available from sensors
-    pub closest_enemy_distance: Option<f32>,
-    /// Whether locomotion state is Running (used by Sharpshooter)
-    pub is_running: bool,
     /// Optional target position for per-target damage calculations
     pub target_position: Option<Vec2>,
     /// Player's last grounded position for distance calculations
@@ -142,45 +92,68 @@ pub struct PassiveContext<'a> {
     pub rotation_active: bool,
 }
 
-pub struct PassiveContextInputs<'a> {
-    pub health: Option<&'a Health>,
-    pub velocity: Option<Vec2>,
-    pub enemies_nearby: Option<u32>,
-    pub grounded: bool,
-    pub in_air: bool,
-    pub buff_stacks: Option<u32>,
-    pub closest_enemy_distance: Option<f32>,
-    pub is_running: bool,
-    pub target_position: Option<Vec2>,
-    pub last_grounded_position: Option<Vec2>,
-    pub movement_input: Option<f32>,
-    pub jump_pressed: Option<bool>,
-    pub enemies_near_target: Option<u32>,
-    pub target_health_pct: Option<f32>,
-    pub rotation_active: bool,
-}
-
-/// Default health value used when constructing PassiveContext without health data
-static DEFAULT_HEALTH: Health = Health { current: 0, max: 0 };
+/// Health used when the owner has none.
+static NO_HEALTH: Health = Health { current: 0, max: 0 };
 
 impl<'a> PassiveContext<'a> {
-    pub fn from_inputs(inputs: PassiveContextInputs<'a>) -> Self {
+    /// A context that knows only the owner's health.
+    pub fn with_health(health: &'a Health) -> Self {
         Self {
-            health: inputs.health.unwrap_or(&DEFAULT_HEALTH),
-            velocity: inputs.velocity.unwrap_or(Vec2::ZERO),
-            enemies_nearby: inputs.enemies_nearby.unwrap_or(0),
-            grounded: inputs.grounded,
-            in_air: inputs.in_air,
-            buff_stacks: inputs.buff_stacks.unwrap_or(0),
-            closest_enemy_distance: inputs.closest_enemy_distance,
-            is_running: inputs.is_running,
-            target_position: inputs.target_position,
-            last_grounded_position: inputs.last_grounded_position,
-            movement_input: inputs.movement_input.unwrap_or(0.0),
-            jump_pressed: inputs.jump_pressed.unwrap_or(false),
-            enemies_near_target: inputs.enemies_near_target.unwrap_or(0),
-            target_health_pct: inputs.target_health_pct,
-            rotation_active: inputs.rotation_active,
+            health,
+            velocity: Vec2::ZERO,
+            enemies_nearby: 0,
+            in_air: false,
+            target_position: None,
+            last_grounded_position: None,
+            movement_input: 0.0,
+            jump_pressed: false,
+            enemies_near_target: 0,
+            target_health_pct: None,
+            rotation_active: false,
+        }
+    }
+
+    /// This context aimed at a damage target.
+    pub fn at_target(self, position: Vec2, health_pct: Option<f32>, enemies_near_target: u32) -> Self {
+        Self {
+            target_position: Some(position),
+            target_health_pct: health_pct,
+            enemies_near_target,
+            ..self
+        }
+    }
+}
+
+/// What passives read about their owner, queried alike wherever passives run. Health is
+/// passed in separately because some of those systems also heal the owner.
+#[derive(QueryData)]
+pub struct PassiveOwner {
+    velocity: Option<&'static LinearVelocity>,
+    action_state: Option<&'static ActionState<PlayerAction>>,
+    horizontal_intent: Option<&'static HorizontalInputIntent>,
+    enemies_nearby: Option<&'static EnemiesNearby>,
+    in_air: Has<InAir>,
+    enemy_proximity: Option<&'static EnemyProximitySensor>,
+    last_grounded: Option<&'static LastGroundedPosition>,
+    permutator: Option<&'static permutator::PermutatorState>,
+}
+
+impl PassiveOwnerItem<'_, '_> {
+    pub fn context<'a>(&self, health: Option<&'a Health>) -> PassiveContext<'a> {
+        // The melee-range sensor is more precise than the coarse count when present.
+        let enemies_nearby = self.enemy_proximity.map_or_else(
+            || self.enemies_nearby.map_or(0, |enemies| enemies.0),
+            |sensor| sensor.enemies_in_melee_range.len() as u32,
+        );
+        PassiveContext {
+            velocity: self.velocity.map_or(Vec2::ZERO, |velocity| velocity.0),
+            enemies_nearby,
+            in_air: self.in_air,
+            last_grounded_position: self.last_grounded.map(|grounded| grounded.position),
+            movement_input: self.horizontal_intent.map_or(0.0, |intent| intent.movement),
+            jump_pressed: self.action_state.is_some_and(|input| input.pressed(&PlayerAction::Jump)),
+            rotation_active: self.permutator.is_some_and(|state| state.active),
+            ..PassiveContext::with_health(health.unwrap_or(&NO_HEALTH))
         }
     }
 }
@@ -190,8 +163,7 @@ impl<'a> PassiveContext<'a> {
 pub struct DamageModifiers {
     pub damage_multiplier: f32,
     pub can_backstab: bool,
-    /// Number of targets the current damage source would hit this tick
-    pub current_target_count: usize,
+    pub backstab_multiplier: f32,
 }
 
 impl Default for DamageModifiers {
@@ -199,74 +171,33 @@ impl Default for DamageModifiers {
         Self {
             damage_multiplier: 1.0,
             can_backstab: false,
-            current_target_count: 0,
+            backstab_multiplier: 2.0,
         }
     }
 }
 
-/// Core trait implemented by all passive effects.
-pub trait PassiveEffect: Send + Sync + 'static {
-    /// Called once per tick to modify player stats
-    fn modify_stats(&self, stats: &mut PlayerStatMod, context: &PassiveContext);
-
-    /// Called when calculating damage properties
-    fn modify_damage(
-        &self,
-        _modifiers: &mut DamageModifiers,
-        _context: &PassiveContext,
-    ) {
+/// Returns the set of projectile directions after applying passive modifiers.
+/// The returned vectors are normalized; caller is responsible for scaling by projectile speed.
+pub fn projectile_directions(
+    passives: &super::Passives,
+    base_direction: Vec2,
+) -> Vec<Vec2> {
+    let len = base_direction.length();
+    if len <= f32::EPSILON {
+        return Vec::new();
     }
-
-    /// Called when passive events occur
-    fn on_event(
-        &self,
-        _event: &PassiveEvent,
-        _context: &PassiveContext,
-    ) -> Vec<PassiveAction> {
-        vec![]
+    let dir = base_direction / len;
+    if passives.contains(&super::Passive::Prism) {
+        let angle = dir.y.atan2(dir.x);
+        let prism_angle_deg = passives
+            .passive_effective_value(super::Passive::Prism)
+            .unwrap_or(5.0);
+        let offset = prism_angle_deg.to_radians();
+        return vec![
+            Vec2::from_angle(angle),
+            Vec2::from_angle(angle + offset),
+            Vec2::from_angle(angle - offset),
+        ];
     }
-
-    /// Animation slots this passive affects (name, value)
-    fn animation_slots(&self) -> Vec<(&'static str, bool)> {
-        vec![]
-    }
-
-    /// Priority for order-dependent processing (higher runs first)
-    fn priority(&self) -> i32 {
-        0
-    }
-
-    /// Human-readable name (debugging)
-    fn name(&self) -> &'static str;
-}
-
-/// Registry to get passive implementations from enum values
-pub fn get_passive_implementation(
-    passive: &super::Passive,
-) -> Box<dyn PassiveEffect> {
-    use super::Passive;
-
-    match passive {
-        Passive::Bloodstone => Box::new(BloodstoneEffect),
-        Passive::ObsidianNecklace => Box::new(ObsidianNecklaceEffect),
-        Passive::CriticalRegeneration => Box::new(CriticalRegenerationEffect),
-        Passive::FlamingHeart => Box::new(FlamingHeartEffect),
-        Passive::IceDagger => Box::new(IceDaggerEffect),
-        Passive::PackKiller => Box::new(PackKillerEffect),
-        Passive::GlowingShard => Box::new(GlowingShardEffect),
-        Passive::SerpentRing => Box::new(SerpentRingEffect),
-        Passive::RabbitsFoot => Box::new(RabbitsFootEffect),
-        Passive::HeavyBoots => Box::new(HeavyBootsEffect),
-        Passive::DeadlyFeather => Box::new(DeadlyFeatherEffect),
-        Passive::FrenziedAttack => Box::new(FrenziedAttackEffect),
-        Passive::VitalityOverclock => Box::new(VitalityOverclockEffect),
-        Passive::ProtectiveSpirit => Box::new(ProtectiveSpiritEffect),
-        Passive::Sharpshooter => Box::new(SharpshooterEffect),
-        Passive::KineticOrb => Box::new(KineticOrbEffect),
-        Passive::BatteryPack => Box::new(BatteryPackEffect),
-        Passive::ShadowCloak => Box::new(ShadowCloakEffect),
-        Passive::PrimeSygil => Box::new(PrimeSygilEffect),
-        Passive::PulseDrive => Box::new(PulseDriveEffect),
-        Passive::Permutator => Box::new(PermutatorEffect),
-    }
+    vec![dir]
 }

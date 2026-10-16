@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.SwordBasicAir"
+image = "animations/player/sword/BasicAirSheet__r1c20__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

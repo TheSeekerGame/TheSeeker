@@ -1,74 +1,77 @@
-use bevy::ecs::hierarchy::ChildOf;
-use bevy::ecs::schedule::IntoScheduleConfigs;
+//! The basic attack: a melee swing whose hitbox follows the animation, or a volley of
+//! arrows, plus the pogo bounce after a downward air swing lands.
+use bevy::ecs::system::SystemParam;
 use bevy::prelude::*;
+use rand::Rng;
 use theseeker_engine::assets::animation::SpriteAnimation;
+use theseeker_engine::effects::{GhostColorMode, GhostingSource};
+use theseeker_engine::gent::Gent;
+use theseeker_engine::physics::{
+    groups, Collider, CollisionGroups, LinearVelocity, PhysicsWorld, ShapeCast,
+    TileCollisionWorld, ENEMY, PLAYER_ATTACK,
+};
 use theseeker_engine::script::ScriptPlayer;
-use theseeker_engine::time::GameTickUpdate;
+use theseeker_engine::time::{GameTickUpdate, GameTime};
 
-use crate::game::player::{
-    Passives, Player, PlayerStatMod, PlayerStateSet, PlayerStats,
-};
-
-// Auto-aim constants for melee attacks
-const MELEE_AUTO_AIM_RANGE: f32 = 48.0;
-const AUTO_AIM_VERTICAL_THRESHOLD: f32 = 8.0;
-const AUTO_AIM_HORIZONTAL_LEEWAY: f32 = 24.0;
-
-// Projectile tuning
-const RANGED_ATTACK_LIFETIME_TICKS: u32 = 192;
-const ARROW_VELOCITY: f32 = 500.0;
-
-// Attack collider sizes (placeholders - AnimationCollider updates from magenta pixels)
-const MELEE_ATTACK_COLLIDER_HALF_WIDTH: f32 = 8.0;
-const MELEE_ATTACK_COLLIDER_HALF_HEIGHT: f32 = 8.0;
-const ARROW_COLLIDER_HALF_WIDTH: f32 = 4.0;
-const ARROW_COLLIDER_HALF_HEIGHT: f32 = 1.0;
+use super::animation_hitbox;
+use crate::camera::GameplayPixelScale;
+use crate::game::combat::damage_source::apply_damage_modifications;
 use crate::game::combat::sparks::WeaponHitSlot;
-use crate::game::player::sensors::EnemyProximitySensor;
-use crate::game::player::weapon::{PlayerMeleeWeapon, PlayerRangedWeapon};
 use crate::game::combat::{
-    DamageSource, DownwardAttack, Pushback, SelfPushback, Stealthed,
+    DamageSource, DownwardAttack, Hit, Pushback, SelfPushback, Stealthed,
 };
-use crate::game::enemy::Enemy;
+use crate::game::effects::stealthed::StealthEffect;
 use crate::game::gentstate::Facing;
 use crate::game::physics::projectile::{Arrow, PreviousPosition, Projectile};
 use crate::game::physics::Knockback;
-use crate::game::player::sensors::CeilingSensor;
-use crate::game::player::skills::cooldowns::Cooldowns;
-use crate::game::player::skills::types::{
-    attack_animation_metadata,
-    attack_variant_metadata,
-    SkillWeaponKind,
-    Variant as SkillVariant,
+use crate::game::player::autoaim::{
+    melee_target_below, ranged_basic_attack_auto_aim_facing, visible_reach,
+    LiveEnemies, RangedAttackFacingLock,
 };
-use crate::game::player::states::{
-    transition_action, transition_locomotion, AttackVariant, Attacking, Falling,
-    Jumping, Ready, Running, WeaponType,
+use crate::game::player::foreground::{
+    finish_action, ActionMut, ActionTag, ForegroundAction,
 };
-use crate::game::player::weapon::CurrentWeapon;
-use crate::game::player::BowAutoAimState;
-use crate::game::player::PlayerAction;
+use crate::game::player::passives::{self, pulse_echo::PulseEcho};
 use crate::game::player::player_anim::set_direction_slots;
-use leafwing_input_manager::action_state::ActionState;
-use theseeker_engine::effects::{
-    FadeCurve, GhostColorMode, GhostMovement, GhostingSource, ScaleCurve,
+use crate::game::player::sensors::CeilingSensor;
+use crate::game::player::states::{
+    transition_locomotion, AttackVariant, Attacking, Falling,
+    HorizontalInputIntent, Jumping, Running, WallSide,
 };
-use theseeker_engine::gent::Gent;
-use theseeker_engine::physics::AnimationCollider;
-use theseeker_engine::physics::{groups, Collider, LinearVelocity};
+use crate::game::player::weapon::{WeaponAttack, WeaponType};
+use crate::game::player::{
+    Dashing, JumpCount, Passives, Player, PlayerBehaviorSet, PlayerStatMod,
+    PlayerStateSet, PlayerStats,
+};
 
-// Pogo effect: upward velocity curve applied when a downward attack first hits an enemy
-#[derive(Component, Debug)]
-pub struct Pogo {
-    pub tick: u32,
-}
+const ARROW_LIFETIME_TICKS: u32 = 192;
+const ARROW_SPEED: f32 = 500.0;
+const ARROW_HALF_EXTENTS: Vec2 = Vec2::new(4.0, 1.0);
+/// Arrows fly in one of this many lanes spread sideways across ±`ARROW_LANE_SPREAD`
+/// pixels, preferring lanes that reach an enemy before a wall.
+const ARROW_LANE_COUNT: usize = 5;
+const ARROW_LANE_SPREAD: f32 = 4.0;
 
-// Pogo per-tick upward displacements (converted from px/s by dividing by 96)
+/// Upward displacement per tick while bouncing off an enemy after a downward air swing.
 const POGO_VELOCITIES: [f32; 24] = [
     0.818, 0.781, 0.745, 0.708, 0.672, 0.635, 0.599, 0.563, 0.526, 0.490,
     0.453, 0.417, 0.380, 0.344, 0.307, 0.271, 0.234, 0.198, 0.161, 0.125,
     0.089, 0.052, 0.016, 0.000,
 ];
+
+#[derive(Component, Debug)]
+pub struct Pogo {
+    tick: u32,
+}
+
+impl Pogo {
+    /// Applies this tick's bounce speed; false once the curve is spent.
+    fn step(&mut self, velocity: &mut Vec2) -> bool {
+        velocity.y = POGO_VELOCITIES[(self.tick as usize).min(POGO_VELOCITIES.len() - 1)];
+        self.tick += 1;
+        (self.tick as usize) < POGO_VELOCITIES.len()
+    }
+}
 
 pub struct AttackingStatePlugin;
 
@@ -76,649 +79,610 @@ impl Plugin for AttackingStatePlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             GameTickUpdate,
-            (
-                attacking_enter_system,
-                attacking_update_system,
-            )
+            (attacking_enter_system, attacking_update_system)
                 .chain()
-                .run_if(any_with_component::<Attacking>)
-                .in_set(PlayerStateSet::Behavior),
+                .in_set(PlayerStateSet::Behavior)
+                .in_set(PlayerBehaviorSet::Execution),
         );
-        // Start pogo after attack pipeline tags hits
+        // Bounce once the damage pipeline has tagged the hit.
         app.add_systems(
             GameTickUpdate,
-            start_pogo_on_downward_attack_hit.after(
-                crate::game::combat::damage_source::apply_damage_modifications,
-            ),
+            start_pogo_on_downward_attack_hit.after(apply_damage_modifications),
         );
-        // Maintain pogo velocity in behavior set
         app.add_systems(
             GameTickUpdate,
-            pogo_update_system.in_set(PlayerStateSet::Behavior),
+            pogo_update_system
+                .in_set(PlayerStateSet::Behavior)
+                .in_set(PlayerBehaviorSet::Execution),
         );
-        // Attack preemption is handled by the general skill_dispatch_system in ready.rs
     }
 }
 
-// Durations are governed by the attack skill tables (see `skills::attack`).
-
-// Get the attack animation key based on current locomotion state
-// These match the format used in player_anim.rs: weapon.get_anim_key("BasicIdle") etc
-fn get_attack_animation_key(
-    weapon: WeaponType,
-    _variant: AttackVariant,
-    is_running: bool,
-    is_airborne: bool,
-) -> &'static str {
-    let kind: SkillWeaponKind = weapon.into();
-    let animations = attack_animation_metadata(kind);
-
-    if is_airborne {
-        animations.air
-    } else if is_running {
-        animations.run
-    } else {
-        animations.idle
-    }
+/// A blow being dealt: who strikes, facing which way, how hard, and whether from stealth.
+#[derive(Clone, Copy)]
+struct Strike {
+    owner: Entity,
+    facing: Facing,
+    damage: f32,
+    stealthed: bool,
 }
 
-// System that runs when entering Attacking state
+/// What a bow shot reads from the world to aim.
+#[derive(SystemParam)]
+struct BowWorld<'w> {
+    physics: PhysicsWorld<'w>,
+    tiles: Option<Res<'w, TileCollisionWorld>>,
+    pixel_scale: Option<Res<'w, GameplayPixelScale>>,
+}
+
+/// Starts an attack: aims it, plays its animation, and spawns its hitbox or arrows.
 fn attacking_enter_system(
     mut commands: Commands,
     mut query: Query<
         (
             Entity,
-            &mut Attacking,
-            &Transform,
+            ActionMut<Attacking>,
+            &GlobalTransform,
             &mut Facing,
-            Option<&EnemyProximitySensor>,
+            Option<&Falling>,
             &Gent,
-            Option<&PlayerStats>,
             Option<&PlayerStatMod>,
             Option<&Passives>,
             Has<Running>,
             Has<Jumping>,
-            Has<Falling>,
-    Has<crate::game::effects::stealthed::StealthEffect>,
+            Has<StealthEffect>,
         ),
-        (With<Player>, Added<Attacking>),
+        (With<Player>, Added<ActionTag<Attacking>>),
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>>,
-    enemy_query: Query<&Transform, With<Enemy>>,
-    melee_weapon: Res<PlayerMeleeWeapon>,
-    ranged_weapon: Res<PlayerRangedWeapon>,
-    mut _cooldowns: ResMut<Cooldowns>,
-    _time: Res<theseeker_engine::time::GameTime>,
+    enemies: LiveEnemies,
+    time: Res<GameTime>,
+    bow_world: BowWorld,
 ) {
     for (
         entity,
         mut attacking,
         transform,
         mut facing,
-        proximity_sensor,
+        falling,
         gent,
-        _stats,
         stat_mod,
-        _passives,
-        has_running,
-        has_jumping,
-        has_falling,
+        passives,
+        is_running,
+        is_jumping,
         is_stealthed,
-    ) in query.iter_mut()
+    ) in &mut query
     {
-        // Determine locomotion state
-        let is_running = has_running;
-        let is_airborne = has_jumping || has_falling;
+        let position = transform.translation();
+        let is_airborne = is_jumping || falling.is_some();
+        let weapon = attacking.weapon;
+        if weapon == WeaponType::Bow {
+            *facing = aim_bow(*facing, falling, position.xy(), &bow_world, &enemies);
+            commands
+                .entity(entity)
+                .insert(RangedAttackFacingLock::new(*facing, time.tick()));
+        }
+        let variant = swing_variant(
+            weapon,
+            attacking.variant,
+            is_airborne,
+            position.xy(),
+            &enemies,
+        );
+        attacking.variant = variant;
 
-        // Calculate auto-aim for melee weapons only
-        let mut final_variant = if attacking.weapon_type.is_melee() {
-            if let Some(proximity_sensor) = proximity_sensor {
-                let player_pos = transform.translation.truncate();
-                let mut variant = calculate_melee_auto_aim(
-                    player_pos,
-                    &facing,
-                    proximity_sensor,
-                    attacking.variant,
-                    &enemy_query,
-                );
-                // Downward auto-aim for melee while airborne when no enemy is directly in front
-                let is_airborne = has_jumping || has_falling;
-                if is_airborne
-                    && !proximity_sensor.has_forward_enemy
-                    && proximity_sensor.has_enemy_below
-                {
-                    // Force downward variant regardless of Up key; no Down key required
-                    variant = AttackVariant::Down;
-                }
-                variant
-            } else {
-                attacking.variant
-            }
+        let attack = weapon.attack();
+        let animation = if variant == AttackVariant::Down || is_airborne {
+            attack.air_animation
+        } else if is_running {
+            attack.run_animation
         } else {
-            attacking.variant
+            attack.idle_animation
         };
-
-        attacking.variant = final_variant;
-
-        // Start attack animation based on locomotion state
-        if let Ok(mut script_player) = gfx_query.get_mut(gent.e_gfx) {
-            // Ensure direction slots reflect current Facing before playing a key
-            set_direction_slots(&mut script_player, &facing);
-            let anim_key = get_attack_animation_key(
-                attacking.weapon_type,
-                final_variant,
-                is_running,
-                is_airborne,
-            );
-
-            // Airborne down attacks enable a dedicated slot
-            if is_airborne && final_variant == AttackVariant::Down {
-                script_player.enable_slot("DownwardAttack");
-            }
-
-            // Clear transition slot defensively to avoid SetFrameNext persistence across state changes
-            script_player.set_slot("AttackTransition", false);
-            script_player.play_key(anim_key);
+        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
+            play_attack_animation(&mut player, attacking.execution_mut(), &facing, animation, variant);
         }
 
-        // Spawn attack entity based on weapon type
-        if let Some(stat_mod) = stat_mod {
-            let base_damage = match attacking.weapon_type {
-                WeaponType::Sword => PlayerMeleeWeapon::Sword.base_damage(),
-                WeaponType::Hammer => PlayerMeleeWeapon::Hammer.base_damage(),
-                WeaponType::Bow => PlayerRangedWeapon::Bow.base_damage(),
-            };
-            let damage = base_damage * stat_mod.damage;
-
-            if attacking.weapon_type.is_melee() {
-                // Melee: spawn attack entity with AnimationCollider. Lifetime equals active window.
-                let skill_variant = match final_variant {
-                    AttackVariant::Forward => SkillVariant::Forward,
-                    AttackVariant::Up => SkillVariant::Up,
-                    AttackVariant::Down => SkillVariant::Down,
-                };
-                let weapon_kind: SkillWeaponKind = attacking.weapon_type.into();
-                let lifetime = attack_variant_metadata(weapon_kind, skill_variant)
-                    .active_window
-                    .duration_ticks;
-
-                // Get pushback values based on weapon type
-                let pushback_values = melee_weapon.pushback_values();
-
-                let attack_entity = commands
-                    .spawn((
-                        DamageSource::new(lifetime, entity, damage),
-                        Collider::cuboid(
-                            MELEE_ATTACK_COLLIDER_HALF_WIDTH,
-                            MELEE_ATTACK_COLLIDER_HALF_HEIGHT,
-                        ), // Placeholder - AnimationCollider will update from magenta pixels
-                        AnimationCollider(gent.e_gfx),
-                        groups::player_attack(),
-                        Transform::from_translation(Vec3::ZERO),
-                        GlobalTransform::default(),
-                        SelfPushback(Knockback::new(
-                            Vec2::new(
-                                pushback_values.self_pushback
-                                    * -facing.direction(),
-                                0.0,
-                            ),
-                            pushback_values.self_pushback_ticks,
-                        )),
-                        Pushback(Knockback::new(
-                            Vec2::new(
-                                facing.direction() * pushback_values.pushback,
-                                0.0,
-                            ),
-                            pushback_values.pushback_ticks,
-                        )),
-                    ))
-                    .insert(ChildOf(entity))
-                    .id();
-
-                // Mark weapon hit slot so sparks can play correct impact SFX
-                let weapon_slot = match attacking.weapon_type {
-                    WeaponType::Sword => "SwordHit",
-                    WeaponType::Hammer => "HammerHit",
-                    WeaponType::Bow => "BowHit",
-                };
-                commands.entity(attack_entity).insert(WeaponHitSlot {
-                    slot_name: weapon_slot.to_string(),
-                });
-
-                // Add stealth if player is stealthed
-                if is_stealthed {
-                    commands.entity(attack_entity).insert(Stealthed);
-                }
-
-                // Add DownwardAttack component for airborne down attacks
-                if final_variant == AttackVariant::Down && is_airborne {
-                    commands.entity(attack_entity).insert(DownwardAttack);
-                }
-            } else if attacking.weapon_type == WeaponType::Bow {
-                // Bow spawns a straight-flying arrow (no gravity)
-
-                // Bow shoots forward only (no up/down variants)
-                let dir = Vec2::X * facing.direction();
-                let dir = dir.normalize_or_zero();
-                if dir == Vec2::ZERO {
-                } else {
-                    let projectile = Projectile {
-                        vel: LinearVelocity(dir * ARROW_VELOCITY),
-                    };
-
-                    // Get pushback values for ranged weapon
-                    let pushback_values = ranged_weapon.pushback_values();
-
-                    // Spawn attack with its own visual (no child) to avoid hierarchy issues
-                    let mut arrow_script_player =
-                        ScriptPlayer::<SpriteAnimation>::default();
-                    arrow_script_player.play_key("anim.player.BowBasicArrow");
-
-                    let attack_entity = commands
-                        .spawn((
-                            DamageSource::new(
-                                RANGED_ATTACK_LIFETIME_TICKS,
-                                entity,
-                                damage,
-                            )
-                            .with_max_targets(1),
-                            projectile,
-                            Arrow, // Marker component for player arrows
-                            PreviousPosition(transform.translation.xy()), // Track position for CCD
-                            Collider::cuboid(
-                                ARROW_COLLIDER_HALF_WIDTH,
-                                ARROW_COLLIDER_HALF_HEIGHT,
-                            ),
-                            groups::player_attack(),
-                            Pushback(Knockback::new(
-                                Vec2::new(
-                                    facing.direction()
-                                        * pushback_values.pushback,
-                                    0.0,
-                                ),
-                                pushback_values.pushback_ticks,
-                            )),
-                            // Visuals on the same entity as the attack to simplify lifecycle
-                            arrow_script_player,
-                            Sprite {
-                                texture_atlas: Some(TextureAtlas::default()),
-                                ..Default::default()
-                            },
-                            Transform::from_translation(transform.translation),
-                            GlobalTransform::default(),
-                            Visibility::Visible,
-                            InheritedVisibility::default(),
-                            // Add ghosting effect to arrow projectile
-                            GhostingSource {
-                                spawn_interval_ticks: 3, // Spawn ghost every 3 ticks for subtle trail
-                                ghost_lifetime_ticks: 19, // ~0.2 seconds at 96Hz
-                                initial_alpha: 0.3,       // Semi-transparent
-                                fade_curve: FadeCurve::Linear,
-                                color_mode: GhostColorMode::Tint(Color::srgb(
-                                    3.0, 3.0, 3.0,
-                                )), // Brighten toward white
-                                scale_over_time: ScaleCurve::Constant, // No scale changes
-                                offset: Vec2::ZERO,
-                                movement: GhostMovement::Static,
-                                ticks_since_last_spawn: 0,
-                            },
-                        ))
-                        .id();
-
-                    // Mark weapon hit slot for bow impacts so sparks pick correct SFX
-                    commands.entity(attack_entity).insert(WeaponHitSlot {
-                        slot_name: "BowHit".to_string(),
-                    });
-
-                    if is_stealthed {
-                        commands.entity(attack_entity).insert(Stealthed);
-                    }
-                }
-            }
+        let Some(stat_mod) = stat_mod else {
+            continue;
+        };
+        let strike = Strike {
+            owner: entity,
+            facing: *facing,
+            damage: attack.damage * stat_mod.damage,
+            stealthed: is_stealthed,
+        };
+        if weapon == WeaponType::Bow {
+            let reach = lane_reach(bow_world.pixel_scale.as_deref(), time.seconds_per_tick() as f32);
+            shoot_volley(&mut commands, strike, position, passives, &bow_world, reach);
+            continue;
         }
-        // Lifetime provided by skills at start; no per-state recalculation here.
-
-        // Do not (re)stamp cooldown here; gating and stamping are owned by skills::attack before state entry.
+        let hitbox = spawn_swing(&mut commands, strike, gent, attack, variant);
+        // Downward swings echo downward; others echo ahead.
+        let echo_direction = if variant == AttackVariant::Down {
+            Vec2::NEG_Y
+        } else {
+            Vec2::new(facing.direction(), 0.0)
+        };
+        if let Some(echo) = passives.and_then(|passives| PulseEcho::of(passives, stat_mod.damage, is_stealthed)) {
+            commands.entity(hitbox).insert(echo.on_swing(echo_direction));
+        }
+        attacking.execution_mut().own(hitbox);
     }
 }
 
-// Main update system for Attacking state
+/// Bows shoot away from a wall the player slides down, then turn toward the nearest enemy.
+fn aim_bow(
+    facing: Facing,
+    falling: Option<&Falling>,
+    position: Vec2,
+    bow_world: &BowWorld,
+    enemies: &LiveEnemies,
+) -> Facing {
+    let facing = match falling.and_then(|falling| falling.wall_slide) {
+        Some(WallSide::Left) => Facing::Right,
+        Some(WallSide::Right) => Facing::Left,
+        None => facing,
+    };
+    ranged_basic_attack_auto_aim_facing(position, facing, bow_world.pixel_scale.as_deref(), enemies)
+}
+
+/// The swing direction: bows always shoot forward, grounded swings can't go down, and an
+/// airborne forward swing turns downward onto an enemy below.
+fn swing_variant(
+    weapon: WeaponType,
+    requested: AttackVariant,
+    is_airborne: bool,
+    position: Vec2,
+    enemies: &LiveEnemies,
+) -> AttackVariant {
+    if !weapon.is_melee() || (requested == AttackVariant::Down && !is_airborne) {
+        return AttackVariant::Forward;
+    }
+    if requested == AttackVariant::Forward && is_airborne && melee_target_below(position, enemies) {
+        return AttackVariant::Down;
+    }
+    requested
+}
+
+fn play_attack_animation(
+    player: &mut ScriptPlayer<SpriteAnimation>,
+    execution: &mut ForegroundAction,
+    facing: &Facing,
+    key: &str,
+    variant: AttackVariant,
+) {
+    set_direction_slots(player, facing);
+    execution.play(player, key);
+    player.set_presentation_slot(execution.id, "AttackTransition", false);
+    player.set_presentation_slot(execution.id, "DownwardAttack", variant == AttackVariant::Down);
+}
+
+/// A melee swing's hitbox, shaped by the animation and active for the swing's window.
+/// Downward swings only happen in the air, where a hit starts a pogo bounce.
+fn spawn_swing(
+    commands: &mut Commands,
+    strike: Strike,
+    gent: &Gent,
+    attack: &WeaponAttack,
+    variant: AttackVariant,
+) -> Entity {
+    let lifetime = attack.swing(variant).hitbox_ticks;
+    let direction = strike.facing.direction();
+    commands
+        .spawn((
+            animation_hitbox(
+                strike.owner,
+                gent,
+                DamageSource::new(lifetime, strike.owner, strike.damage),
+                attack.hit_slot,
+            ),
+            Pushback(attack.pushback.horizontal(direction)),
+            SelfPushback(attack.self_pushback.horizontal(-direction)),
+        ))
+        .insert_if(Stealthed, || strike.stealthed)
+        .insert_if(DownwardAttack, || variant == AttackVariant::Down)
+        .id()
+}
+
+/// Fires one arrow per direction (more with multishot passives), each in a lane that
+/// reaches an enemy when any does.
+fn shoot_volley(
+    commands: &mut Commands,
+    strike: Strike,
+    origin: Vec3,
+    passives: Option<&Passives>,
+    bow_world: &BowWorld,
+    reach: f32,
+) {
+    let forward = Vec2::X * strike.facing.direction();
+    let directions = passives.map_or_else(
+        || vec![forward],
+        |passives| passives::projectile_directions(passives, forward),
+    );
+    let bow = WeaponType::Bow.attack();
+    let collider = Collider::cuboid(ARROW_HALF_EXTENTS.x, ARROW_HALF_EXTENTS.y);
+    let mut rng = rand::rng();
+    for direction in directions.into_iter().filter_map(Vec2::try_normalize) {
+        let lane = choose_arrow_lane(&mut rng, |offset| {
+            let start = lane_origin(origin.xy(), direction, offset);
+            lane_hits_enemy(bow_world, strike.owner, start, direction, &collider, reach)
+        });
+        let start = lane_origin(origin.xy(), direction, lane).extend(origin.z);
+        commands
+            .spawn(player_arrow(
+                DamageSource::new(ARROW_LIFETIME_TICKS, strike.owner, strike.damage),
+                Transform::from_translation(start),
+                direction * ARROW_SPEED,
+                bow.pushback.horizontal(strike.facing.direction()),
+                "anim.player.BowBasicArrow",
+            ))
+            .insert_if(Stealthed, || strike.stealthed);
+    }
+}
+
+/// A player arrow in flight: a bow shot, or the body of a Pulse Echo.
+pub(crate) fn player_arrow(
+    damage: DamageSource,
+    transform: Transform,
+    velocity: Vec2,
+    pushback: Knockback,
+    animation: &str,
+) -> impl Bundle {
+    let mut player = ScriptPlayer::<SpriteAnimation>::default();
+    player.play_key(animation);
+    (
+        damage.with_max_targets(1),
+        Projectile { vel: LinearVelocity(velocity) },
+        Arrow,
+        PreviousPosition(transform.translation.xy()),
+        Collider::cuboid(ARROW_HALF_EXTENTS.x, ARROW_HALF_EXTENTS.y),
+        groups::player_attack(),
+        Pushback(pushback),
+        player,
+        Sprite { texture_atlas: Some(TextureAtlas::default()), ..default() },
+        transform,
+        GlobalTransform::default(),
+        Visibility::Visible,
+        InheritedVisibility::default(),
+        GhostingSource {
+            spawn_interval_ticks: 3,
+            ghost_lifetime_ticks: 19,
+            initial_alpha: 0.3,
+            color_mode: GhostColorMode::Tint(Color::srgb(3.0, 3.0, 3.0)),
+            ..default()
+        },
+        WeaponHitSlot { slot_name: WeaponType::Bow.attack().hit_slot.to_owned() },
+    )
+}
+
+/// How far lane probes look: as far as an arrow flies, but no farther than the player sees.
+fn lane_reach(pixel_scale: Option<&GameplayPixelScale>, seconds_per_tick: f32) -> f32 {
+    let flight = ARROW_SPEED * ARROW_LIFETIME_TICKS as f32 * seconds_per_tick;
+    flight.min(visible_reach(pixel_scale))
+}
+
+fn lane_origin(origin: Vec2, direction: Vec2, offset: f32) -> Vec2 {
+    let lateral_axis = Vec2::new(-direction.y, direction.x);
+    origin + lateral_axis * offset
+}
+
+/// Picks one random offset per lane, then a random lane among those that reach an enemy,
+/// or among all lanes when none does.
+fn choose_arrow_lane(rng: &mut impl Rng, mut hits_enemy: impl FnMut(f32) -> bool) -> f32 {
+    let offsets = lane_offsets(rng);
+    let hits: Vec<f32> = offsets.into_iter().filter(|&offset| hits_enemy(offset)).collect();
+    if hits.is_empty() {
+        offsets[rng.random_range(0..ARROW_LANE_COUNT)]
+    } else {
+        hits[rng.random_range(0..hits.len())]
+    }
+}
+
+fn lane_offsets(rng: &mut impl Rng) -> [f32; ARROW_LANE_COUNT] {
+    let lane_width = ARROW_LANE_SPREAD * 2.0 / ARROW_LANE_COUNT as f32;
+    std::array::from_fn(|lane| {
+        -ARROW_LANE_SPREAD + (lane as f32 + rng.random_range(0.0..1.0)) * lane_width
+    })
+}
+
+fn lane_hits_enemy(
+    bow_world: &BowWorld,
+    owner: Entity,
+    origin: Vec2,
+    direction: Vec2,
+    collider: &Collider,
+    reach: f32,
+) -> bool {
+    let cast = ShapeCast {
+        origin,
+        dir: direction,
+        shape: collider,
+        max_toi: reach,
+        interaction: CollisionGroups::new(PLAYER_ATTACK, ENEMY),
+        exclude: Some(owner),
+    };
+    let enemy_distance = bow_world
+        .physics
+        .cast_shape(cast, |_| true)
+        .map(|(_, hit)| hit.time_of_impact);
+    let wall_distance = bow_world
+        .tiles
+        .as_deref()
+        .filter(|tiles| tiles.is_ready())
+        .and_then(|tiles| tiles.ray_cast_solid(origin, direction, reach))
+        .map_or(f32::INFINITY, |hit| hit.time_of_impact);
+    enemy_before_wall(enemy_distance, wall_distance)
+}
+
+fn enemy_before_wall(enemy_distance: Option<f32>, wall_distance: f32) -> bool {
+    enemy_distance.is_some_and(|distance| distance < wall_distance)
+}
+
+/// Ends the attack after its duration; the player stops unless bouncing.
 fn attacking_update_system(
+    mut commands: Commands,
+    mut query: Query<
+        (Entity, ActionMut<Attacking>, &mut LinearVelocity, Has<Pogo>),
+        With<Player>,
+    >,
+) {
+    for (entity, mut attacking, mut velocity, is_bouncing) in &mut query {
+        attacking.tick += 1;
+        if attacking.tick < attacking.duration {
+            continue;
+        }
+        if !is_bouncing {
+            velocity.0 = Vec2::ZERO;
+        }
+        finish_action(&mut commands, entity, attacking.execution().id);
+    }
+}
+
+/// A downward air swing's first hit bounces the attacker and restores their jumps.
+fn start_pogo_on_downward_attack_hit(
+    mut commands: Commands,
+    hits: Query<&DamageSource, (Added<Hit>, With<DownwardAttack>)>,
+    mut players: Query<(&mut LinearVelocity, Option<&mut JumpCount>), With<Player>>,
+) {
+    for attack in &hits {
+        let Ok((mut velocity, jump_count)) = players.get_mut(attack.owner) else {
+            continue;
+        };
+        velocity.0.y = POGO_VELOCITIES[0];
+        commands.entity(attack.owner).insert(Pogo { tick: 0 });
+        if let Some(mut jump_count) = jump_count {
+            jump_count.reset();
+        }
+    }
+}
+
+/// Follows the bounce curve with normal air control, until the curve ends or the player
+/// hits a ceiling.
+fn pogo_update_system(
     mut commands: Commands,
     mut query: Query<
         (
             Entity,
-            &mut Attacking,
-            &mut theseeker_engine::physics::LinearVelocity,
-            Has<Pogo>,
-        ),
-        With<Player>,
-    >,
-) {
-    for (entity, mut attacking, mut vel, has_pogo) in query.iter_mut() {
-        // Increment tick counter
-        attacking.tick += 1;
-
-        // Duration-agnostic: prefer max_ticks provided by the skill tables; fallback to default window
-        let duration = attacking.max_ticks.unwrap_or_else(|| {
-            let v = match attacking.variant {
-                AttackVariant::Forward => SkillVariant::Forward,
-                AttackVariant::Up => SkillVariant::Up,
-                AttackVariant::Down => SkillVariant::Down,
-            };
-            let kind: SkillWeaponKind = attacking.weapon_type.into();
-            attack_variant_metadata(kind, v)
-                .active_window
-                .duration_ticks
-        });
-        if attacking.tick >= duration {
-            // If pogo is active, let pogo own velocity and finish; otherwise zero velocity on exit
-            if !has_pogo {
-                vel.0 = Vec2::ZERO;
-            }
-            transition_action(&mut commands, entity, Ready);
-        }
-    }
-}
-
-// Detect the first hit of an airborne downward attack and start pogo on the attacker
-fn start_pogo_on_downward_attack_hit(
-    mut commands: Commands,
-    attack_query: Query<
-        &crate::game::combat::DamageSource,
-        (
-            Added<crate::game::combat::Hit>,
-            With<crate::game::combat::DownwardAttack>,
-        ),
-    >,
-    mut player_q: Query<
-        (
-            &mut theseeker_engine::physics::LinearVelocity,
-            Option<&mut crate::game::player::JumpCount>,
-        ),
-        With<Player>,
-    >,
-) {
-    for attack in attack_query.iter() {
-        if let Ok((mut vel, maybe_jump_count)) = player_q.get_mut(attack.owner)
-        {
-            // Begin pogo: set initial upward velocity and attach effect
-            vel.0.y = POGO_VELOCITIES[0];
-            commands.entity(attack.owner).insert(Pogo { tick: 0 });
-            // Reset jump count to allow subsequent aerial control akin to a fresh jump
-            if let Some(mut jc) = maybe_jump_count {
-                jc.reset();
-            }
-        }
-    }
-}
-
-// Apply pogo velocity curve and clean up
-fn pogo_update_system(
-    mut commands: Commands,
-    mut q: Query<
-        (
-            Entity,
-            &mut theseeker_engine::physics::LinearVelocity,
+            &mut LinearVelocity,
             &mut Pogo,
             Option<&mut Falling>,
             Option<&Jumping>,
             &CeilingSensor,
-            &ActionState<PlayerAction>,
-            &crate::game::player::PlayerStats,
-            &crate::game::player::PlayerStatMod,
-            &mut Facing,
-            Has<crate::game::player::Dashing>,
-            Has<crate::game::effects::stealthed::StealthEffect>,
+            &HorizontalInputIntent,
+            &PlayerStats,
+            &PlayerStatMod,
+            Has<ActionTag<Dashing>>,
         ),
         With<Player>,
     >,
-    weapon: CurrentWeapon,
-    autoaim: Res<BowAutoAimState>,
 ) {
-    const AIR_SPEED_FACTOR: f32 = 1.0;
     for (
         entity,
-        mut vel,
+        mut velocity,
         mut pogo,
-        maybe_falling,
-        maybe_jumping,
+        falling,
+        jumping,
         ceiling,
-        action_state,
+        intent,
         stats,
         stat_mod,
-        mut facing,
         is_dashing,
-        _is_stealthed,
-    ) in q.iter_mut()
+    ) in &mut query
     {
-        // If we touch the ceiling during pogo, end pogo immediately and hand over to Falling
-        if ceiling.is_touching_ceiling {
-            vel.0.y = 0.0;
-            if let Some(mut falling) = maybe_falling {
-                falling.fall_ticks = 0;
-                falling.wall_slide = None;
-            } else if let Some(jumping) = maybe_jumping {
-                transition_locomotion(
-                    &mut commands,
-                    entity,
-                    Falling::from_jump(jumping.jump_count),
-                );
-            } else {
-                transition_locomotion(
-                    &mut commands,
-                    entity,
-                    Falling::from_jump(0),
-                );
-            }
-            commands.entity(entity).remove::<Pogo>();
+        let blocked = ceiling.is_touching_ceiling;
+        if !blocked && !is_dashing {
+            velocity.0.x = air_control(intent.movement, stats, stat_mod);
+        }
+        if !blocked && pogo.step(&mut velocity.0) {
             continue;
         }
-        let idx = pogo.tick.min(POGO_VELOCITIES.len() as u32 - 1) as usize;
-        vel.0.y = POGO_VELOCITIES[idx];
+        velocity.0.y = 0.0;
+        end_pogo(&mut commands, entity, falling, jumping);
+    }
+}
 
-        // Allow horizontal air control during pogo (same as jumping/falling), unless dashing
-        if !is_dashing {
-            let direction = action_state.clamped_value(&PlayerAction::Move);
-            if direction != 0.0 {
-                let base_speed =
-                    stats.get(crate::game::player::StatType::MoveVelMax);
-                vel.0.x =
-                    direction * base_speed * AIR_SPEED_FACTOR * stat_mod.speed;
-                // Update facing when not bow-decided
-                if !weapon.has_bow_equipped()
-                    || !autoaim.blocks_manual(*facing)
-                {
-                    if direction > 0.0 {
-                        *facing = Facing::Right;
-                    } else if direction < 0.0 {
-                        *facing = Facing::Left;
-                    }
-                }
-            } else {
-                vel.0.x = 0.0;
-            }
+/// Horizontal speed while bouncing, the same as normal movement.
+fn air_control(movement: f32, stats: &PlayerStats, stat_mod: &PlayerStatMod) -> f32 {
+    if movement == 0.0 {
+        0.0
+    } else {
+        movement * stats.max_move_velocity * stat_mod.speed
+    }
+}
+
+/// Ends the bounce in a fresh fall, keeping the jump count of an ongoing jump.
+fn end_pogo(
+    commands: &mut Commands,
+    entity: Entity,
+    falling: Option<Mut<Falling>>,
+    jumping: Option<&Jumping>,
+) {
+    if let Some(mut falling) = falling {
+        falling.fall_ticks = 0;
+        falling.wall_slide = None;
+    } else {
+        let jump_count = jumping.map_or(0, |jumping| jumping.jump_count);
+        transition_locomotion(commands, entity, Falling::from_jump(jump_count));
+    }
+    commands.entity(entity).remove::<Pogo>();
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::ecs::system::RunSystemOnce;
+    use rand::{rngs::StdRng, SeedableRng};
+    use theseeker_engine::physics::EntityCollisionWorld;
+
+    use super::*;
+    use crate::game::enemy::Enemy;
+    use crate::game::player::foreground;
+
+    /// A player starting `attack`, optionally in the air, after the enter system ran.
+    fn attack(attack: Attacking, airborne: bool, enemy_at: Option<Vec2>) -> (World, Entity) {
+        let mut world = World::new();
+        world.init_resource::<GameTime>();
+        world.init_resource::<EntityCollisionWorld>();
+        let gfx = world.spawn(ScriptPlayer::<SpriteAnimation>::default()).id();
+        let player = world
+            .spawn((
+                Player,
+                GlobalTransform::default(),
+                Facing::Right,
+                Gent { e_gfx: gfx, e_effects_gfx: gfx },
+                PlayerStatMod::new(),
+            ))
+            .id();
+        if airborne {
+            world.entity_mut(player).insert(Falling::new());
         }
-        pogo.tick += 1;
-        if pogo.tick >= POGO_VELOCITIES.len() as u32 {
-            // Zero velocity on exit to hand control deterministically to locomotion
-            vel.0.y = 0.0;
-            // Reset fall curve so Falling resumes from its start (fixes terminal-velocity snap)
-            if let Some(mut falling) = maybe_falling {
-                falling.fall_ticks = 0;
-                falling.wall_slide = None;
-            } else if let Some(jumping) = maybe_jumping {
-                // If we were jumping, hand over to Falling cleanly from jump context
-                transition_locomotion(
-                    &mut commands,
-                    entity,
-                    Falling::from_jump(jumping.jump_count),
-                );
-            } else {
-                // Ensure we are in a known falling state if neither existed (safety)
-                transition_locomotion(
-                    &mut commands,
-                    entity,
-                    Falling::from_jump(0),
-                );
-            }
-            commands.entity(entity).remove::<Pogo>();
+        if let Some(position) = enemy_at {
+            world.spawn((Enemy, GlobalTransform::from_translation(position.extend(0.0)), Collider::cuboid(4.0, 4.0)));
+        }
+        foreground::start_action(&mut world, player, attack);
+        world.run_system_once(attacking_enter_system).expect("attack systems run");
+        (world, player)
+    }
+
+    fn state(world: &World, player: Entity) -> &Attacking {
+        world.get::<ForegroundAction>(player).and_then(|action| action.state()).expect("attacking")
+    }
+
+    #[test]
+    fn a_swing_takes_its_timing_and_knockback_from_the_weapon() {
+        let (mut world, player) = attack(Attacking::new(AttackVariant::Up, WeaponType::Sword), false, None);
+
+        let (damage, push, recoil, slot, parent) = world
+            .query::<(&DamageSource, &Pushback, &SelfPushback, &WeaponHitSlot, &ChildOf)>()
+            .single(&world)
+            .expect("one swing hitbox");
+        assert_eq!((damage.max_lifetime, damage.damage), (16, 33.0));
+        assert_eq!((push.strength, push.max_ticks), (Vec2::new(90.0 / 96.0, 0.0), 12));
+        assert_eq!((recoil.strength, recoil.max_ticks), (Vec2::new(-90.0 / 96.0, 0.0), 3));
+        assert_eq!((slot.slot_name.as_str(), parent.parent()), ("SwordHit", player));
+        assert_eq!(state(&world, player).duration, 36);
+    }
+
+    #[test]
+    fn an_airborne_forward_swing_turns_down_onto_an_enemy_below() {
+        let enemy = Some(Vec2::new(0.0, -30.0));
+        let (mut world, player) = attack(Attacking::new(AttackVariant::Forward, WeaponType::Hammer), true, enemy);
+
+        let damage = world
+            .query_filtered::<&DamageSource, With<DownwardAttack>>()
+            .single(&world)
+            .expect("a downward swing");
+        assert_eq!(damage.max_lifetime, 30);
+        // The attack keeps the length of the swing that was requested.
+        assert_eq!((state(&world, player).variant, state(&world, player).duration), (AttackVariant::Down, 56));
+    }
+
+    #[test]
+    fn grounded_swings_cannot_go_down() {
+        let (mut world, player) = attack(Attacking::new(AttackVariant::Down, WeaponType::Sword), false, None);
+
+        assert_eq!(state(&world, player).variant, AttackVariant::Forward);
+        assert_eq!(world.query_filtered::<(), With<DownwardAttack>>().iter(&world).count(), 0);
+    }
+
+    #[test]
+    fn the_bow_shoots_one_forward_arrow_and_locks_facing() {
+        let (mut world, player) = attack(Attacking::new(AttackVariant::Down, WeaponType::Bow), false, None);
+
+        let (damage, projectile) = world
+            .query::<(&DamageSource, &Projectile)>()
+            .single(&world)
+            .expect("one arrow");
+        assert_eq!((damage.max_lifetime, damage.max_targets, damage.damage), (192, 1, 22.0));
+        assert_eq!(projectile.vel.0, Vec2::new(500.0, 0.0));
+        assert_eq!(state(&world, player).variant, AttackVariant::Forward);
+        assert!(world.get::<RangedAttackFacingLock>(player).is_some());
+    }
+
+    #[test]
+    fn lane_offsets_cover_every_lane() {
+        let mut rng = StdRng::seed_from_u64(5);
+        let lane_width = ARROW_LANE_SPREAD * 2.0 / ARROW_LANE_COUNT as f32;
+
+        for (lane, offset) in lane_offsets(&mut rng).into_iter().enumerate() {
+            let min = -ARROW_LANE_SPREAD + lane as f32 * lane_width;
+            assert!((min..min + lane_width).contains(&offset));
         }
     }
-}
 
-// Calculate auto-aim for melee weapons - only changes variant, doesn't flip facing
-fn calculate_melee_auto_aim(
-    player_pos: Vec2,
-    player_facing: &Facing,
-    proximity_sensor: &EnemyProximitySensor,
-    requested_variant: AttackVariant,
-    enemy_query: &Query<&Transform, With<Enemy>>,
-) -> AttackVariant {
-    // If player requested up/down variant, always honor it
-    if matches!(
-        requested_variant,
-        AttackVariant::Up | AttackVariant::Down
-    ) {
-        return requested_variant;
+    #[test]
+    fn lane_choice_prefers_a_lane_that_hits() {
+        let mut rng = StdRng::seed_from_u64(11);
+        let mut probes = 0;
+
+        let lane = choose_arrow_lane(&mut rng, |offset| {
+            probes += 1;
+            offset > 1.0
+        });
+
+        assert_eq!(probes, ARROW_LANE_COUNT);
+        assert!(lane > 1.0);
     }
 
-    // Get enemies in different directions
-    let forward_enemies = enemies_in_direction(
-        &proximity_sensor.enemies_in_melee_range,
-        &proximity_sensor.enemies_in_ranged_range,
-        player_pos,
-        player_facing.direction(),
-        MELEE_AUTO_AIM_RANGE,
-        enemy_query,
-    );
+    #[test]
+    fn lane_choice_stays_random_when_no_lane_hits() {
+        let mut rng = StdRng::seed_from_u64(19);
 
-    if !forward_enemies.is_empty() {
-        return AttackVariant::Forward; // Attack normally
+        let lane = choose_arrow_lane(&mut rng, |_| false);
+
+        assert!((-ARROW_LANE_SPREAD..ARROW_LANE_SPREAD).contains(&lane));
     }
 
-    // No enemies horizontally - check vertically
-    let above_enemies = enemies_above(
-        &proximity_sensor.enemies_in_melee_range,
-        &proximity_sensor.enemies_in_ranged_range,
-        player_pos,
-        MELEE_AUTO_AIM_RANGE,
-        enemy_query,
-    );
+    #[test]
+    fn each_direction_uses_its_own_lateral_axis() {
+        let origin = Vec2::new(4.0, -3.0);
+        let directions = [
+            Vec2::X,
+            Vec2::from_angle(15.0_f32.to_radians()),
+            Vec2::from_angle(-15.0_f32.to_radians()),
+        ];
 
-    if !above_enemies.is_empty() {
-        return AttackVariant::Up;
+        for direction in directions {
+            let displacement = lane_origin(origin, direction, 5.0) - origin;
+            assert!(displacement.dot(direction).abs() < 0.000_01);
+            assert!((displacement.length() - 5.0).abs() < 0.000_01);
+        }
     }
 
-    let below_enemies = enemies_below(
-        &proximity_sensor.enemies_in_melee_range,
-        &proximity_sensor.enemies_in_ranged_range,
-        player_pos,
-        MELEE_AUTO_AIM_RANGE,
-        enemy_query,
-    );
-
-    if !below_enemies.is_empty() {
-        return AttackVariant::Down;
+    #[test]
+    fn walls_block_enemies_at_or_beyond_impact() {
+        assert!(enemy_before_wall(Some(9.0), 10.0));
+        assert!(!enemy_before_wall(Some(10.0), 10.0));
+        assert!(!enemy_before_wall(Some(11.0), 10.0));
+        assert!(!enemy_before_wall(None, f32::INFINITY));
     }
 
-    // No valid targets - attack forward anyway
-    AttackVariant::Forward
-}
+    #[test]
+    fn lane_reach_stops_at_visible_range_or_arrow_flight() {
+        let normal_tick = lane_reach(None, 1.0 / 96.0);
+        let short_flight = lane_reach(None, 0.000_5);
 
-// State lifetime is driven by the attack skill tables; no local animation-derived durations
-
-// Helper functions for directional enemy detection
-fn enemies_in_direction(
-    melee_enemies: &Vec<Entity>,
-    ranged_enemies: &Vec<Entity>,
-    player_pos: Vec2,
-    direction: f32,
-    range: f32,
-    enemy_query: &Query<&Transform, With<Enemy>>,
-) -> Vec<Entity> {
-    let enemies = if range <= MELEE_AUTO_AIM_RANGE {
-        melee_enemies
-    } else {
-        ranged_enemies
-    };
-
-    enemies
-        .iter()
-        .filter(|&&enemy| {
-            if let Ok(enemy_transform) = enemy_query.get(enemy) {
-                let enemy_pos = enemy_transform.translation.truncate();
-                let to_enemy = enemy_pos - player_pos;
-
-                // Check if enemy is in the direction we're facing
-                // direction is 1.0 for right, -1.0 for left
-                to_enemy.x.signum() == direction
-            } else {
-                false
-            }
-        })
-        .copied()
-        .collect()
-}
-
-fn enemies_above(
-    melee_enemies: &Vec<Entity>,
-    ranged_enemies: &Vec<Entity>,
-    player_pos: Vec2,
-    range: f32,
-    enemy_query: &Query<&Transform, With<Enemy>>,
-) -> Vec<Entity> {
-    let enemies = if range <= MELEE_AUTO_AIM_RANGE {
-        melee_enemies
-    } else {
-        ranged_enemies
-    };
-
-    enemies
-        .iter()
-        .filter(|&&enemy| {
-            if let Ok(enemy_transform) = enemy_query.get(enemy) {
-                let enemy_pos = enemy_transform.translation.truncate();
-                let to_enemy = enemy_pos - player_pos;
-
-                // Check if enemy is above (+Y is up in this project)
-                to_enemy.y > AUTO_AIM_VERTICAL_THRESHOLD
-                    && to_enemy.x.abs() < AUTO_AIM_HORIZONTAL_LEEWAY
-            } else {
-                false
-            }
-        })
-        .copied()
-        .collect()
-}
-
-fn enemies_below(
-    melee_enemies: &Vec<Entity>,
-    ranged_enemies: &Vec<Entity>,
-    player_pos: Vec2,
-    range: f32,
-    enemy_query: &Query<&Transform, With<Enemy>>,
-) -> Vec<Entity> {
-    let enemies = if range <= MELEE_AUTO_AIM_RANGE {
-        melee_enemies
-    } else {
-        ranged_enemies
-    };
-
-    enemies
-        .iter()
-        .filter(|&&enemy| {
-            if let Ok(enemy_transform) = enemy_query.get(enemy) {
-                let enemy_pos = enemy_transform.translation.truncate();
-                let to_enemy = enemy_pos - player_pos;
-
-                // Check if enemy is below
-                to_enemy.y < -AUTO_AIM_VERTICAL_THRESHOLD
-                    && to_enemy.x.abs() < AUTO_AIM_HORIZONTAL_LEEWAY
-            } else {
-                false
-            }
-        })
-        .copied()
-        .collect()
+        assert_eq!(normal_tick, visible_reach(None));
+        assert!((short_flight - 48.0).abs() < 0.000_01);
+    }
 }

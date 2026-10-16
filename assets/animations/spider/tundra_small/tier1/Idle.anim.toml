@@ -1,0 +1,41 @@
+[asset]
+key = "anim.tundra_small.Idle"
+image = "animations/spider/tundra_small/tier1/Idle__r1c6__48x48.png"
+
+atlas_asset_key = "anim.tundra_small.Idle.sprite"
+
+[playback]
+start = 1
+end = 6
+ticks_per_frame = 8
+mode = "loop"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 6
+frame_start = 1
+
+# Loop
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false
+
+# Ensure correct color after damage stops
+[[script]]
+run_on_slot_disable = "Damage"
+action = "SetSpriteColor"
+color = "#ffffff"
+
+# On Damage, immediately change color to ensure no delay
+[[script]]
+run_on_slot_enable = "Damage"
+action = "SetSpriteColor"
+color = "#ff0000"

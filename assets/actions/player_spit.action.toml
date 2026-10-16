@@ -1,0 +1,6 @@
+id = "player_spit"
+base = "spider_shot"
+presentation = { animation = "anim.player.Spit", offset = [0.0, 4.0] }
+timing = { release = "fire_projectile", cancel = "cancel_window", duration_ticks = 80, repetitions = 1 }
+damage = 36.0
+controls = { motion_x = true, motion_y = true, facing = true, presentation = true }

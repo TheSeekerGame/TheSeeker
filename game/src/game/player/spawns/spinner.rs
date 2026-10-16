@@ -1,6 +1,6 @@
-use bevy::prelude::*;
-use bevy::render::view::RenderLayers;
+use bevy::camera::visibility::RenderLayers;
 
+use theseeker_engine::animation::PlaybackState;
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::physics::{groups, Collider};
@@ -16,11 +16,13 @@ use crate::prelude::*;
 #[derive(Component)]
 pub struct Spinner {
     pub owner: Entity,
+    pub gfx_entity: Entity,
+    pub damage_entity: Entity,
     pub vel: Vec2,
     pub initial_ticks_left: u32,
     pub outro_ticks_left: Option<u32>,
+    pub despawn_block_ticks: u32,
     pub last_slot: Option<&'static str>,
-    pub last_gfx_frame: Option<u32>,
     pub vel_mult: f32,
     pub hover_phase: f32,
     pub hover_prev: f32,
@@ -30,10 +32,9 @@ pub struct Spinner {
 #[derive(Component)]
 pub struct SpinnerGfx;
 
-// No persistent damage collider entity
-
 const SPINNER_INTRO_TICKS: u32 = 8 * 3; // 3 frames @ 8 ticks (intro visuals), also initial outward duration
 const SPINNER_OUTRO_TICKS: u32 = 8 * 5; // frames 16-20 @ 8 ticks
+const SPINNER_MIN_LIFETIME_TICKS: u32 = 96;
 const INITIAL_SPEED: f32 = 1.7; // px / tick away from player (20% faster)
 const PULL_SPEED: f32 = 0.62; // px /
 const PULL_SPEED_V_MULT: f32 = 1.6;
@@ -71,33 +72,8 @@ pub fn spawn_spinner(
 ) {
     // Logic entity root (drives motion)
     // Render above player/enemies/kinetic orb. Player is ~15e-6; use higher.
-    let base_z = 17.0 * 0.000001;
+    let base_z = 17.0 * 0.000_001;
     let vel_mult = rand::rng().random_range(0.85..=1.15);
-    let spinner_entity = commands
-        .spawn((
-            Spinner {
-                owner,
-                // Randomize speed multiplier within ±15%
-                vel_mult,
-                vel: Vec2::new(
-                    INITIAL_SPEED * facing_dir * vel_mult,
-                    0.0,
-                ),
-                initial_ticks_left: SPINNER_INTRO_TICKS,
-                outro_ticks_left: None,
-                last_slot: None,
-                last_gfx_frame: None,
-                hover_phase: 0.0,
-                hover_prev: 0.0,
-            },
-            Transform::from_translation(pos.extend(base_z)),
-            GlobalTransform::default(),
-            StateDespawnMarker,
-            Name::new("Spinner"),
-        ))
-        .id();
-
-    // Gfx entity with animation and sprite
     let gfx_entity = commands
         .spawn((
             SpinnerGfx,
@@ -117,11 +93,6 @@ pub fn spawn_spinner(
             Name::new("SpinnerGfx"),
         ))
         .id();
-
-    // Parent gfx to logic so they move together
-    commands.entity(spinner_entity).add_child(gfx_entity);
-
-    // Persistent damage entity that follows the spinner (damage applied on specified frames)
     let dmg_entity = commands
         .spawn((
             DamageSource::new(u32::MAX, owner, 12.0).with_max_targets(u32::MAX),
@@ -134,6 +105,34 @@ pub fn spawn_spinner(
             Name::new("SpinnerDamage"),
         ))
         .id();
+
+    let spinner_entity = commands
+        .spawn((
+            Spinner {
+                owner,
+                gfx_entity,
+                damage_entity: dmg_entity,
+                vel_mult,
+                vel: Vec2::new(
+                    INITIAL_SPEED * facing_dir * vel_mult,
+                    0.0,
+                ),
+                initial_ticks_left: SPINNER_INTRO_TICKS,
+                outro_ticks_left: None,
+                despawn_block_ticks: SPINNER_MIN_LIFETIME_TICKS,
+                last_slot: None,
+                hover_phase: 0.0,
+                hover_prev: 0.0,
+            },
+            Transform::from_translation(pos.extend(base_z)),
+            GlobalTransform::default(),
+            StateDespawnMarker,
+            Name::new("Spinner"),
+        ))
+        .id();
+
+    // Parent gfx and damage to logic so they move together
+    commands.entity(spinner_entity).add_child(gfx_entity);
     commands.entity(spinner_entity).add_child(dmg_entity);
 }
 
@@ -143,11 +142,13 @@ fn update_spinner_movement(
     stealthed_q: Query<(), With<StealthEffect>>, // check owner stealth
 ) {
     for (mut sp, mut tf) in q.iter_mut() {
+        sp.despawn_block_ticks = sp.despawn_block_ticks.saturating_sub(1);
+        let is_stealthed = stealthed_q.get(sp.owner).is_ok();
+        let despawn_blocked = is_stealthed || sp.despawn_block_ticks > 0;
+
         // Outro: count down and freeze
         if let Some(ref mut ticks) = sp.outro_ticks_left {
-            if *ticks > 0 {
-                *ticks -= 1;
-            }
+            tick_spinner_outro(ticks, despawn_blocked);
             continue;
         }
 
@@ -166,98 +167,125 @@ fn update_spinner_movement(
             tf.translation.x += sp.vel.x;
             tf.translation.y += sp.vel.y;
             // Apply hover oscillation even during intro
-            let omega = core::f32::consts::TAU / HOVER_PERIOD_TICKS;
-            sp.hover_phase = (sp.hover_phase + omega) % core::f32::consts::TAU;
-            let hover_now = HOVER_AMPLITUDE * sp.hover_phase.sin();
-            let dy = hover_now - sp.hover_prev;
-            sp.hover_prev = hover_now;
-            tf.translation.y += dy;
+            apply_spinner_hover(&mut sp, &mut tf);
             continue;
         }
 
         // Pull towards player at anisotropic constant speed (randomized per spinner)
         let pos = tf.translation.truncate();
         let to_owner = owner_pos - pos;
-        let dist = to_owner.length();
-        let is_stealthed = stealthed_q.get(sp.owner).is_ok();
-        if !is_stealthed {
-            if dist > f32::EPSILON {
-                let dir = to_owner / dist;
-                let vx = dir.x * PULL_SPEED * sp.vel_mult;
-                let vy = dir.y * (PULL_SPEED * PULL_SPEED_V_MULT) * sp.vel_mult;
-                sp.vel = Vec2::new(vx, vy);
-            } else {
-                sp.vel = Vec2::ZERO;
-            }
-        } else {
-            sp.vel = Vec2::ZERO; // freeze pull, but still apply hover below
-        }
+        sp.vel = spinner_pull_velocity(to_owner, sp.vel_mult, is_stealthed);
         tf.translation.x += sp.vel.x;
         tf.translation.y += sp.vel.y;
 
         // Apply hover oscillation every tick
-        let omega = core::f32::consts::TAU / HOVER_PERIOD_TICKS;
-        sp.hover_phase = (sp.hover_phase + omega) % core::f32::consts::TAU;
-        let hover_now = HOVER_AMPLITUDE * sp.hover_phase.sin();
-        let dy = hover_now - sp.hover_prev;
-        sp.hover_prev = hover_now;
-        tf.translation.y += dy;
+        apply_spinner_hover(&mut sp, &mut tf);
     }
 }
 
+fn tick_spinner_outro(ticks: &mut u32, despawn_blocked: bool) {
+    if despawn_blocked {
+        return;
+    }
+
+    *ticks = ticks.saturating_sub(1);
+}
+
+fn spinner_pull_velocity(
+    to_owner: Vec2,
+    vel_mult: f32,
+    is_stealthed: bool,
+) -> Vec2 {
+    if is_stealthed {
+        return Vec2::ZERO;
+    }
+
+    let dist = to_owner.length();
+    if dist <= f32::EPSILON {
+        return Vec2::ZERO;
+    }
+
+    let dir = to_owner / dist;
+    let vx = dir.x * PULL_SPEED * vel_mult;
+    let vy = dir.y * (PULL_SPEED * PULL_SPEED_V_MULT) * vel_mult;
+    Vec2::new(vx, vy)
+}
+
+fn apply_spinner_hover(sp: &mut Spinner, tf: &mut Transform) {
+    let omega = core::f32::consts::TAU / HOVER_PERIOD_TICKS;
+    sp.hover_phase = (sp.hover_phase + omega) % core::f32::consts::TAU;
+    let hover_now = HOVER_AMPLITUDE * sp.hover_phase.sin();
+    let dy = hover_now - sp.hover_prev;
+    sp.hover_prev = hover_now;
+    tf.translation.y += dy;
+}
+
 fn update_spinner_animation_slots(
-    mut sp_q: Query<(
-        &mut Spinner,
-        &GlobalTransform,
-        &Children,
-    )>,
+    mut sp_q: Query<&mut Spinner>,
     mut anim_q: Query<&mut ScriptPlayer<SpriteAnimation>, With<SpinnerGfx>>,
 ) {
-    for (mut sp, _tf, children) in sp_q.iter_mut() {
+    for mut sp in sp_q.iter_mut() {
         // Determine desired slot, but do not override intro frames
-        let desired_slot: Option<&'static str> =
-            if sp.outro_ticks_left.is_some() {
-                Some("Outro")
-            } else if sp.initial_ticks_left > 0 {
-                None // stay on intro; no slot change
-            } else {
-                // Normal phase – choose based on horizontal motion or idle
-                if sp.vel.x.abs() <= 0.01 {
-                    Some("Idle")
-                } else if sp.vel.x < 0.0 {
-                    Some("Left")
-                } else {
-                    Some("Right")
-                }
-            };
+        let desired_slot = desired_spinner_slot(&sp);
 
         // Only toggle if changed
         if desired_slot != sp.last_slot {
-            for child in children.iter() {
-                if let Ok(mut player) = anim_q.get_mut(child) {
-                    if let Some(prev) = sp.last_slot {
-                        player.set_slot(prev, false);
-                    }
-                    if let Some(newslot) = desired_slot {
-                        player.set_slot(newslot, true);
-                    }
-                }
-            }
+            set_spinner_animation_slot(
+                sp.gfx_entity,
+                sp.last_slot,
+                desired_slot,
+                &mut anim_q,
+            );
             sp.last_slot = desired_slot;
         }
     }
 }
 
-/// Clear damaged_set on each animation frame change so spinner can hit again
+fn desired_spinner_slot(sp: &Spinner) -> Option<&'static str> {
+    if sp.outro_ticks_left.is_some() {
+        return Some("Outro");
+    }
+    if sp.initial_ticks_left > 0 {
+        return None;
+    }
+
+    spinner_motion_slot(sp.vel.x)
+}
+
+fn spinner_motion_slot(velocity_x: f32) -> Option<&'static str> {
+    if velocity_x.abs() <= 0.01 {
+        return Some("Idle");
+    }
+    if velocity_x < 0.0 {
+        return Some("Left");
+    }
+
+    Some("Right")
+}
+
+fn set_spinner_animation_slot(
+    gfx_entity: Entity,
+    previous_slot: Option<&'static str>,
+    desired_slot: Option<&'static str>,
+    anim_q: &mut Query<&mut ScriptPlayer<SpriteAnimation>, With<SpinnerGfx>>,
+) {
+    let Ok(mut player) = anim_q.get_mut(gfx_entity) else {
+        return;
+    };
+
+    if let Some(prev) = previous_slot {
+        player.set_slot(prev, false);
+    }
+    if let Some(newslot) = desired_slot {
+        player.set_slot(newslot, true);
+    }
+}
+
+/// Clear damaged_set on each animation damage pulse so spinner can hit again
 fn spawn_spinner_damage_on_frames(
     mut commands: Commands,
-    mut sp_q: Query<(
-        Entity,
-        &mut Spinner,
-        &GlobalTransform,
-        &Children,
-    )>,
-    gfx_q: Query<&Sprite, With<SpinnerGfx>>,
+    sp_q: Query<&Spinner>,
+    signal_q: Query<&PlaybackState, With<SpinnerGfx>>,
     mut dmg_q: Query<&mut DamageSource>,
     player_stats_q: Query<
         (
@@ -267,148 +295,127 @@ fn spawn_spinner_damage_on_frames(
         With<Player>,
     >,
 ) {
-    // 1-indexed frames where damage pulses occur
-    const DAMAGE_FRAMES_1IDX: [u32; 6] = [4, 6, 8, 10, 12, 14];
-    for (spinner_e, mut sp, _sp_tf, children) in sp_q.iter_mut() {
-        // Find or attach a persistent damage child entity
-        let mut found_dmg: Option<Entity> = None;
-        for child in children.iter() {
-            if dmg_q.get_mut(child).is_ok() {
-                found_dmg = Some(child.clone());
-                break;
-            }
+    for sp in sp_q.iter() {
+        let Ok(signals) = signal_q.get(sp.gfx_entity) else {
+            continue;
+        };
+        if !signals.has_event("damage_pulse") {
+            continue;
         }
-        let dmg_entity = if let Some(e) = found_dmg {
-            e
+
+        let (statmod, is_stealthed) =
+            player_stats_q.get(sp.owner).ok().unwrap_or((None, false));
+        let base_mult = statmod.map(|s| s.damage).unwrap_or(1.0);
+        if let Ok(mut ds) = dmg_q.get_mut(sp.damage_entity) {
+            ds.base_damage = 12.0 * base_mult;
+            ds.damage = ds.base_damage;
+            ds.damaged_set.clear();
+        }
+        if is_stealthed {
+            commands.entity(sp.damage_entity).insert(DmgStealthed);
         } else {
-            let e = commands
-                .spawn((
-                    DamageSource::new(u32::MAX, sp.owner, 12.0)
-                        .with_max_targets(u32::MAX),
-                    Collider::cuboid(30.0, 30.0),
-                    groups::player_attack(),
-                    Transform::from_translation(Vec3::ZERO),
-                    GlobalTransform::default(),
-                    StateDespawnMarker,
-                    Name::new("SpinnerDamage"),
-                ))
-                .id();
-            commands.entity(spinner_e).add_child(e);
-            e
-        };
-
-        // Read current frame from gfx child (0-indexed → 1-indexed)
-        let mut cf: Option<u32> = None;
-        for child in children.iter() {
-            if let Ok(sprite) = gfx_q.get(child) {
-                if let Some(atlas) = &sprite.texture_atlas {
-                    cf = Some(atlas.index as u32 + 1);
-                }
-                break;
-            }
-        }
-        let Some(cf) = cf else {
-            continue;
-        };
-        if sp.last_gfx_frame == Some(cf) {
-            continue;
-        }
-        sp.last_gfx_frame = Some(cf);
-
-        // On damage frames: refresh damage parameters and allow re-hits
-        if DAMAGE_FRAMES_1IDX.contains(&cf) {
-            // Update base damage from current player stat mod and stealth tag
-            let (statmod, is_stealthed) =
-                player_stats_q.get(sp.owner).ok().unwrap_or((None, false));
-            let base_mult = statmod.map(|s| s.damage).unwrap_or(1.0);
-            if let Ok(mut ds) = dmg_q.get_mut(dmg_entity) {
-                ds.base_damage = 12.0 * base_mult;
-                ds.damage = ds.base_damage; // reset immediately; will be re-modified by systems
-                ds.damaged_set.clear(); // allow hitting again on this pulse
-            }
-            if is_stealthed {
-                commands.entity(dmg_entity).insert(DmgStealthed);
-            } else {
-                commands.entity(dmg_entity).remove::<DmgStealthed>();
-            }
+            commands.entity(sp.damage_entity).remove::<DmgStealthed>();
         }
     }
 }
 
 fn pickup_and_outro_cut_cooldown(
-    mut sp_q: Query<(
-        Entity,
-        &mut Spinner,
-        &GlobalTransform,
-        &Children,
-    )>,
+    mut sp_q: Query<(&mut Spinner, &GlobalTransform)>,
     player_tf_q: Query<&GlobalTransform, With<Player>>,
     mut anim_q: Query<&mut ScriptPlayer<SpriteAnimation>, With<SpinnerGfx>>,
     mut cooldowns: ResMut<crate::game::player::skills::cooldowns::Cooldowns>,
     stealthed_q: Query<(), With<StealthEffect>>,
 ) {
-    for (_e, mut sp, tf, children) in sp_q.iter_mut() {
+    for (mut sp, tf) in sp_q.iter_mut() {
         if sp.outro_ticks_left.is_some() {
             continue;
         }
-        if let Ok(p_tf) = player_tf_q.get(sp.owner) {
-            // Do not allow pickup while the owner is stealthed
-            if stealthed_q.get(sp.owner).is_ok() {
-                continue;
-            }
-            let dist = p_tf
-                .translation()
-                .truncate()
-                .distance(tf.translation().truncate());
-            if dist <= PICKUP_RADIUS {
-                // Trigger outro and halve remaining cooldown
-                sp.outro_ticks_left = Some(SPINNER_OUTRO_TICKS);
-
-                // Switch to Outro slot on anim now (only if changed)
-                if sp.last_slot != Some("Outro") {
-                    for child in children.iter() {
-                        if let Ok(mut player) = anim_q.get_mut(child) {
-                            if let Some(prev) = sp.last_slot {
-                                player.set_slot(prev, false);
-                            }
-                            player.set_slot("Outro", true);
-                        }
-                    }
-                    sp.last_slot = Some("Outro");
-                }
-
-                // Halve remaining cooldown for Spinner on owner
-                if let Some(entry) = cooldowns.get(
-                    sp.owner,
-                    crate::game::player::skills::types::SkillId::Spinner,
-                ) {
-                    let delta = entry.remaining * 0.5;
-                    cooldowns.reduce_specific(
-                        sp.owner,
-                        crate::game::player::skills::types::SkillId::Spinner,
-                        delta,
-                    );
-                }
-            }
+        let is_stealthed = stealthed_q.get(sp.owner).is_ok();
+        if is_stealthed || sp.despawn_block_ticks > 0 {
+            continue;
+        }
+        if spinner_is_in_pickup_range(&sp, tf, &player_tf_q) {
+            trigger_spinner_pickup_outro(&mut sp, &mut anim_q, &mut cooldowns);
         }
     }
 }
 
+fn spinner_is_in_pickup_range(
+    sp: &Spinner,
+    tf: &GlobalTransform,
+    player_tf_q: &Query<&GlobalTransform, With<Player>>,
+) -> bool {
+    let Ok(p_tf) = player_tf_q.get(sp.owner) else {
+        return false;
+    };
+
+    let dist = p_tf
+        .translation()
+        .truncate()
+        .distance(tf.translation().truncate());
+    dist <= PICKUP_RADIUS
+}
+
+fn trigger_spinner_pickup_outro(
+    sp: &mut Spinner,
+    anim_q: &mut Query<&mut ScriptPlayer<SpriteAnimation>, With<SpinnerGfx>>,
+    cooldowns: &mut ResMut<crate::game::player::skills::cooldowns::Cooldowns>,
+) {
+    sp.outro_ticks_left = Some(SPINNER_OUTRO_TICKS);
+
+    if sp.last_slot != Some("Outro") {
+        set_spinner_animation_slot(
+            sp.gfx_entity,
+            sp.last_slot,
+            Some("Outro"),
+            anim_q,
+        );
+        sp.last_slot = Some("Outro");
+    }
+
+    reduce_spinner_cooldown_by_half(sp.owner, cooldowns);
+}
+
+fn reduce_spinner_cooldown_by_half(
+    owner: Entity,
+    cooldowns: &mut ResMut<crate::game::player::skills::cooldowns::Cooldowns>,
+) {
+    let Some(entry) = cooldowns.get(
+        owner,
+        crate::game::player::skills::types::SkillId::Spinner,
+    ) else {
+        return;
+    };
+
+    let delta = entry.remaining * 0.5;
+    cooldowns.reduce_specific(
+        owner,
+        crate::game::player::skills::types::SkillId::Spinner,
+        delta,
+    );
+}
+
 fn cleanup_spinner(
     mut commands: Commands,
-    q: Query<(Entity, &Spinner, &Children)>,
+    q: Query<(Entity, &Spinner)>,
+    stealthed_q: Query<(), With<StealthEffect>>,
 ) {
-    for (e, sp, children) in q.iter() {
-        if let Some(t) = sp.outro_ticks_left {
-            if t == 0 {
-                // Despawn children first
-                for c in children.iter() {
-                    commands.entity(c).despawn();
-                }
-                commands.entity(e).despawn();
-            }
+    for (entity, spinner) in q.iter() {
+        if spinner_is_ready_for_cleanup(spinner, &stealthed_q) {
+            commands.entity(spinner.gfx_entity).despawn();
+            commands.entity(spinner.damage_entity).despawn();
+            commands.entity(entity).despawn();
         }
     }
+}
+
+fn spinner_is_ready_for_cleanup(
+    spinner: &Spinner,
+    stealthed_q: &Query<(), With<StealthEffect>>,
+) -> bool {
+    spinner.outro_ticks_left == Some(0)
+        && spinner.despawn_block_ticks == 0
+        && stealthed_q.get(spinner.owner).is_err()
 }
 
 // (no sync system needed; pulses snapshot statmod and stealth)

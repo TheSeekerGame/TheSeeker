@@ -1,5 +1,4 @@
-use bevy::prelude::*;
-use bevy::render::view::RenderLayers;
+use bevy::camera::visibility::RenderLayers;
 
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::physics::{groups, Collider};
@@ -7,16 +6,17 @@ use theseeker_engine::physics::{groups, Collider};
 use crate::game::combat::damage_source::DamageSource;
 use crate::game::combat::Stealthed;
 use crate::game::effects::frozen::{Frozen, FrozenSize};
-use crate::game::enemy::{Enemy, EnemyVariant, MovementState};
 use crate::game::effects::stealthed::StealthEffect;
+use crate::game::enemy::{Enemy, LargeFreezeTarget};
 use crate::prelude::*;
+use crate::levelgen::foliage::FoliageImpulseEvent;
 
 const ICE_NOVA_RADIUS: f32 = 60.0;
 const ICE_NOVA_DAMAGE: f32 = 27.0;
 const ICE_NOVA_FREEZE_TICKS: u32 = 300;
 const ICE_NOVA_VISUAL_LIFETIME: u32 = 32;
 const ICE_NOVA_BURST_TICK: u32 = 9;
-const ICE_NOVA_Z: f32 = 30.0 * 0.000001;
+const ICE_NOVA_Z: f32 = 30.0 * 0.000_001;
 
 #[derive(Component)]
 pub struct IceNova {
@@ -83,7 +83,7 @@ pub(crate) fn tick_ice_nova(
         (
             Entity,
             &GlobalTransform,
-            Option<&MovementState>,
+            Has<LargeFreezeTarget>,
         ),
         (
             With<Enemy>,
@@ -92,6 +92,7 @@ pub(crate) fn tick_ice_nova(
     >,
     mut frozen_query: Query<&mut Frozen>,
     owner_stealth: Query<(), With<StealthEffect>>,
+    mut foliage_impulses: MessageWriter<FoliageImpulseEvent>,
 ) {
     for (entity, mut nova) in query.iter_mut() {
         nova.elapsed_ticks = nova.elapsed_ticks.saturating_add(1);
@@ -105,6 +106,11 @@ pub(crate) fn tick_ice_nova(
                 nova.owner,
                 nova.center,
             );
+            foliage_impulses.write(FoliageImpulseEvent::instant(
+                nova.center,
+                ICE_NOVA_RADIUS,
+                3.25,
+            ));
             nova.applied_burst = true;
         }
 
@@ -122,7 +128,7 @@ fn apply_ice_nova_burst(
         (
             Entity,
             &GlobalTransform,
-            Option<&MovementState>,
+            Has<LargeFreezeTarget>,
         ),
         (
             With<Enemy>,
@@ -135,18 +141,16 @@ fn apply_ice_nova_burst(
 ) {
     let mut affected_enemies: Vec<(Entity, FrozenSize)> = Vec::new();
 
-    for (enemy_entity, enemy_tf, movement_state) in enemy_query.iter() {
+    for (enemy_entity, enemy_tf, large_freeze_target) in enemy_query.iter() {
         let enemy_pos = enemy_tf.translation().truncate();
-        if enemy_pos.distance(center) <= ICE_NOVA_RADIUS {
-            let variant = movement_state
-                .map(|s| s.enemy_variant)
-                .unwrap_or(EnemyVariant::Default);
-            let size = match variant {
-                EnemyVariant::BigSpider => FrozenSize::Large,
-                _ => FrozenSize::Small,
-            };
-            affected_enemies.push((enemy_entity, size));
+        if enemy_pos.distance(center) > ICE_NOVA_RADIUS {
+            continue;
         }
+
+        affected_enemies.push((
+            enemy_entity,
+            frozen_size_for_ice_nova_target(large_freeze_target),
+        ));
     }
 
     for (enemy_entity, size) in affected_enemies {
@@ -173,4 +177,12 @@ fn apply_ice_nova_burst(
     if owner_stealth.get(owner).is_ok() {
         damage_entity.insert(Stealthed);
     }
+}
+
+fn frozen_size_for_ice_nova_target(large_freeze_target: bool) -> FrozenSize {
+    if large_freeze_target {
+        return FrozenSize::Large;
+    }
+
+    FrozenSize::Small
 }

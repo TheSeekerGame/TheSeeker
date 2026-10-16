@@ -2,14 +2,14 @@ use bevy::prelude::*;
 use leafwing_input_manager::action_state::ActionState;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
-use theseeker_engine::physics::LinearVelocity;
+use theseeker_engine::physics::{Collider, LinearVelocity};
 use theseeker_engine::script::ScriptPlayer;
 
 use crate::game::{
     gentstate::Facing,
     player::{
-        Attacking, DashStrike, Player, PlayerAction, PlayerGfx, PlayerStatMod,
-        PlayerStats, Ready, StatType, Whirling,
+        Player, PlayerAction, PlayerGfx, PlayerStatMod,
+        PlayerStats,
     },
 };
 
@@ -19,12 +19,9 @@ use crate::game::player::states::skill::attacking::Pogo;
 use crate::game::player::states::WALL_PUSHBACK;
 use crate::game::player::states::WALL_PUSHBACK_TICKS;
 use crate::game::player::states::{
-    transition_locomotion, Falling, Grounded, InAir, Jumping,
-    OverridesLocomotion,
+    transition_locomotion, Falling, Grounded, HorizontalInputIntent, InAir,
+    Jumping,
 };
-use crate::game::player::weapon::CurrentWeapon;
-use crate::game::player::BowAutoAimState;
-use theseeker_engine::physics::Collider;
 
 pub struct JumpingStatePlugin;
 
@@ -38,63 +35,142 @@ impl Plugin for JumpingStatePlugin {
             )
                 .chain()
                 .run_if(any_with_component::<Jumping>)
-                .in_set(crate::game::player::PlayerStateSet::Behavior),
+                .in_set(crate::game::player::PlayerBehaviorSet::Locomotion),
         );
     }
 }
 
 // Exact per-tick upward displacements; values are units moved this tick
-const JUMP_VELOCITIES: &[f32] = &[
-    0.0, 0.0, 1.615, 1.579, 1.542, 1.506, 1.469, 1.433, 1.396, 1.360, 1.323,
-    1.287, 1.250, 1.214, 1.177, 1.141, 1.104, 1.068, 1.031, 0.995, 0.958,
-    0.922, 0.885, 0.849, 0.812, 0.776, 0.739, 0.703, 0.666, 0.630, 0.593,
-    0.557, 0.520, 0.484, 0.447, 0.411, 0.374, 0.338, 0.301, 0.265, 0.228,
-    0.192, 0.155, 0.119, 0.082, 0.046, 0.010, 0.0, 0.0, 0.0, 0.0,
-];
-
 // Horizontal air-control multiplier during jump
 const AIR_SPEED_FACTOR: f32 = 1.0; // Multiplier for air speed (can be tweaked for different feel)
+const AIR_JUMP_ANIMATION_SLOT: &str = "AirJump";
+
+fn play_jump_animation(
+    player: &mut ScriptPlayer<SpriteAnimation>,
+    jumping: &Jumping,
+) {
+    player.request_background("anim.player.Jump");
+    player.set_slot(AIR_JUMP_ANIMATION_SLOT, jumping.jump_count > 1);
+}
 
 fn jumping_enter_system(
     query: Query<
         (Entity, &Gent, &Jumping),
-        Or<(
-            (
-                Added<Jumping>,
-                Without<Attacking>,
-                Without<Whirling>,
-                Without<crate::game::player::Dashing>,
-                Without<DashStrike>,
-            ),
-            (
-                With<Jumping>,
-                Added<Ready>,
-                Without<Whirling>,
-                Without<crate::game::player::Dashing>,
-                Without<DashStrike>,
-            ),
-        )>,
+        Added<Jumping>,
     >,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-    mut removed_dashing: RemovedComponents<crate::game::player::Dashing>,
     mut commands: Commands,
 ) {
-    for (entity, gent, _jumping) in query.iter() {
+    for (entity, gent, jumping) in query.iter() {
         commands.entity(entity).insert(InAir);
-
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            player.play_key("anim.player.Jump")
-        }
+        play_jump_animation_for_gent(gent, jumping, &mut gfx_query);
     }
 
-    // If dash ended while in Jumping, restart jump animation
-    for entity in removed_dashing.read() {
-        if let Ok((_entity, gent, _jumping)) = query.get(entity) {
-            if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-                player.play_key("anim.player.Jump");
-            }
-        }
+
+}
+
+fn play_jump_animation_for_gent(
+    gent: &Gent,
+    jumping: &Jumping,
+    gfx_query: &mut Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
+) {
+    let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) else {
+        return;
+    };
+
+    play_jump_animation(&mut player, jumping);
+}
+
+#[derive(Clone, Copy)]
+struct InitialWallKick {
+    push_x: f32,
+    base_jump_y: f32,
+    facing: Facing,
+}
+
+fn initial_wall_jump_kick(
+    jumping: &Jumping,
+    is_grounded: bool,
+    has_knockback: bool,
+    collider: &Collider,
+    wall_sensor: &WallSensor,
+    move_dir: f32,
+    base_jump_y: f32,
+) -> Option<InitialWallKick> {
+    if jumping.tick != 0 || is_grounded || has_knockback {
+        return None;
     }
+
+    let half_width = collider
+        .cuboid_half_extents()
+        .map(|half| half.x)
+        .unwrap_or(2.0);
+    const WALL_FORGIVENESS_DISTANCE: f32 = 0.2;
+    let near_left_wall =
+        wall_sensor.left_distance <= half_width + WALL_FORGIVENESS_DISTANCE;
+    let near_right_wall =
+        wall_sensor.right_distance <= half_width + WALL_FORGIVENESS_DISTANCE;
+    if !(near_left_wall ^ near_right_wall) {
+        return None;
+    }
+
+    initial_wall_kick_from_input(near_left_wall, near_right_wall, move_dir)
+        .map(|(push_x, facing)| InitialWallKick {
+            push_x,
+            base_jump_y,
+            facing,
+        })
+}
+
+fn initial_wall_kick_from_input(
+    near_left_wall: bool,
+    near_right_wall: bool,
+    move_dir: f32,
+) -> Option<(f32, Facing)> {
+    if near_left_wall && move_dir < -0.1 {
+        return Some((WALL_PUSHBACK, Facing::Right));
+    }
+
+    if near_right_wall && move_dir > 0.1 {
+        return Some((-WALL_PUSHBACK, Facing::Left));
+    }
+
+    None
+}
+
+fn apply_initial_wall_jump_kick(
+    entity: Entity,
+    commands: &mut Commands,
+    velocity: &mut LinearVelocity,
+    facing: &mut Facing,
+    wall_kick: Option<InitialWallKick>,
+) {
+    let Some(wall_kick) = wall_kick else {
+        return;
+    };
+
+    velocity.0.x = wall_kick.push_x;
+    commands.entity(entity).insert(Knockback::new(
+        Vec2::new(wall_kick.push_x, wall_kick.base_jump_y),
+        WALL_PUSHBACK_TICKS,
+    ));
+    *facing = wall_kick.facing;
+}
+
+fn apply_jumping_air_control(
+    velocity: &mut LinearVelocity,
+    direction: f32,
+    stats: &PlayerStats,
+    stat_mod: &PlayerStatMod,
+) {
+    if direction != 0.0 {
+        let base_speed = stats.max_move_velocity;
+        velocity.0.x =
+            direction * base_speed * AIR_SPEED_FACTOR * stat_mod.speed;
+        return;
+    }
+
+    velocity.0.x = 0.0;
 }
 
 fn jumping_update_system(
@@ -104,6 +180,7 @@ fn jumping_update_system(
             &mut LinearVelocity,
             &mut Jumping,
             &ActionState<PlayerAction>,
+            &HorizontalInputIntent,
             &PlayerStats,
             &PlayerStatMod,
             &mut Facing,
@@ -112,15 +189,14 @@ fn jumping_update_system(
             &Collider,
             Option<&Grounded>,
             Option<&Knockback>,
-            Has<Pogo>,
-            Has<crate::game::player::Dashing>,
-            Has<OverridesLocomotion>,
+            (
+                Has<Pogo>,
+                &crate::game::player::foreground::ForegroundAction,
+            ),
         ),
-        With<Player>,
+        (With<Player>, Without<crate::game::spikes::SpikeRespawnPending>),
     >,
     mut commands: Commands,
-    weapon: CurrentWeapon,
-    autoaim: Res<BowAutoAimState>,
     stealth_q: Query<
         Has<crate::game::effects::stealthed::StealthEffect>,
         With<Player>,
@@ -131,6 +207,7 @@ fn jumping_update_system(
         mut velocity,
         mut jumping,
         action_state,
+        horizontal_intent,
         stats,
         stat_mod,
         mut facing,
@@ -139,14 +216,15 @@ fn jumping_update_system(
         collider,
         maybe_grounded,
         maybe_knockback,
-        has_pogo,
-        _has_dashing,
-        has_locomotion_override,
+        (
+            has_pogo,
+            foreground,
+        ),
     ) in query.iter_mut()
     {
         let _is_stealthed = stealth_q.get(entity).unwrap_or(false);
         // Suspend jump curve while a skill overrides movement
-        if has_locomotion_override {
+        if foreground.owns_motion() {
             continue;
         }
         // Pogo owns velocity while active
@@ -174,7 +252,7 @@ fn jumping_update_system(
         }
 
         // Advance jump curve or hand over to Falling when complete
-        if jumping.tick >= JUMP_VELOCITIES.len() as u32 {
+        if jumping.tick >= crate::game::physics::JUMP_VELOCITIES.len() as u32 {
             // Reached end of jump curve, transition to falling
             transition_locomotion(
                 &mut commands,
@@ -185,81 +263,34 @@ fn jumping_update_system(
         }
 
         // Apply per-tick vertical displacement
-        velocity.0.y = JUMP_VELOCITIES[jumping.tick as usize];
+        velocity.0.y = crate::game::physics::jump_velocity(jumping.tick);
 
         // Wall-jump kickback at tick 0 when airborne and near a wall
-        if jumping.tick == 0 {
-            let is_grounded = maybe_grounded.is_some();
-            if !is_grounded {
-                // Determine wall proximity using collider half-width with small tolerance
-                let half_width = if let Some(cuboid) = collider.as_cuboid() {
-                    cuboid.half_extents().x
-                } else {
-                    2.0
-                };
-                const WALL_FORGIVENESS_DISTANCE: f32 = 0.2;
-                let near_left_wall = wall_sensor.left_distance
-                    <= half_width + WALL_FORGIVENESS_DISTANCE;
-                let near_right_wall = wall_sensor.right_distance
-                    <= half_width + WALL_FORGIVENESS_DISTANCE;
-
-                // Require input toward the wall
-                let move_dir = action_state.clamped_value(&PlayerAction::Move);
-                let pressing_left = move_dir < -0.1;
-                let pressing_right = move_dir > 0.1;
-
-                // Apply when near exactly one wall (avoid ambiguous corridors)
-                if (near_left_wall ^ near_right_wall)
-                    && maybe_knockback.is_none()
-                    && ((near_left_wall && pressing_left)
-                        || (near_right_wall && pressing_right))
-                {
-                    // Kick away from the wall; preserve current vertical component
-                    let push_x = if near_left_wall {
-                        WALL_PUSHBACK
-                    } else {
-                        -WALL_PUSHBACK
-                    };
-                    let base_jump_y = velocity.0.y;
-
-                    commands.entity(entity).insert(Knockback::new(
-                        Vec2::new(push_x, base_jump_y),
-                        WALL_PUSHBACK_TICKS,
-                    ));
-
-                    // Face away from the wall (bow auto-aim can override later)
-                    *facing = if near_left_wall {
-                        Facing::Right
-                    } else {
-                        Facing::Left
-                    };
-                }
-            }
-        }
+        let initial_wall_kick = initial_wall_jump_kick(
+            &jumping,
+            maybe_grounded.is_some(),
+            maybe_knockback.is_some(),
+            collider,
+            wall_sensor,
+            horizontal_intent.movement,
+            velocity.0.y,
+        );
+        apply_initial_wall_jump_kick(
+            entity,
+            &mut commands,
+            &mut velocity,
+            &mut facing,
+            initial_wall_kick,
+        );
 
         // Horizontal air control unless knockback is active
         if maybe_knockback.is_none() {
-            let direction = action_state.clamped_value(&PlayerAction::Move);
-            if direction != 0.0 {
-                // Per-tick displacement (stats already per-tick)
-                let base_speed = stats.get(StatType::MoveVelMax);
-                velocity.0.x =
-                    direction * base_speed * AIR_SPEED_FACTOR * stat_mod.speed;
-
-                // Bow auto-aim may own facing; otherwise reflect input
-                if !weapon.has_bow_equipped()
-                    || !autoaim.blocks_manual(*facing)
-                {
-                    if direction > 0.0 {
-                        *facing = Facing::Right;
-                    } else if direction < 0.0 {
-                        *facing = Facing::Left;
-                    }
-                }
-            } else {
-                // No input → zero horizontal movement
-                velocity.0.x = 0.0;
-            }
+            apply_jumping_air_control(
+                &mut velocity,
+                horizontal_intent.movement,
+                stats,
+                stat_mod,
+            );
         }
 
         // Increment tick counter

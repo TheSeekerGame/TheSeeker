@@ -2,10 +2,11 @@ use crate::prelude::*;
 
 pub mod ghosting;
 pub mod sprite_stretch;
+pub mod scale_recovery;
 
 pub use ghosting::{
-    FadeCurve, Ghost, GhostColorMode, GhostMovement, GhostingPlugin,
-    GhostingSet, GhostingSource, ScaleCurve,
+    FadeCurve, Ghost, GhostColorMode, GhostMovement, GhostingDefaults,
+    GhostingPlugin, GhostingSet, GhostingSource, ScaleCurve,
 };
 pub use sprite_stretch::{SpriteStretch, SpriteStretchPlugin, StretchAnchor};
 

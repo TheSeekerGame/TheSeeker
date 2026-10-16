@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.BurningDash"
+image = "animations/player/skills/BurningDashSheet__r1c2__84x32.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

@@ -1,4 +1,14 @@
+[asset]
+key = "anim.spider2.RangedAttack"
+image = "animations/spider/big/tier2/RangedAttack__r1c15__48x48.png"
+
 atlas_asset_key = "anim.spider2.RangedAttack.sprite"
+
+[playback]
+start = 1
+end = 15
+ticks_per_frame = 8
+mode = "loop"
 
 [settings]
 time_base = "Relative"
@@ -8,12 +18,11 @@ ticks_per_frame = 8
 frame_max = 15
 frame_min = 1
 
-# LOOP
-[[script]]
-action = "SetFrameNext"
-frame_index = 1
-run_at_frame = 15
+[[events]]
+on = { frame_enter = 8 }
+emit = "fire_projectile"
 
+# LOOP
 [[script]]
 run_at_frame = 3
 action = "StopAudio"

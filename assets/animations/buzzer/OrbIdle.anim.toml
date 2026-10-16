@@ -1,0 +1,18 @@
+[asset]
+key = "anim.buzzer.OrbIdle"
+image = "animations/buzzer/OrbIdle__r1c8__48x48.png"
+
+[playback]
+start = 1
+end = 8
+ticks_per_frame = 8
+mode = "loop"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 8
+frame_start = 1
+

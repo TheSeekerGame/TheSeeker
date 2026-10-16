@@ -1,4 +1,14 @@
+[asset]
+key = "anim.spider2.Walk"
+image = "animations/spider/big/tier2/Walk__r1c10__48x48.png"
+
 atlas_asset_key = "anim.spider2.Walk.sprite"
+
+[playback]
+start = 1
+end = 10
+ticks_per_frame = 8
+mode = "loop"
 
 [settings]
 time_base = "Relative"
@@ -8,11 +18,35 @@ frame_min = 1
 frame_max = 10
 frame_start = 1
 
-# LOOP
-[[script]]
-run_at_frame = 10
-action = "SetFrameNext"
-frame_index = 1
+[[frame_impulse]]
+frame = 1
+x = 1.0
+y = 0.0
+
+[[frame_impulse]]
+frame = 2
+x = 1.0
+y = 0.0
+
+[[frame_impulse]]
+frame = 4
+x = 1.0
+y = 0.0
+
+[[frame_impulse]]
+frame = 6
+x = 1.0
+y = 0.0
+
+[[frame_impulse]]
+frame = 8
+x = 1.0
+y = 0.0
+
+[[frame_impulse]]
+frame = 10
+x = 1.0
+y = 0.0
 
 # Support left/right flipping
 [[script]]

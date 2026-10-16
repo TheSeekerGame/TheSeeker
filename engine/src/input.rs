@@ -9,7 +9,7 @@ use bevy::ecs::prelude::*;
 use bevy::input::gamepad::GamepadButton;
 use bevy::input::keyboard::KeyCode;
 use bevy::input::mouse::*;
-use bevy::input::InputSystem;
+use bevy::input::InputSystems;
 use bevy::prelude::{PostUpdate, PreUpdate};
 use bevy::reflect::TypePath;
 use leafwing_input_manager::action_state::{ActionState, ButtonData};
@@ -31,37 +31,17 @@ use leafwing_input_manager::Actionlike;
 use crate::time::GameTickPost;
 use crate::GameTickSet;
 
-/// A [`Plugin`] that collects [`ButtonInput`](bevy::input::ButtonInput) from disparate sources,
-/// producing an [`ActionState`] that can be conveniently checked
+/// Collects physical input in `PreUpdate` and delivers it to the custom game ticks.
 ///
-/// This plugin needs to be passed in an [`Actionlike`] enum type that you've created for your game.
-/// Each variant represents a "virtual button" whose state is stored in an [`ActionState`] struct.
+/// Install one plugin per action enum. Entities carry an [`InputMap`] and an
+/// [`ActionState`]; input collection runs after Bevy input and Leafwing's unified
+/// input store. Systems consuming render-frame actions run after
+/// [`InputManagerSystem::Update`].
 ///
-/// Each [`InputManagerBundle`](crate::InputManagerBundle) contains:
-///  - an [`InputMap`] component, which stores an entity-specific mapping between the assorted input streams and an internal representation of "actions"
-///  - an [`ActionState`] component, which stores the current input state for that entity in a source-agnostic fashion
-///
-/// If you have more than one distinct type of action (e.g., menu actions, camera actions, and player actions),
-/// consider creating multiple `Actionlike` enums
-/// and adding a copy of this plugin for each `Actionlike` type.
-///
-/// All actions can be dynamically enabled or disabled by calling the relevant methods on
-/// `ActionState<A>`. This can be useful when working with states to pause the game, navigate
-/// menus, and so on.
-///
-/// ## Systems
-///
-/// **WARNING:** These systems run during [`PreUpdate`].
-/// If you have systems that care about inputs and actions that also run during this stage,
-/// you must define an ordering between your systems or behavior will be very erratic.
-/// The stable system sets for these systems are available under [`InputManagerSystem`] enum.
-///
-/// Complete list:
-///
-/// - [`tick_action_state`](crate::systems::tick_action_state), which resets the `pressed` and `just_pressed` fields of the [`ActionState`] each frame
-/// - [`update_action_state`](crate::systems::update_action_state), which collects [`ButtonInput`](bevy::input::ButtonInput) resources to update the [`ActionState`]
-/// - [`update_action_state_from_interaction`](crate::systems::update_action_state_from_interaction), for triggering actions from buttons
-///    - powers the [`ActionStateDriver`](crate::action_driver::ActionStateDriver) component based on an [`Interaction`](bevy::ui::Interaction) component
+/// The fixed action bank is selected before simulation and restored afterward.
+/// Edges remain pending on frames with no ticks and are cleared in
+/// [`GameTickPost`] between catch-up ticks. Modal gameplay suppression runs after
+/// collection, before the gameplay systems that consume actions.
 pub struct InputManagerPlugin<A: Actionlike> {
     _phantom: PhantomData<A>,
 }
@@ -83,6 +63,8 @@ impl<A: Actionlike + TypePath + bevy::reflect::GetTypeRegistration> Plugin
 
         if !app.is_plugin_added::<CentralInputStorePlugin>() {
             app.add_plugins(CentralInputStorePlugin);
+            app.add_systems(PreUpdate, clear_central_input_store
+                .before(leafwing_input_manager::plugin::InputManagerSystem::Unify));
         }
 
         // Main schedule
@@ -104,7 +86,8 @@ impl<A: Actionlike + TypePath + bevy::reflect::GetTypeRegistration> Plugin
 
         app.configure_sets(
             PreUpdate,
-            InputManagerSystem::Update.after(InputSystem),
+            InputManagerSystem::Update.after(InputSystems)
+                .after(leafwing_input_manager::plugin::InputManagerSystem::Unify),
         );
 
         // GameTickUpdate just_pressed state fixes
@@ -209,3 +192,6 @@ pub enum InputManagerSystem {
     /// Must run after [`InputManagerSystem::Update`] or the action state will be overridden
     ManualControl,
 }
+
+#[cfg(test)]
+mod tests;

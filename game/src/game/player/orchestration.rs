@@ -1,50 +1,12 @@
-use crate::prelude::*;
-use theseeker_engine::time::{GameTickUpdate, GameTimeAppExt};
 use crate::game::effects::{chilled, stealthed};
+use crate::prelude::*;
+use theseeker_engine::physics::PhysicsSet;
+use theseeker_engine::script::ScriptSet;
+use theseeker_engine::time::{GameTickUpdate, GameTimeAppExt};
 
-/// Player Plugin - Orchestrates all player-related systems
-///
-/// ## Stat Modification Architecture
-///
-/// Player stats flow through a deterministic pipeline each game tick:
-///
-/// ### 1. Base Stats (`PlayerStats`)
-/// - **Base values**: Stored in `PlayerStats.base_stats` (e.g., MoveVelMax = 0.729 per tick)
-/// - **Effective values**: Stored in `PlayerStats.effective_stats` (initially mirrors base)
-/// - **Initialization**: Set once via `load_player_stats` when player spawns
-/// - **Access**: Movement systems call `stats.get(StatType::MoveVelMax)`
-///
-/// ### 2. Stat Modifiers (`PlayerStatMod`)
-/// - **Purpose**: Multiplicative modifiers that stack (damage, defense, speed, cdr)
-/// - **Reset**: Every tick to 1.0 (baseline) by the passive system
-/// - **Application**: Passives and effects multiply these values
-/// - **Final calculation**: `base_speed * stat_mod.speed * other_multipliers`
-///
-/// ### 3. System Execution Order (per tick)
-///
-/// ```
-/// PlayerStateSet::Sensors
-///   └─ Sensor systems (ground, wall, enemy proximity)
-///
-/// PlayerStateSet::Input  
-///   └─ Input buffer and action processing
-///
-/// PlayerStateSet::Behavior
-///   ├─ load_player_stats (only on Added<PlayerStats>)
-///   ├─ process_passives_new_system
-///   │   └─ Resets PlayerStatMod to 1.0, applies passive modifiers
-///   ├─ Effect systems (after passives)
-///   │   ├─ stealth_effect_system: Multiplies speed by 1.15
-///   │   └─ chilled_effect_system: Multiplies speed by 0.5
-///   └─ State update systems (running, jumping, etc.)
-///       └─ Read stats and stat_mod to determine final velocity
-/// ```
-///
-/// ### 4. Key Design Principles
-/// - **Multiplicative stacking**: All modifiers multiply together
-/// - **Frame-perfect control**: Movement uses per-tick displacements, not forces
-/// - **Clear data flow**: Base → Passives → Effects → Movement
-/// - **No hidden state**: All modifiers visible in PlayerStatMod
+/// Orders player sensing, input, behavior, collision, and presentation.
+/// Passive stat modifiers are refreshed before effects and movement consume them;
+/// combat events are processed after damage integration.
 pub struct PlayerPlugin;
 
 /// Ordered system sets for player-related logic
@@ -57,13 +19,25 @@ pub enum PlayerStateSet {
     Animation,
 }
 
+/// Admission commits before background locomotion and foreground execution.
+#[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
+pub enum PlayerBehaviorSet {
+    Activation,
+    Locomotion,
+    Execution,
+}
+
 impl Plugin for PlayerPlugin {
+    #[expect(
+        clippy::too_many_lines,
+        reason = "This Bevy plugin method declares player state-machine systems and schedule ordering in one auditable block."
+    )]
     fn build(&self, app: &mut App) {
         // Configure system set ordering
         app.configure_sets(
             GameTickUpdate,
             (
-                PlayerStateSet::Sensors,
+                PlayerStateSet::Sensors.after(PhysicsSet),
                 PlayerStateSet::Input.after(PlayerStateSet::Sensors),
                 PlayerStateSet::Behavior.after(PlayerStateSet::Input),
                 PlayerStateSet::Collisions.after(PlayerStateSet::Behavior),
@@ -71,25 +45,50 @@ impl Plugin for PlayerPlugin {
             ),
         );
 
-        // Init auto-aim decisiveness state
-        app.init_resource::<super::BowAutoAimState>();
+        app.configure_sets(GameTickUpdate, (
+            PlayerBehaviorSet::Activation,
+            PlayerBehaviorSet::Locomotion,
+            PlayerBehaviorSet::Execution,
+        ).chain().in_set(PlayerStateSet::Behavior));
+        app.add_observer(super::foreground::interrupt_on_death);
+        app.add_systems(GameTickUpdate, super::foreground::interrupt_stopped_playback
+            .after(theseeker_engine::animation::AnimationSet::Signals)
+            .before(PlayerBehaviorSet::Activation));
+        app.init_resource::<super::spawn::PersistedPlayerProgression>();
+        app.init_resource::<super::skills::portable_tent::TentInteriorAssets>();
 
         // Player stat management & passives runtime.
-        // Passive events are processed on the next tick for clear ordering and determinism.
         app.add_gametick_event::<super::passives::PassiveEvent>();
+        app.add_gametick_event::<super::passives::blood_shards::HealApplied>();
+        app.init_resource::<
+            super::passives::runtime::ElementalSpriteTintCache,
+        >();
         app.register_type::<super::crits::Crits>();
         app.add_systems(
             GameTickUpdate,
             (
-                super::stats::load_player_stats,
-                super::track_hits,
-                super::passives::runtime::process_passives_new_system,
+                super::passives::runtime::process_passive_stats,
                 super::passives::runtime::apply_passive_animation_slots,
                 super::crits::track_crits,
             )
                 .chain()
                 .in_set(PlayerStateSet::Behavior)
                 .after(PlayerStateSet::Sensors),
+        );
+        app.add_systems(
+            GameTickUpdate,
+            super::passives::runtime::apply_elemental_crystal_player_tint
+                .in_set(PlayerStateSet::Animation)
+                .after(ScriptSet::Run)
+                .run_if(in_state(AppState::InGame)),
+        );
+        app.add_systems(
+            GameTickUpdate,
+            super::skills::consumables::apply_consumable_stat_buffs
+                .in_set(PlayerStateSet::Behavior)
+                .after(super::passives::runtime::process_passive_stats)
+                .before(super::skills::cooldowns::tick_cooldowns)
+                .run_if(in_state(AppState::InGame)),
         );
         // Track skill rotation state for Permutator passives
         app.add_systems(
@@ -101,14 +100,21 @@ impl Plugin for PlayerPlugin {
         // Process passive events after damage has been applied so crit and damage events are visible
         app.add_systems(
             GameTickUpdate,
-            (super::passives::runtime::process_passive_events_system)
+            (
+                super::passives::runtime::process_passive_events_system,
+                super::skills::consumables::tick_consumable_regeneration,
+                super::passives::blood_shards::spawn_blood_shards_on_heal,
+            )
+                .chain()
                 .after(crate::game::combat::damage_source::apply_damage)
-                .in_set(PlayerStateSet::Behavior),
+                .after(
+                    crate::game::combat::damage_source::emit_passive_events_from_damage,
+                ),
         );
         app.add_systems(
             GameTickUpdate,
             (super::passives::runtime::emit_passive_events_from_xp,)
-                .after(PlayerStateSet::Behavior),
+                .after(crate::game::player::spawns::xp_orbs::XpOrbSet),
         );
         app.add_systems(
             GameTickUpdate,
@@ -116,11 +122,56 @@ impl Plugin for PlayerPlugin {
                 super::apply_vitality_overclock,
                 super::update_serpentring_health,
                 super::enforce_skill_slot_capacity,
+                (
+                    super::passives::blood_shards::update_blood_shards_pos,
+                    super::passives::blood_shards::update_blood_shards_vel_and_hit,
+                )
+                    .chain(),
+                super::passives::blood_shards::despawn_blood_shard_on_hit
+                    .after(crate::game::combat::damage_source::apply_damage),
             )
                 .after(PlayerStateSet::Behavior),
         );
+        app.add_systems(
+            GameTickUpdate,
+            super::skills::consumables::sync_skill_stock_unlocks
+                .after(PlayerStateSet::Behavior)
+                .after(crate::game::player::spawns::item_drops::ItemDropSet)
+                .run_if(in_state(AppState::InGame)),
+        );
+        app.add_systems(
+            GameTickUpdate,
+            (
+                super::skills::placement_preview::update_placement_previews,
+                super::skills::portable_tent::resolve_pending_tent_entry,
+                super::skills::placement_preview::cleanup_orphaned_previews,
+            )
+                .chain()
+                .in_set(PlayerStateSet::Behavior)
+                .run_if(in_state(AppState::InGame)),
+        );
+        app.add_systems(
+            GameTickUpdate,
+            super::skills::portable_tent::exit_tent_on_exit_overlap
+                .after(PlayerStateSet::Collisions)
+                .run_if(in_state(AppState::InGame)),
+        );
+        app.add_systems(
+            OnEnter(AppState::InGame),
+            super::skills::portable_tent::load_tent_interior_image,
+        );
+        app.add_systems(
+            Update,
+            (
+                super::skills::portable_tent::populate_tent_interior_map,
+                super::skills::portable_tent::sync_tent_interior_backdrop,
+                super::skills::portable_tent::sync_tent_interior_view,
+            )
+                .chain()
+                .run_if(in_state(AppState::InGame)),
+        );
 
-        // Dash after-image FX are now handled by the generic ghosting system
+        // Dash after-images use the generic ghosting system
         // in engine/src/effects/ghosting.rs via the GhostingSource component
 
         // Spawn/despawn
@@ -195,7 +246,6 @@ impl Plugin for PlayerPlugin {
                 .after(super::skills::cooldowns::tick_cooldowns)
                 .after(super::skills::whirl::whirl_energy_regen)
                 .after(super::skills::flicker_strike::flicker_energy_regen)
-                .after(super::skills::explosive_mine::mine_energy_regen)
                 .in_set(PlayerStateSet::Behavior)
                 .run_if(in_state(AppState::InGame)),
         );
@@ -214,11 +264,10 @@ impl Plugin for PlayerPlugin {
                 stealthed::stealth_exit_visibility_system,
                 stealthed::stealth_damage_break_system,
                 stealthed::start_stealth_cooldown_on_remove,
-                super::reset_autoaim_on_stealth_change,
             )
                 .chain()
                 .in_set(PlayerStateSet::Behavior)
-                .after(super::passives::runtime::process_passives_new_system)
+                .after(super::passives::runtime::process_passive_stats)
                 .run_if(in_state(AppState::InGame)),
         );
 
@@ -228,33 +277,28 @@ impl Plugin for PlayerPlugin {
             (
                 chilled::chilled_effect_system,
                 chilled::chilled_exit_restoration_system,
-                chilled::chilled_refresh_system,
             )
                 .chain()
                 .in_set(PlayerStateSet::Behavior)
-                .after(super::passives::runtime::process_passives_new_system)
+                .after(super::passives::runtime::process_passive_stats)
                 .run_if(in_state(AppState::InGame)),
         );
 
-        // Input-time auto-aim for bow
-        app.add_systems(
-            GameTickUpdate,
-            (super::autoaim::continuous_bow_auto_aim)
-                .in_set(PlayerStateSet::Input)
-                .run_if(in_state(AppState::InGame)),
-        );
-
-        // Pogo is now handled inside states::skill::attacking, after attack systems
+        // Pogo runs inside states::skill::attacking, after attack systems.
 
         // Core player plugins
         app.add_plugins((
             super::sensors::SensorPlugin,
             super::input_buffer::InputBufferPlugin,
             super::player_action::PlayerActionPlugin,
+            super::autoaim::RangedAutoAimPlugin,
+            super::passives::pulse_echo::PulseEchoPlugin,
             super::collision::PlayerCollisionPlugin,
+            super::dust::PlayerDustPlugin,
             super::player_anim::PlayerAnimationPlugin,
             super::weapon::PlayerWeaponPlugin,
             super::equipment::EquipmentPlugin,
+            super::progression::PlayerProgressionPlugin,
         ));
 
         // State plugins
@@ -263,7 +307,8 @@ impl Plugin for PlayerPlugin {
             super::states::RunStatePlugin,
             super::states::JumpingStatePlugin,
             super::states::FallingStatePlugin,
-            super::states::ReadyStatePlugin,
+            super::states::ElevatorStatePlugin,
+            super::states::GatheringStatePlugin,
             super::states::AttackingStatePlugin,
             super::states::DashingStatePlugin,
             super::states::WhirlingStatePlugin,
@@ -283,57 +328,20 @@ impl Plugin for PlayerPlugin {
         app.add_plugins(crate::game::player::spawns::spinner::SpinnerPlugin);
         app.add_plugins(crate::game::player::spawns::mine::ExplosiveMinePlugin);
         app.add_plugins(crate::game::player::spawns::ice_nova::IceNovaPlugin);
+        app.add_plugins(
+            crate::game::player::spawns::quark_pylon::QuarkPylonPlugin,
+        );
+        app.add_plugins(
+            crate::game::player::spawns::tether_node::TetherNodePlugin,
+        );
+        app.add_plugins(crate::game::player::spawns::spit::SpitPlugin);
+        app.add_plugins(
+            crate::game::player::spawns::item_drops::ItemDropsPlugin,
+        );
 
         // Initialize skills framework resources
         app.add_plugins(super::skills::SkillsPlugin);
-        // Mine energy systems and debit-on-use
-        app.add_systems(
-            GameTickUpdate,
-            (
-                super::skills::explosive_mine::mine_energy_regen,
-                super::skills::explosive_mine::mine_energy_debit_on_spawn,
-            )
-                .in_set(PlayerStateSet::Behavior)
-                .run_if(in_state(AppState::InGame)),
-        );
 
-        // Centralized dash-end animation restart
-        app.add_systems(
-            GameTickUpdate,
-            restart_animation_on_dash_end
-                .in_set(PlayerStateSet::Animation)
-                .run_if(in_state(AppState::InGame)),
-        );
-    }
-}
 
-use theseeker_engine::assets::animation::SpriteAnimation;
-use theseeker_engine::gent::Gent;
-use theseeker_engine::script::ScriptPlayer;
-
-/// When dashing ends, restart Idle/Run animation based on current locomotion state.
-fn restart_animation_on_dash_end(
-    mut removed: RemovedComponents<super::states::Dashing>,
-    idle_q: Query<(&Gent, &crate::game::gentstate::Facing), With<super::states::Idle>>,
-    running_q: Query<(&Gent, &crate::game::gentstate::Facing), With<super::states::Running>>,
-    mut gfx_q: Query<&mut ScriptPlayer<SpriteAnimation>, With<super::PlayerGfx>>,
-) {
-    for e in removed.read() {
-        if let Ok((gent, facing)) = idle_q.get(e) {
-            if let Ok(mut anim) = gfx_q.get_mut(gent.e_gfx) {
-                super::player_anim::set_direction_slots(&mut anim, facing);
-                anim.set_slot("AttackTransition", false);
-                anim.set_slot("DownwardAttack", false);
-                anim.play_key("anim.player.Idle");
-            }
-            continue;
-        }
-        if let Ok((gent, facing)) = running_q.get(e) {
-            if let Ok(mut anim) = gfx_q.get_mut(gent.e_gfx) {
-                super::player_anim::set_direction_slots(&mut anim, facing);
-                anim.play_key("anim.player.Run");
-            }
-            continue;
-        }
     }
 }

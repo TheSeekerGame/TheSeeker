@@ -40,26 +40,49 @@ fn apply_damage_flash(
     >,
     enemy_check_query: Query<Entity, With<EnemyGfx>>,
     gent_query: Query<&Gent>,
-    mut damage_events: EventReader<DamageInfo>,
+    mut damage_events: MessageReader<DamageInfo>,
     mut commands: Commands,
 ) {
     for damage_info in damage_events.read() {
         if let Ok(gent) = gent_query.get(damage_info.target) {
-            if let Ok(entity) = sprite_query.get(gent.e_gfx) {
-                // Apply damage flash
-                commands.entity(entity).insert(DamageFlash {
-                    current_ticks: 0,
-                    max_ticks: 8,
-                });
+            apply_damage_flash_to_gent(
+                gent,
+                &sprite_query,
+                &enemy_check_query,
+                &mut commands,
+            );
+        }
+    }
+}
 
-                // Apply stretch effect to enemies only
-                if enemy_check_query.get(entity).is_ok() {
-                    commands
-                        .entity(entity)
-                        .insert(SpriteScale::new())
-                        .insert(SpriteStretch::default());
-                }
-            }
+fn apply_damage_flash_to_gent(
+    gent: &Gent,
+    sprite_query: &Query<
+        Entity,
+        (
+            With<Sprite>,
+            Or<(With<EnemyGfx>, With<PlayerGfx>)>,
+            Without<Gent>,
+        ),
+    >,
+    enemy_check_query: &Query<Entity, With<EnemyGfx>>,
+    commands: &mut Commands,
+) {
+    for gfx_entity in [gent.e_gfx, gent.e_effects_gfx] {
+        let Ok(entity) = sprite_query.get(gfx_entity) else {
+            continue;
+        };
+
+        commands.entity(entity).insert(DamageFlash {
+            current_ticks: 0,
+            max_ticks: 8,
+        });
+
+        if enemy_check_query.get(entity).is_ok() {
+            commands
+                .entity(entity)
+                .insert(SpriteScale::new())
+                .insert(SpriteStretch::default());
         }
     }
 }
@@ -75,19 +98,39 @@ fn apply_damage_stretch_reset(
         ),
     >,
     gent_query: Query<&Gent>,
-    mut damage_events: EventReader<DamageInfo>,
+    mut damage_events: MessageReader<DamageInfo>,
 ) {
     for damage_info in damage_events.read() {
         if let Ok(gent) = gent_query.get(damage_info.target) {
-            if let Ok(entity) = sprite_query.get(gent.e_gfx) {
-                if let Ok((mut stretch, mut scale)) =
-                    stretch_query.get_mut(entity)
-                {
-                    // Restart stretch animation timeline
-                    stretch.current_tick = 0;
-                    scale.reset();
-                }
-            }
+            reset_damage_stretch_for_gent(
+                gent,
+                &sprite_query,
+                &mut stretch_query,
+            );
+        }
+    }
+}
+
+fn reset_damage_stretch_for_gent(
+    gent: &Gent,
+    sprite_query: &Query<
+        Entity,
+        (
+            With<Sprite>,
+            With<EnemyGfx>,
+            Without<Gent>,
+        ),
+    >,
+    stretch_query: &mut Query<(&mut SpriteStretch, &mut SpriteScale)>,
+) {
+    for gfx_entity in [gent.e_gfx, gent.e_effects_gfx] {
+        let Ok(entity) = sprite_query.get(gfx_entity) else {
+            continue;
+        };
+
+        if let Ok((mut stretch, mut scale)) = stretch_query.get_mut(entity) {
+            stretch.current_tick = 0;
+            scale.reset();
         }
     }
 }

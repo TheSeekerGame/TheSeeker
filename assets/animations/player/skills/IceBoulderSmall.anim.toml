@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.IceBoulderSmall"
+image = "animations/player/skills/IceBoulderSheet__r1c2__43x26.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

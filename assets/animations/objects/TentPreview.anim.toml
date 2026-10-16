@@ -1,0 +1,14 @@
+[asset]
+key = "anim.objects.TentPreview"
+image = "animations/objects/Tent__r1c4__28x24.png"
+
+image_asset_key = "anim.objects.Tent.image"
+atlas_asset_key = "anim.objects.Tent.atlas"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 4
+frame_max = 4
+frame_start = 4

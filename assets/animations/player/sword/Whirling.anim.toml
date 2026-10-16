@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.SwordWhirling"
+image = "animations/player/sword/WhirlingSheet__r1c6__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"
@@ -5,6 +9,14 @@ ticks_per_frame = 8
 frame_min = 1
 frame_max = 6
 frame_start = 1
+
+[[events]]
+on = { frame_enter = 2 }
+emit = "whirl_damage"
+
+[[events]]
+on = { frame_enter = 4 }
+emit = "whirl_damage"
 
 
 [[script]]

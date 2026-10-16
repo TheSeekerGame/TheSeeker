@@ -1,0 +1,24 @@
+schema_version = 2
+id = "spider_big_tundra"
+base = "spider_big"
+walking = { kind = "continuous" }
+behavior = { kind = "combat", approach = "ground", committed = true }
+actions = { Attack = "contact_strike" }
+
+[override.stats]
+spawn_hp      = 300
+walk_speed    = 0.208
+chase_speed   = 0.625
+dmg_melee     = 30
+dmg_ranged    = 0
+vision_range  = 100
+melee_range   = 32
+reaction_time = 32
+
+[override.anim]
+Idle   = "anim.tundra_big.Idle"
+Walk   = "anim.tundra_big.Walk"
+Chase  = "anim.tundra_big.Chase"
+Attack = "anim.tundra_big.MeleeAttack"
+Die    = "anim.tundra_big.Death"
+Decay  = "anim.tundra_big.Decay"

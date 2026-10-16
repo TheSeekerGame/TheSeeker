@@ -1,0 +1,15 @@
+[asset]
+key = "anim.opi.EatLeft"
+image = "animations/opi/EatLeft__r1c16__84x84.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 16
+frame_start = 1
+
+[[events]]
+on = { anim_finished = true }
+emit = "eat_done"

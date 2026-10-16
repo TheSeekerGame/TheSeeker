@@ -1,0 +1,38 @@
+[asset]
+key = "anim.bat_huge.Attack"
+image = "animations/bats/huge/Attack__r1c9__36x36.png"
+
+[sections.flight]
+start = 3
+end = 6
+loop_start = 4
+ticks_per_frame = 8
+mode = "loop"
+
+[sections.impact]
+start = 7
+end = 9
+ticks_per_frame = 8
+mode = "hold"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 9
+frame_start = 3
+
+[[events]]
+on = { frame_enter = 9 }
+emit = "attack_done"
+
+# Support left/right flipping
+[[script]]
+run_on_slot_enable = "DirectionLeft"
+action = "SetSpriteFlip"
+flip_x = true
+[[script]]
+run_on_slot_enable = "DirectionRight"
+action = "SetSpriteFlip"
+flip_x = false

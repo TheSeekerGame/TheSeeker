@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.SwordBasicIdle"
+image = "animations/player/sword/BasicIdleSheet__r1c20__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

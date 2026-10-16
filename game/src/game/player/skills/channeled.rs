@@ -24,7 +24,7 @@ impl ChanneledSkill {
 /// every 48 ticks after the first 48, so long channels count as repeats for rotation logic.
 pub fn channeled_skill_tick_and_emit_repeats(
     mut query: Query<(Entity, &mut ChanneledSkill), With<Player>>,
-    mut passive_events: EventWriter<
+    mut passive_events: MessageWriter<
         crate::game::player::passives::PassiveEvent,
     >,
 ) {

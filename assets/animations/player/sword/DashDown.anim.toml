@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.SwordDashDown"
+image = "animations/player/sword/DashDownSheet__r1c6__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

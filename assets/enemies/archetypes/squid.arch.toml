@@ -1,0 +1,54 @@
+schema_version = 2
+id = "squid"
+behavior = { kind = "hopper" }
+actions = { Jump = "jump", AirJump = "air_jump" }
+spawn_hp = 120
+walk_speed = 0.55
+chase_speed = 0.55
+dmg_melee = 0
+dmg_ranged = 0
+vision_range = 1
+melee_range = 1
+reaction_time = 0
+[setup]
+name = "Squid"
+controller = "jump"
+collider = { half_extents = [2.0, 2.5] }
+spawn_offset = [0.0, 14.0, 0.000014]
+facing_slots = { right = "DirectionRight", left = "DirectionLeft" }
+
+[setup.gfx]
+keys = ["Idle"]
+offset = [0.0, 3.5, 0.0]
+pixel_aligned = false
+
+[contact_damage]
+damage = 16.0
+cooldown_ticks = 24
+
+[contact_damage.pushback]
+horizontal = 1.2
+vertical = 0.4
+ticks = 10
+
+[jump]
+idle_ticks = [143, 271]
+jump_prep_ticks = 12
+jump_cancel_lock_ticks = 16
+horizontal_speed = 0.55
+fall_multiplier = 0.8
+
+[jump.anger]
+radius = 100.0
+escape_distance = 200.0
+
+[death]
+mode = "despawn"
+anim_key = "Die"
+
+[anim]
+Idle = "anim.squid.Idle"
+Jump = "anim.squid.Jump"
+AirJump = "anim.squid.AirJump"
+Fall = "anim.squid.Fall"
+Die = "anim.squid.Death"

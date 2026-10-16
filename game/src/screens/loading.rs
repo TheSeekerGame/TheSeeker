@@ -1,4 +1,4 @@
-use bevy::{color::palettes::css::GRAY, render::camera::ClearColorConfig};
+use bevy::{color::palettes::css::GRAY, camera::ClearColorConfig};
 
 use crate::prelude::*;
 
@@ -69,7 +69,7 @@ fn setup_loadscreen(mut commands: Commands) {
 
 fn update_loading_pct(
     mut q: Query<&mut Node, With<LoadingProgressIndicator>>,
-    time: Res<Time>,
+    time: Res<Time<Real>>,
 ) {
     // Simple fake progress animation based on time
     let elapsed = time.elapsed_secs();

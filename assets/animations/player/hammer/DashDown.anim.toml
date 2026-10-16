@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.HammerDashDown"
+image = "animations/player/hammer/DashDownSheet__r1c12__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

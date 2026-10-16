@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.Jump"
+image = "animations/player/movement/JumpSheet__r1c12__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"
@@ -18,12 +22,19 @@ action = "PlayAudio"
 volume = 0.5
 asset_key = "audio.game.XpOrbs"
 
-# INITIALIZE JUMP STRAIGHT
+# INITIALIZE REGULAR JUMP
 [[script]]
 run_on_playback_control = "Start"
-forbid_slots_all = ["MovingSideways"]
+forbid_slots_all = ["AirJump"]
 action = "SetFrameNow"
-frame_index = 2
+frame_index = 1
+
+# INITIALIZE AIR JUMP
+[[script]]
+run_on_playback_control = "Start"
+require_slots_all = ["AirJump"]
+action = "SetFrameNow"
+frame_index = 6
 
 [[script]]
 run_on_playback_control = "Start"
@@ -31,49 +42,20 @@ action = "PlayAudio"
 volume = 0.5
 asset_key = "audio.game.JumpStart"
 
-[[script]]
-run_on_playback_control = "Start"
-action = "PlayAudio"
-volume = 0.16
-asset_key = "audio.game.Pluck"
 
-#SWITCH FROM FORWARD TO STRAIGHT
+# LOOP REGULAR JUMP
 [[script]]
-run_at_frame = 7
-forbid_slots_all = ["MovingSideways"]
-action = "SetFrameNow"
-frame_index = 1
-[[script]]
-run_at_frame = 8
-forbid_slots_all = ["MovingSideways"]
-action = "SetFrameNow"
+run_at_frame = 5
+forbid_slots_all = ["AirJump"]
+action = "SetFrameNext"
 frame_index = 2
-[[script]]
-run_at_frame = 9
-forbid_slots_all = ["MovingSideways"]
-action = "SetFrameNow"
-frame_index = 3
-[[script]]
-run_at_frame = 10
-forbid_slots_all = ["MovingSideways"]
-action = "SetFrameNow"
-frame_index = 4
-[[script]]
-run_at_frame = 11
-forbid_slots_all = ["MovingSideways"]
-action = "SetFrameNow"
-frame_index = 5
+
+# LOOP AIR JUMP
 [[script]]
 run_at_frame = 12
-forbid_slots_all = ["MovingSideways"]
-action = "SetFrameNow"
-frame_index = 6
-
-# LOOP JUMP STRAIGHT
-[[script]]
-run_at_frame = 6
+require_slots_all = ["AirJump"]
 action = "SetFrameNext"
-frame_index = 3
+frame_index = 9
 
 
 # Support left/right flipping

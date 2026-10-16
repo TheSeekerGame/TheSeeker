@@ -1,667 +1,562 @@
+//! The skill toolbar, the interact prompt above it, and level-up captions: pixel canvases
+//! redrawn every frame.
+//!
+//! The toolbar frame holds the equipped skills with their cooldowns and stock, and shows health
+//! and Alignment through the bar windows cut into its art.
+use std::collections::HashSet;
+use std::f32::consts::TAU;
+
+use bevy::ecs::query::QueryData;
+use bevy::ecs::system::SystemParam;
+
+use super::pixel_canvas::{gain, lift, rect, text_width, Art, ArtLibrary, Canvas, Raster};
+use super::pixel_font::FONT_IMAGE_PATH;
+use super::pixel_panel::{draw_prompt, show_raster, UiPixelGrid, PANEL_Z_INDEX, TEXT};
+use super::screen_frame::{AlignmentPulseSample, ALIGNMENT_PULSE_LINEAR_GRAY};
+use crate::game::combat::Health;
+use crate::game::effects::stealthed::StealthEffect;
+use crate::game::interaction::InteractionFocus;
+use crate::game::player::passives::PassiveEvent;
+use crate::game::player::progression::{AdaptationLevelUpEvent, UnlockedSkillPresentationState};
+use crate::game::player::skills::channeled::ChanneledSkill;
+use crate::game::player::skills::cooldowns::Cooldowns;
+use crate::game::player::skills::tether_node::TetherConnectionStatus;
+use crate::game::player::skills::types::{flicker_strike_metadata, whirl_metadata, SkillId};
+use crate::game::player::weapon::{PlayerAmmo, PlayerMeleeWeapon, WeaponInventory};
 use crate::game::player::{
-    FlickerAbility, Passive, Passives, Player, SkillInventory, WhirlAbility,
+    Alignment, FlickerAbility, MaterialInventory, Passive, Passives, Player, PlayerStateSet, SkillInventory,
+    WhirlAbility,
 };
-use crate::graphics::{ability_cooldown, player_hp};
 use crate::prelude::*;
 
-use crate::ui::ability_widget::{AbilityWidget, AbilityWidgetCommands};
-use std::f32::consts::PI;
+const TOOLBAR_Z_INDEX: i32 = 27;
+const CAPTION_Z_INDEX: i32 = 28;
+const ICON: i32 = 12;
+/// The frame art's top rows are empty and left out of the toolbar.
+const FRAME_TOP: i32 = 6;
+pub(super) const FRAME_HEIGHT: i32 = 30 - FRAME_TOP;
+/// Where the first slot icon and the bar windows sit in the cropped frame.
+const FIRST_SLOT: IVec2 = IVec2::new(9, 9 - FRAME_TOP);
+const SLOT_STRIDE: i32 = 14;
+const HEALTH_BAR: IVec2 = IVec2::new(9, 23 - FRAME_TOP);
+const ALIGNMENT_BAR: IVec2 = IVec2::new(9, 26 - FRAME_TOP);
+
+const HEALTH_TRACK: Color = Color::srgb(0.231, 0.125, 0.125);
+const HEALTH_FILL: Color = Color::srgb(0.635, 0.196, 0.306);
+const ALIGNMENT_TRACK: Color = Color::srgb(0.176, 0.153, 0.227);
+const ALIGNMENT_FILL: Color = Color::srgb(0.247, 0.314, 0.431);
+const ALIGNMENT_WARNING: Color = Color::srgb(0.50, 0.62, 0.80);
+const ALIGNMENT_DEPLETED: Color = Color::srgb(0.38, 0.47, 0.62);
+const ALIGNMENT_LOW_THRESHOLD: f32 = 0.2;
+const ALIGNMENT_LOW_PULSE_HZ: f32 = 1.5;
+const ALIGNMENT_DEPLETED_PULSE_HZ: f32 = 0.75;
+
+/// An icon stays pressed for this long after its skill is used, and while it channels.
+const PRESS_TICKS: u32 = 12;
+const UNAVAILABLE_GAIN: f32 = 0.75;
+const READY_FLASH_TICKS: u32 = 16;
+const READY_FLASH_GAIN: f32 = 1.5;
+const UNLOCK_FLASH_GAIN: f32 = 2.4;
+const COOLDOWN_SHADE: Color = Color::srgba(0.0, 0.0, 0.0, 0.6);
+/// Skills that recharge through energy or channel rather than cool down.
+const CHANNELED_SKILLS: [SkillId; 3] = [SkillId::Whirl, SkillId::BurningDash, SkillId::FlickerStrike];
+
+const CAPTION_COLOR: Color = Color::srgb(0.88, 0.94, 1.0);
+const CAPTION_LIMIT: usize = 3;
+const CAPTION_DELAY_SECS: f32 = 0.24;
+const CAPTION_HOLD_SECS: f32 = 0.95;
+const CAPTION_TOTAL_SECS: f32 = 1.6;
+const CAPTION_TOP: u32 = 4;
 
 pub struct SkillToolbarPlugin;
 
-#[derive(Component)]
-pub struct AbilityBarRoot;
-
 impl Plugin for SkillToolbarPlugin {
     fn build(&self, app: &mut App) {
-        app.add_systems(OnEnter(AppState::InGame), spawn_toolbar);
-        app.add_systems(
-            GameTickUpdate,
-            (
-                assign_hp_bar_on_bar_added,
-                assign_hp_bar_on_player_added,
-            ),
-        );
-        app.add_systems(
-            Update,
-            (
-                apply_toolbar_preset,
-                update_toolbar_skills,
-                ensure_toolbar_populated,
+        app.init_resource::<ToolbarIcons>()
+            .init_resource::<StationPrompt>()
+            .init_resource::<Captions>()
+            .add_systems(Startup, load_toolbar_art)
+            .add_systems(OnEnter(AppState::InGame), (reset_toolbar_presentation, spawn_toolbar).chain())
+            .add_systems(
+                GameTickUpdate,
+                advance_toolbar_icons.after(PlayerStateSet::Behavior).run_if(in_state(AppState::InGame)),
             )
-                .chain()
-                .run_if(in_state(AppState::InGame)),
-        );
-        app.add_systems(
-            Update,
-            update_skill_cooldowns.run_if(in_state(AppState::InGame)),
-        );
+            .add_systems(
+                Update,
+                (present_toolbar, present_prompt, (queue_level_up_captions, present_captions).chain())
+                    .after(super::sync_ui_scale)
+                    .run_if(in_state(AppState::InGame)),
+            );
     }
 }
 
-#[derive(Component, Clone, Copy)]
-struct ToolbarPreset {
-    num_slots: usize,
+fn reset_toolbar_presentation(mut icons: ResMut<ToolbarIcons>, mut captions: ResMut<Captions>, mut prompt: ResMut<StationPrompt>) {
+    *icons = default();
+    *captions = default();
+    *prompt = default();
 }
 
-fn spawn_toolbar(
-    mut commands: Commands,
-    mut ui_materials: ResMut<Assets<player_hp::Material>>,
-    game_ui_assets: Res<crate::assets::GameUiAssets>,
-    player_passives: Query<&Passives, With<Player>>,
-) {
-    // Create root UI container at bottom center of screen
-    let root = commands
-        .spawn((
-            Node {
-                position_type: PositionType::Absolute,
-                bottom: Val::Px(0.0),
-                left: Val::Px(0.0),
-                right: Val::Px(0.0),
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                flex_direction: FlexDirection::Column,
-                ..default()
-            },
-            StateDespawnMarker,
-            AbilityBarRoot,
-            Name::new("ability_bar_ui"),
-        ))
-        .id();
-
-    // Create ability bar container
-    let ability_bar = commands
-        .spawn((
-            Node {
-                flex_direction: FlexDirection::Column,
-                align_items: AlignItems::Center,
-                justify_content: JustifyContent::Center,
-                position_type: PositionType::Relative,
-                ..default()
-            },
-            BackgroundColor(Color::NONE),
-        ))
-        .id();
-
-    commands.entity(root).add_children(&[ability_bar]);
-
-    // Toolbar frame with abilities
-    let has_battery = player_passives
-        .single()
-        .map(|p| p.contains(&Passive::BatteryPack))
-        .unwrap_or(false);
-    let frame_image = if has_battery {
-        game_ui_assets.toolbar_frame_5slots.clone()
-    } else {
-        game_ui_assets.toolbar_frame.clone()
-    };
-    let num_slots = if has_battery { 5 } else { 4 };
-    let frame_width = if has_battery { 86.0 * 5.0 } else { 72.0 * 5.0 };
-    let frame_height = 30.0 * 5.0;
-
-    // Container to anchor bars (behind) and frame (above)
-    let toolbar_container = commands
-        .spawn((
-            Node {
-                width: Val::Px(frame_width),
-                height: Val::Px(frame_height),
-                position_type: PositionType::Relative,
-                ..default()
-            },
-            BackgroundColor(Color::NONE),
-            Name::new("toolbar_container"),
-        ))
-        .id();
-
-    commands.entity(ability_bar).add_child(toolbar_container);
-
-    let toolbar_frame = commands
-        .spawn((
-            ImageNode::new(frame_image),
-            Node {
-                width: Val::Px(frame_width),
-                height: Val::Px(frame_height),
-                position_type: PositionType::Absolute,
-                left: Val::Px(0.0),
-                top: Val::Px(0.0),
-                ..default()
-            },
-            BackgroundColor(Color::NONE),
-            ZIndex(1),
-            Name::new("toolbar_frame"),
-            ToolbarFrame,
-            ToolbarPreset { num_slots },
-        ))
-        .id();
-    commands.entity(toolbar_container).add_child(toolbar_frame);
-
-    // Create fixed slot containers for skills at fixed positions
-    for slot in 0..num_slots {
-        // Align to art window: 45px left margin at 5x scale, 70px stride
-        let x_offset = 45.0 + (slot as f32) * 70.0;
-        let slot_container = commands
-            .spawn((
-                Node {
-                    width: Val::Px(60.0),
-                    height: Val::Px(60.0),
-                    position_type: PositionType::Absolute,
-                    left: Val::Px(x_offset),
-                    top: Val::Px(45.0),
-                    ..default()
-                },
-                SkillSlotContainer { slot },
-                Name::new(format!("skill_slot_{}", slot)),
-            ))
-            .id();
-        commands.entity(toolbar_frame).add_child(slot_container);
-    }
-
-    // HP bar container - absolute within toolbar frame
-    let hp_container = commands
-        .spawn((
-            Node {
-                width: Val::Px(if has_battery { 340.0 } else { 270.0 }),
-                height: Val::Px(if has_battery { 12.0 } else { 10.0 }),
-                position_type: PositionType::Absolute,
-                top: Val::Px(if has_battery { 112.0 } else { 115.0 }),
-                left: Val::Px(45.0),
-                ..default()
-            },
-            BackgroundColor(Color::srgb(0.0, 0.0, 0.0)),
-            ZIndex(0),
-            Name::new("hp_bg"),
-        ))
-        .id();
-
-    // HP bar fill
-    let hp_bar = commands
-        .spawn((
-            MaterialNode(
-                ui_materials.add(player_hp::Material {
-                    factor: 1.0,
-                    background_color: Color::srgb(
-                        0.23137254901960785,
-                        0.12549019607843137,
-                        0.12549019607843137,
-                    )
-                    .into(),
-                    filled_color: Color::srgb(
-                        0.6352941176470588,
-                        0.196078431372549022,
-                        0.3058823529411765,
-                    )
-                    .into(),
-                }),
-            ),
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                ..default()
-            },
-            player_hp::Bar(Entity::PLACEHOLDER),
-            Name::new("hp_bar"),
-            PlayerHpUI,
-        ))
-        .id();
-
-    commands.entity(hp_container).add_children(&[hp_bar]);
-    commands.entity(toolbar_container).add_child(hp_container);
-
-    // Skill widgets are spawned dynamically based on equipped skills
-
-    // XP bar container - absolute within toolbar frame
-    let xp_container = commands
-        .spawn((
-            Node {
-                width: Val::Px(if has_battery { 340.0 } else { 270.0 }),
-                height: Val::Px(if has_battery { 6.0 } else { 5.0 }),
-                position_type: PositionType::Absolute,
-                bottom: Val::Px(15.0),
-                left: Val::Px(45.0),
-                ..default()
-            },
-            BackgroundColor(Color::srgb(0.0, 0.0, 0.0)),
-            ZIndex(0),
-            Name::new("xp_bg"),
-        ))
-        .id();
-
-    // XP bar fill
-    let xp_bar = commands
-        .spawn((
-            MaterialNode(
-                ui_materials.add(player_hp::Material {
-                    factor: 1.0,
-                    background_color: Color::srgb(
-                        0.17647058823529413,
-                        0.15294117647058825,
-                        0.22745098039215686,
-                    )
-                    .into(),
-                    filled_color: Color::srgb(
-                        0.24705882352941178,
-                        0.3137254901960784,
-                        0.43137254901960786,
-                    )
-                    .into(),
-                }),
-            ),
-            Node {
-                width: Val::Percent(100.0),
-                height: Val::Percent(100.0),
-                ..default()
-            },
-            Name::new("xp_bar"),
-        ))
-        .id();
-
-    commands.entity(xp_container).add_children(&[xp_bar]);
-    commands.entity(toolbar_container).add_child(xp_container);
-}
-
-fn apply_toolbar_preset(
-    mut commands: Commands,
-    mut ui_materials: ResMut<Assets<player_hp::Material>>,
-    game_ui_assets: Res<crate::assets::GameUiAssets>,
-    passives_q: Query<&Passives, With<Player>>,
-    frames_q: Query<(Entity, &ToolbarPreset), With<ToolbarFrame>>,
-    roots_q: Query<Entity, With<AbilityBarRoot>>,
-) {
-    let Ok(passives) = passives_q.single() else {
-        return;
-    };
-    // Early exit unless passives changed; avoids unnecessary work each frame.
-    // We avoid `Ref<Passives>` here for API compatibility with other callers.
-    let desired = if passives.contains(&Passive::BatteryPack) {
-        5
-    } else {
-        4
-    };
-
-    // If a frame exists with the correct preset, do nothing
-    if let Ok((_, preset)) = frames_q.single() {
-        if preset.num_slots == desired {
-            return;
-        }
-    }
-    // Despawn existing toolbar root (and its children) and rebuild for current passives
-    if let Ok(root_entity) = roots_q.single() {
-        commands.entity(root_entity).despawn();
-    }
-    // Rebuild fresh using the existing spawn function and current passives
-    spawn_toolbar(
-        commands,
-        ui_materials,
-        game_ui_assets,
-        passives_q,
-    );
-}
-
-fn assign_hp_bar_on_bar_added(
-    player: Query<Entity, With<Player>>,
-    mut hp_bar_q: Query<&mut player_hp::Bar, Added<PlayerHpUI>>,
-) {
-    let Some(player) = player.iter().next() else {
-        return;
-    };
-    for mut hp_bar in hp_bar_q.iter_mut() {
-        hp_bar.0 = player;
-    }
-}
-
-fn assign_hp_bar_on_player_added(
-    player: Query<Entity, Added<Player>>,
-    mut hp_bar_q: Query<&mut player_hp::Bar, With<PlayerHpUI>>,
-) {
-    let Some(player) = player.iter().next() else {
-        return;
-    };
-    for mut hp_bar in hp_bar_q.iter_mut() {
-        hp_bar.0 = player;
-    }
-}
-
-#[derive(Component, Clone)]
-pub struct PlayerHpUI;
-
+/// The toolbar image; the capsule prompt is placed above it.
 #[derive(Component)]
 pub struct ToolbarFrame;
 
+fn frame_path(slots: usize) -> &'static str {
+    if slots > SkillInventory::MAX_EQUIPPED { "ui/game/ToolbarFrame5Slots.png" } else { "ui/game/ToolbarFrame.png" }
+}
+
+fn load_toolbar_art(mut library: ResMut<ArtLibrary>, server: Res<AssetServer>) {
+    let skills = SkillInventory::DEBUG_UNLOCK_ORDER.into_iter();
+    let icons = skills.flat_map(|skill| PlayerMeleeWeapon::ALL.map(|weapon| skill.icon_path_with_melee_weapon(weapon)));
+    let frames = [SkillInventory::MAX_EQUIPPED, SkillInventory::MAX_EQUIPPED + 1].map(frame_path);
+    library.load(&server, icons.chain(frames).chain([FONT_IMAGE_PATH]));
+}
+
+/// A slot's stock count, set in smooth text because pixel digits would cover the icon.
 #[derive(Component)]
-pub struct SkillSlotContainer {
-    pub slot: usize, // 0-3
-}
+struct StockLabel(usize);
 
-#[derive(Component, Clone)]
-pub struct SkillSlotUI {
-    pub slot: usize, // 0-3
-}
-
-fn update_toolbar_skills(
-    mut commands: Commands,
-    player_query: Query<
-        &SkillInventory,
-        (
-            With<Player>,
-            Or<(
-                Added<SkillInventory>,
-                Changed<SkillInventory>,
-            )>,
-        ),
-    >,
-    container_query: Query<(
-        Entity,
-        &SkillSlotContainer,
-        Option<&Children>,
-    )>,
-    _slot_widget_query: Query<Entity, With<SkillSlotUI>>,
-    mut ability_materials: ResMut<Assets<ability_cooldown::Material>>,
-    game_ui_assets: Res<crate::assets::GameUiAssets>,
-) {
-    // Update when `SkillInventory` is added or changes
-    let Ok(skill_inventory) = player_query.single() else {
-        return;
-    };
-
-    // Clear all slot containers
-    for (_container_entity, _container, maybe_children) in container_query.iter()
-    {
-        if let Some(children) = maybe_children {
-            for &child in children {
-                commands.entity(child).despawn();
-            }
-        }
-    }
-
-    // Add skill widgets to appropriate slot containers
-    for (slot_index, skill_id) in skill_inventory.equipped.iter().enumerate() {
-        // Find the container for this slot
-        let Some((container_entity, _, _)) = container_query
-            .iter()
-            .find(|(_, container, _)| container.slot == slot_index)
-        else {
-            continue;
-        };
-
-        let icon_handle = match skill_id {
-            crate::game::player::skills::types::SkillId::Attack => {
-                game_ui_assets.attack_skill_icon.clone()
-            },
-            crate::game::player::skills::types::SkillId::Dash => {
-                game_ui_assets.dash_skill_icon.clone()
-            },
-            crate::game::player::skills::types::SkillId::DashStrike => {
-                game_ui_assets.dash_strike_skill_icon.clone()
-            },
-            crate::game::player::skills::types::SkillId::Whirl => {
-                game_ui_assets.whirl_skill_icon.clone()
-            },
-            crate::game::player::skills::types::SkillId::Stealth => {
-                game_ui_assets.stealth_skill_icon.clone()
-            },
-            crate::game::player::skills::types::SkillId::BurningDash => {
-                game_ui_assets.burning_dash_skill_icon.clone()
-            },
-            crate::game::player::skills::types::SkillId::FlickerStrike => {
-                game_ui_assets.flicker_strike_skill_icon.clone()
-            },
-            crate::game::player::skills::types::SkillId::AmplifiedBell => {
-                game_ui_assets.amplified_bell_skill_icon.clone()
-            },
-            crate::game::player::skills::types::SkillId::Spinner => {
-                game_ui_assets.spinner_skill_icon.clone()
-            },
-            crate::game::player::skills::types::SkillId::ExplosiveMine => {
-                game_ui_assets.mine_skill_icon.clone()
-            },
-            crate::game::player::skills::types::SkillId::IceNova => {
-                game_ui_assets.ice_nova_skill_icon.clone()
-            },
-        };
-
-        // Determine fill rotation based on skill type
-        let dir_up = match skill_id {
-            crate::game::player::skills::types::SkillId::Whirl => false,
-            crate::game::player::skills::types::SkillId::FlickerStrike => false,
-            crate::game::player::skills::types::SkillId::AmplifiedBell => true,
-            crate::game::player::skills::types::SkillId::Spinner => true,
-            _ => true,
-        };
-
-        spawn_ability_widget_in_container(
-            &mut commands,
-            &mut ability_materials,
-            icon_handle,
-            slot_index,
-            dir_up,
-            container_entity,
-        );
-    }
-}
-
-fn spawn_ability_widget_in_container(
-    commands: &mut Commands,
-    ability_materials: &mut ResMut<Assets<ability_cooldown::Material>>,
-    image_handle: Handle<Image>,
-    slot: usize,
-    dir_up: bool,
-    container: Entity,
-) {
-    // Ability icon
-    let ability_icon = commands
-        .spawn((
-            ImageNode::new(image_handle),
-            Node {
-                width: Val::Px(60.0),
-                height: Val::Px(60.0),
-                position_type: PositionType::Absolute,
-                ..default()
-            },
-            AbilityWidget,
-            SkillSlotUI { slot },
-            Name::new(format!("ability_slot_{}", slot)),
-        ))
-        .id();
-
-    // Ability cooldown overlay
-    let cooldown_material = ability_materials.add(ability_cooldown::Material {
-        factor: 0.3,
-        background_color: Color::srgba(0.0, 0.0, 0.0, 0.0).into(),
-        filled_color: Color::srgba(0.25, 0.25, 0.0, 0.75).into(),
+/// Spawned with the game rather than on first draw, so the HUD is hidden from its first frame
+/// whenever gameplay presentation is suspended.
+fn spawn_toolbar(mut commands: Commands, mut images: ResMut<Assets<Image>>, server: Res<AssetServer>) {
+    let empty = Canvas::new(UVec2::ONE, &Art::default()).finish();
+    let font = TextFont { font: server.load("font/Tektur-Medium.ttf").into(), font_size: FontSize::Px(12.0), ..default() };
+    let labels = (0..=SkillInventory::MAX_EQUIPPED).map(move |slot| {
+        (StockLabel(slot), Text::default(), font.clone(), Node { position_type: PositionType::Absolute, ..default() })
     });
+    commands.spawn((
+        Name::new("SkillToolbar"),
+        ToolbarFrame,
+        ImageNode::new(images.add(empty.into_image())),
+        Node::default(),
+        ZIndex(TOOLBAR_Z_INDEX),
+        StateDespawnMarker,
+        crate::ui::GameplayHud,
+        Children::spawn(SpawnIter(labels)),
+    ));
+}
 
-    let ability_cooldown = commands
-        .spawn((
-            MaterialNode(cooldown_material),
-            Node {
-                width: Val::Px(60.0),
-                height: Val::Px(60.0),
-                position_type: PositionType::Absolute,
-                ..default()
+/// How an equipped skill's icon reacts to use, cooldowns, and recharge.
+#[derive(Debug, Default, Clone, Copy, PartialEq)]
+struct IconState {
+    press_ticks: u32,
+    channeling: bool,
+    unavailable: bool,
+    flash_ticks: u32,
+    energy_full: Option<bool>,
+}
+
+impl IconState {
+    fn pressed(self) -> bool {
+        self.channeling || self.press_ticks > 0
+    }
+
+    /// Advances one tick. `ready_flash` is whether becoming usable again flashes the icon, and
+    /// `energy_full` whether the skill's energy is full, for skills that recharge through energy.
+    fn advance(&mut self, used: bool, channeling: bool, unavailable: bool, ready_flash: bool, energy_full: Option<bool>) {
+        if !self.channeling {
+            self.press_ticks = self.press_ticks.saturating_sub(1);
+        }
+        self.flash_ticks = self.flash_ticks.saturating_sub(1);
+        if used {
+            self.press_ticks = PRESS_TICKS;
+        }
+        if self.channeling && !channeling {
+            self.press_ticks = 0;
+        }
+        self.channeling = channeling;
+        if unavailable {
+            self.flash_ticks = 0;
+        } else if self.unavailable && ready_flash {
+            self.flash_ticks = READY_FLASH_TICKS;
+        }
+        self.unavailable = unavailable;
+        if self.energy_full == Some(false) && energy_full == Some(true) {
+            self.flash_ticks = READY_FLASH_TICKS;
+        }
+        self.energy_full = energy_full;
+    }
+
+    /// The icon's brightness: dimmed while unusable, flashing when it becomes usable.
+    fn gain(self) -> f32 {
+        if self.unavailable {
+            return UNAVAILABLE_GAIN;
+        }
+        1.0 + (READY_FLASH_GAIN - 1.0) * self.flash_ticks as f32 / READY_FLASH_TICKS as f32
+    }
+}
+
+/// Brightness of a newly unlocked skill's icon while it flashes.
+pub(crate) fn unlock_gain(remaining_ticks: u32) -> f32 {
+    let remaining = remaining_ticks as f32 / UnlockedSkillPresentationState::FLASH_TICKS as f32;
+    1.0 + (UNLOCK_FLASH_GAIN - 1.0) * remaining.sqrt()
+}
+
+#[derive(Resource, Default)]
+struct ToolbarIcons {
+    states: HashMap<SkillId, IconState>,
+    /// Channeled skills seen so far; their icons are not dimmed by cooldowns.
+    channeled: HashSet<SkillId>,
+}
+
+/// The player state the toolbar shows.
+#[derive(QueryData)]
+struct ToolbarPlayer {
+    entity: Entity,
+    skills: &'static SkillInventory,
+    passives: &'static Passives,
+    materials: &'static MaterialInventory,
+    weapons: &'static WeaponInventory,
+    whirl: &'static WhirlAbility,
+    flicker: &'static FlickerAbility,
+    health: &'static Health,
+    alignment: &'static Alignment,
+    stealthed: Has<StealthEffect>,
+}
+
+impl ToolbarPlayerItem<'_, '_> {
+    /// Missing ammunition, stock, or a tether connection, which no cooldown restores.
+    fn lacks_means(&self, skill: SkillId, tether_connected: bool) -> bool {
+        match skill {
+            SkillId::BowAttack => !self.weapons.can_fire_bow(),
+            SkillId::TetherNode if !tether_connected => true,
+            _ => skill.stock_material().is_some_and(|material| self.materials.backpack_count(material) == 0),
+        }
+    }
+
+    fn energy_full(&self, skill: SkillId) -> bool {
+        match skill {
+            SkillId::Whirl => self.whirl.energy >= whirl_metadata().max_energy,
+            SkillId::FlickerStrike => self.flicker.energy >= flicker_strike_metadata().max_energy,
+            _ => false,
+        }
+    }
+
+    /// How much of the icon is still shaded: the remaining cooldown, or missing energy.
+    fn recharge(&self, skill: SkillId, cooldowns: &Cooldowns) -> f32 {
+        match skill {
+            SkillId::Whirl => 1.0 - self.whirl.energy / whirl_metadata().max_energy,
+            SkillId::FlickerStrike => 1.0 - self.flicker.energy / flicker_strike_metadata().max_energy,
+            _ => cooldowns.get(self.entity, skill).map_or(0.0, |entry| entry.remaining / entry.initial.max(1.0)),
+        }
+        .clamp(0.0, 1.0)
+    }
+
+    /// The stock a skill spends, if it counts one.
+    fn stock(&self, skill: SkillId) -> Option<u32> {
+        match skill {
+            SkillId::BowAttack => {
+                let arrows = self.weapons.equipped_ammo().filter(|ammo| *ammo == PlayerAmmo::Arrows);
+                Some(arrows.map_or(0, |ammo| self.weapons.count_ammo(ammo)))
             },
-            Transform::from_rotation(Quat::from_axis_angle(
-                Vec3::Z,
-                if dir_up { -1.0 } else { 1.0 } * PI * 0.5,
-            )),
-            SkillSlotUI { slot },
-            Name::new(format!(
-                "ability_cooldown_slot_{}",
-                slot
-            )),
-        ))
-        .id();
-
-    // Add both icon and cooldown overlay to the container
-    commands
-        .entity(container)
-        .add_children(&[ability_icon, ability_cooldown]);
+            _ => skill.stock_material().map(|material| self.materials.backpack_count(material)),
+        }
+    }
 }
 
-/// Fallback system to ensure toolbar is populated if both player and toolbar exist
-fn ensure_toolbar_populated(
-    mut commands: Commands,
-    player_query: Query<&SkillInventory, With<Player>>,
-    container_query: Query<(
-        Entity,
-        &SkillSlotContainer,
-        Option<&Children>,
-    )>,
-    skill_widget_query: Query<Entity, With<SkillSlotUI>>,
-    mut ability_materials: ResMut<Assets<ability_cooldown::Material>>,
-    game_ui_assets: Res<crate::assets::GameUiAssets>,
+fn advance_toolbar_icons(
+    player: Query<ToolbarPlayer, With<Player>>,
+    channeled: Query<&ChanneledSkill, With<Player>>,
+    mut events: MessageReader<PassiveEvent>,
+    cooldowns: Res<Cooldowns>,
+    tether: Res<TetherConnectionStatus>,
+    time: Res<GameTime>,
+    mut icons: ResMut<ToolbarIcons>,
 ) {
-    // Only act if player exists and containers exist
-    let Ok(skill_inventory) = player_query.single() else {
-        return;
-    };
-
-    // Check if any containers have skill widgets
-    let mut any_populated = false;
-    for (_, _, maybe_children) in container_query.iter() {
-        if let Some(children) = maybe_children {
-            for child_entity in children.iter() {
-                if skill_widget_query.contains(child_entity) {
-                    any_populated = true;
-                    break;
-                }
-            }
-            if any_populated {
-                break;
-            }
-        }
-    }
-
-    // If no skill widgets exist in any container, populate them
-    if !any_populated && !skill_inventory.equipped.is_empty() {
-        for (slot_index, skill_id) in
-            skill_inventory.equipped.iter().enumerate()
-        {
-            // Find the container for this slot
-            let Some((container_entity, _, _)) = container_query
-                .iter()
-                .find(|(_, container, _)| container.slot == slot_index)
-            else {
-                continue;
-            };
-
-            let icon_handle = match skill_id {
-                crate::game::player::skills::types::SkillId::Attack => {
-                    game_ui_assets.attack_skill_icon.clone()
-                },
-                crate::game::player::skills::types::SkillId::Dash => {
-                    game_ui_assets.dash_skill_icon.clone()
-                },
-                crate::game::player::skills::types::SkillId::DashStrike => {
-                    game_ui_assets.dash_strike_skill_icon.clone()
-                },
-                crate::game::player::skills::types::SkillId::Whirl => {
-                    game_ui_assets.whirl_skill_icon.clone()
-                },
-                crate::game::player::skills::types::SkillId::Stealth => {
-                    game_ui_assets.stealth_skill_icon.clone()
-                },
-                crate::game::player::skills::types::SkillId::BurningDash => {
-                    game_ui_assets.burning_dash_skill_icon.clone()
-                },
-                crate::game::player::skills::types::SkillId::FlickerStrike => {
-                    game_ui_assets.flicker_strike_skill_icon.clone()
-                },
-                crate::game::player::skills::types::SkillId::AmplifiedBell => {
-                    game_ui_assets.amplified_bell_skill_icon.clone()
-                },
-                crate::game::player::skills::types::SkillId::Spinner => {
-                    game_ui_assets.spinner_skill_icon.clone()
-                },
-                crate::game::player::skills::types::SkillId::ExplosiveMine => {
-                    game_ui_assets.mine_skill_icon.clone()
-                },
-                crate::game::player::skills::types::SkillId::IceNova => {
-                    game_ui_assets.ice_nova_skill_icon.clone()
-                },
-            };
-
-            let dir_up = match skill_id {
-                crate::game::player::skills::types::SkillId::Whirl => false,
-                crate::game::player::skills::types::SkillId::FlickerStrike => {
-                    false
-                },
-                crate::game::player::skills::types::SkillId::AmplifiedBell => {
-                    true
-                },
-                crate::game::player::skills::types::SkillId::Spinner => true,
-                _ => true,
-            };
-
-            spawn_ability_widget_in_container(
-                &mut commands,
-                &mut ability_materials,
-                icon_handle,
-                slot_index,
-                dir_up,
-                container_entity,
-            );
-        }
+    let Ok(player) = player.single() else { return };
+    let used: HashSet<SkillId> = events
+        .read()
+        .filter_map(|event| match *event {
+            PassiveEvent::SkillUsed { owner, skill } if owner == player.entity => Some(skill),
+            _ => None,
+        })
+        .collect();
+    let channeling: HashSet<SkillId> = channeled.iter().map(|channeled| channeled.skill).collect();
+    let ToolbarIcons { states, channeled } = &mut *icons;
+    channeled.extend(CHANNELED_SKILLS.into_iter().chain(channeling.iter().copied()));
+    states.retain(|skill, _| player.skills.is_equipped(skill));
+    for &skill in &player.skills.equipped {
+        let recharges = channeled.contains(&skill);
+        let lacks_means = player.lacks_means(skill, tether.available);
+        let cooling = !cooldowns.is_ready(player.entity, skill, time.tick()) || skill == SkillId::Stealth && player.stealthed;
+        let unavailable = lacks_means || !recharges && cooling;
+        let energy_full = recharges.then(|| player.energy_full(skill));
+        let state = states.entry(skill).or_default();
+        state.advance(used.contains(&skill), channeling.contains(&skill), unavailable, !recharges, energy_full);
     }
 }
 
-fn update_skill_cooldowns(
-    player_query: Query<
-        (
-            Entity,
-            &SkillInventory,
-            &WhirlAbility,
-            &FlickerAbility,
-            &crate::game::player::skills::explosive_mine::ExplosiveMineAbility,
-        ),
-        With<Player>,
-    >,
-    ui_query: Query<(Entity, &SkillSlotUI), Without<AbilityWidget>>,
-    mut commands: Commands,
-    cooldowns: Res<crate::game::player::skills::cooldowns::Cooldowns>,
+/// Everything besides the player that the toolbar shows.
+#[derive(SystemParam)]
+struct ToolbarSources<'w> {
+    icons: Res<'w, ToolbarIcons>,
+    cooldowns: Res<'w, Cooldowns>,
+    melee: Res<'w, PlayerMeleeWeapon>,
+    unlocks: Res<'w, UnlockedSkillPresentationState>,
+    pulse: Res<'w, AlignmentPulseSample>,
+    time: Res<'w, Time<Real>>,
+}
+
+/// An equipped skill as the toolbar draws it.
+#[derive(Debug, Clone, Copy, PartialEq)]
+struct Slot {
+    icon: &'static str,
+    pressed: bool,
+    gain: f32,
+    /// Shaded rows of the icon; energy fills from the bottom and cooldowns clear from the top.
+    shade: i32,
+    energy: bool,
+    /// Shown by the slot's text label.
+    stock: Option<u32>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct Toolbar {
+    slots: usize,
+    skills: Vec<Slot>,
+    health: f32,
+    alignment: f32,
+    elapsed_secs: f32,
+    frame_pulse: f32,
+}
+
+fn present_toolbar(
+    player: Query<ToolbarPlayer, With<Player>>,
+    sources: ToolbarSources,
+    library: Res<ArtLibrary>,
+    mut images: ResMut<Assets<Image>>,
+    mut toolbar: Query<(&ImageNode, &mut Node), With<ToolbarFrame>>,
+    mut labels: Query<(&StockLabel, &mut Text, &mut Node), Without<ToolbarFrame>>,
+    grid: UiPixelGrid,
 ) {
-    let Some((player_entity, skill_inventory, whirl, flicker, mine)) =
-        player_query.iter().next()
-    else {
-        return;
+    let (Ok(player), Ok((image, mut node))) = (player.single(), toolbar.single_mut()) else { return };
+    let skills = player.skills.equipped.iter().map(|&skill| {
+        let state = sources.icons.states.get(&skill).copied().unwrap_or_default();
+        let flash = sources.unlocks.entry(skill).map(|entry| unlock_gain(entry.remaining_ticks));
+        Slot {
+            icon: skill.icon_path_with_melee_weapon(*sources.melee),
+            pressed: state.pressed(),
+            gain: flash.unwrap_or(state.gain()),
+            shade: (player.recharge(skill, &sources.cooldowns) * ICON as f32).ceil() as i32,
+            energy: matches!(skill, SkillId::Whirl | SkillId::FlickerStrike),
+            stock: player.stock(skill),
+        }
+    });
+    let toolbar = Toolbar {
+        slots: if player.passives.contains(&Passive::BatteryPack) { 5 } else { 4 },
+        skills: skills.collect(),
+        health: player.health.current as f32 / player.health.max.max(1) as f32,
+        alignment: player.alignment.factor(),
+        elapsed_secs: sources.time.elapsed_secs(),
+        frame_pulse: sources.pulse.intensity,
     };
+    let raster = draw_toolbar(&toolbar, &library.art(&images));
+    let Some((layout, unit)) = grid.anchored(raster.size, Vec2::new(0.5, 1.0)).zip(grid.unit()) else { return };
+    node.set_if_neq(layout);
+    for (label, mut text, mut node) in &mut labels {
+        let stock = toolbar.skills.get(label.0).filter(|_| label.0 < toolbar.slots).and_then(|slot| slot.stock);
+        let hidden = Node { display: Display::None, position_type: PositionType::Absolute, ..default() };
+        let (count, placement) = stock.map_or((String::new(), hidden), |stock| {
+            (MaterialInventory::display_count(stock), stock_label_node(label.0, raster.size, unit))
+        });
+        if text.0 != count {
+            text.0 = count;
+        }
+        node.set_if_neq(placement);
+    }
+    raster.publish(&mut images, &image.image);
+}
 
-    let whirl_cap = crate::game::player::skills::types::whirl_metadata()
-        .max_energy;
-    let flicker_cap =
-        crate::game::player::skills::types::flicker_strike_metadata()
-            .max_energy;
+/// Pins a slot's count just inside its icon's bottom-right corner.
+fn stock_label_node(slot: usize, toolbar: UVec2, unit: f32) -> Node {
+    let icon_end = FIRST_SLOT + IVec2::new(SLOT_STRIDE * slot as i32 + ICON, ICON);
+    let inset = (toolbar.as_ivec2() - icon_end).as_vec2() * unit;
+    Node {
+        position_type: PositionType::Absolute,
+        right: px(inset.x + 0.8 * unit),
+        bottom: px(inset.y + 0.4 * unit),
+        ..default()
+    }
+}
 
-    for (entity, slot_ui) in ui_query.iter() {
-        if let Some(skill_id) = skill_inventory.get_skill_at_slot(slot_ui.slot)
-        {
-            // Special handling for whirl (reverse energy bar)
-            if skill_id == crate::game::player::skills::types::SkillId::Whirl {
-                let factor = 1.0 - whirl.energy / whirl_cap;
-                commands.entity(entity).factor(factor);
-            } else if skill_id
-                == crate::game::player::skills::types::SkillId::FlickerStrike
-            {
-                // Special handling for flicker (reverse energy bar)
-                let factor = 1.0 - flicker.energy / flicker_cap;
-                commands.entity(entity).factor(factor);
-            } else if skill_id
-                == crate::game::player::skills::types::SkillId::ExplosiveMine
-            {
-                // Discrete 3-chunk model: show only full chunks as available
-                let chunks_ready = mine.energy.floor().clamp(0.0, 3.0) as i32;
-                let factor = 1.0 - (chunks_ready as f32 / 3.0);
-                commands.entity(entity).factor(factor);
-            } else {
-                // Standard cooldown handling
-                if let Some(entry) = cooldowns.get(player_entity, skill_id) {
-                    let denom = entry.initial.max(1.0);
-                    let factor =
-                        (entry.remaining / denom).clamp(0.0, 1.0) as f32;
-                    commands.entity(entity).factor(factor);
-                } else {
-                    commands.entity(entity).factor(0.0);
-                }
-            }
+fn draw_toolbar(toolbar: &Toolbar, art: &Art) -> Raster {
+    let slots = toolbar.slots as i32;
+    let bar_width = slots * SLOT_STRIDE - 2;
+    let mut canvas = Canvas::new(UVec2::new((slots * SLOT_STRIDE + 16) as u32, FRAME_HEIGHT as u32), art);
+    draw_bar(&mut canvas, HEALTH_BAR, IVec2::new(bar_width, 2), toolbar.health, (HEALTH_TRACK, HEALTH_FILL));
+    let alignment = alignment_colors(toolbar.alignment, toolbar.elapsed_secs);
+    draw_bar(&mut canvas, ALIGNMENT_BAR, IVec2::new(bar_width, 1), toolbar.alignment, alignment);
+    let frame = frame_path(toolbar.slots);
+    let pulse = ALIGNMENT_PULSE_LINEAR_GRAY * toolbar.frame_pulse;
+    let size = UVec2::new((slots * SLOT_STRIDE + 16) as u32, 30);
+    canvas.sprite(frame, URect::from_corners(UVec2::Y * FRAME_TOP as u32, size), IVec2::ZERO, |texel| lift(texel, pulse));
+    for (index, slot) in toolbar.skills.iter().take(toolbar.slots).enumerate() {
+        draw_slot(&mut canvas, FIRST_SLOT + IVec2::X * SLOT_STRIDE * index as i32, slot);
+    }
+    canvas.finish()
+}
+
+fn draw_bar(canvas: &mut Canvas, at: IVec2, size: IVec2, fraction: f32, (track, fill): (Color, Color)) {
+    let filled = (fraction.clamp(0.0, 1.0) * size.x as f32).ceil() as i32;
+    canvas.fill(rect(at.x, at.y, size.x, size.y), track);
+    canvas.fill(rect(at.x, at.y, filled, size.y), fill);
+}
+
+/// A pressed icon sinks into its slot: its outer ring gives way to the frame's.
+fn draw_slot(canvas: &mut Canvas, at: IVec2, slot: &Slot) {
+    let inset = u32::from(slot.pressed);
+    let source = URect::new(inset, inset, ICON as u32 - inset, ICON as u32 - inset);
+    canvas.sprite(slot.icon, source, at + inset as i32, |texel| gain(texel, slot.gain));
+    let shade = slot.shade.clamp(0, ICON);
+    let top = if slot.energy { at.y } else { at.y + ICON - shade };
+    canvas.fill(rect(at.x, top, ICON, shade), COOLDOWN_SHADE);
+}
+
+/// Track and fill colors; low Alignment pulses toward a warning color, and depletion pulses the track.
+fn alignment_colors(fraction: f32, elapsed_secs: f32) -> (Color, Color) {
+    let pulse = |hz: f32| 0.5 + 0.5 * (elapsed_secs * hz * TAU).sin();
+    let fraction = fraction.clamp(0.0, 1.0);
+    if fraction > ALIGNMENT_LOW_THRESHOLD {
+        return (ALIGNMENT_TRACK, ALIGNMENT_FILL);
+    }
+    if fraction <= 0.0 {
+        let strength = 0.18 + pulse(ALIGNMENT_DEPLETED_PULSE_HZ) * 0.22;
+        return (mix(ALIGNMENT_TRACK, ALIGNMENT_DEPLETED, strength), ALIGNMENT_FILL);
+    }
+    let urgency = 0.2 + 0.8 * (1.0 - fraction / ALIGNMENT_LOW_THRESHOLD);
+    let strength = urgency * pulse(ALIGNMENT_LOW_PULSE_HZ);
+    (mix(ALIGNMENT_TRACK, ALIGNMENT_WARNING, strength * 0.12), mix(ALIGNMENT_FILL, ALIGNMENT_WARNING, strength * 0.32))
+}
+
+fn mix(from: Color, to: Color, amount: f32) -> Color {
+    from.to_linear().mix(&to.to_linear(), amount).into()
+}
+
+/// The capsule station in reach and its accent, set by the capsule UI.
+#[derive(Resource, Default)]
+pub(crate) struct StationPrompt(pub(crate) Option<(&'static str, Color)>);
+
+/// What the interact key does nearby: use a capsule station or enter a shelter.
+#[derive(SystemParam)]
+struct InteractPrompt<'w> {
+    station: Res<'w, StationPrompt>,
+    shelter: Res<'w, InteractionFocus>,
+}
+
+impl InteractPrompt<'_> {
+    fn label(&self) -> Option<(&'static str, Color)> {
+        self.station.0.or_else(|| self.shelter.has_target().then_some(("ENTER", TEXT)))
+    }
+}
+
+#[derive(Component)]
+struct PromptPlate;
+
+/// Rests the interact prompt on top of the toolbar.
+fn present_prompt(
+    mut commands: Commands,
+    prompt: InteractPrompt,
+    library: Res<ArtLibrary>,
+    mut images: ResMut<Assets<Image>>,
+    mut shown: Query<(Entity, &ImageNode, &mut Node), With<PromptPlate>>,
+    toolbar: Query<Entity, With<ToolbarFrame>>,
+    grid: UiPixelGrid,
+) {
+    let Ok(toolbar) = toolbar.single() else { return };
+    let content = prompt.label().zip(grid.unit()).map(|((label, color), unit)| {
+        let raster = draw_prompt(label, color, &library.art(&images));
+        let size = raster.size.as_vec2() * unit;
+        let node = Node {
+            position_type: PositionType::Absolute,
+            left: percent(50.0),
+            top: px(-size.y),
+            margin: UiRect::left(px(-size.x / 2.0)),
+            width: px(size.x),
+            height: px(size.y),
+            ..default()
+        };
+        (node, raster)
+    });
+    show_raster(&mut commands, &mut images, shown.single_mut().ok(), content, |image, node| {
+        (Name::new("InteractPrompt"), PromptPlate, image, node, ZIndex(PANEL_Z_INDEX), ChildOf(toolbar))
+    });
+}
+
+/// A level-up announcement; `age` counts from when it was queued.
+struct Caption {
+    lines: Vec<String>,
+    age: f32,
+}
+
+impl Caption {
+    /// Fully visible after a short delay, then fading out; `None` before it appears.
+    fn opacity(&self) -> Option<f32> {
+        let shown = self.age - CAPTION_DELAY_SECS;
+        (shown >= 0.0).then(|| (1.0 - (shown - CAPTION_HOLD_SECS).max(0.0) / (CAPTION_TOTAL_SECS - CAPTION_HOLD_SECS)).max(0.0))
+    }
+}
+
+#[derive(Resource, Default)]
+struct Captions(Vec<Caption>);
+
+fn queue_level_up_captions(
+    mut events: MessageReader<AdaptationLevelUpEvent>,
+    mut captions: ResMut<Captions>,
+    time: Res<Time<Real>>,
+) {
+    for caption in &mut captions.0 {
+        caption.age += time.delta_secs();
+    }
+    captions.0.retain(|caption| caption.age < CAPTION_DELAY_SECS + CAPTION_TOTAL_SECS);
+    for event in events.read() {
+        let unlocked = event.unlocked_skill.map(|skill| format!("NEW ABILITY UNLOCKED: {}", skill.name().to_uppercase()));
+        let lines = std::iter::once("ADAPTATION INCREASED".to_owned()).chain(unlocked).collect();
+        if captions.0.len() < CAPTION_LIMIT {
+            captions.0.push(Caption { lines, age: 0.0 });
         }
     }
 }
+
+#[derive(Component)]
+struct CaptionStack;
+
+fn present_captions(
+    mut commands: Commands,
+    captions: Res<Captions>,
+    library: Res<ArtLibrary>,
+    mut images: ResMut<Assets<Image>>,
+    mut shown: Query<(Entity, &ImageNode, &mut Node), With<CaptionStack>>,
+    grid: UiPixelGrid,
+) {
+    let visible: Vec<_> = captions.0.iter().filter_map(|caption| Some((&caption.lines[..], caption.opacity()?))).collect();
+    let content = (!visible.is_empty()).then(|| draw_captions(&visible, &library.art(&images))).and_then(|raster| {
+        let mut node = grid.anchored(raster.size, Vec2::new(0.5, 0.0))?;
+        node.top = px(CAPTION_TOP as f32 * grid.unit()?);
+        Some((node, raster))
+    });
+    show_raster(&mut commands, &mut images, shown.single_mut().ok(), content, |image, node| {
+        (Name::new("LevelUpCaptions"), CaptionStack, image, node, ZIndex(CAPTION_Z_INDEX), StateDespawnMarker)
+    });
+}
+
+/// Stacked plates, each fading with its caption's `opacity`.
+fn draw_captions(captions: &[(&[String], f32)], art: &Art) -> Raster {
+    let widest = captions.iter().flat_map(|(lines, _)| lines.iter()).map(|line| text_width(line)).max().unwrap_or(0);
+    let width = widest + 12;
+    let heights: Vec<i32> = captions.iter().map(|(lines, _)| lines.len() as i32 * 10 + 5).collect();
+    let height = heights.iter().map(|height| height + 1).sum::<i32>() - 1;
+    let mut canvas = Canvas::new(UVec2::new(width as u32, height.max(1) as u32), art);
+    let mut top = 0;
+    for ((lines, opacity), plate_height) in captions.iter().zip(heights) {
+        let fill = Color::srgba(0.02, 0.03, 0.05, 0.72 * opacity);
+        canvas.plate(rect(0, top, width, plate_height), 1, fill, Color::WHITE.with_alpha(0.28 * opacity));
+        for (index, line) in lines.iter().enumerate() {
+            let at = IVec2::new((width - text_width(line)) / 2, top + 4 + 10 * index as i32);
+            canvas.text(at, line, CAPTION_COLOR.with_alpha(*opacity));
+        }
+        top += plate_height + 1;
+    }
+    canvas.finish()
+}
+
+#[cfg(test)]
+mod tests;

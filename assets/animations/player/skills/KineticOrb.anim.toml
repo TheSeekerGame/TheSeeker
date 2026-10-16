@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.KineticOrb"
+image = "animations/player/skills/KineticOrbSheet__r1c4__12x12.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

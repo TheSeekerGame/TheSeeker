@@ -1,3 +1,7 @@
+[asset]
+key = "anim.particles.Soul"
+image = "animations/player/particles/SoulSheet__r1c3__1x2.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

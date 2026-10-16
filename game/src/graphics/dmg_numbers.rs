@@ -1,270 +1,112 @@
-use bevy::color::palettes;
-use bevy::prelude::*;
+//! Damage numbers: pixel digits that rise from a damaged actor and fade, pausing with the game.
+use bevy::color::palettes::css;
 use theseeker_engine::animation::SpriteAnimationBundle;
-use theseeker_engine::physics::{Collider, ColliderShapeAccess};
-use theseeker_engine::prelude::{GameTickUpdate, GameTime};
+use theseeker_engine::audio::transport::TICK_RATE_HZ;
+use theseeker_engine::physics::Collider;
 use theseeker_engine::script::ScriptPlayer;
 
-use crate::camera::MainCamera;
 use crate::game::combat::damage_source::apply_damage;
 use crate::game::combat::DamageInfo;
 use crate::game::player::Player;
-use crate::prelude::Update;
-use crate::StateDespawnMarker;
+use crate::prelude::*;
+
+/// Damage numbers stay hidden while this is off.
+const DAMAGE_NUMBERS_ENABLED: bool = false;
+/// How fast a number rises, in world units per second of game time, when it starts fading,
+/// and when it is gone.
+const RISE_SPEED: f32 = 6.0;
+const FADE_START: f32 = 0.25;
+const LIFETIME: f32 = 3.0;
+/// How far above its target's collider a number appears.
+const ABOVE_COLLIDER: f32 = 15.0;
+/// A digit's width, and the step from one digit to the next.
+const DIGIT_WIDTH: f32 = 3.0;
+const DIGIT_STEP: f32 = 4.0;
+/// Each number lies this much above the one before, until a second passes without one.
+const STACK_STEP: f32 = 0.000_000_1;
 
 pub struct DmgNumbersPlugin;
 
 impl Plugin for DmgNumbersPlugin {
     fn build(&self, app: &mut App) {
-        app.init_resource::<DamageNumberZOrder>();
-        app.add_systems(
-            GameTickUpdate,
-            instance.after(apply_damage),
-        );
-        app.add_systems(
-            Update,
-            (
-                update_number,
-                reset_z_order_after_timeout,
-            ),
-        );
+        app.init_resource::<DamageNumberStack>()
+            .add_systems(GameTickUpdate, spawn_damage_numbers.after(apply_damage))
+            .add_systems(Update, rise_and_fade);
     }
 }
 
-/// Marker to suppress damage numbers when an entity takes damage
+/// Marks an entity whose damage shows no numbers.
 #[derive(Component)]
 pub struct NoDamageNumbers;
 
-/// Resource to track z-ordering for damage numbers
-#[derive(Resource)]
-struct DamageNumberZOrder {
-    /// Current z offset for next damage number
-    current_z: f32,
-    /// Last time a damage number was spawned
+/// How far above the world the next number lies, so later numbers cover earlier ones.
+#[derive(Resource, Default)]
+struct DamageNumberStack {
+    z: f32,
     last_spawn_tick: u64,
 }
 
-impl Default for DamageNumberZOrder {
-    fn default() -> Self {
-        Self {
-            current_z: 0.0,
-            last_spawn_tick: 0,
-        }
-    }
+#[derive(Component)]
+struct DamageDigit {
+    start_y: f32,
+    /// When the digit appeared, in game seconds.
+    spawned_at: f64,
 }
 
-/// Marker component for a damage number group, contains all digit entities
-#[derive(Component)]
-struct DmgNumberGroup {
-    /// World position where the damage number spawned
-    start_pos: Vec3,
-    /// Time when the damage number was spawned
-    spawn_time: f64,
-    /// List of entity IDs for all digit sprites in this damage number
-    digit_entities: Vec<Entity>,
-}
-
-/// Marker component for individual digit sprites
-#[derive(Component)]
-struct DmgNumberDigit;
-
-fn instance(
+fn spawn_damage_numbers(
     mut commands: Commands,
-    enemy_query: Query<(&GlobalTransform, Option<&Collider>), Without<Player>>,
-    player_query: Query<(&GlobalTransform, Option<&Collider>), With<Player>>,
-    mut damage_events: EventReader<DamageInfo>,
-    game_time: Res<GameTime>,
-    q_cam: Query<(&GlobalTransform, &Camera), With<MainCamera>>,
-    mut z_order: ResMut<DamageNumberZOrder>,
-    suppress_query: Query<(), With<NoDamageNumbers>>,
+    mut damage: MessageReader<DamageInfo>,
+    targets: Query<(&GlobalTransform, Option<&Collider>, Has<Player>, Has<NoDamageNumbers>)>,
+    time: Res<GameTime>,
+    mut stack: ResMut<DamageNumberStack>,
 ) {
-    let Some((_camera_transform, _camera)) = q_cam.iter().next() else {
+    if !DAMAGE_NUMBERS_ENABLED {
         return;
-    };
-
-    for damage_info in damage_events.read() {
-        // Skip targets that opt-out of damage numbers (e.g., Bell)
-        if suppress_query.get(damage_info.target).is_ok() {
+    }
+    for info in damage.read() {
+        let Ok((transform, collider, player, silent)) = targets.get(info.target) else {
+            continue;
+        };
+        if silent {
             continue;
         }
-        // Try the enemy query first:
-        let (transform, collider, text_color) =
-            if let Ok((transform, collider)) =
-                enemy_query.get(damage_info.target)
-            {
-                (
-                    transform,
-                    collider,
-                    if damage_info.crit && damage_info.stealthed {
-                        palettes::css::PURPLE.into()
-                    } else if damage_info.crit {
-                        (palettes::css::YELLOW * 1.1).into()
-                    } else if damage_info.stealthed {
-                        palettes::css::PINK.into()
-                    } else {
-                        Color::WHITE
-                    },
-                )
-            } else if let Ok((transform, collider)) =
-                player_query.get(damage_info.target)
-            {
-                // For player, force red color
-                (
-                    transform,
-                    collider,
-                    palettes::css::RED.into(),
-                )
-            } else {
-                continue;
-            };
-
-        let mut world_position = transform.translation();
-
-        // Offset from collider (above hitbox) if available.
-        world_position += match collider {
-            Some(collider) => {
-                let above_hb_offset = 15.0;
-                let collider_height =
-                    collider.shape().compute_local_aabb().half_extents().y;
-                Vec3::new(
-                    1.0,
-                    collider_height + above_hb_offset,
-                    0.0,
-                )
-            },
-            None => Vec3::ZERO,
+        let color = match (player, info.crit, info.stealthed) {
+            (true, ..) => css::RED.into(),
+            (false, true, true) => css::PURPLE.into(),
+            (false, true, false) => (css::YELLOW * 1.1).into(),
+            (false, false, true) => css::PINK.into(),
+            (false, false, false) => Color::WHITE,
         };
-
-        // Update z-order tracking
-        z_order.current_z += 0.0000001;
-        z_order.last_spawn_tick = game_time.tick();
-        let damage_z = world_position.z + 0.1 + z_order.current_z;
-
-        // Convert damage amount to string to get individual digits (rounded)
-        let damage_text = format!("{:.0}", damage_info.amount);
-        let digit_count = damage_text.len();
-
-        // Calculate total width of the damage number display
-        // Each digit is 3 pixels wide, with 1 pixel gap between them
-        let total_width = (digit_count * 3 + (digit_count - 1)) as f32;
-
-        // Calculate starting x position to center the damage number
-        let start_x = world_position.x - total_width / 2.0;
-
-        let mut digit_entities = Vec::new();
-
-        // Spawn each digit sprite
-        for (i, digit_char) in damage_text.chars().enumerate() {
-            // Calculate position for this digit
-            let digit_x = start_x + (i as f32 * 4.0); // 3 pixels for digit + 1 pixel gap
-            let digit_pos = Vec3::new(digit_x, world_position.y, damage_z);
-
-            // Get the animation key for this digit
-            let anim_key = format!("anim.numbers.{}", digit_char);
-
-            // Create the animation player
+        let above = collider.map_or(Vec3::ZERO, |collider| Vec3::new(1.0, collider.half_extents().y + ABOVE_COLLIDER, 0.0));
+        let position = transform.translation() + above;
+        if time.tick() > stack.last_spawn_tick + u64::from(TICK_RATE_HZ) {
+            stack.z = 0.0;
+        }
+        stack.z += STACK_STEP;
+        stack.last_spawn_tick = time.tick();
+        let text = format!("{:.0}", info.amount);
+        let left = position.x - (text.len() as f32 * DIGIT_STEP - (DIGIT_STEP - DIGIT_WIDTH)) / 2.0;
+        for (i, digit) in text.chars().enumerate() {
             let mut player = ScriptPlayer::default();
-            player.play_key(&anim_key);
-
-            // Spawn the digit entity
-            let digit_entity = commands
-                .spawn((
-                    DmgNumberDigit,
-                    SpriteAnimationBundle { player },
-                    Sprite {
-                        texture_atlas: Some(TextureAtlas::default()),
-                        color: text_color,
-                        ..default()
-                    },
-                    Transform::from_translation(digit_pos),
-                    GlobalTransform::default(),
-                    Visibility::Visible,
-                    InheritedVisibility::VISIBLE,
-                    ViewVisibility::default(),
-                    StateDespawnMarker,
-                ))
-                .id();
-
-            digit_entities.push(digit_entity);
-        }
-
-        // Create a parent entity to track all the digits
-        commands.spawn((
-            DmgNumberGroup {
-                start_pos: world_position,
-                spawn_time: game_time.tick() as f64 / game_time.hz
-                    + game_time.last_update().as_secs_f64(),
-                digit_entities,
-            },
-            StateDespawnMarker,
-        ));
-    }
-}
-
-fn update_number(
-    mut commands: Commands,
-    mut dmg_group_q: Query<(Entity, &mut DmgNumberGroup)>,
-    mut digit_q: Query<(&mut Transform, &mut Sprite), With<DmgNumberDigit>>,
-    game_time: Res<GameTime>,
-) {
-    let max_time = 6.0;
-    let fade_start_time = 0.5; // Start fading after 0.5 seconds
-
-    for (group_entity, dmg_group) in dmg_group_q.iter_mut() {
-        // This way the floating text position is dependent on the gametick time,
-        // so if the game is paused, the floating numbers will pause as well.
-        let elapsed_time = game_time.tick() as f64 / game_time.hz
-            + game_time.last_update().as_secs_f64()
-            - dmg_group.spawn_time;
-
-        // Apply movement and fade to all digits
-        let vertical_offset = 3.0 * elapsed_time as f32;
-
-        // Calculate fade alpha with smooth transition
-        let alpha = if elapsed_time as f32 <= fade_start_time {
-            // Stay fully opaque for the first fade_start_time seconds
-            1.0
-        } else {
-            // Then fade out smoothly over the remaining time
-            let fade_duration = max_time - fade_start_time;
-            let fade_elapsed = elapsed_time as f32 - fade_start_time;
-            1.0 - (fade_elapsed / fade_duration).min(1.0)
-        };
-
-        // Update each digit
-        for &digit_entity in &dmg_group.digit_entities {
-            if let Ok((mut transform, mut sprite)) =
-                digit_q.get_mut(digit_entity)
-            {
-                // Update position (only Y changes, X stays the same)
-                transform.translation.y =
-                    dmg_group.start_pos.y + vertical_offset;
-
-                // Update alpha while preserving the color tint
-                sprite.color.set_alpha(alpha);
-            }
-        }
-
-        // Despawn all entities when time is up
-        if elapsed_time as f32 > max_time {
-            // Despawn all digit entities
-            for &digit_entity in &dmg_group.digit_entities {
-                commands.entity(digit_entity).despawn();
-            }
-            // Despawn the group entity
-            commands.entity(group_entity).despawn();
+            player.play_key(&format!("anim.numbers.{digit}"));
+            commands.spawn((
+                DamageDigit { start_y: position.y, spawned_at: time.time_in_seconds() },
+                SpriteAnimationBundle { player },
+                Sprite { texture_atlas: Some(default()), color, ..default() },
+                Transform::from_xyz(left + i as f32 * DIGIT_STEP, position.y, position.z + 0.1 + stack.z),
+                StateDespawnMarker,
+            ));
         }
     }
 }
 
-fn reset_z_order_after_timeout(
-    mut z_order: ResMut<DamageNumberZOrder>,
-    game_time: Res<GameTime>,
-) {
-    const RESET_AFTER_TICKS: u64 = 96; // 1 second at 96 Hz
-
-    if game_time.tick() > z_order.last_spawn_tick + RESET_AFTER_TICKS {
-        // Reset z-order if no damage numbers spawned for 1 second
-        z_order.current_z = 0.0;
+fn rise_and_fade(mut commands: Commands, time: Res<GameTime>, mut digits: Query<(Entity, &DamageDigit, &mut Transform, &mut Sprite)>) {
+    for (entity, digit, mut transform, mut sprite) in &mut digits {
+        let age = (time.time_in_seconds() - digit.spawned_at) as f32;
+        transform.translation.y = digit.start_y + RISE_SPEED * age;
+        sprite.color.set_alpha(1.0 - ((age - FADE_START) / (LIFETIME - FADE_START)).clamp(0.0, 1.0));
+        if age > LIFETIME {
+            commands.entity(entity).despawn();
+        }
     }
 }

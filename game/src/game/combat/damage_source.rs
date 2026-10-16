@@ -1,25 +1,24 @@
-use super::{DamageInfo, Health};
+use super::{DamageInfo, DamageWindow, Health, Invulnerable};
+use crate::game::effects::chilled::ChilledEffect;
 use crate::game::enemy::Enemy;
-use crate::game::gentstate::Facing;
+use crate::game::gentstate::{Dead, Facing};
 use crate::game::physics::Knockback;
 use crate::game::player::crits::Crits;
-use crate::game::player::passives::{PassiveContext, PassiveContextInputs, PassiveEvent};
-use crate::game::player::skills::types::SkillId;
-use crate::game::player::states::InAir;
-use crate::game::player::{
-    Passives, PlayerAction, PlayerStatMod,
+use crate::game::player::passives::{
+    PassiveContext, PassiveEvent, PassiveOwner, PassiveOwnerItem,
 };
-use crate::game::effects::chilled::ChilledEffect;
+use crate::game::player::skills::types::SkillId;
+use crate::game::player::{Passives, PlayerStatMod};
+use crate::game::spikes::{SpikeDamageCooldown, SpikeHazard};
+use theseeker_engine::profile::TickProfiler;
+use crate::levelgen::breakable_wall::BreakableWall;
 use crate::prelude::*;
 use bevy::ecs::system::Command;
 use bevy::ecs::system::ParamSet;
-use bevy_rapier2d::prelude::Sensor;
-use leafwing_input_manager::prelude::ActionState;
 use std::mem;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::physics::{
-    Collider, ColliderShapeAccess, CollisionGroups as InteractionGroups,
-    PhysicsWorld, ENEMY, PLAYER_ATTACK,
+    Collider, CollisionGroups, PhysicsWorld, Sensor, ENEMY, PLAYER_ATTACK,
 };
 
 /// Component representing an entity that can deal damage (attacks, projectiles, etc.)
@@ -47,8 +46,8 @@ impl DamageSource {
             base_damage: damage,
             max_targets: 3,
             owner,
-            damaged_set: Default::default(),
-            target_set: Default::default(),
+            damaged_set: HashSet::default(),
+            target_set: HashSet::default(),
             chilled_effect: None,
         }
     }
@@ -62,12 +61,6 @@ impl DamageSource {
         self.max_targets = max_targets;
         self
     }
-}
-
-#[derive(Bundle)]
-pub struct DamageSourceBundle {
-    pub damage_source: DamageSource,
-    pub collider: Collider,
 }
 
 /// Knockback applied to damaged targets
@@ -88,9 +81,20 @@ pub struct Hit;
 #[derive(Component)]
 pub struct Backstab;
 
+#[derive(Component, Debug, Clone, Copy, Deref)]
+pub struct BackstabMultiplier(pub f32);
+
 /// Tags a damage source with the originating skill to provide richer passive events.
 #[derive(Component, Debug, Clone, Copy)]
 pub struct DamageSourceSkill(pub SkillId);
+
+/// Allows the damage source to hit its owner (skip owner exclusion during target queries).
+#[derive(Component, Debug, Clone, Copy)]
+pub struct AllowOwnerHit;
+
+/// Despawns owner-bound damage when owner is missing or dead.
+#[derive(Component, Debug, Clone, Copy)]
+pub struct DespawnOnOwnerInvalid;
 
 /// Marks a downward-oriented attack (for pogo mechanics, etc.)
 #[derive(Component)]
@@ -109,6 +113,7 @@ impl<T: bevy::ecs::bundle::Bundle + 'static> InsertIfExists<T> {
 }
 
 impl<T: bevy::ecs::bundle::Bundle + 'static> Command for InsertIfExists<T> {
+    type Out = ();
     fn apply(self, world: &mut World) {
         if let Ok(mut e) = world.get_entity_mut(self.entity) {
             e.insert(self.bundle);
@@ -131,42 +136,61 @@ pub fn determine_damage_targets(
         &GlobalTransform,
         &mut DamageSource,
         &Collider,
-        Option<&InteractionGroups>,
+        Option<&CollisionGroups>,
+        Option<&AllowOwnerHit>,
     )>,
     damageable_query: Query<
-        (&GlobalTransform, &Collider),
-        (With<Collider>, With<Health>, With<Gent>),
+        (
+            &GlobalTransform,
+            &Collider,
+            Option<&DamageWindow>,
+        ),
+        (
+            With<Collider>,
+            With<Health>,
+            With<Gent>,
+            Without<Dead>,
+            Without<crate::game::spikes::SpikeRespawnPending>,
+        ),
     >,
+    breakable_query: Query<(&GlobalTransform, &Collider), With<BreakableWall>>,
     spatial_query: PhysicsWorld,
+    mut profiler: TickProfiler,
 ) {
-    for (_entity, transform, mut damage_source, collider, maybe_groups) in
-        damage_query.iter_mut()
+    let _profile = profiler.scope("damage_targets");
+    for (
+        _entity,
+        transform,
+        mut damage_source,
+        collider,
+        maybe_groups,
+        allow_owner_hit,
+    ) in damage_query.iter_mut()
     {
         let collision_groups = maybe_groups.copied().unwrap_or(
-            InteractionGroups::new(PLAYER_ATTACK, ENEMY),
+            CollisionGroups::new(PLAYER_ATTACK, ENEMY),
         );
 
         let intersections = spatial_query.intersect(
             transform.translation().xy(),
-            collider.shape(),
+            collider,
             collision_groups,
-            Some(damage_source.owner), // Exclude owner, not damage source
+            if allow_owner_hit.is_some() {
+                None
+            } else {
+                Some(damage_source.owner) // Exclude owner, not damage source
+            },
         );
 
         let mut targets = intersections
             .into_iter()
             .filter_map(|colliding_entity| {
-                if let Ok((damageable_transform, _damageable_collider)) =
-                    damageable_query.get(colliding_entity)
-                {
-                    let dist = damageable_transform
-                        .translation()
-                        .xy()
-                        .distance_squared(transform.translation().xy());
-                    Some((colliding_entity, dist))
-                } else {
-                    None
-                }
+                damage_target_distance(
+                    colliding_entity,
+                    transform.translation().xy(),
+                    &damageable_query,
+                    &breakable_query,
+                )
             })
             .collect::<Vec<_>>();
         targets.sort_by(|(_, dist1), (_, dist2)| dist1.total_cmp(dist2));
@@ -179,15 +203,71 @@ pub fn determine_damage_targets(
         };
 
         for entity in valid_targets {
-            if damage_source.damaged_set.contains(entity) {
-                continue;
-            };
-            if damageable_query.get(*entity).is_err() {
-                continue;
-            }
-            damage_source.target_set.insert(*entity);
+            insert_new_damage_target(&mut damage_source, entity);
         }
     }
+}
+
+fn damage_target_distance(
+    entity: Entity,
+    source_pos: Vec2,
+    damageable_query: &Query<
+        (
+            &GlobalTransform,
+            &Collider,
+            Option<&DamageWindow>,
+        ),
+        (
+            With<Collider>,
+            With<Health>,
+            With<Gent>,
+            Without<Dead>,
+            Without<crate::game::spikes::SpikeRespawnPending>,
+        ),
+    >,
+    breakable_query: &Query<
+        (&GlobalTransform, &Collider),
+        With<BreakableWall>,
+    >,
+) -> Option<(Entity, f32)> {
+    if let Ok((transform, _collider, damage_window)) =
+        damageable_query.get(entity)
+    {
+        return damageable_target_distance(entity, source_pos, transform, damage_window);
+    }
+
+    breakable_query
+        .get(entity)
+        .ok()
+        .map(|(transform, _)| (entity, target_distance(source_pos, transform)))
+}
+
+fn damageable_target_distance(
+    entity: Entity,
+    source_pos: Vec2,
+    transform: &GlobalTransform,
+    damage_window: Option<&DamageWindow>,
+) -> Option<(Entity, f32)> {
+    if damage_window.map(|window| !window.open).unwrap_or(false) {
+        return None;
+    }
+
+    Some((entity, target_distance(source_pos, transform)))
+}
+
+fn target_distance(source_pos: Vec2, transform: &GlobalTransform) -> f32 {
+    transform.translation().xy().distance_squared(source_pos)
+}
+
+fn insert_new_damage_target(
+    damage_source: &mut DamageSource,
+    entity: &Entity,
+) {
+    if damage_source.damaged_set.contains(entity) {
+        return;
+    }
+
+    damage_source.target_set.insert(*entity);
 }
 
 pub fn apply_damage_modifications(
@@ -195,25 +275,11 @@ pub fn apply_damage_modifications(
         (Entity, &mut DamageSource, Has<Hit>),
         Without<Gent>,
     >,
-    mut owner_query: Query<
-        (
-            Option<&Passives>,
-            Option<&Health>,
-            Option<&Transform>,
-            Option<&theseeker_engine::physics::LinearVelocity>,
-            Option<&ActionState<PlayerAction>>,
-            Option<&crate::game::player::EnemiesNearby>,
-            Option<&crate::game::player::Grounded>,
-            Option<&InAir>,
-            Option<&crate::game::player::BuffTick>,
-            Option<&crate::game::player::EnemyProximitySensor>,
-            Option<&crate::game::player::states::Running>,
-            Option<&crate::game::player::LastGroundedPosition>,
-        ),
-        With<Gent>,
-    >,
+    owner_query: Query<(&Passives, Option<&Health>, PassiveOwner), With<Gent>>,
     mut commands: Commands,
+    mut profiler: TickProfiler,
 ) {
+    let _profile = profiler.scope("damage_modifiers");
     for (entity, mut damage_source, has_hit) in damage_query.iter_mut() {
         if damage_source.target_set.is_empty() {
             continue;
@@ -222,79 +288,14 @@ pub fn apply_damage_modifications(
         // Reset damage to base to prevent compounding on persistent entities (like whirling)
         damage_source.damage = damage_source.base_damage;
 
-        if let Ok((
-            maybe_passives,
-            maybe_health,
-            _maybe_transform,
-            maybe_velocity,
-            maybe_action_state,
-            maybe_enemies_nearby,
-            maybe_grounded,
-            maybe_in_air,
-            maybe_buff_tick,
-            maybe_enemy_proximity,
-            maybe_running,
-            maybe_last_grounded_pos,
-        )) = owner_query.get_mut(damage_source.owner)
-        {
-            if let Some(passives) = maybe_passives {
-                let mut modifiers =
-                    crate::game::player::passives::DamageModifiers::default();
-                modifiers.current_target_count = damage_source.target_set.len();
-                let _default_health = Health { current: 0, max: 0 };
-
-                let enemies_nearby_count =
-                    if let Some(proximity) = maybe_enemy_proximity {
-                        proximity.enemies_in_melee_range.len() as u32
-                    } else if let Some(enemies) = maybe_enemies_nearby {
-                        enemies.0
-                    } else {
-                        0
-                    };
-
-                let pctx = PassiveContext::from_inputs(PassiveContextInputs {
-                    health: maybe_health,
-                    velocity: maybe_velocity.map(|v| v.0),
-                    enemies_nearby: Some(enemies_nearby_count),
-                    grounded: maybe_grounded.is_some(),
-                    in_air: maybe_in_air.is_some(),
-                    buff_stacks: maybe_buff_tick.map(|b| b.stacks),
-                    closest_enemy_distance: maybe_enemy_proximity
-                        .map(|s| s.closest_distance),
-                    is_running: maybe_running.is_some(),
-                    target_position: None,
-                    last_grounded_position: maybe_last_grounded_pos
-                        .map(|p| p.position),
-                    movement_input: maybe_action_state
-                        .map(|a| a.clamped_value(&PlayerAction::Move)),
-                    jump_pressed: maybe_action_state
-                        .map(|a| a.pressed(&PlayerAction::Jump)),
-                    enemies_near_target: Some(0),
-                    target_health_pct: None,
-                    rotation_active: false,
-                });
-
-                use crate::game::player::passives::get_passive_implementation;
-                let mut implementations: Vec<
-                    Box<dyn crate::game::player::passives::PassiveEffect>,
-                > = passives
-                    .equipped
-                    .iter()
-                    .map(|p| get_passive_implementation(p))
-                    .collect();
-                implementations.sort_by_key(|p| -p.priority());
-                for p in implementations.iter() {
-                    p.modify_damage(&mut modifiers, &pctx);
-                }
-                if modifiers.can_backstab {
-                    // Also make this insertion resilient to prior queued despawn.
-                    commands.queue(InsertIfExists::new(entity, Backstab));
-                }
-                // Apply modifier to the already-reset damage
-                if modifiers.damage_multiplier != 1.0 {
-                    damage_source.damage *= modifiers.damage_multiplier;
-                }
-            }
+        if let Ok((passives, health, owner)) = owner_query.get(damage_source.owner) {
+            let mut modifiers = crate::game::player::passives::DamageModifiers::default();
+            apply_passive_damage_modifiers(passives, &mut modifiers, &owner.context(health));
+            queue_backstab_marker(entity, &modifiers, &mut commands);
+            apply_damage_multiplier(
+                &mut damage_source.damage,
+                modifiers.damage_multiplier,
+            );
         }
         if !has_hit {
             // Use a safe insert that checks existence at apply time to avoid
@@ -304,6 +305,456 @@ pub fn apply_damage_modifications(
     }
 }
 
+fn apply_passive_damage_modifiers(
+    passives: &Passives,
+    modifiers: &mut crate::game::player::passives::DamageModifiers,
+    context: &PassiveContext<'_>,
+) {
+    for passive in crate::game::player::passives::ordered_passives(passives).into_iter().flatten() {
+        passive.modify_damage(modifiers, context);
+    }
+}
+
+fn queue_backstab_marker(
+    entity: Entity,
+    modifiers: &crate::game::player::passives::DamageModifiers,
+    commands: &mut Commands,
+) {
+    if !modifiers.can_backstab {
+        return;
+    }
+
+    commands.queue(InsertIfExists::new(
+        entity,
+        (
+            Backstab,
+            BackstabMultiplier(modifiers.backstab_multiplier),
+        ),
+    ));
+}
+
+fn apply_damage_multiplier(damage: &mut f32, multiplier: f32) {
+    if multiplier != 1.0 {
+        *damage *= multiplier;
+    }
+}
+
+#[derive(Default)]
+struct TargetDamageSnapshot {
+    position: Vec2,
+    health_pct: Option<f32>,
+}
+
+impl TargetDamageSnapshot {
+    fn new(health: &Health, transform: &GlobalTransform) -> Self {
+        Self {
+            position: transform.translation().truncate(),
+            health_pct: target_health_pct(health),
+        }
+    }
+}
+
+fn target_health_pct(health: &Health) -> Option<f32> {
+    if health.max == 0 {
+        return None;
+    }
+
+    Some(health.current as f32 / health.max as f32)
+}
+
+fn is_enemy_near_target(
+    enemy: Entity,
+    target: Entity,
+    enemy_transform: &Transform,
+    target_pos: Vec2,
+    radius: f32,
+) -> bool {
+    enemy != target
+        && enemy_transform.translation.truncate().distance(target_pos) <= radius
+}
+
+fn target_damage_snapshot(
+    target: Entity,
+    target_query: &mut Query<
+        (
+            Entity,
+            &mut Health,
+            &GlobalTransform,
+            &Facing,
+            Option<&PlayerStatMod>,
+            Has<Invulnerable>,
+            Has<crate::game::player::Player>,
+            Option<&mut SpikeDamageCooldown>,
+        ),
+        With<Gent>,
+    >,
+) -> TargetDamageSnapshot {
+    target_query
+        .get(target)
+        .ok()
+        .map(|(_, health, transform, _, _, _, _, _)| TargetDamageSnapshot::new(health, transform))
+        .unwrap_or_default()
+}
+
+fn enemy_near_target_candidate(
+    candidate: &(Entity, &Transform),
+    target: Entity,
+    target_pos: Vec2,
+    radius: f32,
+) -> bool {
+    let (enemy, enemy_transform) = *candidate;
+    is_enemy_near_target(enemy, target, enemy_transform, target_pos, radius)
+}
+
+fn has_shadow_cloak(passives: Option<&Passives>) -> bool {
+    passives
+        .map(|passives| {
+            passives.contains(&crate::game::player::Passive::ShadowCloak)
+        })
+        .unwrap_or(false)
+}
+
+fn apply_crit_damage(
+    maybe_crits: Option<Mut<'_, Crits>>,
+    damage: &mut f32,
+    is_critical: &mut bool,
+    damage_entity: Entity,
+    source_skill: Option<&DamageSourceSkill>,
+    owner: Entity,
+    passive_events: &mut MessageWriter<PassiveEvent>,
+) {
+    let Some(mut crits) = maybe_crits else {
+        return;
+    };
+
+    crits.hit_count += 1;
+    if crits.next_hit_is_critical {
+        *is_critical = true;
+        *damage *= crits.crit_damage_multiplier;
+        crits.next_hit_is_critical = false;
+        passive_events.write(PassiveEvent::CriticalHit {
+            damage_source: damage_entity,
+            source_skill: source_skill.map(|tag| tag.0),
+        });
+    }
+
+    passive_events.write(PassiveEvent::HitCountAdvanced {
+        owner,
+        hit_count: crits.hit_count,
+    });
+}
+
+type DamageTargetItem<'a> = (
+    Entity,
+    Mut<'a, Health>,
+    &'a GlobalTransform,
+    &'a Facing,
+    Option<&'a PlayerStatMod>,
+    bool,
+    bool,
+    Option<Mut<'a, SpikeDamageCooldown>>,
+);
+
+type OwnerDamageItem<'w, 's> = (
+    Option<Mut<'w, Crits>>,
+    Option<&'w Passives>,
+    Option<&'w Health>,
+    PassiveOwnerItem<'w, 's>,
+);
+
+struct DamageApplication<'a> {
+    owner: Entity,
+    source: Entity,
+    source_transform: &'a GlobalTransform,
+    is_stealthed: bool,
+    can_backstab: bool,
+    backstab_multiplier: Option<&'a BackstabMultiplier>,
+    pushback: Option<&'a Pushback>,
+    chilled_effect: Option<&'a ChilledEffect>,
+    is_spike_hazard: bool,
+    owner_has_shadow_cloak: bool,
+    is_critical: bool,
+}
+
+struct OwnerDamageAdjustment<'a, 's> {
+    owner: Option<OwnerDamageItem<'a, 's>>,
+    damage_entity: Entity,
+    source_skill: Option<&'a DamageSourceSkill>,
+    owner_entity: Entity,
+    target_snapshot: &'a TargetDamageSnapshot,
+    enemies_near_target: u32,
+}
+
+fn apply_owner_damage_adjustments(
+    adjustment: OwnerDamageAdjustment<'_, '_>,
+    damage: &mut f32,
+    is_critical: &mut bool,
+    passive_events: &mut MessageWriter<PassiveEvent>,
+) -> bool {
+    let Some((crits, passives, health, owner)) = adjustment.owner else {
+        return false;
+    };
+
+    let owner_has_shadow_cloak = has_shadow_cloak(passives);
+    apply_crit_damage(
+        crits,
+        damage,
+        is_critical,
+        adjustment.damage_entity,
+        adjustment.source_skill,
+        adjustment.owner_entity,
+        passive_events,
+    );
+    if let Some(passives) = passives {
+        let target = adjustment.target_snapshot;
+        let context = owner.context(health).at_target(
+            target.position,
+            target.health_pct,
+            adjustment.enemies_near_target,
+        );
+        let mut modifiers = crate::game::player::passives::DamageModifiers::default();
+        apply_passive_damage_modifiers(passives, &mut modifiers, &context);
+        apply_damage_multiplier(damage, modifiers.damage_multiplier);
+    }
+    owner_has_shadow_cloak
+}
+
+fn apply_gent_target_if_present(
+    target: Option<DamageTargetItem<'_>>,
+    damage: f32,
+    application: &DamageApplication<'_>,
+    damaged_set: &mut HashSet<Entity>,
+    damage_events: &mut MessageWriter<DamageInfo>,
+    commands: &mut Commands,
+) -> bool {
+    let Some(target) = target else {
+        return false;
+    };
+
+    apply_damage_to_gent_target(
+        target,
+        damage,
+        application,
+        damaged_set,
+        damage_events,
+        commands,
+    );
+    true
+}
+
+fn apply_damage_to_gent_target(
+    target: DamageTargetItem<'_>,
+    mut damage: f32,
+    application: &DamageApplication<'_>,
+    damaged_set: &mut HashSet<Entity>,
+    damage_events: &mut MessageWriter<DamageInfo>,
+    commands: &mut Commands,
+) {
+    let (
+        target_entity,
+        mut health,
+        target_transform,
+        target_facing,
+        maybe_player_statmod,
+        is_invulnerable,
+        is_player,
+        maybe_spike_cooldown,
+    ) = target;
+
+    apply_stealth_damage(
+        &mut damage,
+        application.is_stealthed,
+        application.owner_has_shadow_cloak,
+    );
+    let was_backstab = apply_backstab_damage(
+        &mut damage,
+        application.can_backstab,
+        target_facing,
+        target_transform,
+        application.source_transform,
+        application.backstab_multiplier,
+    );
+
+    let is_spike_hit = application.is_spike_hazard && is_player;
+    let spike_immunity_active =
+        spike_immunity_active(is_spike_hit, maybe_spike_cooldown.as_deref());
+    zero_damage_when(&mut damage, spike_immunity_active || is_invulnerable);
+    insert_chilled_effect(
+        is_player,
+        application.chilled_effect,
+        target_entity,
+        commands,
+    );
+    apply_player_defense(&mut damage, maybe_player_statmod);
+
+    health.current = health.current.saturating_sub(damage as u32);
+    write_damage_info(
+        damage_events,
+        damaged_set,
+        DamageInfo {
+            owner: application.owner,
+            source: application.source,
+            target: target_entity,
+            amount: damage,
+            crit: application.is_critical,
+            stealthed: application.is_stealthed,
+            backstab: was_backstab,
+        },
+    );
+    reset_or_insert_spike_cooldown(
+        is_spike_hit,
+        spike_immunity_active,
+        damage,
+        maybe_spike_cooldown,
+        target_entity,
+        commands,
+    );
+    insert_pushback(target_entity, application.pushback, commands);
+}
+
+fn apply_stealth_damage(
+    damage: &mut f32,
+    is_stealthed: bool,
+    owner_has_shadow_cloak: bool,
+) {
+    if is_stealthed && !owner_has_shadow_cloak {
+        *damage *= 2.0;
+    }
+}
+
+fn apply_backstab_damage(
+    damage: &mut f32,
+    can_backstab: bool,
+    target_facing: &Facing,
+    target_transform: &GlobalTransform,
+    source_transform: &GlobalTransform,
+    multiplier: Option<&BackstabMultiplier>,
+) -> bool {
+    if !can_backstab {
+        return false;
+    }
+    if !is_backstab_hit(target_facing, target_transform, source_transform) {
+        return false;
+    }
+
+    *damage *= multiplier.map(|m| m.0).unwrap_or(2.0);
+    true
+}
+
+fn is_backstab_hit(
+    target_facing: &Facing,
+    target_transform: &GlobalTransform,
+    source_transform: &GlobalTransform,
+) -> bool {
+    match *target_facing {
+        Facing::Left => target_transform.translation().x
+            > source_transform.translation().x,
+        Facing::Right => target_transform.translation().x
+            < source_transform.translation().x,
+    }
+}
+
+fn spike_immunity_active(
+    is_spike_hit: bool,
+    spike_cooldown: Option<&SpikeDamageCooldown>,
+) -> bool {
+    is_spike_hit
+        && spike_cooldown
+            .map(|cooldown| cooldown.remaining_ticks > 0)
+            .unwrap_or(false)
+}
+
+fn zero_damage_when(damage: &mut f32, condition: bool) {
+    if condition {
+        *damage = 0.0;
+    }
+}
+
+fn insert_chilled_effect(
+    is_player: bool,
+    chilled_effect: Option<&ChilledEffect>,
+    target: Entity,
+    commands: &mut Commands,
+) {
+    let (true, Some(chilled_effect)) = (is_player, chilled_effect) else {
+        return;
+    };
+
+    commands.entity(target).insert(chilled_effect.clone());
+}
+
+fn apply_player_defense(damage: &mut f32, statmod: Option<&PlayerStatMod>) {
+    if let Some(statmod) = statmod {
+        *damage /= statmod.defense;
+    }
+}
+
+fn reset_or_insert_spike_cooldown(
+    is_spike_hit: bool,
+    spike_immunity_active: bool,
+    damage: f32,
+    maybe_spike_cooldown: Option<Mut<'_, SpikeDamageCooldown>>,
+    target: Entity,
+    commands: &mut Commands,
+) {
+    if !(is_spike_hit && !spike_immunity_active && damage > 0.0) {
+        return;
+    }
+    if let Some(mut cooldown) = maybe_spike_cooldown {
+        cooldown.reset();
+        return;
+    }
+
+    commands.entity(target).insert(SpikeDamageCooldown::activate());
+}
+
+fn insert_pushback(
+    target: Entity,
+    pushback: Option<&Pushback>,
+    commands: &mut Commands,
+) {
+    if let Some(pushback) = pushback {
+        commands.entity(target).insert(pushback.0);
+    }
+}
+
+fn emit_breakable_wall_damage_if_present(
+    target: Entity,
+    is_breakable_wall: bool,
+    application: &DamageApplication<'_>,
+    damage: f32,
+    damaged_set: &mut HashSet<Entity>,
+    damage_events: &mut MessageWriter<DamageInfo>,
+) {
+    if !is_breakable_wall {
+        return;
+    }
+
+    write_damage_info(
+        damage_events,
+        damaged_set,
+        DamageInfo {
+            owner: application.owner,
+            source: application.source,
+            target,
+            amount: damage,
+            crit: false,
+            stealthed: application.is_stealthed,
+            backstab: false,
+        },
+    );
+}
+
+fn write_damage_info(
+    damage_events: &mut MessageWriter<DamageInfo>,
+    damaged_set: &mut HashSet<Entity>,
+    damage_info: DamageInfo,
+) {
+    damaged_set.insert(damage_info.target);
+    damage_events.write(damage_info);
+}
+
+#[expect(clippy::too_many_arguments, reason = "Bevy system dependencies are expressed as explicit system parameters.")]
 pub fn apply_damage(
     mut damage_query: Query<(
         Entity,
@@ -311,8 +762,10 @@ pub fn apply_damage(
         &GlobalTransform,
         Has<Stealthed>,
         Has<Backstab>,
+        Option<&BackstabMultiplier>,
         Option<&Pushback>,
         Option<&DamageSourceSkill>,
+        Has<SpikeHazard>,
     )>,
     mut queries: ParamSet<(
         Query<
@@ -322,42 +775,35 @@ pub fn apply_damage(
                 &GlobalTransform,
                 &Facing,
                 Option<&PlayerStatMod>,
-                Has<crate::game::enemy::Defense>,
+                Has<Invulnerable>,
                 Has<crate::game::player::Player>,
+                Option<&mut SpikeDamageCooldown>,
             ),
             With<Gent>,
         >,
         Query<
-            (
-                Option<&mut Crits>,
-                Option<&Passives>,
-                Option<&Health>,
-                Option<&theseeker_engine::physics::LinearVelocity>,
-                Option<&ActionState<PlayerAction>>,
-                Option<&crate::game::player::EnemiesNearby>,
-                Option<&crate::game::player::Grounded>,
-                Option<&InAir>,
-                Option<&crate::game::player::BuffTick>,
-                Option<&crate::game::player::EnemyProximitySensor>,
-                Option<&crate::game::player::states::Running>,
-                Option<&crate::game::player::LastGroundedPosition>,
-            ),
+            (Option<&mut Crits>, Option<&Passives>, Option<&Health>, PassiveOwner),
             With<Gent>,
         >,
     )>,
-    enemy_query: Query<(Entity, &Transform), With<Enemy>>,
-    mut damage_events: EventWriter<DamageInfo>,
-    mut passive_events: EventWriter<PassiveEvent>,
+    enemy_query: Query<(Entity, &Transform), (With<Enemy>, Without<Dead>)>,
+    breakable_walls: Query<(), With<BreakableWall>>,
+    mut damage_events: MessageWriter<DamageInfo>,
+    mut passive_events: MessageWriter<PassiveEvent>,
     mut commands: Commands,
+    mut profiler: TickProfiler,
 ) {
+    let _profile = profiler.scope("damage_apply");
     for (
         damage_entity,
         mut damage_source,
         transform,
         is_stealthed,
         can_backstab,
+        maybe_backstab_multiplier,
         maybe_pushback,
         skill_tag,
+        is_spike_hazard,
     ) in damage_query.iter_mut()
     {
         let target_set = mem::take(&mut damage_source.target_set);
@@ -367,217 +813,69 @@ pub fn apply_damage(
             // First, gather owner data for passive calculations
             let mut damage = damage_source.damage;
             let mut is_critical = false;
-            let mut target_pos = Vec2::ZERO;
-            let mut target_health_pct: Option<f32> = None;
-
-            // Get target position first (we'll need it for passives)
-            if let Ok((_, t_health, t_transform, _, _, _, _)) =
-                queries.p0().get(*target)
-            {
-                target_pos = t_transform.translation().truncate();
-                if t_health.max > 0 {
-                    target_health_pct =
-                        Some(t_health.current as f32 / t_health.max as f32);
-                }
-            }
+            let target_snapshot =
+                target_damage_snapshot(*target, &mut queries.p0());
 
             // Calculate enemies near this target for Pack Killer
             // Using same range as big spider defense trigger (24 pixels)
             const ENEMY_PROXIMITY_RADIUS: f32 = 24.0;
             let enemies_near_current_target = enemy_query
                 .iter()
-                .filter(|(e, enemy_tf)| {
-                    // Don't count the target itself
-                    *e != *target
-                        && enemy_tf.translation.truncate().distance(target_pos)
-                            <= ENEMY_PROXIMITY_RADIUS
-                })
+                .filter(|candidate| enemy_near_target_candidate(
+                    candidate,
+                    *target,
+                    target_snapshot.position,
+                    ENEMY_PROXIMITY_RADIUS,
+                ))
                 .count() as u32;
 
             // Access owner query to get crit and passive data
-            if let Ok((
-                maybe_crits,
-                maybe_passives,
-                maybe_health,
-                maybe_velocity,
-                maybe_action_state,
-                maybe_enemies_nearby,
-                maybe_grounded,
-                maybe_in_air,
-                maybe_buff_tick,
-                maybe_enemy_proximity,
-                maybe_running,
-                maybe_last_grounded_pos,
-            )) = queries.p1().get_mut(damage_source.owner)
-            {
-                if let Some(mut crits) = maybe_crits {
-                    crits.hit_count += 1;
+            let owner_has_shadow_cloak = apply_owner_damage_adjustments(
+                OwnerDamageAdjustment {
+                    owner: queries.p1().get_mut(damage_source.owner).ok(),
+                    damage_entity,
+                    source_skill: skill_tag,
+                    owner_entity: damage_source.owner,
+                    target_snapshot: &target_snapshot,
+                    enemies_near_target: enemies_near_current_target,
+                },
+                &mut damage,
+                &mut is_critical,
+                &mut passive_events,
+            );
 
-                    if crits.next_hit_is_critical {
-                        is_critical = true;
-                        damage *= crits.crit_damage_multiplier;
-                        crits.next_hit_is_critical = false;
-                        passive_events.write(PassiveEvent::CriticalHit {
-                            damage_source: damage_entity,
-                            source_skill: skill_tag.map(|tag| tag.0),
-                        });
-                    }
+            let chilled_effect = damage_source.chilled_effect.clone();
+            let application = DamageApplication {
+                owner: damage_source.owner,
+                source: damage_entity,
+                source_transform: transform,
+                is_stealthed,
+                can_backstab,
+                backstab_multiplier: maybe_backstab_multiplier,
+                pushback: maybe_pushback,
+                chilled_effect: chilled_effect.as_ref(),
+                is_spike_hazard,
+                owner_has_shadow_cloak,
+                is_critical,
+            };
 
-                    passive_events.write(PassiveEvent::HitCountAdvanced {
-                        owner: damage_source.owner,
-                        hit_count: crits.hit_count,
-                    });
-                }
-                // Apply per-target passive modifiers (has target position, proximity, and health pct)
-                if let Some(passives) = maybe_passives {
-                    let mut modifiers =
-                        crate::game::player::passives::DamageModifiers::default(
-                        );
-                    let _default_health = Health { current: 0, max: 0 };
-                    let enemies_nearby_count =
-                        if let Some(proximity) = maybe_enemy_proximity {
-                            proximity.enemies_in_melee_range.len() as u32
-                        } else if let Some(enemies) = maybe_enemies_nearby {
-                            enemies.0
-                        } else {
-                            0
-                        };
-                    let pctx = PassiveContext::from_inputs(PassiveContextInputs {
-                        health: maybe_health,
-                        velocity: maybe_velocity.map(|v| v.0),
-                        enemies_nearby: Some(enemies_nearby_count),
-                        grounded: maybe_grounded.is_some(),
-                        in_air: maybe_in_air.is_some(),
-                        buff_stacks: maybe_buff_tick.map(|b| b.stacks),
-                        closest_enemy_distance: maybe_enemy_proximity
-                            .map(|s| s.closest_distance),
-                        is_running: maybe_running.is_some(),
-                        target_position: Some(target_pos),
-                        last_grounded_position: maybe_last_grounded_pos
-                            .map(|p| p.position),
-                        movement_input: maybe_action_state
-                            .map(|a| a.clamped_value(&PlayerAction::Move)),
-                        jump_pressed: maybe_action_state
-                            .map(|a| a.pressed(&PlayerAction::Jump)),
-                        enemies_near_target: Some(enemies_near_current_target),
-                        target_health_pct,
-                        rotation_active: false,
-                    });
-                    use crate::game::player::passives::get_passive_implementation;
-                    let mut impls: Vec<
-                        Box<dyn crate::game::player::passives::PassiveEffect>,
-                    > = passives
-                        .equipped
-                        .iter()
-                        .map(|p| get_passive_implementation(p))
-                        .collect();
-                    impls.sort_by_key(|p| -p.priority());
-                    for p in impls.iter() {
-                        p.modify_damage(&mut modifiers, &pctx);
-                    }
-                    if modifiers.damage_multiplier != 1.0 {
-                        damage *= modifiers.damage_multiplier;
-                    }
-                }
-            }
+            let target_applied = apply_gent_target_if_present(
+                queries.p0().get_mut(*target).ok(),
+                damage,
+                &application,
+                &mut damage_source.damaged_set,
+                &mut damage_events,
+                &mut commands,
+            );
 
-            // Precompute owner passive flags needed during application
-            let owner_has_shadow_cloak = queries
-                .p1()
-                .get(damage_source.owner)
-                .ok()
-                .and_then(
-                    |(
-                        _maybe_crits,
-                        maybe_passives,
-                        _maybe_health,
-                        _maybe_velocity,
-                        _maybe_action_state,
-                        _maybe_enemies_nearby,
-                        _maybe_grounded,
-                        _maybe_in_air,
-                        _maybe_buff_tick,
-                        _maybe_enemy_proximity,
-                        _maybe_running,
-                        _maybe_last_grounded_pos,
-                    )| maybe_passives,
-                )
-                .map(|p| p.contains(&crate::game::player::Passive::ShadowCloak))
-                .unwrap_or(false);
-
-            // Now apply damage to target
-            if let Ok((
-                t_entity,
-                mut health,
-                t_transform,
-                t_facing,
-                maybe_player_statmod,
-                is_defending,
-                is_player,
-            )) = queries.p0().get_mut(*target)
-            {
-                let mut was_backstab = false;
-                if is_stealthed {
-                    // If Shadow Cloak is equipped on the owner, suppress stealth double damage
-                    if !owner_has_shadow_cloak {
-                        damage *= 2.0;
-                    }
-                }
-
-                if can_backstab {
-                    let is_backstab = match *t_facing {
-                        Facing::Left => {
-                            t_transform.translation().x
-                                > transform.translation().x
-                        },
-                        Facing::Right => {
-                            t_transform.translation().x
-                                < transform.translation().x
-                        },
-                    };
-                    if is_backstab {
-                        damage *= 2.;
-                        was_backstab = true;
-                    }
-                }
-
-                if is_defending {
-                    // Only big spiders can defend, and they receive 0 damage when defending
-                    damage = 0.0;
-                }
-
-                // Only apply chilled effect to players
-                if is_player {
-                    if let Some(chilled_effect) = &damage_source.chilled_effect
-                    {
-                        commands
-                            .entity(t_entity)
-                            .insert(chilled_effect.clone());
-                    }
-                }
-
-                if let Some(statmod) = maybe_player_statmod {
-                    damage /= statmod.defense;
-                }
-
-                health.current = health.current.saturating_sub(damage as u32);
-
-                let damage_info = DamageInfo {
-                    owner: damage_source.owner,
-                    source: damage_entity,
-                    target: t_entity,
-                    amount: damage,
-                    crit: is_critical,
-                    stealthed: is_stealthed,
-                    backstab: was_backstab,
-                };
-                damage_source.damaged_set.insert(t_entity);
-                damage_events.write(damage_info);
-
-                if let Some(pushback) = maybe_pushback {
-                    commands.entity(t_entity).insert(pushback.0);
-                }
-            }
+            emit_breakable_wall_damage_if_present(
+                *target,
+                !target_applied && breakable_walls.contains(*target),
+                &application,
+                damage,
+                &mut damage_source.damaged_set,
+                &mut damage_events,
+            );
         }
         damage_source.damaged_set.extend(damaged_set);
     }
@@ -585,7 +883,7 @@ pub fn apply_damage(
 
 pub(crate) fn emit_passive_events_from_damage_hit(
     query: Query<Entity, Added<Hit>>,
-    mut passive_events: EventWriter<PassiveEvent>,
+    mut passive_events: MessageWriter<PassiveEvent>,
 ) {
     for damage_entity in query.iter() {
         passive_events.write(PassiveEvent::DamageHit {
@@ -595,23 +893,35 @@ pub(crate) fn emit_passive_events_from_damage_hit(
 }
 
 pub(crate) fn emit_passive_events_from_damage(
-    mut damage_events: EventReader<DamageInfo>,
-    mut passive_events: EventWriter<PassiveEvent>,
+    mut damage_events: MessageReader<DamageInfo>,
+    mut passive_events: MessageWriter<PassiveEvent>,
     health_query: Query<&Health>,
 ) {
     for dmg in damage_events.read() {
         passive_events.write(PassiveEvent::DamageDealt(*dmg));
         passive_events.write(PassiveEvent::DamageTaken(*dmg));
-        // Emit a specialized event when a backstab kills the target
-        if dmg.backstab {
-            if let Ok(health) = health_query.get(dmg.target) {
-                if health.current == 0 {
-                    passive_events
-                        .write(PassiveEvent::BackstabKill { owner: dmg.owner });
-                }
-            }
-        }
+        emit_backstab_kill_event(dmg, &health_query, &mut passive_events);
     }
+}
+
+fn emit_backstab_kill_event(
+    damage: &DamageInfo,
+    health_query: &Query<&Health>,
+    passive_events: &mut MessageWriter<PassiveEvent>,
+) {
+    if !damage.backstab {
+        return;
+    }
+    let Ok(health) = health_query.get(damage.target) else {
+        return;
+    };
+    if health.current != 0 {
+        return;
+    }
+
+    passive_events.write(PassiveEvent::BackstabKill {
+        owner: damage.owner,
+    });
 }
 
 pub(crate) fn on_hit_self_pushback(
@@ -639,7 +949,22 @@ pub(crate) fn damage_source_cleanup(
 ) {
     for (entity, damage_source) in query.iter() {
         if damage_source.current_lifetime >= damage_source.max_lifetime {
-            commands.entity(entity).despawn();
+            commands.entity(entity).try_despawn();
+        }
+    }
+}
+
+pub(crate) fn cleanup_owner_bound_damage_sources(
+    query: Query<
+        (Entity, &DamageSource),
+        With<DespawnOnOwnerInvalid>,
+    >,
+    owners: Query<(), Without<Dead>>,
+    mut commands: Commands,
+) {
+    for (entity, damage_source) in query.iter() {
+        if owners.get(damage_source.owner).is_err() {
+            commands.entity(entity).try_despawn();
         }
     }
 }

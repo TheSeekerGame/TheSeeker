@@ -1,0 +1,7 @@
+id = "copied_bat_glide"
+base = "bat_dive"
+presentation = { animation = "anim.bat_small.Attack", section = "flight", impact_section = "impact", facing_slots = { right = "DirectionLeft", left = "DirectionRight" } }
+timing = { duration_ticks = 18, repetitions = 1 }
+motion = { speed = 3.0, direction = [1.0, -0.5], impact_ticks = 8 }
+damage = 120.0
+hits = { kind = "sweep", radius = 8.0, impact_radius = 24.0, impact_max_targets = 64 }

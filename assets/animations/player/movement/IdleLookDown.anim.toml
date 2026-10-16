@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.IdleLookDown"
+image = "animations/player/movement/IdleLookDown__r2c11__96x96.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

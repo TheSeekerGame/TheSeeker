@@ -1,21 +1,37 @@
+use theseeker_engine::physics::LinearVelocity;
+use crate::game::player::scatter_homing::{ScatterHoming, ScatterHomingProfile};
 use bevy::prelude::*;
+use bevy::camera::visibility::RenderLayers;
 use rand::Rng;
 use theseeker_engine::assets::animation::SpriteAnimation;
-use theseeker_engine::effects::GhostingSource;
+use theseeker_engine::effects::{FadeCurve, GhostingSource, ScaleCurve};
 // Pickup uses pure distance checks (no physics queries)
 use theseeker_engine::script::ScriptPlayer;
 use theseeker_engine::time::{GameTickUpdate, GameTimeAppExt};
 
 use crate::game::enemy::Enemy;
 use crate::game::gentstate::Dead;
-use crate::game::player::{Passive, Passives, Player};
+use crate::game::player::{
+    progression::AdaptationProgress, Passive, Passives, Player,
+    PlayerStateSet,
+};
+use crate::graphics::pixel_perfect::pixel_perfect_layers;
 use crate::prelude::StateDespawnMarker;
 
 pub struct XpOrbsPlugin;
 
+#[derive(SystemSet, Clone, PartialEq, Eq, Debug, Hash)]
+pub struct XpOrbSet;
+
 impl Plugin for XpOrbsPlugin {
     fn build(&self, app: &mut App) {
         app.add_gametick_event::<XpOrbPickup>();
+        app.configure_sets(
+            GameTickUpdate,
+            XpOrbSet
+                .after(PlayerStateSet::Collisions)
+                .before(PlayerStateSet::Animation),
+        );
         app.add_systems(
             GameTickUpdate,
             (
@@ -23,26 +39,38 @@ impl Plugin for XpOrbsPlugin {
                 update_orbs_pos,
                 update_orbs_vel_and_pickup,
             )
-                .chain(),
+                .chain()
+                .in_set(XpOrbSet),
         );
     }
 }
 
 #[derive(Component)]
 pub struct XpOrb {
-    explosion_ticks_left: u32,
+    motion: ScatterHoming,
     pickup_active: bool,
 }
 
-#[derive(Event)]
-pub struct XpOrbPickup;
+#[derive(Message)]
+pub struct XpOrbPickup {
+    pub amount: u32,
+}
 
 fn spawn_orbs_on_death(
-    enemy_q: Query<&GlobalTransform, (With<Enemy>, Added<Dead>)>,
+    enemy_q: Query<
+        (
+            &GlobalTransform,
+            Option<&crate::game::enemy::NoXpDrops>,
+        ),
+        (With<Enemy>, Added<Dead>),
+    >,
     player_q: Query<&Passives, With<Player>>,
     mut commands: Commands,
 ) {
-    for tr in enemy_q.iter() {
+    for (tr, skip_xp) in enemy_q.iter() {
+        if skip_xp.is_some() {
+            continue;
+        }
         let enemy_pos = tr.translation().truncate();
 
         let mut rng = rand::rng();
@@ -67,23 +95,13 @@ fn spawn_orbs_on_death(
             .clamp_length_max(POS_RADIUS);
             let orb_position = enemy_pos + pos;
 
-            let dir = if pos.length_squared() > 1e-3 {
-                pos.normalize()
-            } else {
-                let a = rng.random_range(0.0..std::f32::consts::TAU);
-                Vec2::new(a.cos(), a.sin())
-            };
+            let dir = scatter_direction(pos, &mut rng);
             let speed = rng.random_range(
                 EXPLOSION_SPEED_PER_TICK_MIN..EXPLOSION_SPEED_PER_TICK_MAX,
             );
             let vel = dir * speed;
 
-            // Prepare animation; set Bloodstone slot when passive is equipped
-            let mut player = ScriptPlayer::<SpriteAnimation>::default();
-            player.play_key("anim.particles.Soul");
-            if use_red {
-                player.set_slot("Bloodstone", true);
-            }
+            let player = xp_orb_animation_player(use_red);
 
             commands.spawn((
                 // Animation + sprite
@@ -95,22 +113,30 @@ fn spawn_orbs_on_death(
                 // Kinematics
                 theseeker_engine::physics::LinearVelocity(vel),
                 XpOrb {
-                    explosion_ticks_left: EXPLOSION_TICKS,
+                    motion: ScatterHoming::new(MOTION),
                     pickup_active: false,
+
                 },
                 // Visuals & transforms
                 Transform::from_translation(
-                    orb_position.extend((15.0 * 0.000001) - 0.0000001),
+                    orb_position.extend(
+                        15.0 * 0.000_001 - 0.000_000_1,
+                    ),
                 ),
                 GlobalTransform::default(),
                 Visibility::Visible,
                 InheritedVisibility::VISIBLE,
                 ViewVisibility::default(),
+                // Render orb on pixel-perfect layer
+                pixel_perfect_layers(),
                 // Simple ghosting trail
                 GhostingSource {
-                    spawn_interval_ticks: 2,
-                    ghost_lifetime_ticks: 40,
-                    initial_alpha: 0.5,
+                    spawn_interval_ticks: 1,
+                    ghost_lifetime_ticks: 20,
+                    initial_alpha: 1.0,
+                    fade_curve: FadeCurve::Constant,
+                    scale_over_time: ScaleCurve::Axes { x: 1.0, y: 0.5 },
+                    render_layers: Some(RenderLayers::layer(0)),
                     ..Default::default()
                 },
                 StateDespawnMarker,
@@ -120,10 +146,28 @@ fn spawn_orbs_on_death(
     }
 }
 
+fn scatter_direction<R: Rng + ?Sized>(pos: Vec2, rng: &mut R) -> Vec2 {
+    if pos.length_squared() > 1e-3 {
+        return pos.normalize();
+    }
+
+    let angle = rng.random_range(0.0..std::f32::consts::TAU);
+    Vec2::new(angle.cos(), angle.sin())
+}
+
+fn xp_orb_animation_player(
+    use_bloodstone: bool,
+) -> ScriptPlayer<SpriteAnimation> {
+    let mut player = ScriptPlayer::<SpriteAnimation>::default();
+    player.play_key("anim.particles.Soul");
+    if use_bloodstone {
+        player.set_slot("Bloodstone", true);
+    }
+    player
+}
+
 // Tick-based tuning
-const EXPLOSION_TICKS: u32 = 22; // ~0.23s at 96 Hz
-const EXPLOSION_STRENGTH_START: f32 = 0.98; // per-tick multiplier at start of explosion
-const EXPLOSION_STRENGTH_END: f32 = 0.92; // per-tick multiplier at end of explosion
+
 const DIST_THRESHOLD: f32 = 2.0;
 
 fn update_orbs_pos(
@@ -147,7 +191,7 @@ fn update_orbs_vel_and_pickup(
         &mut XpOrb,
     )>,
     p_query: Query<&GlobalTransform, With<Player>>,
-    mut xp_event: EventWriter<XpOrbPickup>,
+    mut xp_event: MessageWriter<XpOrbPickup>,
 ) {
     let Ok(p) = p_query.single() else {
         return;
@@ -159,45 +203,29 @@ fn update_orbs_vel_and_pickup(
         let dist = p_pos.distance(pos);
         let dir = (p_pos - pos).normalize_or_zero();
 
-        // Explosion phase: gradual slowdown each tick between start and end strengths
-        if xp_orb.explosion_ticks_left > 0 {
-            let t = 1.0
-                - (xp_orb.explosion_ticks_left as f32 / EXPLOSION_TICKS as f32);
-            let strength = EXPLOSION_STRENGTH_START
-                + (EXPLOSION_STRENGTH_END - EXPLOSION_STRENGTH_START) * t;
-            vel.0 *= strength;
-            xp_orb.explosion_ticks_left -= 1;
-            if xp_orb.explosion_ticks_left == 0 {
-                xp_orb.pickup_active = true;
-            }
-        }
+        tick_explosion_phase(&mut xp_orb, &mut vel);
 
         // Pickup detection during chasing phase via transform distance only
         if xp_orb.pickup_active && dist < DIST_THRESHOLD {
             commands.entity(entity).despawn();
-            xp_event.write(XpOrbPickup);
+            xp_event.write(XpOrbPickup {
+                amount: AdaptationProgress::XP_PER_ORB,
+            });
             continue;
         }
 
-        // Homing velocity control (tick-based, constant-speed target)
         if dist >= DIST_THRESHOLD {
-            const HOMING_MAX_SPEED_PER_TICK: f32 = 2.0;
-            let mut target_vel = dir * HOMING_MAX_SPEED_PER_TICK;
-
-            // Prevent overshoot
-            let max_speed = dist * 0.9;
-            let current_speed = target_vel.length();
-            if current_speed > max_speed {
-                target_vel = target_vel.normalize_or_zero() * max_speed;
-            }
-
-            // Smooth steering scaled by how far through homing we are
-            let t = 1.0
-                - (xp_orb.explosion_ticks_left as f32 / EXPLOSION_TICKS as f32);
-            let homing_scale = t * t * (3.0 - 2.0 * t); // smoothstep
-            const HOMING_ALPHA_PER_TICK: f32 = 0.10;
-            let alpha = HOMING_ALPHA_PER_TICK * homing_scale;
-            vel.0 = vel.0.lerp(target_vel, alpha);
+            xp_orb.motion.steer(&mut vel.0, dir, dist, MOTION);
         }
     }
 }
+
+fn tick_explosion_phase(xp_orb: &mut XpOrb, vel: &mut LinearVelocity) {
+    if let Some(finished) = xp_orb.motion.scatter(&mut vel.0, MOTION) {
+        xp_orb.pickup_active = finished;
+    }
+}
+
+const MOTION: ScatterHomingProfile = ScatterHomingProfile {
+    ticks: 22, damping_start: 0.98, damping_end: 0.92, max_speed: 2.0, steering: 0.10,
+};

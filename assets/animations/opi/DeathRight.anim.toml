@@ -1,0 +1,11 @@
+[asset]
+key = "anim.opi.DeathRight"
+image = "animations/opi/DeathRight__r1c9__84x84.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 9
+frame_start = 1

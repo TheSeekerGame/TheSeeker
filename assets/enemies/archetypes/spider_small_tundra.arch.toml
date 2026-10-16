@@ -1,0 +1,24 @@
+schema_version = 2
+id = "spider_small_tundra"
+base = "spider_small"
+behavior = { kind = "combat", approach = "roll", committed = true }
+actions = { Attack = "contact_strike" }
+
+[override.stats]
+spawn_hp     = 200
+walk_speed   = 0.208
+chase_speed  = 0.365
+dmg_melee    = 20
+dmg_ranged   = 0
+vision_range = 120
+melee_range  = 24
+reaction_time = 8
+
+[override.anim]
+Idle   = "anim.tundra_small.Idle"
+Walk   = "anim.tundra_small.Walk"
+Roll   = "anim.tundra_small.Roll"
+Attack = "anim.tundra_small.MeleeAttack"
+Die    = "anim.tundra_small.Death"
+Decay  = "anim.tundra_small.Decay"
+Jump   = "anim.tundra_small.Jump"

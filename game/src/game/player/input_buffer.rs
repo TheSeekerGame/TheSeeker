@@ -29,7 +29,7 @@ impl Plugin for InputBufferPlugin {
     }
 }
 
-/// Tracks buffered inputs with their originating tick and up/down variant.
+/// Tracks buffered inputs with their originating tick and directional variant.
 #[derive(Component, Debug)]
 pub struct InputBuffer {
     /// Most-recent-first semantics via back insertion; keep short to avoid stale inputs.
@@ -57,7 +57,7 @@ pub struct BufferedInput {
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub enum InputVariant {
     Normal,
-    Up,   // Jump/Up held at press time
+    Up,   // Up modifier held at press time
     Down, // Fall/Down held at press time
 }
 
@@ -72,23 +72,22 @@ impl BufferConfig {
             PlayerAction::Jump => 12, // ~125ms
 
             // Moderate windows for ability cooldown timing
-            PlayerAction::Skill1 => 8, // ~83ms
-            PlayerAction::Skill2 => 8,
-            PlayerAction::Skill3 => 8,
-            PlayerAction::Skill4 => 8,
-            PlayerAction::Skill5 => 8,
+            PlayerAction::Skill1
+            | PlayerAction::Skill2
+            | PlayerAction::Skill3
+            | PlayerAction::Skill4
+            | PlayerAction::Skill5 => 8, // ~83ms
 
             // Minimal or none for the rest
-            PlayerAction::Fall => 4, // Small buffer for fast-fall timing
-            PlayerAction::Interact => 4,
-            PlayerAction::UpModifier => 0,
+            PlayerAction::Fall | PlayerAction::Interact => 4,
 
             // No buffering
-            PlayerAction::Move => 0,
-            PlayerAction::SwapCombatStyle => 0,
-            PlayerAction::SwapMeleeWeapon => 0,
-            PlayerAction::ToggleControlOverlay => 0,
-            PlayerAction::TogglePassiveInventory => 0,
+            PlayerAction::UpModifier
+            | PlayerAction::Move
+            | PlayerAction::SwapMeleeWeapon
+            | PlayerAction::ToggleControlOverlay
+            | PlayerAction::TogglePassiveInventory
+            | PlayerAction::DebugUnlockAllProgression => 0,
         }
     }
 
@@ -147,19 +146,6 @@ impl InputBuffer {
             })
     }
 
-    /// Remove and return the most recent valid buffered input.
-    pub fn consume(&mut self, action: PlayerAction) -> Option<BufferedInput> {
-        let current_tick = self.entries.back().map(|e| e.tick).unwrap_or(0);
-        let buffer_time = BufferConfig::buffer_time(action) as u64;
-
-        let index = self.entries.iter().rposition(|input| {
-            input.action == action
-                && current_tick.saturating_sub(input.tick) <= buffer_time
-        });
-
-        index.and_then(|i| self.entries.remove(i))
-    }
-
     /// Drop inputs older than a small global horizon.
     pub fn clear_expired(&mut self, current_tick: u64) {
         const MAX_AGE: u64 = 20; // ~208ms
@@ -168,8 +154,8 @@ impl InputBuffer {
             .retain(|input| current_tick.saturating_sub(input.tick) <= MAX_AGE);
     }
 
-    /// Clear all buffered inputs
-    pub fn clear(&mut self) {
+    /// Drops pending gameplay actions when input ownership changes.
+    pub fn clear_all(&mut self) {
         self.entries.clear();
     }
 
@@ -191,7 +177,7 @@ fn update_input_buffers(
     time: Res<GameTime>,
 ) {
     for (mut buffer, action_state) in query.iter_mut() {
-        let current_tick = time.tick() as u64;
+        let current_tick = time.tick();
 
         for action in [
             PlayerAction::Jump,
@@ -203,27 +189,44 @@ fn update_input_buffers(
             PlayerAction::Fall,
             PlayerAction::Interact,
         ] {
-            if BufferConfig::should_buffer(action)
-                && action_state.just_pressed(&action)
-            {
-                // Derive variant from directional modifiers (Down wins ties)
-                let variant = if action_state.pressed(&PlayerAction::Fall) {
-                    InputVariant::Down
-                } else if action_state.pressed(&PlayerAction::UpModifier)
-                    || action_state.pressed(&PlayerAction::Jump)
-                {
-                    InputVariant::Up
-                } else {
-                    InputVariant::Normal
-                };
-
-                buffer.push(action, current_tick, variant);
-            }
+            buffer_pressed_action(
+                &mut buffer,
+                action_state,
+                action,
+                current_tick,
+            );
         }
     }
 }
 
-    /// Remove stale inputs beyond a small global horizon.
+fn buffer_pressed_action(
+    buffer: &mut InputBuffer,
+    action_state: &ActionState<PlayerAction>,
+    action: PlayerAction,
+    current_tick: u64,
+) {
+    if !BufferConfig::should_buffer(action) || !action_state.just_pressed(&action)
+    {
+        return;
+    }
+
+    buffer.push(action, current_tick, input_variant(action_state));
+}
+
+fn input_variant(action_state: &ActionState<PlayerAction>) -> InputVariant {
+    // Derive variant from directional modifiers (Down wins ties)
+    if action_state.pressed(&PlayerAction::Fall) {
+        return InputVariant::Down;
+    }
+
+    if action_state.pressed(&PlayerAction::UpModifier) {
+        return InputVariant::Up;
+    }
+
+    InputVariant::Normal
+}
+
+/// Remove stale inputs beyond a small global horizon.
 fn clear_expired_buffers(
     mut query: Query<&mut InputBuffer, With<Player>>,
     time: Res<GameTime>,
@@ -235,52 +238,18 @@ fn clear_expired_buffers(
     }
 }
 
-/// Helper for checking buffered inputs alongside fresh presses.
-pub trait InputBufferExt {
-    /// True if an action is buffered or was just pressed this tick.
-    fn pressed_or_buffered(&self, action: PlayerAction) -> bool;
 
-    /// Variant for an action considering buffered and just-pressed cases.
-    fn get_input_variant(&self, action: PlayerAction) -> InputVariant;
-}
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-/// Implementation for queries that have both ActionState and InputBuffer
-impl InputBufferExt
-    for (
-        &ActionState<PlayerAction>,
-        &InputBuffer,
-        u64,
-    )
-{
-    fn pressed_or_buffered(&self, action: PlayerAction) -> bool {
-        let (action_state, buffer, current_tick) = self;
-
-        if action_state.just_pressed(&action) {
-            return true;
-        }
-
-        buffer.check_buffered(action, *current_tick).is_some()
-    }
-
-    fn get_input_variant(&self, action: PlayerAction) -> InputVariant {
-        let (action_state, buffer, current_tick) = self;
-
-        if action_state.just_pressed(&action) {
-            if action_state.pressed(&PlayerAction::Fall) {
-                InputVariant::Down
-            } else if action_state.pressed(&PlayerAction::UpModifier)
-                || action_state.pressed(&PlayerAction::Jump)
-            {
-                InputVariant::Up
-            } else {
-                InputVariant::Normal
-            }
-        } else if let Some(buffered) =
-            buffer.check_buffered(action, *current_tick)
-        {
-            buffered.variant_modifier
-        } else {
-            InputVariant::Normal
-        }
+    #[test]
+    fn gameplay_buffer_clear_discards_early_skill_and_jump_inputs() {
+        let mut buffer = InputBuffer::default();
+        buffer.push(PlayerAction::Jump, 10, InputVariant::Normal);
+        buffer.push(PlayerAction::Skill1, 10, InputVariant::Up);
+        buffer.clear_all();
+        assert!(buffer.check_buffered(PlayerAction::Jump, 10).is_none());
+        assert!(buffer.check_buffered(PlayerAction::Skill1, 10).is_none());
     }
 }

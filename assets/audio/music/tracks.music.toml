@@ -1,0 +1,8 @@
+[tracks.main]
+audio_asset = "audio.game.Music"
+sample_rate = 48000
+first_downbeat = 0
+loop_start = 0
+loop_end = 15360000
+gain = 0.04
+beats_per_bar = 4

@@ -1,53 +1,59 @@
-//! Player collision and ground maintenance systems.
+//! Player collision systems.
 //!
-//! This module integrates the custom movement model (no physics simulation) with
-//! Rapier shape casts to resolve player contacts against ground and enemies.
-//!
-//! Key points:
-//! - Iterative geometric resolution to handle corners/stacked contacts without forces.
-//! - Enemy hits are detected but can be selectively ignored for resolution during
-//!   specific skills (e.g., flicker strike, burning dash, whirling).
-//! - Position is updated once per tick from the accumulated resolution plus velocity.
-//! - A separate ground-maintenance system keeps a precise gap above ground when grounded.
-use bevy::prelude::*;
-use glam::{Vec2, Vec2Swizzles, Vec3Swizzles};
+//! Uses the custom tile-based collision world for wall contacts and the
+//! custom entity collision world for enemy-only interactions.
+use super::collision_view::{PlayerCollisionView, CapsuleCollisionQuery};
+use theseeker_engine::physics::geometry::{Axis, ProbeDirection};
+use crate::game::player::foreground::{ActionRef, ActionTag};
+use bevy::ecs::change_detection::Mut;
+use glam::Vec3Swizzles;
 use theseeker_engine::physics::{
-    into_vec2, Collider, ColliderShapeAccess, CollisionGroups, LinearVelocity,
-    PhysicsWorld, ShapeCastStatus, ShapeCaster, ENEMY, GROUND,
-    GROUNDED_THRESHOLD, PLAYER,
+    Collider, CollisionGroups, LinearVelocity, PhysicsWorld, ShapeCast, TileCollisionWorld, ENEMY,
+    PLAYER,
 };
 
+use crate::game::effects::stealthed::StealthEffect;
 use crate::game::enemy::Enemy;
+use crate::game::gentstate::Dead;
 use crate::game::player::{
-    sensors::GroundSensor,
+    skills::portable_tent::{TentInteriorAssets, TentInteriorOccupant},
     states::{
-        transition_action, BurningDashing, DashStrike, Dashing, Falling,
-        Grounded, Ready, Whirling,
+        BurningDashing, DashStrike, Dashing, Elevator,
+        Falling, WallSide, Whirling,
     },
     Player, PlayerStateSet, WallSlideTime,
 };
-use crate::game::effects::stealthed::StealthEffect;
+use crate::game::world_objects::{
+    capsule_elevator_stop_y,
+    sync_capsule_drop_platform_state, Capsule,
+    CapsuleDropPlatformState,
+};
+use theseeker_engine::profile::TickProfiler;
 use crate::prelude::*;
 
 /// Player collision systems.
 pub(crate) struct PlayerCollisionPlugin;
 
+const CAPSULE_TRANSIT_STOP_EPS: f32 = 0.001;
+
 impl Plugin for PlayerCollisionPlugin {
     fn build(&self, app: &mut App) {
         app.add_systems(
             GameTickUpdate,
-            (
-                player_collisions,
-                player_grounded_position_maintenance.after(player_collisions),
-            )
-                .chain()
+            player_collisions
                 .in_set(PlayerStateSet::Collisions)
                 .run_if(in_state(AppState::InGame)),
         );
     }
 }
 
+#[expect(clippy::too_many_arguments, reason = "Bevy system dependencies are expressed as explicit system parameters.")]
+#[expect(
+    clippy::too_many_lines,
+    reason = "This collision system resolves player tiles, enemy blockers, inside checks, and profile counters in one ordered physics pass."
+)]
 pub fn player_collisions(
+    collision_world: Option<Res<TileCollisionWorld>>,
     spatial_query: PhysicsWorld,
     mut q_gent: Query<
         (
@@ -56,29 +62,35 @@ pub fn player_collisions(
             &mut LinearVelocity,
             &Collider,
             Option<&mut WallSlideTime>,
-            Option<&mut Dashing>,
-            Has<DashStrike>,
-            Has<Whirling>,
-            Has<BurningDashing>,
-            Has<crate::game::player::states::FlickerStriking>,
+            Option<ActionRef<Dashing>>,
+            Has<ActionTag<DashStrike>>,
+            Has<ActionTag<Whirling>>,
+            Has<ActionTag<BurningDashing>>,
+            Has<ActionTag<crate::game::player::states::FlickerStriking>>,
             Has<crate::game::player::states::locomotion::running::AutoDodgeRolling>,
             Option<&Falling>,
             Has<StealthEffect>,
+            Option<&TentInteriorOccupant>,
+            &mut CapsuleDropPlatformState,
         ),
-        With<Player>,
+        (With<Player>, Without<Dead>, Without<crate::game::spikes::SpikeRespawnPending>),
     >,
-    mut q_enemy: Query<(Entity, &mut Collider), (With<Enemy>, Without<Player>)>,
-    is_bell: Query<(), With<crate::game::player::spawns::amplified_bell::Bell>>,
+    q_enemy: Query<(), With<Enemy>>,
+    q_capsule: CapsuleCollisionQuery<(With<Capsule>, Without<Player>)>,
+    q_elevator: Query<Option<ActionRef<Elevator>>, With<Player>>,
     mut commands: Commands,
     time: Res<GameTime>,
+    tent_interior: Option<Res<TentInteriorAssets>>,
+    mut profiler: TickProfiler,
 ) {
+    let _profile = profiler.scope("player_collisions");
     for (
         entity,
         mut pos,
         mut linear_velocity,
         collider,
         slide,
-        mut dashing,
+        dashing,
         is_dash_strike,
         is_whirling,
         is_burning_dashing,
@@ -86,281 +98,222 @@ pub fn player_collisions(
         is_auto_dodge_rolling,
         falling_state,
         is_stealthed,
+        interior_occupant,
+        mut drop_platform_state,
     ) in q_gent.iter_mut()
     {
-        let mut shape = collider.shared_shape().clone();
-        let original_pos = pos.translation.xy();
-        let mut accumulated_movement = Vec2::ZERO; // Accumulates displacement from collision resolution
-        let z = pos.translation.z;
-        let mut projected_velocity = linear_velocity.0;
-        let is_wall_sliding =
-            falling_state.as_ref().and_then(|f| f.wall_slide).is_some();
+        let Some(view) = PlayerCollisionView::new(interior_occupant,
+            tent_interior.as_deref(), collision_world.as_deref(), &q_capsule) else {
+            continue;
+        };
+        let origin = view.origin;
 
-        // When whirling, burning dashing, dash striking, auto-dodge rolling, or stealthed, pass through enemies but still collide with ground
-        // Flicker striking should still detect collisions for damage purposes but not resolve wall collisions
-        let filter = if is_whirling
+        let Some(half_extents) = collider.cuboid_half_extents() else {
+            continue;
+        };
+        let original_pos = pos.translation.xy() - origin;
+        let z = pos.translation.z;
+        let mut velocity = linear_velocity.0;
+        let wall_side = falling_state.and_then(|f| f.wall_slide);
+        let is_wall_sliding = wall_side.is_some();
+
+        if is_wall_sliding && velocity.y > 0.0 {
+            velocity.y = 0.0;
+        }
+
+        let elevator = q_elevator.get(entity).ok().flatten();
+        let active_elevator = elevator
+            .as_deref().copied()
+            .filter(|elevator| {
+                interior_occupant.is_none()
+                    && q_capsule.get(elevator.shelter()).is_ok()
+            });
+        if elevator.is_some() && active_elevator.is_none() {
+            finish_optional_action(elevator, &mut commands, entity);
+        }
+        if let Some(elevator) = active_elevator {
+            velocity = elevator.velocity();
+        }
+        let elevator_stop_y =
+            active_elevator.and_then(|elevator| {
+                capsule_elevator_stop_y(
+                    pos.translation.xy(),
+                    velocity.y,
+                    half_extents,
+                    elevator,
+                    &q_capsule,
+                )
+            });
+        if let Some(stop_y) = elevator_stop_y {
+            velocity.y = stop_y - pos.translation.y;
+        }
+
+        let (resolved_y, blocked_y) = view.resolve_axis(Axis::Y, original_pos,
+            velocity.y, half_extents, Some(&drop_platform_state));
+        if blocked_y {
+            velocity.y = 0.0;
+        }
+        let pos_after_y = Vec2::new(original_pos.x, resolved_y);
+        let reached_elevator_stop =
+            elevator_stop_y.is_some_and(|stop_y| {
+                ((pos_after_y.y + origin.y) - stop_y).abs()
+                    <= CAPSULE_TRANSIT_STOP_EPS
+            });
+        let elevator_blocked_vertically = active_elevator.is_some() && blocked_y;
+
+        let (mut final_x, blocked_x) = view.resolve_axis(Axis::X, pos_after_y,
+            velocity.x, half_extents, Some(&drop_platform_state));
+        if blocked_x {
+            velocity.x = 0.0;
+        }
+
+        let allow_enemy_queries = !(is_whirling
             || is_burning_dashing
             || is_dash_strike
             || is_auto_dodge_rolling
             || is_stealthed
-        {
-            GROUND
-        } else {
-            ENEMY | GROUND
-        };
-        let mut interaction = CollisionGroups::new(PLAYER, filter);
-
-        let mut wall_slide = false;
-        let dir = linear_velocity.0.x.signum();
-        // Iterative collision resolution to robustly handle corners and stacked contacts.
-        // Cap iterations to avoid pathological loops on complex geometry.
-        let mut iteration_count = 0;
-
-        while let Ok(shape_dir) = Dir2::new(projected_velocity) {
-            iteration_count += 1;
-            if iteration_count > 5 {
-                break;
-            }
-
-            // Cast from current accumulated position
-            let cast_origin = original_pos + accumulated_movement;
-            // Small buffer for precise collision
-            const CAST_BUFFER: f32 = 0.1;
-
-            if let Some((e, first_hit)) = spatial_query.shape_cast(
-                cast_origin,
-                shape_dir,
-                &*shape,
-                projected_velocity.length() + CAST_BUFFER,
-                interaction,
-                Some(entity),
-            ) {
-                // Ignore collisions with spawned player bells (they are pass-through props)
-                if is_bell.get(e).is_ok() {
-                    // Continue the loop without resolving against this entity
-                    // Constrain subsequent casts to ground only for the remainder of this tick
-                    interaction = CollisionGroups::new(PLAYER, GROUND);
-                    continue;
-                }
-                // Enemy collisions
-                if let Ok((_enemy, mut _collider)) = q_enemy.get_mut(e) {
-                    // After first enemy hit, constrain to ground only for the remainder of this tick
-                    // (unless flicker striking, which should pass through everything)
-                    if !is_flicker_striking {
-                        interaction = CollisionGroups::new(PLAYER, GROUND);
-                    }
-
-                    match first_hit.status {
-                        // Not yet penetrating
-                        _ if first_hit.time_of_impact > 0.001 => {
-                            // Ignore enemy collision while dashing (except dash-strike).
-                            // Flicker striking handles its own collision detection.
-                            if dashing.is_none()
-                                && !is_dash_strike
-                                && !is_flicker_striking
-                            {
-                                if let Some(details) = first_hit.details {
-                                    let sliding_plane =
-                                        into_vec2(details.normal1);
-                                    // Threshold on normal.x to classify vertical wall vs floor/ceiling
-                                    let threshold = 0.1;
-                                    // Check if this is a vertical wall (normal is mostly horizontal)
-                                    if sliding_plane.x.abs() > threshold {
-                                        // This is a wall collision - stop horizontal movement into the wall
-                                        projected_velocity.x = 0.0;
-                                    }
-                                }
-                            }
-                        },
-                        // Already inside: mark as inside to skip next frame
-                        _ => {
-                            if !is_flicker_striking {
-                                theseeker_engine::physics::inside::set(
-                                    &mut commands,
-                                    entity,
-                                    e,
-                                );
-                            }
-                        },
-                    }
-                // Ground collisions
-                } else {
-                    match first_hit.status {
-                        ShapeCastStatus::Converged
-                        | ShapeCastStatus::OutOfIterations => {
-                            // No bounce or friction; geometric resolution only
-                            let sliding_plane = into_vec2(
-                                first_hit
-                                    .details
-                                    .map(|d| d.normal1)
-                                    .unwrap_or_default(),
-                            );
-
-                            // Skip collision resolution during flicker striking
-                            if is_flicker_striking {
-                                // Flicker striking passes through walls, so we don't resolve collisions
-                                // but we still detect them for potential damage purposes
-                                continue;
-                            }
-
-                            // Project velocity along collision surface to prevent clipping
-                            projected_velocity = linear_velocity.0
-                                - sliding_plane
-                                    * linear_velocity.0.dot(sliding_plane);
-
-                            // No friction injected by this system
-                            let friction_vec = Vec2::ZERO;
-
-                            // Update wall slide tracking for WallSlideTime component
-                            if is_wall_sliding && sliding_plane.x.abs() > 0.9 {
-                                // Verify player is properly against the wall
-                                if spatial_query
-                                    .ray_cast(
-                                        pos.translation.xy(),
-                                        Vec2::new(dir, 0.0),
-                                        shape
-                                            .as_cuboid()
-                                            .unwrap()
-                                            .half_extents
-                                            .x
-                                            + 0.1,
-                                        true,
-                                        theseeker_engine::physics::groups::player_body(),
-                                        Some(entity),
-                                    )
-                                    .is_some()
-                                {
-                                    wall_slide = true;
-                                }
-                            }
-
-                            projected_velocity += friction_vec; // no bounce/friction from here
-
-                            // Apply collision resolution with a small skin width to avoid jitter at boundaries
-                            const SKIN_WIDTH: f32 = 0.02;
-                            // Calculate movement from collision point, not from original position
-                            let movement_distance = (first_hit.time_of_impact
-                                - SKIN_WIDTH)
-                                .max(0.0);
-                            accumulated_movement +=
-                                shape_dir.xy() * movement_distance;
-                        },
-                        ShapeCastStatus::PenetratingOrWithinTargetDist => {
-                            // For ground penetration, we don't need special handling
-                        },
-                        ShapeCastStatus::Failed => {
-                            // Collision failed - continue
-                        },
-                    }
-                }
-
-                // During wall sliding, ensure we never have upward velocity
-                // to maintain deterministic downward movement
-                if is_wall_sliding && projected_velocity.y > 0.0 {
-                    projected_velocity.y = 0.0;
-                }
-
-                linear_velocity.0 = projected_velocity;
-                // Do not update position inside the loop; apply after accumulation
-            } else {
-                break;
-            }
+            || interior_occupant.is_some());
+        let allow_enemy_block =
+            allow_enemy_queries && dashing.is_none() && !is_flicker_striking;
+        let allowed_dx = final_x - pos_after_y.x;
+        if let Some(enemy_blocked_x) = enemy_blocked_player_x(
+            allow_enemy_block,
+            &spatial_query,
+            entity,
+            pos_after_y,
+            collider,
+            allowed_dx,
+            &q_enemy,
+        ) {
+            final_x = enemy_blocked_x;
+            velocity.x = 0.0;
         }
 
-        // If horizontal velocity is zero, cancel horizontal dashes immediately (downward dashes persist)
-        if projected_velocity.x.abs() < 0.00001 {
-            if dashing.is_some() {
-                // Exit dash now; also zero velocity to ensure clean handover to locomotion
-                linear_velocity.0 = Vec2::ZERO;
-                transition_action(&mut commands, entity, Ready);
-            }
+        let final_pos = Vec2::new(final_x, pos_after_y.y);
+
+        if allow_enemy_queries && !is_flicker_striking {
+            record_player_enemy_inside(
+                &spatial_query,
+                final_pos,
+                collider,
+                entity,
+                &q_enemy,
+                &mut commands,
+            );
         }
 
-        // Apply accumulated movement plus any remaining per-tick displacement
-        let final_pos = original_pos + accumulated_movement + linear_velocity.0;
-        pos.translation = final_pos.extend(z);
-
-        if let Some(mut slide) = slide {
-            if wall_slide {
-                slide.0 = 0.0;
-            } else {
-                slide.0 += 1.0 / time.hz as f32;
+        if velocity.x.abs() < 0.00001
+            && dashing.is_some() {
+                velocity = Vec2::ZERO;
+                finish_optional_action(dashing, &mut commands, entity);
             }
+
+        pos.translation = (final_pos + origin).extend(z);
+        if reached_elevator_stop || elevator_blocked_vertically {
+            velocity = Vec2::ZERO;
+            finish_optional_action(elevator, &mut commands, entity);
         }
+        linear_velocity.0 = velocity;
+        if interior_occupant.is_none() {
+            sync_capsule_drop_platform_state(
+                original_pos + origin,
+                pos.translation.xy(),
+                half_extents,
+                &mut drop_platform_state,
+                &q_capsule,
+            );
+        }
+
+        const WALL_SLIDE_CHECK_DISTANCE: f32 = 8.0;
+        const WALL_SLIDE_TOLERANCE: f32 = 0.1;
+        let direction = wall_side.map(|side| match side {
+            WallSide::Left => ProbeDirection::Left, WallSide::Right => ProbeDirection::Right,
+        });
+        let wall_slide = direction.is_some_and(|direction| {
+            view.distance_local(direction, final_pos, half_extents, WALL_SLIDE_CHECK_DISTANCE)
+                <= half_extents.x + WALL_SLIDE_TOLERANCE
+        });
+
+        update_wall_slide_timer(slide, wall_slide, time.hz);
     }
 }
 
-//
 
-/// Maintains player position relative to ground when grounded
-/// This prevents gradual sinking into the ground by ensuring the player
-/// stays exactly GROUNDED_THRESHOLD distance above the ground
-pub fn player_grounded_position_maintenance(
-    spatial_query: PhysicsWorld,
-    mut query: Query<
-        (
-            Entity,
-            &mut Transform,
-            &ShapeCaster,
-            &GroundSensor,
-            Has<Grounded>,
-            Has<Dashing>,
-            Option<&Falling>,
-        ),
-        With<Player>,
-    >,
-) {
-    for (
-        entity,
-        mut transform,
-        shape_caster,
-        ground_sensor,
-        has_grounded_marker,
-        is_dashing,
-        falling_state,
-    ) in query.iter_mut()
-    {
-        // Only adjust position if:
-        // 1. We have the Grounded marker
-        // 2. The sensor says we're grounded
-        // 3. We're not dashing (dashing has its own collision handling)
-        // 4. We're not wall sliding (wall sliding handles its own movement)
-        // 5. We're actually close to the ground (not falling from height)
-        let is_wall_sliding =
-            falling_state.as_ref().and_then(|f| f.wall_slide).is_some();
-        if has_grounded_marker
-            && ground_sensor.is_grounded
-            && !is_dashing
-            && !is_wall_sliding
-        {
-            // Perform our own raycast to get exact ground distance
-            if let Some((_, toi)) = shape_caster.cast(
-                &spatial_query.context(),
-                &transform,
-                Some(entity),
-            ) {
-                let distance = toi.time_of_impact;
 
-                // CRITICAL: Only adjust if we're already very close to ground
-                // This prevents teleporting player to ground when falling
-                const MAX_ADJUSTMENT_DISTANCE: f32 = 5.0;
-                if distance > MAX_ADJUSTMENT_DISTANCE {
-                    // Player is too far from ground - this is likely a sensor error
-                    // Don't adjust position for this entity; continue with others
-                    continue;
-                }
 
-                // Only adjust if we're not at the exact correct distance
-                // Allow a small tolerance to prevent constant micro-adjustments
-                const POSITION_TOLERANCE: f32 = 0.05;
-                let distance_error = (distance - GROUNDED_THRESHOLD).abs();
-
-                if distance_error > POSITION_TOLERANCE {
-                    // Adjust Y position to maintain exact GROUNDED_THRESHOLD distance
-                    let adjustment = GROUNDED_THRESHOLD - distance;
-                    transform.translation.y += adjustment;
-                }
-            }
-        }
+fn enemy_blocked_player_x(
+    allow_enemy_block: bool,
+    spatial_query: &PhysicsWorld,
+    entity: Entity,
+    pos_after_y: Vec2,
+    collider: &Collider,
+    allowed_dx: f32,
+    q_enemy: &Query<(), With<Enemy>>,
+) -> Option<f32> {
+    if !allow_enemy_block || allowed_dx.abs() <= 0.0 {
+        return None;
     }
+
+    let dir = allowed_dx.signum();
+    let max_toi = allowed_dx.abs();
+    let (_enemy, hit) = spatial_query.cast_shape(
+        ShapeCast {
+            origin: pos_after_y,
+            dir: Vec2::new(dir, 0.0),
+            shape: collider,
+            max_toi,
+            interaction: CollisionGroups::new(PLAYER, ENEMY),
+            exclude: Some(entity),
+        },
+        |other| q_enemy.contains(other),
+    )?;
+    Some(pos_after_y.x + dir * hit.time_of_impact)
+}
+
+fn record_player_enemy_inside(
+    spatial_query: &PhysicsWorld,
+    final_pos: Vec2,
+    collider: &Collider,
+    entity: Entity,
+    q_enemy: &Query<(), With<Enemy>>,
+    commands: &mut Commands,
+) {
+    for other in spatial_query.intersect(
+        final_pos,
+        collider,
+        CollisionGroups::new(PLAYER, ENEMY),
+        Some(entity),
+    ) {
+        if !q_enemy.contains(other) {
+            continue;
+        }
+
+        theseeker_engine::physics::inside::set(commands, entity, other);
+    }
+}
+
+
+
+
+fn update_wall_slide_timer(
+    slide: Option<Mut<'_, WallSlideTime>>,
+    wall_slide: bool,
+    tick_hz: f64,
+) {
+    let Some(mut slide) = slide else {
+        return;
+    };
+    if wall_slide {
+        slide.0 = 0.0;
+    } else {
+        slide.0 += 1.0 / tick_hz as f32;
+    }
+}
+
+fn finish_optional_action<T: crate::game::player::foreground::ActionState>(
+    action: Option<crate::game::player::foreground::ActionRefItem<'_, '_, T>>,
+    commands: &mut Commands,
+    entity: Entity,
+) {
+    if let Some(action) = action { action.finish(commands, entity); }
 }

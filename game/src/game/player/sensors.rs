@@ -1,18 +1,24 @@
 //! Player sensors updated at 96 Hz.
 //!
 //! Provides ground/wall/ceiling contact data and enemy proximity hints for
-//! state machines. Uses Rapier queries only for detection (no physics forces).
+//! state machines. Uses the custom entity collision world for detection.
+use super::collision_view::{PlayerCollisionView, CapsuleCollisionQuery};
+use theseeker_engine::physics::{
+    geometry::ProbeDirection, Collider, CollisionGroups, PhysicsWorld, ShapeCast, TileCollisionWorld,
+    ENEMY, PLAYER,
+};
 use crate::game::enemy::Enemy;
-use crate::game::gentstate::Facing;
+use crate::game::gentstate::{Dead, Facing};
+use crate::game::player::skills::portable_tent::{
+    PendingTentEntry, ShelterInteriorKind, TentInteriorAssets, TentInteriorOccupant,
+};
 use crate::game::player::states::{Falling, Jumping};
 use crate::game::player::{JumpCount, Player, PlayerStateSet};
-use bevy::prelude::*;
-use bevy_rapier2d::prelude::{QueryFilter, ShapeCastOptions};
-use theseeker_engine::physics::CollisionGroups as InteractionGroups;
-use theseeker_engine::physics::{
-    Collider, CollisionGroups, LinearVelocity, PhysicsWorld, ShapeCaster,
-    ENEMY, GROUND, GROUNDED_THRESHOLD, PLAYER,
+use crate::game::world_objects::{
+    Capsule,
+    CapsuleDropPlatformState,
 };
+use bevy::{ecs::system::SystemParam, prelude::*};
 use theseeker_engine::time::{GameTickUpdate, GameTime};
 
 pub struct SensorPlugin;
@@ -31,6 +37,9 @@ impl Plugin for SensorPlugin {
                 .chain()
                 .in_set(PlayerStateSet::Sensors),
         );
+        app.add_systems(GameTickUpdate, record_safe_grounded_position
+            .after(PlayerStateSet::Collisions)
+            .before(crate::game::spikes::process_spike_hits));
     }
 }
 
@@ -73,11 +82,99 @@ pub struct LastGroundedPosition {
     pub position: Vec2,
 }
 
+/// A physical recovery anchor belongs to the collision space where it was recorded.
+#[derive(Component, Clone, Copy, Debug)]
+pub(crate) struct SafeGroundedPosition {
+    pub position: Vec2,
+    pub space: Option<ShelterInteriorKind>,
+}
+
+#[derive(SystemParam)]
+pub(crate) struct RecoveryCollisionWorld<'w, 's> {
+    terrain: Option<Res<'w, TileCollisionWorld>>,
+    interiors: Option<Res<'w, TentInteriorAssets>>,
+    capsules: CapsuleCollisionQuery<'w, 's, (With<Capsule>, Without<Player>)>,
+    spatial: PhysicsWorld<'w>,
+    spikes: Query<'w, 's, (), With<crate::game::spikes::SpikeHazard>>,
+}
+
+impl RecoveryCollisionWorld<'_, '_> {
+    pub fn capsule_occupant(
+        &self,
+        position: Vec2,
+        occupant: Option<&TentInteriorOccupant>,
+    ) -> Option<crate::game::world_objects::CapsuleOccupant> {
+        if occupant.is_some() { return None; }
+        crate::game::world_objects::capsule_occupant_at_world_position(position, &self.capsules)
+    }
+
+    pub fn is_safe(
+        &self,
+        position: Vec2,
+        collider: &Collider,
+        occupant: Option<&TentInteriorOccupant>,
+        platforms: &CapsuleDropPlatformState,
+    ) -> bool {
+        let Some(half) = collider.cuboid_half_extents() else { return false; };
+        let Some(view) = PlayerCollisionView::new(occupant, self.interiors.as_deref(),
+            self.terrain.as_deref(), &self.capsules) else { return false; };
+        view.distance(ProbeDirection::Down, position, half,
+            MAX_GROUND_CHECK_DISTANCE, Some(platforms)) <= GROUND_CONTACT_EPS
+            && !view.overlaps_solid(position, half)
+            && !self.spatial.intersect(position, collider,
+                theseeker_engine::physics::groups::player_body(), None)
+                .into_iter().any(|entity| self.spikes.contains(entity))
+    }
+
+    /// Resolve a safe supported fallback near an invalidated anchor or initial spawn.
+    pub fn supported_destination(
+        &self,
+        reference: Vec2,
+        collider: &Collider,
+        occupant: Option<&TentInteriorOccupant>,
+        platforms: &CapsuleDropPlatformState,
+    ) -> Option<Vec2> {
+        if self.is_safe(reference, collider, occupant, platforms) { return Some(reference); }
+        let half = collider.cuboid_half_extents()?;
+        let view = PlayerCollisionView::new(occupant, self.interiors.as_deref(),
+            self.terrain.as_deref(), &self.capsules)?;
+        let tile_size = view.tile_size();
+        let reach = crate::levelgen::mapgen::CHUNK_IMAGE_SIZE as f32 * tile_size;
+        let radius = crate::levelgen::mapgen::CHUNK_IMAGE_SIZE as i32;
+        (-radius..=radius).filter_map(|x| {
+            let start = reference + Vec2::new(x as f32 * tile_size, half.y * 2.0);
+            let distance = view.distance(ProbeDirection::Down, start, half, reach, Some(platforms));
+            let candidate = start - Vec2::Y * distance;
+            (distance < reach && self.is_safe(candidate, collider, occupant, platforms)).then_some(candidate)
+        }).min_by(|a, b| a.distance_squared(reference).total_cmp(&b.distance_squared(reference)))
+    }
+}
+
+fn record_safe_grounded_position(
+    mut players: Query<(Entity, &Transform, &Collider, Option<&TentInteriorOccupant>,
+        &CapsuleDropPlatformState, &super::foreground::ForegroundAction,
+        Option<&mut SafeGroundedPosition>),
+        (With<Player>, Without<Dead>, Without<PendingTentEntry>,
+            Without<crate::game::spikes::SpikeRespawnPending>)>,
+    world: RecoveryCollisionWorld,
+    mut commands: Commands,
+) {
+    for (entity, transform, collider, occupant, platforms, foreground, checkpoint) in &mut players {
+        if foreground.owns_motion() { continue; }
+        let position = transform.translation.truncate();
+        if !world.is_safe(position, collider, occupant, platforms) { continue; }
+        let safe = SafeGroundedPosition { position, space: occupant.map(|occupant| occupant.kind) };
+        if let Some(mut checkpoint) = checkpoint { *checkpoint = safe; }
+        else { commands.entity(entity).insert(safe); }
+    }
+}
+
 const WALL_CAST_DISTANCE: f32 = 8.0;
 const CEILING_CAST_DISTANCE: f32 = 8.0;
 const MELEE_RANGE: f32 = 32.0;
 const RANGED_RANGE: f32 = 200.0;
 const MAX_GROUND_CHECK_DISTANCE: f32 = 50.0; // Cap for distance when no hit is found
+const GROUND_CONTACT_EPS: f32 = 0.01;
 
 fn update_ground_sensor(
     mut query: Query<
@@ -85,14 +182,17 @@ fn update_ground_sensor(
             Entity,
             &Transform,
             &mut GroundSensor,
-            &ShapeCaster,
-            &LinearVelocity,
+            &Collider,
             Option<&mut LastGroundedPosition>,
             Has<crate::game::player::states::InAir>,
+            Option<&TentInteriorOccupant>,
+            &CapsuleDropPlatformState,
         ),
         With<Player>,
     >,
-    spatial_query: PhysicsWorld,
+    collision_world: Option<Res<TileCollisionWorld>>,
+    tent_interior: Option<Res<TentInteriorAssets>>,
+    capsule_q: CapsuleCollisionQuery<With<Capsule>>,
     _time: Res<GameTime>,
     mut commands: Commands,
 ) {
@@ -100,98 +200,112 @@ fn update_ground_sensor(
         entity,
         transform,
         mut sensor,
-        shape_caster,
-        velocity,
+        collider,
         mut last_grounded_pos,
         is_in_air,
+        interior_occupant,
+        drop_platform_state,
     ) in query.iter_mut()
     {
-        // Detect ground via ShapeCaster under the player
-        if let Some((_, toi)) = shape_caster.cast(
-            &spatial_query.context(),
-            &transform,
-            Some(entity),
-        ) {
-            sensor.distance = toi.time_of_impact;
-
-            // Predict imminent ground only when falling fast; conservative threshold
-            if velocity.0.y < -0.52 {
-                // ~50 px/s at 96 Hz
-                // Predict landing
-                let predicted_distance = toi.time_of_impact + velocity.0.y; // per-tick displacement
-                sensor.is_grounded = predicted_distance < GROUNDED_THRESHOLD;
-            } else {
-                // Distance check with a small buffer to prevent flicker near threshold
-                sensor.is_grounded =
-                    toi.time_of_impact < GROUNDED_THRESHOLD + 0.1;
-            }
-        } else {
+        let Some(view) = PlayerCollisionView::new(interior_occupant,
+            tent_interior.as_deref(), collision_world.as_deref(), &capsule_q) else {
             sensor.is_grounded = false;
             sensor.distance = MAX_GROUND_CHECK_DISTANCE;
-        }
+            continue;
+        };
 
-        // Update last grounded position when NOT in air (more accurate than prediction)
+        let Some(half_extents) = collider.cuboid_half_extents() else {
+            sensor.is_grounded = false;
+            sensor.distance = MAX_GROUND_CHECK_DISTANCE;
+            continue;
+        };
+        let distance = view.distance(
+            ProbeDirection::Down,
+            transform.translation.truncate(),
+            half_extents,
+            MAX_GROUND_CHECK_DISTANCE,
+            Some(drop_platform_state),
+        );
+        sensor.distance = distance;
+        sensor.is_grounded = distance <= GROUND_CONTACT_EPS;
+
         if !is_in_air {
-            if let Some(ref mut last_pos) = last_grounded_pos {
-                last_pos.position = transform.translation.truncate();
-            } else {
-                commands.entity(entity).insert(LastGroundedPosition {
-                    position: transform.translation.truncate(),
-                });
-            }
+            update_last_grounded_position(
+                &mut commands,
+                entity,
+                transform.translation.truncate(),
+                last_grounded_pos.as_deref_mut(),
+            );
         }
     }
 }
 
-fn update_wall_sensor(
-    mut query: Query<(&Transform, &mut WallSensor, &Collider), With<Player>>,
-    spatial_query: PhysicsWorld,
+fn update_last_grounded_position(
+    commands: &mut Commands,
+    entity: Entity,
+    position: Vec2,
+    last_grounded_pos: Option<&mut LastGroundedPosition>,
 ) {
-    for (transform, mut sensor, collider) in query.iter_mut() {
-        let ray_origin = transform.translation.truncate();
+    let Some(last_pos) = last_grounded_pos else {
+        commands.entity(entity).insert(LastGroundedPosition { position });
+        return;
+    };
 
-        // Collider half-extents for proper wall detection
-        let half_width = if let Some(cuboid) = collider.as_cuboid() {
-            cuboid.half_extents().x
-        } else {
-            2.0 // Default fallback
+    last_pos.position = position;
+}
+
+
+fn update_wall_sensor(
+    mut query: Query<
+        (
+            &Transform,
+            &mut WallSensor,
+            &Collider,
+            Option<&TentInteriorOccupant>,
+        ),
+        With<Player>,
+    >,
+    collision_world: Option<Res<TileCollisionWorld>>,
+    tent_interior: Option<Res<TentInteriorAssets>>,
+    capsule_q: CapsuleCollisionQuery<With<Capsule>>,
+) {
+    for (transform, mut sensor, collider, interior_occupant) in query.iter_mut() {
+        let Some(view) = PlayerCollisionView::new(interior_occupant,
+            tent_interior.as_deref(), collision_world.as_deref(), &capsule_q) else {
+            sensor.left_contact = false;
+            sensor.right_contact = false;
+            sensor.left_distance = WALL_CAST_DISTANCE;
+            sensor.right_distance = WALL_CAST_DISTANCE;
+            continue;
         };
 
-        // Cast ray to the left
-        let left_dir = Vec2::NEG_X;
-        if let Some((_, toi)) = spatial_query.ray_cast(
-            ray_origin,
-            left_dir,
-            half_width + WALL_CAST_DISTANCE,
-            true,
-            CollisionGroups::new(PLAYER, GROUND),
-            None,
-        ) {
-            // Tolerance approximates collision skin width to reduce gaps
-            sensor.left_contact = toi.time_of_impact <= half_width + 0.05;
-            sensor.left_distance = toi.time_of_impact;
-        } else {
+        let Some(half_extents) = collider.cuboid_half_extents() else {
             sensor.left_contact = false;
-            sensor.left_distance = WALL_CAST_DISTANCE;
-        }
-
-        // Cast ray to the right
-        let right_dir = Vec2::X;
-        if let Some((_, toi)) = spatial_query.ray_cast(
-            ray_origin,
-            right_dir,
-            half_width + WALL_CAST_DISTANCE,
-            true,
-            CollisionGroups::new(PLAYER, GROUND),
-            None,
-        ) {
-            // Tolerance approximates collision skin width to reduce gaps
-            sensor.right_contact = toi.time_of_impact <= half_width + 0.05;
-            sensor.right_distance = toi.time_of_impact;
-        } else {
             sensor.right_contact = false;
+            sensor.left_distance = WALL_CAST_DISTANCE;
             sensor.right_distance = WALL_CAST_DISTANCE;
-        }
+            continue;
+        };
+
+        let left_distance = view.distance(
+            ProbeDirection::Left,
+            transform.translation.truncate(),
+            half_extents,
+            WALL_CAST_DISTANCE,
+            None,
+        );
+        sensor.left_distance = left_distance;
+        sensor.left_contact = left_distance <= half_extents.x + 0.05;
+
+        let right_distance = view.distance(
+            ProbeDirection::Right,
+            transform.translation.truncate(),
+            half_extents,
+            WALL_CAST_DISTANCE,
+            None,
+        );
+        sensor.right_distance = right_distance;
+        sensor.right_contact = right_distance <= half_extents.x + 0.05;
     }
 }
 
@@ -201,39 +315,37 @@ fn update_ceiling_sensor(
             &Transform,
             &mut CeilingSensor,
             &Collider,
+            Option<&TentInteriorOccupant>,
         ),
         With<Player>,
     >,
-    spatial_query: PhysicsWorld,
+    collision_world: Option<Res<TileCollisionWorld>>,
+    tent_interior: Option<Res<TentInteriorAssets>>,
+    capsule_q: CapsuleCollisionQuery<With<Capsule>>,
 ) {
-    for (transform, mut sensor, collider) in query.iter_mut() {
-        let ray_origin = transform.translation.truncate();
-
-        // Collider half-height for proper ceiling detection
-        let half_height = if let Some(cuboid) = collider.as_cuboid() {
-            cuboid.half_extents().y
-        } else {
-            8.0 // Default fallback
-        };
-
-        // Cast ray upward
-        let up_dir = Vec2::Y;
-        if let Some((_, toi)) = spatial_query.ray_cast(
-            ray_origin,
-            up_dir,
-            half_height + CEILING_CAST_DISTANCE,
-            true,
-            CollisionGroups::new(PLAYER, GROUND),
-            None,
-        ) {
-            // Consider touching ceiling if within a small threshold
-            sensor.is_touching_ceiling =
-                toi.time_of_impact <= half_height + 2.0;
-            sensor.distance = toi.time_of_impact;
-        } else {
+    for (transform, mut sensor, collider, interior_occupant) in query.iter_mut() {
+        let Some(view) = PlayerCollisionView::new(interior_occupant,
+            tent_interior.as_deref(), collision_world.as_deref(), &capsule_q) else {
             sensor.is_touching_ceiling = false;
             sensor.distance = CEILING_CAST_DISTANCE;
-        }
+            continue;
+        };
+
+        let Some(half_extents) = collider.cuboid_half_extents() else {
+            sensor.is_touching_ceiling = false;
+            sensor.distance = CEILING_CAST_DISTANCE;
+            continue;
+        };
+
+        let distance = view.distance(
+            ProbeDirection::Up,
+            transform.translation.truncate(),
+            half_extents,
+            CEILING_CAST_DISTANCE,
+            None,
+        );
+        sensor.distance = distance;
+        sensor.is_touching_ceiling = distance <= half_extents.y + 2.0;
     }
 }
 
@@ -248,7 +360,7 @@ fn update_enemy_proximity_sensor(
         ),
         With<Player>,
     >,
-    enemy_query: Query<(Entity, &Transform), With<Enemy>>,
+    enemy_query: Query<(Entity, &Transform), (With<Enemy>, Without<Dead>)>,
     spatial_query: PhysicsWorld,
 ) {
     for (
@@ -273,79 +385,83 @@ fn update_enemy_proximity_sensor(
         // Check all enemies
         for (enemy_entity, enemy_transform) in enemy_query.iter() {
             let enemy_pos = enemy_transform.translation.truncate();
-            let distance = player_pos.distance(enemy_pos);
-
-            // Update closest enemy
-            if distance < sensor.closest_distance {
-                sensor.closest_enemy = Some(enemy_entity);
-                sensor.closest_distance = distance;
-            }
-
-            // Categorize by range
-            if distance <= MELEE_RANGE {
-                sensor.enemies_in_melee_range.push(enemy_entity);
-            }
-            if distance <= RANGED_RANGE {
-                sensor.enemies_in_ranged_range.push(enemy_entity);
-            }
-
-            // Forward window check in a narrow band
-            let forward_len = 60.0;
-            let half_width = 10.0;
-            let dir = facing.direction(); // 1.0 right, -1.0 left
-            let start_x = player_pos.x;
-            let end_x = player_pos.x + forward_len * dir;
-            let within_x = if dir > 0.0 {
-                enemy_pos.x >= start_x && enemy_pos.x <= end_x
-            } else {
-                enemy_pos.x <= start_x && enemy_pos.x >= end_x
-            };
-            let within_y = (enemy_pos.y - player_pos.y).abs() <= half_width;
-            if within_x && within_y {
-                sensor.has_forward_enemy = true;
-            }
+            record_enemy_sensor_target(
+                &mut sensor,
+                enemy_entity,
+                player_pos,
+                enemy_pos,
+                facing,
+            );
         }
 
-        // Downward shape cast: 120px wide (half_width 60), cast down 180px from player center
-        let rapier = spatial_query.context();
         let sweep_shape = Collider::cuboid(60.0, 1.0);
-        let down_hit = rapier.cast_shape(
-            player_pos,
-            0.0,
-            Vec2::NEG_Y,
-            &sweep_shape,
-            ShapeCastOptions {
-                max_time_of_impact: 180.0,
-                ..Default::default()
-            },
-            QueryFilter::new()
-                .groups(InteractionGroups::new(PLAYER, ENEMY))
-                .exclude_collider(player_entity),
-        );
-        if down_hit.is_some() {
-            sensor.has_enemy_below = true;
-        }
+        sensor.has_enemy_below = spatial_query
+            .cast_shape(ShapeCast {
+                origin: player_pos,
+                dir: Vec2::NEG_Y,
+                shape: &sweep_shape,
+                max_toi: 180.0,
+                interaction: CollisionGroups::new(PLAYER, ENEMY),
+                exclude: Some(player_entity),
+            }, |_| true)
+            .is_some();
 
-        // Immediate forward-block detection: cast player's collider a small distance ahead
-        let dir = facing.direction(); // 1.0 right, -1.0 left
+        let dir = facing.direction();
         let cast_dir = if dir >= 0.0 { Vec2::X } else { Vec2::NEG_X };
-        let forward_hit = rapier.cast_shape(
-            player_pos,
-            0.0,
-            cast_dir,
-            player_collider,
-            ShapeCastOptions {
-                max_time_of_impact: 2.0,
-                ..Default::default()
-            }, // ~2px ahead
-            QueryFilter::new()
-                .groups(InteractionGroups::new(PLAYER, ENEMY))
-                .exclude_collider(player_entity),
-        );
-        if forward_hit.is_some() {
-            sensor.has_blocking_enemy_ahead = true;
-        }
+        sensor.has_blocking_enemy_ahead = spatial_query
+            .cast_shape(ShapeCast {
+                origin: player_pos,
+                dir: cast_dir,
+                shape: player_collider,
+                max_toi: 2.0,
+                interaction: CollisionGroups::new(PLAYER, ENEMY),
+                exclude: Some(player_entity),
+            }, |_| true)
+            .is_some();
     }
+}
+
+fn record_enemy_sensor_target(
+    sensor: &mut EnemyProximitySensor,
+    enemy_entity: Entity,
+    player_pos: Vec2,
+    enemy_pos: Vec2,
+    facing: &Facing,
+) {
+    let distance = player_pos.distance(enemy_pos);
+    if distance < sensor.closest_distance {
+        sensor.closest_enemy = Some(enemy_entity);
+        sensor.closest_distance = distance;
+    }
+
+    if distance <= MELEE_RANGE {
+        sensor.enemies_in_melee_range.push(enemy_entity);
+    }
+    if distance <= RANGED_RANGE {
+        sensor.enemies_in_ranged_range.push(enemy_entity);
+    }
+
+    sensor.has_forward_enemy |=
+        enemy_in_forward_sensor_window(player_pos, enemy_pos, facing);
+}
+
+fn enemy_in_forward_sensor_window(
+    player_pos: Vec2,
+    enemy_pos: Vec2,
+    facing: &Facing,
+) -> bool {
+    let forward_len = 60.0;
+    let half_width = 10.0;
+    let dir = facing.direction();
+    let start_x = player_pos.x;
+    let end_x = player_pos.x + forward_len * dir;
+    let within_x = if dir > 0.0 {
+        enemy_pos.x >= start_x && enemy_pos.x <= end_x
+    } else {
+        enemy_pos.x <= start_x && enemy_pos.x >= end_x
+    };
+    let within_y = (enemy_pos.y - player_pos.y).abs() <= half_width;
+    within_x && within_y
 }
 
 /// Reset jump count when player touches a wall - enables wall jumping
@@ -365,8 +481,8 @@ fn reset_jump_count_on_wall_touch(
         query.iter_mut()
     {
         // Player half-width for accurate distance calculation
-        let half_width = if let Some(cuboid) = collider.as_cuboid() {
-            cuboid.half_extents().x
+        let half_width = if let Some(cuboid_half) = collider.cuboid_half_extents() {
+            cuboid_half.x
         } else {
             2.0 // Default fallback
         };
@@ -380,18 +496,82 @@ fn reset_jump_count_on_wall_touch(
         let is_near_wall = near_left_wall || near_right_wall;
 
         // Reset jump count near a wall in Falling or Jumping states
-        if is_near_wall {
-            if let Some(ref mut falling_state) = falling {
-                // Treat wall jumps as fresh jumps for forgiveness
-                falling_state.jump_count = 0;
-                jump_count.reset();
-            }
-
-            if let Some(ref mut jumping_state) = jumping {
-                // Maintain consistency when transitioning from jump to wall
-                jumping_state.jump_count = 0;
-                jump_count.reset();
-            }
+        if !is_near_wall {
+            continue;
         }
+
+        reset_wall_touch_jump_count(
+            &mut jump_count,
+            falling.as_deref_mut(),
+            jumping.as_deref_mut(),
+        );
+    }
+}
+
+fn reset_wall_touch_jump_count(
+    jump_count: &mut JumpCount,
+    falling: Option<&mut Falling>,
+    jumping: Option<&mut Jumping>,
+) {
+    if let Some(falling_state) = falling {
+        // Treat wall jumps as fresh jumps for forgiveness.
+        falling_state.jump_count = 0;
+        jump_count.reset();
+    }
+
+    if let Some(jumping_state) = jumping {
+        // Maintain consistency when transitioning from jump to wall.
+        jumping_state.jump_count = 0;
+        jump_count.reset();
+    }
+}
+
+#[cfg(test)]
+mod recovery_tests {
+    use super::*;
+    use crate::game::player::foreground::start_action;
+    use theseeker_engine::gent::Gent;
+    use theseeker_engine::physics::{EntityCollisionWorld, Group, StaticCollider,
+        groups, rebuild_entity_collision_world};
+
+    #[test]
+    fn recovery_anchor_requires_support_and_survives_air_and_activated_spikes() {
+        let mut world = World::new();
+        world.insert_resource(GameTime::default());
+        world.insert_resource(EntityCollisionWorld::default());
+        let mut terrain = vec![false; 32 * 16];
+        terrain[32 * 15..].fill(true);
+        let mut tiles = TileCollisionWorld::default();
+        tiles.rebuild(32, 16, 1.0, &terrain);
+        world.insert_resource(tiles);
+        let gfx = world.spawn_empty().id();
+        let player = world.spawn((Player, Gent { e_gfx: gfx, e_effects_gfx: gfx },
+            Transform::from_xyz(6.0, 5.0, 0.0), Collider::cuboid(1.0, 2.0),
+            CapsuleDropPlatformState::default())).id();
+        start_action(&mut world, player, crate::game::player::Ready);
+        let mut record = Schedule::default();
+        record.add_systems(record_safe_grounded_position);
+        record.run(&mut world);
+        assert!(world.get::<SafeGroundedPosition>(player).is_none());
+        world.get_mut::<Transform>(player).unwrap().translation.y = 3.0;
+        record.run(&mut world);
+        assert_eq!(world.get::<SafeGroundedPosition>(player).unwrap().position, Vec2::new(6.0, 3.0));
+        world.get_mut::<Transform>(player).unwrap().translation.y = 5.0;
+        record.run(&mut world);
+        assert_eq!(world.get::<SafeGroundedPosition>(player).unwrap().position, Vec2::new(6.0, 3.0));
+        let spike = world.spawn((crate::game::spikes::SpikeHazard, StaticCollider,
+            GlobalTransform::from_xyz(12.0, 1.5, 0.0), Collider::cuboid(0.5, 0.5),
+            CollisionGroups::new(Group::NONE, Group::NONE))).id();
+        let mut index = Schedule::default();
+        index.add_systems(rebuild_entity_collision_world);
+        index.run(&mut world);
+        world.get_mut::<Transform>(player).unwrap().translation = Vec3::new(12.0, 3.0, 0.0);
+        record.run(&mut world);
+        assert_eq!(world.get::<SafeGroundedPosition>(player).unwrap().position, Vec2::new(12.0, 3.0));
+        world.entity_mut(spike).insert(groups::enemy_attack());
+        index.run(&mut world);
+        world.get_mut::<SafeGroundedPosition>(player).unwrap().position = Vec2::new(6.0, 3.0);
+        record.run(&mut world);
+        assert_eq!(world.get::<SafeGroundedPosition>(player).unwrap().position, Vec2::new(6.0, 3.0));
     }
 }

@@ -2,6 +2,8 @@
 name = "theseeker"
 version = "0.1.0"
 edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/TheSeekerGame/TheSeeker"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
@@ -38,59 +40,135 @@ debug = false
 [dependencies]
 anyhow = "1.0.97"
 enum-iterator = "2.1.0"
-glam = "0.29.2"
+glam = "0.32.1"
 rand = "0.9.0"
 crossbeam-channel = "0.5"
 serde_with = "3.12.0"
 serde_json = "1.0"
 thiserror = "2.0.12"
 toml = "0.8.20"
-rodio = "0.20"
 strum = "0.27"
 strum_macros = "0.27"
+cpal = "0.15.3"
+symphonium = { version = "0.6.5", features = ["flac"] }
 
-bevy_egui = "0.35"
-bevy-inspector-egui = "0.31"
+# GPU particles use the 2D renderer; retain serialized effect asset support.
+bevy_hanabi = { version = "0.19", default-features = false, features = ["2d"] }
 
-# This specific rev was working main on may 28th.
-# needed for moveble forcefields not availible in 0.10
-# (also has some wgsl fixes)
-bevy_hanabi = "0.16"
+rfd = "0.14"
 
 [dependencies.serde]
 version = "1.0.219"
 features = ["derive"]
 
 [dependencies.bevy]
-version = "0.16"
-default-features = true
-features = ["flac", "jpeg", "wayland"]
+version = "=0.19.1"
+default-features = false
+# Keep scene authoring, diagnostics, audio assets, and desktop input alongside 2D rendering.
+features = [
+    "std",
+    "async_executor",
+    "multi_threaded",
+    "bevy_asset",
+    "bevy_audio",
+    "bevy_color",
+    "bevy_core_pipeline",
+    "bevy_post_process", # MSAA writeback preserves custom passes under overlay cameras.
+    "bevy_gilrs",
+    "bevy_gizmos",
+    "bevy_input_focus",
+    "bevy_log",
+    "bevy_render",
+    "bevy_scene",
+    "bevy_sprite",
+    "bevy_sprite_render",
+    "bevy_gizmos_render",
+    "bevy_ui_render",
+    "keyboard",
+    "mouse",
+    "bevy_state",
+    "bevy_text",
+    "bevy_ui",
+    "bevy_window",
+    "bevy_winit",
+    "default_font",
+    "sysinfo_plugin",
+    "debug", # Retain system and type names in diagnostics.
+    "png",
+    "jpeg",
+    "flac",
+    "vorbis",
+    "wayland",
+    "x11",
+]
 
 [dependencies.bevy_asset_loader]
-version = "0.23"
+version = "0.27"
 features = ["2d", "progress_tracking", "standard_dynamic_assets"]
 
 [dependencies.bevy_common_assets]
-version = "0.13"
+version = "0.17"
+default-features = false
 features = ["toml", "ron"]
 
-[dependencies.bevy_ecs_ldtk]
-version = "0.12.0"
-features = ["default"]
-
-[dependencies.bevy_ecs_tilemap]
-version = "0.16.0"
-features = ["default"]
-
 [dependencies.leafwing-input-manager]
-version = "0.17"
+version = "0.21"
+default-features = false
+features = ["asset", "mouse", "keyboard", "gamepad"]
 
-[dependencies.bevy_rapier2d]
-version = "0.30"
-features = ["dim2", "parallel"]
+# Pin Tracy dependencies to match Tracy 0.11.1 (Homebrew version)
+[dependencies.tracy-client]
+version = "=0.18.0"
 
-# Unavoidable with how Bevy is designed
+[dependencies.tracy-client-sys]
+version = "=0.24.3"
+
+# Tests check shader uniforms against their Rust layouts in the naga modules Bevy composes.
+[dev-dependencies.naga]
+version = "29"
+default-features = false
+
+[lints.rust]
+warnings = "deny"
+unsafe_code = "deny"
+
 [lints.clippy]
+all = { level = "deny", priority = -1 }
+perf = { level = "deny", priority = -1 }
+complexity = { level = "deny", priority = -1 }
+
+# Bevy ECS query and system types are naturally complex.
 type_complexity = "allow"
-pedantic = { level = "warn", priority = -1 }
-nursery = { level = "warn", priority = -1 }
+
+# High-threshold guardrail against newly introduced deeply branching functions.
+cognitive_complexity = "deny"
+
+# Selected high-signal pedantic lints.
+allow_attributes_without_reason = "deny"
+assigning_clones = "deny"
+bool_to_int_with_if = "deny"
+cloned_instead_of_copied = "deny"
+collapsible_else_if = "deny"
+default_trait_access = "deny"
+elidable_lifetime_names = "deny"
+format_push_string = "deny"
+ignored_unit_patterns = "deny"
+inefficient_to_string = "deny"
+match_same_arms = "deny"
+match_wildcard_for_single_variants = "deny"
+manual_assert = "deny"
+manual_let_else = "deny"
+manual_string_new = "deny"
+needless_continue = "deny"
+no_effect_underscore_binding = "deny"
+range_plus_one = "deny"
+redundant_closure_for_method_calls = "deny"
+redundant_else = "deny"
+ref_option = "deny"
+return_self_not_must_use = "deny"
+single_match_else = "deny"
+too_many_lines = "deny"
+unnecessary_semicolon = "deny"
+unreadable_literal = "deny"
+uninlined_format_args = "deny"
+unnested_or_patterns = "deny"

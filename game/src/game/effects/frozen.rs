@@ -1,14 +1,10 @@
-use bevy::prelude::*;
-use bevy::render::view::RenderLayers;
+use bevy::camera::visibility::RenderLayers;
 
-use crate::game::enemy::{
-    Defense, Enemy, EnemyGfx, EnemyVariant, JustThawed, MovementState,
-    MovementType, Tier,
-};
+use crate::game::enemy::Enemy;
 use crate::game::gentstate::Dead;
-use crate::game::player::{Player, PlayerGfx};
+use crate::game::player::Player;
 use crate::prelude::*;
-use theseeker_engine::ai::FsmInstance;
+use crate::game::actors::AiPaused;
 use theseeker_engine::animation::SpriteAnimationBundle;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::{Gent, TransformGfxFromGent};
@@ -24,6 +20,9 @@ pub struct FrozenOverlay;
 pub struct FrozenVisual {
     pub overlay: Entity,
 }
+
+#[derive(Component)]
+struct FrozenVelocity(Vec2);
 
 /// Size variants for the frozen overlay visuals.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -61,8 +60,8 @@ impl Frozen {
 // Overlay offsets for correct layering:
 // - Positive offset places overlay slightly in front of enemies (above their base Z)
 // - Negative offset keeps overlay behind the player (below player base Z)
-const OVERLAY_OFFSET_ENEMY: f32 = 0.0000004;
-const OVERLAY_OFFSET_PLAYER: f32 = -0.0000004;
+const OVERLAY_OFFSET_ENEMY: f32 = 0.000_000_4;
+const OVERLAY_OFFSET_PLAYER: f32 = -0.000_000_4;
 
 const SMALL_OVERLAY_KEY: &str = "anim.player.IceBoulderSmall";
 const LARGE_OVERLAY_KEY: &str = "anim.player.IceBoulderBig";
@@ -81,6 +80,7 @@ impl Plugin for FrozenEffectPlugin {
             )
                 .run_if(in_state(AppState::InGame))
                 .after(crate::game::player::spawns::ice_nova::tick_ice_nova)
+                .before(crate::game::enemy::EnemyStateSet::Sensors)
                 .before(crate::game::enemy::dead),
         );
         app.add_systems(PostUpdate, cleanup_frozen_removed);
@@ -89,20 +89,15 @@ impl Plugin for FrozenEffectPlugin {
 
 fn attach_frozen_visuals(
     mut commands: Commands,
-    mut added: Query<(Entity, &mut Frozen, &Gent), Added<Frozen>>,
+    added: Query<(Entity, &Frozen, &Gent), Added<Frozen>>,
     enemy_query: Query<(), With<Enemy>>,
     player_query: Query<(), With<Player>>,
-    mut enemy_state_query: Query<&mut MovementState>,
-    mut enemy_fsm_query: Query<&mut FsmInstance>,
-    mut anim_players: ParamSet<(
-        Query<&mut ScriptPlayer<SpriteAnimation>, With<EnemyGfx>>,
-        Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
-    )>,
+    mut anim_players: Query<&mut ScriptPlayer<SpriteAnimation>>,
     mut velocity_query: Query<&mut LinearVelocity>,
-    tier_query: Query<&Tier>,
 ) {
-    for (entity, mut frozen, gent) in added.iter_mut() {
+    for (entity, frozen, gent) in added.iter() {
         let is_player = player_query.get(entity).is_ok();
+        let is_enemy = enemy_query.get(entity).is_ok();
         let overlay_key = match frozen.size {
             FrozenSize::Small => SMALL_OVERLAY_KEY,
             FrozenSize::Large => LARGE_OVERLAY_KEY,
@@ -136,58 +131,45 @@ fn attach_frozen_visuals(
                 StateDespawnMarker,
             ))
             .id();
-        commands.entity(entity).insert(FrozenVisual { overlay });
 
-        // Immediately clamp velocity
-        if let Ok(mut vel) = velocity_query.get_mut(entity) {
+        let saved_velocity = velocity_query.get_mut(entity).ok().map(|mut vel| {
+            let saved = vel.0;
             vel.0 = Vec2::ZERO;
+            saved
+        });
+
+        commands.entity(entity).insert(FrozenVisual { overlay });
+        if let Some(saved_velocity) = saved_velocity {
+            commands.entity(entity).insert(FrozenVelocity(saved_velocity));
         }
 
-        if enemy_query.get(entity).is_ok() {
-            // Force enemies into idle state and play idle animation for visual consistency.
-            let mut idle_variant = None;
-            if let Ok(mut state) = enemy_state_query.get_mut(entity) {
-                idle_variant = Some(state.enemy_variant);
-                state.movement_type = MovementType::Idle;
-                state.ticks = 0;
-                state.prev_frame = None;
-            }
-            if let Ok(mut fsm) = enemy_fsm_query.get_mut(entity) {
-                fsm.actions.clear();
-                fsm.state_tick = 0;
-                fsm.anim_tick = 0;
-            }
-            let tier = tier_query.get(entity).copied().unwrap_or(Tier::Base);
-            if let Some(variant) = idle_variant {
-                let idle_key = enemy_idle_animation_key(tier, variant);
-                if let Ok(mut anim) = anim_players.p0().get_mut(gent.e_gfx) {
-                    anim.play_key(&idle_key);
-                }
-            }
-            // Break defensive stance while frozen
-            commands.entity(entity).remove::<Defense>();
-        } else if is_player {
-            if let Ok(mut anim) = anim_players.p1().get_mut(gent.e_gfx) {
-                anim.play_key(PLAYER_IDLE_KEY);
-            }
-        }
+        update_frozen_animation(
+            entity,
+            gent,
+            is_enemy,
+            is_player,
+            &mut anim_players,
+            &mut commands,
+        );
     }
 }
 
-fn enemy_idle_animation_key(tier: Tier, variant: EnemyVariant) -> String {
-    let prefix = match variant {
-        EnemyVariant::BigSpider => "anim.spider",
-        EnemyVariant::SmallSpider => "anim.smallspider",
-        EnemyVariant::Default => "anim.smallspider",
-    };
-
-    let suffix = match tier {
-        Tier::Base => "",
-        Tier::Two => "2",
-        Tier::Three => "3",
-    };
-
-    format!("{prefix}{suffix}.Idle")
+fn update_frozen_animation(
+    entity: Entity,
+    gent: &Gent,
+    is_enemy: bool,
+    is_player: bool,
+    anim_players: &mut Query<&mut ScriptPlayer<SpriteAnimation>>,
+    commands: &mut Commands,
+) {
+    if is_enemy {
+        commands.entity(entity).insert(AiPaused);
+        set_gent_animation_paused(gent, true, anim_players);
+        return;
+    }
+    if let (true, Ok(mut anim)) = (is_player, anim_players.get_mut(gent.e_gfx)) {
+        anim.play_key(PLAYER_IDLE_KEY);
+    }
 }
 
 fn tick_frozen(
@@ -211,31 +193,110 @@ fn tick_frozen(
 
 fn cleanup_frozen_removed(
     mut removed: RemovedComponents<Frozen>,
-    mut visuals: Query<(Entity, &FrozenVisual)>,
+    visuals: Query<(
+        &FrozenVisual,
+        Option<&FrozenVelocity>,
+        Option<&Gent>,
+        Has<Enemy>,
+        Has<Dead>,
+    )>,
+    mut velocity_query: Query<&mut LinearVelocity>,
+    mut anim_players: Query<&mut ScriptPlayer<SpriteAnimation>>,
     mut commands: Commands,
-    enemy_query: Query<(), With<Enemy>>,
 ) {
     for entity in removed.read() {
-        if let Ok((_, visual)) = visuals.get(entity) {
-            commands.entity(visual.overlay).despawn();
-            commands.entity(entity).remove::<FrozenVisual>();
-        }
+        let Ok((visual, saved_velocity, gent, is_enemy, is_dead)) =
+            visuals.get(entity)
+        else {
+            continue;
+        };
 
-        if enemy_query.get(entity).is_ok() {
-            commands.entity(entity).insert(JustThawed);
-        }
+        commands.entity(visual.overlay).despawn();
+        commands.entity(entity).remove::<FrozenVisual>();
+        commands.entity(entity).remove::<FrozenVelocity>();
+
+        restore_frozen_velocity(
+            entity,
+            is_dead,
+            saved_velocity,
+            &mut velocity_query,
+        );
+        resume_frozen_enemy(
+            entity,
+            is_enemy,
+            gent,
+            &mut anim_players,
+            &mut commands,
+        );
+    }
+}
+
+fn restore_frozen_velocity(
+    entity: Entity,
+    is_dead: bool,
+    saved_velocity: Option<&FrozenVelocity>,
+    velocity_query: &mut Query<&mut LinearVelocity>,
+) {
+    if is_dead {
+        return;
+    }
+    let Some(saved_velocity) = saved_velocity else {
+        return;
+    };
+    let Ok(mut velocity) = velocity_query.get_mut(entity) else {
+        return;
+    };
+
+    velocity.0 = saved_velocity.0;
+}
+
+fn resume_frozen_enemy(
+    entity: Entity,
+    is_enemy: bool,
+    gent: Option<&Gent>,
+    anim_players: &mut Query<&mut ScriptPlayer<SpriteAnimation>>,
+    commands: &mut Commands,
+) {
+    if !is_enemy {
+        return;
+    }
+
+    commands.entity(entity).remove::<AiPaused>();
+    if let Some(gent) = gent {
+        set_gent_animation_paused(gent, false, anim_players);
     }
 }
 
 fn clear_frozen_on_death(
     mut commands: Commands,
-    query: Query<(Entity, Option<&FrozenVisual>), (With<Frozen>, Added<Dead>)>,
+    query: Query<
+        (Entity, Option<&FrozenVisual>, Option<&Gent>),
+        (With<Frozen>, Added<Dead>),
+    >,
+    mut anim_players: Query<&mut ScriptPlayer<SpriteAnimation>>,
 ) {
-    for (entity, visual) in &query {
+    for (entity, visual, gent) in &query {
         if let Some(visual) = visual {
             commands.entity(visual.overlay).despawn();
             commands.entity(entity).remove::<FrozenVisual>();
         }
+        if let Some(gent) = gent {
+            set_gent_animation_paused(gent, false, &mut anim_players);
+        }
+        commands.entity(entity).remove::<AiPaused>();
+        commands.entity(entity).remove::<FrozenVelocity>();
         commands.entity(entity).remove::<Frozen>();
+    }
+}
+
+fn set_gent_animation_paused(
+    gent: &Gent,
+    paused: bool,
+    anim_players: &mut Query<&mut ScriptPlayer<SpriteAnimation>>,
+) {
+    for entity in [gent.e_gfx, gent.e_effects_gfx] {
+        if let Ok(mut player) = anim_players.get_mut(entity) {
+            player.set_paused(paused);
+        }
     }
 }

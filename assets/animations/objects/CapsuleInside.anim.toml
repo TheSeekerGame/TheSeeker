@@ -1,0 +1,19 @@
+[asset]
+key = "anim.objects.CapsuleInside"
+image = "animations/objects/CapsuleInside__r1c1__54x154.png"
+
+image_asset_key = "anim.objects.CapsuleInside.image"
+atlas_asset_key = "anim.objects.CapsuleInside.atlas"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 1
+frame_start = 1
+
+[[script]]
+run_at_frame = 1
+action = "SetFrameNext"
+frame_index = 1

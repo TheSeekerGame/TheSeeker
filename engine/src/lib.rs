@@ -1,5 +1,3 @@
-#![allow(unused_mut)]
-
 pub mod prelude {
     pub use std::collections::{HashMap, HashSet};
     pub use std::sync::Arc;
@@ -10,7 +8,6 @@ pub mod prelude {
     };
     pub use bevy::prelude::*;
     pub use bevy_asset_loader::prelude::*;
-    pub use bevy_ecs_ldtk::prelude::*;
     pub use rand::prelude::*;
     pub use serde::de::DeserializeOwned;
     pub use serde::{Deserialize, Serialize};
@@ -21,8 +18,10 @@ pub mod prelude {
     pub use crate::condition::*;
     pub use crate::data::Quant;
     pub use crate::time::{
-        at_tick_multiples, GameTickEventClearSet, GameTickSet, GameTickUpdate,
-        GameTime, GameTimeAppExt,
+        at_tick_multiples, ClockTime, GameTickEventClearSet, GameTickPre, GameTickPost,
+        GameTickSet, GameTickUpdate, GameTime, GameTimeAppExt, MasterClock,
+        RenderInterpolation,
+        GameTransport, PresentationTime, TimingSettings,
     };
 }
 
@@ -30,7 +29,6 @@ use bevy::app::PluginGroupBuilder;
 
 use crate::prelude::*;
 
-pub mod ai;
 pub mod animation;
 pub mod assets;
 pub mod audio;
@@ -41,6 +39,8 @@ pub mod effects;
 pub mod gent;
 pub mod input;
 pub mod physics;
+pub mod profile;
+pub mod presentation;
 pub mod script;
 pub mod time;
 
@@ -54,7 +54,7 @@ impl PluginGroup for EnginePlugins {
             .add(crate::animation::SpriteAnimationPlugin)
             .add(crate::audio::AudioPlugin)
             .add(crate::gent::GentPlugin)
-            .add(crate::ai::AiPlugin)
+            .add(crate::presentation::PresentationPlugin)
             .add(crate::effects::SpriteStretchPlugin)
             .add(crate::effects::GhostingPlugin)
     }

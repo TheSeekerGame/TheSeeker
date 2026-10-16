@@ -3,34 +3,29 @@ name: build & deploy book
 on:
   push:
     branches: [main]
-
-env:
-  CARGO_TERM_COLOR: always
+    paths:
+      - "docs/**"
+      - ".github/workflows/deploy-mdbook.yml"
 
 jobs:
   build:
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
-
-      - uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          override: true
+      - uses: actions/checkout@v4
 
       - name: Setup mdBook
-        uses: peaceiris/actions-mdbook@v1
+        uses: peaceiris/actions-mdbook@v2
         with:
-          mdbook-version: "latest"
+          mdbook-version: "0.4.37"
 
       - name: Build mdbook
-        run: cd doc && mdbook build
+        run: mdbook build docs
 
       - name: Deploy mdbook to Github pages
-        uses: peaceiris/actions-gh-pages@v3
+        uses: peaceiris/actions-gh-pages@v4
         with:
           deploy_key: ${{ secrets.BOOK_DEPLOY_KEY }}
           external_repository: TheSeekerGame/theseekergame.github.io
-          publish_dir: ./doc/book
+          publish_dir: ./docs/book
           destination_dir: ./doc

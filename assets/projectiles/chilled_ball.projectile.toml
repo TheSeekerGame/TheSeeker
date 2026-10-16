@@ -1,0 +1,19 @@
+lifetime_ticks = 480
+ground_despawn = true
+
+[[hit_effects]]
+kind = "chilled"
+slow_multiplier = 0.5
+duration_ticks = 192
+
+[collider]
+half_width = 2.5
+half_height = 2.5
+
+[movement]
+gravity = 432.0
+initial_speed = 200.0
+speed_attempts = 10
+speed_multiplier = 1.15
+fallback_x_speed = 134.0
+fallback_y_speed = 151.0

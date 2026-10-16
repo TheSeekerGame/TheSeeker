@@ -20,16 +20,13 @@ impl Plugin for YakPlugin {
 #[derive(Component, Default)]
 pub struct YakBlueprint;
 
-#[derive(Bundle, LdtkEntity, Default)]
+#[derive(Bundle, Default)]
 pub struct YakBlueprintBundle {
     marker: YakBlueprint,
 }
 
 #[derive(Component)]
-pub struct YakGfx {
-    #[allow(dead_code)] // Symmetry with other Gfx types
-    pub e_gent: Entity,
-}
+pub struct YakGfx;
 
 #[derive(Bundle)]
 pub struct YakGfxBundle {
@@ -49,7 +46,7 @@ pub fn setup_yak(
     mut commands: Commands,
 ) {
     for (mut xf_gent, e_gent) in q.iter_mut() {
-        xf_gent.translation.z = 12.0 * 0.000001;
+        xf_gent.translation.z = 12.0 * 0.000_001;
         xf_gent.translation.y += 5.0;
         let e_gfx = commands.spawn(()).id();
         commands
@@ -60,7 +57,7 @@ pub fn setup_yak(
         player.play_key("anim.yak.Idle");
         commands.entity(e_gfx).insert((
             YakGfxBundle {
-                marker: YakGfx { e_gent },
+                marker: YakGfx,
                 gent2gfx: TransformGfxFromGent {
                     pixel_aligned: false,
                     gent: e_gent,

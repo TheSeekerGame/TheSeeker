@@ -1,5 +1,4 @@
 #![cfg_attr(feature = "release", windows_subsystem = "windows")]
-#![allow(unused_mut)]
 
 /// Custom prelude, for stuff we'd like to access all over the codebase
 /// Use in every file. :)
@@ -13,21 +12,25 @@ mod prelude {
 use bevy::app::{
     TaskPoolOptions, TaskPoolPlugin, TaskPoolThreadAssignmentPolicy,
 };
-use bevy::ecs::schedule::ExecutorKind;
-use bevy::render::settings::{WgpuFeatures, WgpuSettings};
-use bevy::render::RenderPlugin;
-use bevy_ecs_tilemap::prelude::*;
+use bevy::ecs::schedule::SingleThreadedExecutor;
+use bevy::render::settings::{
+    WgpuFeatures, WgpuSettings,
+};
+use bevy::render::{RenderDebugFlags, RenderPlugin};
+use bevy::window::{MonitorSelection, WindowMode, WindowResolution};
 use theseeker_engine::physics::PhysicsPlugin;
 
 use crate::prelude::*;
 
 mod appstate;
 mod assets;
-mod audio;
 mod camera;
 mod game;
 mod gamestate;
-mod level;
+mod music;
+mod timing_probe;
+mod frame_metrics;
+mod levelgen;
 
 mod screens {
     pub mod loading;
@@ -38,9 +41,17 @@ mod ui;
 mod graphics;
 mod parallax;
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "This entrypoint declares the Bevy app resources, plugins, and startup configuration in one auditable builder chain."
+)]
 fn main() {
     let mut app = App::new();
-    app.insert_resource(ClearColor(Color::BLACK));
+    app.insert_resource(ClearColor(Color::srgb(
+        245.0 / 255.0,
+        250.0 / 255.0,
+        253.0 / 255.0,
+    )));
 
     let mut wgpu_settings = WgpuSettings::default();
     wgpu_settings.features.set(
@@ -48,12 +59,16 @@ fn main() {
         true,
     );
 
-    let bevy_plugins = DefaultPlugins;
+    let bevy_plugins = DefaultPlugins.build().disable::<bevy::audio::AudioPlugin>();
     let bevy_plugins = bevy_plugins.set(WindowPlugin {
         primary_window: Some(Window {
             title: "The Seeker (PRE-ALPHA)".into(),
+            resolution: WindowResolution::default()
+                .with_scale_factor_override(1.0),
             present_mode: bevy::window::PresentMode::AutoVsync,
+            desired_maximum_frame_latency: std::num::NonZeroU32::new(crate::frame_metrics::DEFAULT_FRAME_LATENCY),
             resizable: true,
+            mode: WindowMode::BorderlessFullscreen(MonitorSelection::Primary),
             ..Default::default()
         }),
         ..Default::default()
@@ -63,11 +78,11 @@ fn main() {
     let bevy_plugins = bevy_plugins.set(RenderPlugin {
         render_creation: wgpu_settings.into(),
         synchronous_pipeline_compilation: false,
-        debug_flags: Default::default(),
+        debug_flags: RenderDebugFlags::default(),
     });
 
     let cpus = std::thread::available_parallelism()
-        .map(|n| n.get())
+        .map(std::num::NonZero::get)
         .unwrap_or(1);
     let cpus_io = (cpus * 3 / 4).max(2);
     let cpus_async_compute = (cpus / 4).max(2);
@@ -100,7 +115,7 @@ fn main() {
     });
 
     let bevy_plugins = bevy_plugins.set(bevy::log::LogPlugin {
-        filter: "info,wgpu_core=warn,wgpu_hal=warn,theseeker_game=info,theseeker_engine=info"
+        filter: "info,wgpu_core=warn,wgpu_hal=warn,theseeker_game=info,theseeker_engine=info,theseeker_game::tick_profile=debug"
             .into(),
         level: bevy::log::Level::INFO,
         ..Default::default()
@@ -112,16 +127,25 @@ fn main() {
 
     // and custom "engine"
     app.add_plugins(theseeker_engine::EnginePlugins);
-
-    // Remove LDtk's default background
-    // (for some reason it was covering our parallax backgrounds)
-    app.insert_resource(LdtkSettings {
-        level_background: LevelBackground::Nonexistent,
-        ..Default::default()
-    });
+    app.add_plugins(crate::music::MusicPlugin);
+    app.add_plugins(crate::timing_probe::TimingProbePlugin);
 
     // external plugins
-    app.add_plugins((TilemapPlugin, LdtkPlugin, PhysicsPlugin));
+    app.add_plugins(PhysicsPlugin);
+    // Disable MSAA globally to avoid any on-screen blending
+    app.add_systems(
+        Startup,
+        (
+            |mut q: bevy::prelude::Query<
+                &mut bevy::render::view::Msaa,
+                bevy::prelude::With<bevy::prelude::Camera>,
+            >| {
+                if let Ok(mut msaa) = q.single_mut() {
+                    *msaa = bevy::render::view::Msaa::Off;
+                }
+            },
+        ),
+    );
 
     // our stuff
     app.add_plugins((
@@ -129,10 +153,9 @@ fn main() {
             state: AppState::AssetsLoading,
         },
         crate::assets::AssetsPlugin,
-        crate::audio::AudioPlugin,
         crate::ui::UiPlugin,
         crate::camera::CameraPlugin,
-        crate::level::LevelManagerPlugin,
+        crate::levelgen::PngLevelPlugin,
         crate::parallax::ParallaxPlugin,
         crate::game::GameplayPlugin,
         crate::gamestate::GameStatePlugin,
@@ -140,7 +163,7 @@ fn main() {
     ));
 
     app.edit_schedule(Update, |s| {
-        s.set_executor_kind(ExecutorKind::SingleThreaded);
+        s.set_executor(SingleThreadedExecutor::new());
     });
 
     app.run();

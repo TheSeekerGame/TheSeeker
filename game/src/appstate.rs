@@ -1,5 +1,6 @@
 use bevy::ecs::query::QueryFilter;
 
+use crate::assets::GameUiAssets;
 use crate::prelude::*;
 
 pub struct AppStatesPlugin;
@@ -17,10 +18,10 @@ impl Plugin for AppStatesPlugin {
         }
         app.add_systems(OnEnter(AppState::Restart), restart);
 
-        // Simple state transition from AssetsLoading to InGame
+        // Start the first expedition once all required collections and audio are ready.
         app.add_systems(
             Update,
-            transition_to_ingame.run_if(in_state(AppState::AssetsLoading)),
+            start_first_expedition.run_if(in_state(AppState::AssetsLoading)),
         );
     }
 }
@@ -51,53 +52,41 @@ pub fn restart(mut next_state: ResMut<NextState<AppState>>) {
     next_state.set(AppState::InGame);
 }
 
-fn transition_to_ingame(
+#[derive(bevy::ecs::system::SystemParam)]
+struct StartupAssets<'w> {
+    preloaded: Res<'w, PreloadedAssets>,
+    server: Res<'w, AssetServer>,
+    game_ui: Option<Res<'w, GameUiAssets>>,
+    pixel_art: Res<'w, crate::ui::pixel_canvas::ArtLibrary>,
+}
+
+fn start_first_expedition(
     mut next_state: ResMut<NextState<AppState>>,
-    dynamic_assets: Option<Res<DynamicAssets>>,
-    asset_server: Res<AssetServer>,
-    time: Res<Time>,
+    time: Res<Time<Real>>,
+    audio: Option<Res<theseeker_engine::audio::AudioEngine>>,
+    assets: StartupAssets,
     mut min_wait_timer: Local<Option<Timer>>,
+    mut commands: Commands,
+    mut starter: crate::ui::mainmenu::WorldStarter,
 ) {
-    // Initialize minimum wait timer (prevents flashing)
-    if min_wait_timer.is_none() {
-        *min_wait_timer = Some(Timer::from_seconds(
+    let timer = min_wait_timer.get_or_insert_with(|| {
+        Timer::from_seconds(
             0.5,
             TimerMode::Once,
-        ));
+        )
+    });
+    timer.tick(time.delta());
+
+    if !timer.is_finished() || audio.is_some_and(|audio| !audio.preparation_ready(&assets.preloaded, &assets.server)) {
+        return;
     }
 
-    // Tick the minimum wait timer
-    if let Some(ref mut timer) = min_wait_timer.as_mut() {
-        timer.tick(time.delta());
-
-        // Only check assets after minimum wait time
-        if timer.finished() {
-            if let Some(dynamic_assets) = dynamic_assets {
-                // Check if all dynamic assets are loaded
-                let total_assets = dynamic_assets.iter_assets().count();
-                let loaded_count = dynamic_assets
-                    .iter_assets()
-                    .filter(|(_, asset)| {
-                        asset.load(&asset_server).iter().all(|handle| {
-                            matches!(
-                                asset_server.get_load_state(handle),
-                                Some(bevy::asset::LoadState::Loaded)
-                            )
-                        })
-                    })
-                    .count();
-
-                if loaded_count == total_assets {
-                    info!("All {} dynamic assets loaded, transitioning to InGame state", total_assets);
-                    next_state.set(AppState::InGame);
-                }
-            } else {
-                // No dynamic assets to wait for
-                info!("No dynamic assets, transitioning to InGame state");
-                next_state.set(AppState::InGame);
-            }
-        }
+    if assets.game_ui.is_none() || !assets.pixel_art.is_ready(&assets.server) {
+        return;
     }
+
+    info!("All startup asset collections loaded, starting the first expedition");
+    starter.generated(&mut commands, &mut next_state, AppState::AssetsLoading);
 }
 
 fn despawn_all_recursive<F: QueryFilter>(
@@ -105,6 +94,24 @@ fn despawn_all_recursive<F: QueryFilter>(
     q: Query<Entity, F>,
 ) {
     for entity in &q {
-        commands.entity(entity).despawn();
+        // Both a parent and its descendants may carry the state marker.
+        commands.entity(entity).try_despawn();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn state_cleanup_handles_marked_parents_and_children_in_one_flush() {
+        let mut app = App::new();
+        app.set_error_handler(bevy::ecs::error::panic);
+        app.add_systems(Update, despawn_all_recursive::<With<StateDespawnMarker>>);
+        let parent = app.world_mut().spawn(StateDespawnMarker).id();
+        let child = app.world_mut().spawn((StateDespawnMarker, ChildOf(parent))).id();
+        app.update();
+        assert!(app.world().get_entity(parent).is_err());
+        assert!(app.world().get_entity(child).is_err());
     }
 }

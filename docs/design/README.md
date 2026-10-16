@@ -1,0 +1,11 @@
+# Game Design
+
+This section records the high-level design vision for The Seeker: who it is for, how it should look and feel, what it means, how it is funded, and which mechanics it aims for.
+
+These pages describe intent, not the current build. Some details have changed in the game itself. For example, skills, weapons, and passives come from research and crafting at capsules, and the creature roster differs from the ecosystem sketch. The [Architecture](../architecture/README.md) pages and the source code describe how the game currently works.
+
+- [Target Audience](audience.md)
+- [Art Direction](art-direction.md)
+- [Game Lore](lore.md)
+- [Monetization](monetization.md)
+- [Gameplay and Mechanics](mechanics/README.md)

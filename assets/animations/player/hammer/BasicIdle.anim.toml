@@ -1,3 +1,7 @@
+[asset]
+keys = ["anim.player.HammerBasicIdle", "anim.player.HammerBasicRun"]
+image = "animations/player/hammer/BasicIdleSheet__r1c29__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

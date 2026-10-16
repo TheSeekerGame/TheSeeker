@@ -1,0 +1,73 @@
+[asset]
+key = "anim.particles.BloodShards"
+image = "animations/player/particles/BloodShardsSheet__r1c4__6x6.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 4
+frame_start = 2
+
+# Size tier slots - Tiny (frame 1), Small (frame 2), Medium (frame 3), Large (frame 4)
+[[script]]
+run_on_slot_enable = "ShardTiny"
+action = "SetFrameNow"
+frame_index = 1
+
+[[script]]
+run_on_slot_enable = "ShardTiny"
+action = "SetFrameNext"
+frame_index = 1
+
+[[script]]
+run_on_slot_enable = "ShardSmall"
+action = "SetFrameNow"
+frame_index = 2
+
+[[script]]
+run_on_slot_enable = "ShardSmall"
+action = "SetFrameNext"
+frame_index = 2
+
+[[script]]
+run_on_slot_enable = "ShardMedium"
+action = "SetFrameNow"
+frame_index = 3
+
+[[script]]
+run_on_slot_enable = "ShardMedium"
+action = "SetFrameNext"
+frame_index = 3
+
+[[script]]
+run_on_slot_enable = "ShardLarge"
+action = "SetFrameNow"
+frame_index = 4
+
+[[script]]
+run_on_slot_enable = "ShardLarge"
+action = "SetFrameNext"
+frame_index = 4
+
+# Frame persistence (stay on assigned frame)
+[[script]]
+run_at_frame = 1
+action = "SetFrameNext"
+frame_index = 1
+
+[[script]]
+run_at_frame = 2
+action = "SetFrameNext"
+frame_index = 2
+
+[[script]]
+run_at_frame = 3
+action = "SetFrameNext"
+frame_index = 3
+
+[[script]]
+run_at_frame = 4
+action = "SetFrameNext"
+frame_index = 4

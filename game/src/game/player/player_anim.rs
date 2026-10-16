@@ -2,7 +2,7 @@
 //!
 //! Centralizes direction slot updates and small event-driven animation slot toggles
 //! (e.g., XP orb pickup, player damage).
-use bevy::ecs::event::EventReader;
+use bevy::ecs::message::MessageReader;
 use theseeker_engine::assets::animation::SpriteAnimation;
 use theseeker_engine::gent::Gent;
 use theseeker_engine::prelude::GameTickUpdate;
@@ -62,39 +62,59 @@ fn sprite_flip(
     mut old_direction: Local<bool>,
 ) {
     for (facing, gent, maybe_falling) in query.iter() {
-        if let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) {
-            *old_direction = *current_direction;
+        let Ok(mut player) = gfx_query.get_mut(gent.e_gfx) else {
+            continue;
+        };
 
-            // If wall sliding, defer flip control to wall-slide logic
-            if let Some(falling) = maybe_falling {
-                if falling.wall_slide.is_some() {
-                    if *old_direction != *current_direction {
-                        player.set_slot("DirectionChanged", true);
-                    } else {
-                        player.set_slot("DirectionChanged", false);
-                    }
-                    continue;
-                }
-            }
-
-            // Use the facing direction as-is for non-wall-slide cases
-            set_direction_slots(&mut player, facing);
-            *current_direction = matches!(facing, Facing::Right);
-
-            // Simple change detection for DirectionChanged slot
-            if *old_direction != *current_direction {
-                player.set_slot("DirectionChanged", true);
-            } else {
-                player.set_slot("DirectionChanged", false);
-            }
-        }
+        update_player_direction_slots(
+            &mut player,
+            facing,
+            maybe_falling,
+            &mut current_direction,
+            &mut old_direction,
+        );
     }
 }
 
-// SerpentRing/FrenziedAttack slot setting moved to passive animation slot aggregator
+fn update_player_direction_slots(
+    player: &mut ScriptPlayer<SpriteAnimation>,
+    facing: &Facing,
+    maybe_falling: Option<&Falling>,
+    current_direction: &mut Local<bool>,
+    old_direction: &mut Local<bool>,
+) {
+    **old_direction = **current_direction;
+
+    // If wall sliding, defer flip control to wall-slide logic.
+    if is_wall_sliding(maybe_falling) {
+        set_direction_changed_slot(player, **old_direction, **current_direction);
+        return;
+    }
+
+    // Use the facing direction as-is for non-wall-slide cases.
+    set_direction_slots(player, facing);
+    **current_direction = matches!(facing, Facing::Right);
+
+    // Simple change detection for DirectionChanged slot.
+    set_direction_changed_slot(player, **old_direction, **current_direction);
+}
+
+fn is_wall_sliding(maybe_falling: Option<&Falling>) -> bool {
+    maybe_falling
+        .map(|falling| falling.wall_slide.is_some())
+        .unwrap_or(false)
+}
+
+fn set_direction_changed_slot(
+    player: &mut ScriptPlayer<SpriteAnimation>,
+    old_direction: bool,
+    current_direction: bool,
+) {
+    player.set_slot("DirectionChanged", old_direction != current_direction);
+}
 
 fn xp_orb_animation_handler(
-    mut xp_events: EventReader<XpOrbPickup>,
+    xp_events: MessageReader<XpOrbPickup>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
 ) {
     let xp_event_occurred = !xp_events.is_empty();
@@ -108,12 +128,11 @@ fn xp_orb_animation_handler(
 }
 
 fn player_damage_animation_handler(
-    mut damage_events: EventReader<DamageInfo>,
+    mut damage_events: MessageReader<DamageInfo>,
     mut gfx_query: Query<&mut ScriptPlayer<SpriteAnimation>, With<PlayerGfx>>,
     player_query: Query<(), With<crate::game::player::Player>>,
 ) {
     // Only set the Damaged slot when the PLAYER entity is the damage TARGET.
-    // Previously, this fired on any damage in the game and would misfire on enemy hits.
     let mut player_was_damaged = false;
     for dmg in damage_events.read() {
         if player_query.get(dmg.target).is_ok() {

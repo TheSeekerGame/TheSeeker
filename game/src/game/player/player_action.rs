@@ -1,9 +1,12 @@
 //! Player input action definitions and default bindings.
 //!
-//! Also provides a helper system to track the last non-zero horizontal input.
+//! Also resolves the player's effective horizontal movement/facing intent.
 use leafwing_input_manager::prelude::*;
 use theseeker_engine::input::InputManagerPlugin;
+use theseeker_engine::time::GameTime;
 
+use crate::game::gentstate::Facing;
+use crate::game::player::states::HorizontalInputIntent;
 use crate::prelude::*;
 
 pub struct PlayerActionPlugin;
@@ -13,7 +16,7 @@ impl Plugin for PlayerActionPlugin {
         app.add_plugins(InputManagerPlugin::<PlayerAction>::default());
         app.add_systems(
             crate::GameTickUpdate,
-            track_last_move_dir
+            resolve_horizontal_input_intent
                 .in_set(crate::game::player::PlayerStateSet::Input),
         );
     }
@@ -32,11 +35,11 @@ pub enum PlayerAction {
     Skill4, // Fourth equipped skill
     Skill5, // Fifth equipped skill (Battery Pack)
     Fall,
-    SwapCombatStyle,
     SwapMeleeWeapon,
     Interact,
     ToggleControlOverlay,
     TogglePassiveInventory,
+    DebugUnlockAllProgression,
 }
 
 impl PlayerAction {
@@ -59,12 +62,6 @@ impl PlayerAction {
             (Self::Skill4, KeyCode::Semicolon),
             (Self::Skill5, KeyCode::Digit5),
             (Self::Skill5, KeyCode::Quote),
-            (Self::SwapCombatStyle, KeyCode::KeyH),
-            (
-                Self::SwapCombatStyle,
-                KeyCode::Backquote,
-            ),
-            (Self::SwapMeleeWeapon, KeyCode::KeyG),
             (Self::Interact, KeyCode::KeyF),
             (
                 Self::ToggleControlOverlay,
@@ -73,6 +70,10 @@ impl PlayerAction {
             (
                 Self::TogglePassiveInventory,
                 KeyCode::KeyM,
+            ),
+            (
+                Self::DebugUnlockAllProgression,
+                KeyCode::Digit0,
             ),
         ])
         .with_axis(Self::Move, VirtualAxis::ad())
@@ -100,14 +101,6 @@ impl PlayerAction {
             ),
             (Self::Skill3, GamepadButton::South),
             (Self::Skill4, GamepadButton::East),
-            (
-                Self::SwapCombatStyle,
-                GamepadButton::LeftTrigger,
-            ),
-            (
-                Self::SwapMeleeWeapon,
-                GamepadButton::RightTrigger,
-            ),
             (Self::Interact, GamepadButton::North),
             (
                 Self::ToggleControlOverlay,
@@ -117,28 +110,171 @@ impl PlayerAction {
     }
 }
 
-/// Maintain `LastMoveDir` as the last non-zero horizontal move input.
-fn track_last_move_dir(
+/// Resolve movement and facing so horizontal motion can stay independent from facing
+/// when the player presses the opposite direction while continuing to hold the original.
+fn resolve_horizontal_input_intent(
+    keyboard: Res<ButtonInput<KeyCode>>,
+    panels: crate::ui::OpenPanels,
+    time: Res<GameTime>,
     mut query: Query<
         (
-            &ActionState<PlayerAction>,
-            Option<&mut super::states::LastMoveDir>,
-            Entity,
+            &mut ActionState<PlayerAction>,
+            &mut HorizontalInputIntent,
+            &mut super::states::LastMoveDir,
+            &mut Facing,
+            Option<&super::autoaim::RangedAttackFacingLock>,
+            Option<&crate::game::actors::action::ActionFacing>,
         ),
         With<super::Player>,
     >,
-    mut commands: Commands,
 ) {
-    for (action_state, maybe_last, entity) in query.iter_mut() {
-        let dir = action_state.clamped_value(&PlayerAction::Move).signum();
-        if dir != 0.0 {
-            if let Some(mut last) = maybe_last {
-                last.0 = dir;
-            } else {
-                commands
-                    .entity(entity)
-                    .insert(super::states::LastMoveDir(dir));
-            }
+    let modal_ui_open = panels.any();
+
+    for (
+        mut action_state,
+        mut intent,
+        mut last_move_dir,
+        mut facing,
+        facing_lock,
+        action_facing,
+    ) in query.iter_mut() {
+        let locked_facing = action_facing.map(crate::game::actors::action::ActionFacing::facing)
+            .or_else(|| facing_lock.and_then(|lock| lock.active_facing(time.tick())));
+
+        if modal_ui_open {
+            action_state.reset(&PlayerAction::Jump);
+            action_state.reset(&PlayerAction::Fall);
+            action_state.reset(&PlayerAction::Move);
+            action_state.reset(&PlayerAction::Interact);
+            *intent = HorizontalInputIntent {
+                movement: 0.0,
+                facing: None,
+            };
+            apply_resolved_facing(&mut facing, locked_facing, None);
+            continue;
         }
+
+        let axis_movement = action_state.clamped_value(&PlayerAction::Move);
+        let left_held = is_pressed(
+            &keyboard,
+            &[KeyCode::KeyA, KeyCode::ArrowLeft],
+        );
+        let right_held = is_pressed(
+            &keyboard,
+            &[KeyCode::KeyD, KeyCode::ArrowRight],
+        );
+        let left_just_pressed = is_just_pressed(
+            &keyboard,
+            &[KeyCode::KeyA, KeyCode::ArrowLeft],
+        );
+        let right_just_pressed = is_just_pressed(
+            &keyboard,
+            &[KeyCode::KeyD, KeyCode::ArrowRight],
+        );
+
+        let previous_intent = *intent;
+        let fallback_movement = fallback_horizontal_movement(
+            previous_intent,
+            last_move_dir.0,
+            axis_movement,
+            *facing,
+        );
+        let fallback_facing = previous_intent.facing.unwrap_or(*facing);
+
+        *intent = match (left_held, right_held) {
+            (true, false) => HorizontalInputIntent {
+                movement: -1.0,
+                facing: Some(Facing::Left),
+            },
+            (false, true) => HorizontalInputIntent {
+                movement: 1.0,
+                facing: Some(Facing::Right),
+            },
+            (true, true) => both_directions_intent(
+                left_just_pressed,
+                right_just_pressed,
+                fallback_movement,
+                fallback_facing,
+            ),
+            (false, false) => axis_horizontal_intent(axis_movement),
+        };
+
+        if intent.movement != 0.0 {
+            last_move_dir.0 = intent.movement.signum();
+        }
+        apply_resolved_facing(&mut facing, locked_facing, intent.facing);
     }
+}
+
+fn apply_resolved_facing(
+    facing: &mut Facing,
+    locked_facing: Option<Facing>,
+    intent_facing: Option<Facing>,
+) {
+    if let Some(locked_facing) = locked_facing {
+        *facing = locked_facing;
+        return;
+    }
+
+    if let Some(intent_facing) = intent_facing {
+        *facing = intent_facing;
+    }
+}
+
+fn fallback_horizontal_movement(
+    previous_intent: HorizontalInputIntent,
+    last_move_dir: f32,
+    axis_movement: f32,
+    facing: Facing,
+) -> f32 {
+    [previous_intent.movement, last_move_dir, axis_movement]
+        .into_iter()
+        .find(|movement| *movement != 0.0)
+        .map(f32::signum)
+        .unwrap_or_else(|| facing.direction())
+}
+
+fn both_directions_intent(
+    left_just_pressed: bool,
+    right_just_pressed: bool,
+    fallback_movement: f32,
+    fallback_facing: Facing,
+) -> HorizontalInputIntent {
+    match (left_just_pressed, right_just_pressed) {
+        (true, false) => HorizontalInputIntent {
+            movement: 1.0,
+            facing: Some(Facing::Left),
+        },
+        (false, true) => HorizontalInputIntent {
+            movement: -1.0,
+            facing: Some(Facing::Right),
+        },
+        _ => HorizontalInputIntent {
+            movement: fallback_movement,
+            facing: Some(fallback_facing),
+        },
+    }
+}
+
+fn axis_horizontal_intent(axis_movement: f32) -> HorizontalInputIntent {
+    HorizontalInputIntent {
+        movement: axis_movement,
+        facing: facing_from_axis(axis_movement),
+    }
+}
+
+fn facing_from_axis(axis_movement: f32) -> Option<Facing> {
+    match axis_movement.total_cmp(&0.0) {
+        std::cmp::Ordering::Greater => Some(Facing::Right),
+        std::cmp::Ordering::Less => Some(Facing::Left),
+        std::cmp::Ordering::Equal => None,
+    }
+}
+
+fn is_pressed(keyboard: &ButtonInput<KeyCode>, keys: &[KeyCode]) -> bool {
+    keys.iter().copied().any(|key| keyboard.pressed(key))
+}
+
+fn is_just_pressed(keyboard: &ButtonInput<KeyCode>, keys: &[KeyCode]) -> bool {
+    keys.iter().copied().any(|key| keyboard.just_pressed(key))
 }

@@ -1,3 +1,13 @@
+[asset]
+key = "anim.spider2.Defense"
+image = "animations/spider/big/tier2/Defence__r1c5__48x48.png"
+
+[playback]
+start = 1
+end = 5
+ticks_per_frame = 8
+mode = "hold"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"
@@ -7,12 +17,6 @@ frame_max = 5
 frame_start = 1
 
 # keep looping final frame
-[[script]]
-run_at_frame = 5
-action = "SetFrameNext"
-frame_index = 5
-
-# Support left/right flipping
 [[script]]
 run_on_slot_enable = "DirectionLeft"
 action = "SetSpriteFlip"

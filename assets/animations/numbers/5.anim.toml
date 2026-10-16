@@ -1,3 +1,7 @@
+[asset]
+key = "anim.numbers.5"
+image = "animations/numbers/5__r1c4__3x10.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

@@ -1,3 +1,7 @@
+[asset]
+key = "anim.player.Death"
+image = "animations/player/movement/DeathSheet__r1c7__48x48.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

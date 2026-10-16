@@ -1,3 +1,7 @@
+[asset]
+key = "anim.spider.Death"
+image = "animations/spider/big/tier1/Death__r1c7__90x90.png"
+
 [settings]
 time_base = "Relative"
 tick_quant = "8"

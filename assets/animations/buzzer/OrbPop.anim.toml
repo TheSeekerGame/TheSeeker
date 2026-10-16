@@ -1,0 +1,11 @@
+[asset]
+key = "anim.buzzer.OrbPop"
+image = "animations/buzzer/OrbPop__r1c4__48x48.png"
+
+[settings]
+time_base = "Relative"
+tick_quant = "8"
+ticks_per_frame = 8
+frame_min = 1
+frame_max = 4
+frame_start = 1
