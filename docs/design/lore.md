@@ -6,9 +6,9 @@ This page sketches the world and the questions it explores. It deliberately leav
 
 ## The Seekers
 
-Seekers are explorers in the service of **Theorem**, a vast organization devoted to discovering and formalizing knowledge across the universe. Seeker is a role, not a species: humans, aliens, and robots alike can become one.
+Seekers are explorers in the service of **Theorem**, a vast organization devoted to discovering and formalizing knowledge across the universe. Seeker is a role, not a species: humans, aliens, and machines alike can become one. The seekers of [SEEKER NET](open-brand.md#seeker-net-robinhood-chain), for example, are tiny, computer-like robots.
 
-What Seekers chase are **permutations of existence**. Being a dog is one kind of existence; riding a bike, exploring Mars, and eating ice cream are others. Combine them and you get something new: a dog riding a bike on Mars while eating ice cream. Seekers crave these combinations. They have already found the familiar ingredients, so they travel ever farther in search of strange ones, the kind that make every earlier combination feel small.
+What Seekers chase are **permutations of existence**. Seeing ultraviolet light is one kind of existence. Thinking as a swarm is another, and so is living beneath an ocean of ice. Combine them and you get something no being has felt before: a swarm-mind drifting under the ice, perceiving colors no eye has ever seen. Seekers crave these combinations. They have already found the familiar ingredients, so they travel ever farther in search of strange ones, the kind that make every earlier combination feel small.
 
 A few ideas shape the life of a Seeker:
 
