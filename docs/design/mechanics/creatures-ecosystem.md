@@ -1,25 +1,41 @@
 # Creatures and Ecosystem
 
-creatures are divided into those 3 overall categories:
-1) Herbivores
-2) Carnivores
-3) Scavengers
+The planet's caves are full of life that grows stranger with depth. Creatures should feel like part of a living ecosystem rather than a list of enemies, and the planet itself should feel like it's paying attention to the Seeker.
 
-**Herbivores** are mostly limited to specific 'oasis' areas in the caves where heat and water from geysers causes vegetation to grow which they can eat.
-One problem for them is that they are obvious targets in those areas, so they usually go there only briefly to eat and then hide in other areas of the cave.
-They attack the player only defensively and try to run away.
-Unless they have cubs, then they will attack actively.
+## Creatures today
 
-**Carnivores** patrol large areas looking for Herbivores, but most often they sit near the oasis areas waiting for Herbivores to appear.
-They will actively attack the player whenever they get near. Their 'sight' is larger than screen size so they can spot the player from farther away and start to chase them.
-Their cubs behave the same way, and accompany parents during hunts
+| Creature | How it behaves |
+| --- | --- |
+| **Spiders** | The most common ground hunters, small and large, in three tiers of strength, with darker tundra variants deeper down. Small spiders leap and bite; large ones keep their distance and shoot. |
+| **Bats** | Four sizes, from small to huge, that patrol the air and dive at the Seeker. |
+| **Buzzers** | Deep-tundra flyers that fire bursts of projectiles. |
+| **Opi** | Deep-tundra ambushers that sit still until something comes close. |
+| **Squid** | Hopping creatures of the deep caves. |
+| **Void** | A dark pursuer that appears only when the planet is at its most hostile. |
+| **Tentacles** | Trap creatures that strike from hiding (in development). |
 
-**Scavengers** patrol large areas looking for leftover meat. They attack the player only defensively and try to run away if isolated. But they will attack actively and chase the player when in larger groups.
-The will always attack actively when they have cubs, and the cubs will also join them in attacking.
+Which creatures appear depends on depth and biome, and every population needs room to live: ground creatures need floor, flyers need open air. Defeated creatures leave materials behind, such as bat wings, and many recipes depend on them, so building toward a skill or passive means hunting in the right part of the planet.
 
-So for any level the minimum viable ecosystem requires 6 creatures.
-1) Herbivore + cub
-2) Carnivore + cub
-3) Scavenger + cub
+The caves aren't only hostile. Other travelers live down there too: the Vagrant and their yak, the Collector, the Monk, and the Exiled.
 
-There might also be additional creatures beyond this basic ecosystem, like 'bats' that attack everything that gets near, or 'trap creatures' that just sit idle until something gets near and then strike
+## The planet's immune response
+
+The planet notices what the Seeker does. Its **immunity** rises as the Seeker kills and can ease off again, and the HUD shows its current level. As immunity climbs:
+
+- creature populations grow larger;
+- hidden spike patches start breaking out of the walls, changing ground you've already crossed;
+- at its peak, the Void starts hunting the Seeker.
+
+Every fight changes the world a little. A careful, quiet Seeker meets a different planet from a reckless one.
+
+## Ecology: where it's heading
+
+The original design organizes life around ecological roles, giving behavior a reason beyond attacking the player:
+
+- **Herbivores** gather at oases where geothermal heat and water let plants grow, eat quickly, and retreat. They fight only to defend themselves, unless they're protecting their young.
+- **Carnivores** patrol widely and wait near the oases for prey. They spot the Seeker from far away and give chase, and their young hunt alongside them.
+- **Scavengers** search for leftovers. Alone they flee; in groups, or with young to protect, they grow bold.
+
+Beyond that core sit creatures like bats that attack anything nearby, and trap creatures that wait motionless until something comes close.
+
+The bigger direction is **adaptation**. Creatures should evolve in response to how the Seeker plays. Lean on fire, and the planet may answer with thicker hides, or with creatures that spit water to put it out. Those new forms become learnable in turn, and how a creature is defeated changes what it leaves behind: a bat frozen solid or blown apart should drop something different from one cut down normally. The planet and the Seeker end up shaping each other, round after round.

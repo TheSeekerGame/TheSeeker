@@ -1,29 +1,43 @@
 # Gameplay and Mechanics
 
-- [Active Skills](active-skills.md)
-- [Passive Skills](passive-skills.md)
-- [Platforming](platforming.md)
-- [Creatures and Ecosystem](creatures-ecosystem.md)
+The Seeker combines the exploration and movement of a metroidvania (think Hollow Knight) with the interlocking builds of an action RPG (Diablo, Risk of Rain) and the freedom of a sandbox. Underneath all three runs the idea at the heart of the [lore](../lore.md): **permutations**. Every creature, material, skill, and choice should be able to combine with the others into something new, and the world should respond to how you play.
 
-The overall idea is to have a game that combines open sandboxy exploration with intense combat and itemization mechanics
+- [Active Skills](active-skills.md): weapons, the skill toolbar, and abilities learned from creatures
+- [Passive Skills](passive-skills.md): equipment that bends your stats and rules
+- [Platforming](platforming.md): how the Seeker moves
+- [Creatures and Ecosystem](creatures-ecosystem.md): the planet's life and how the planet fights back
 
+Each page separates what the game does today from where it is heading.
 
-**EXPLORATION**
+## The core loop
 
-On the exploration front this can be seen as a combination of the overall feel of a sandbox game (Red Dead Redemption style, but in a 2D setting) with some Metroidvania mechanics (similar to Hollow Knight)
-The metroidvania mechanics here are mostly the platformer style gameplay with the typical 'teasing of certain locked areas' where the player needs to get some item or ability to access those areas.
-The locked areas don't have as much of a gamplay significance as in Metroidvanias, instead they are used more as just a way to motivate the player to explore.
-This motivation will be the core driver of progress in this game. Beyond the planet's mysterious pull toward its depths, there won't be a quest log telling the player what to do next.
-Instead the player explores the deep alien cave systems mostly out of curiosity and the will to experience more of the hidden beauty of the planet.
-Therefore various mechanics need to really prioritize feeding this curiosity to make this design work.
+1. **Descend.** Explore procedurally generated caves that grow warmer, stranger, and more dangerous with depth, from icy upper caves into tundra below.
+2. **Fight and gather.** Defeat creatures for experience and drops, and harvest plants, berries, and ore from the caves.
+3. **Return to a capsule.** Capsules are your shelter. Store materials safely, spend Essence to research new recipes from what you carry, and craft skills, weapons, and passives.
+4. **Build.** Equip skills on the toolbar and passives in your inventory, and combine them into a playstyle.
+5. **Push deeper**, and the planet pushes back.
 
+## Exploration
 
-**COMBAT AND ITEMIZATION**
+There is no quest log. The planet's pull draws the Seeker downward, and curiosity does the rest. Hidden rooms sit behind breakable walls, and familiar ground can change while you're away.
 
-Combat and itemization take a lot of inspiration from games like Diablo and Risk of Rain.
-On the build/combat side that means prioritizing synergy - giving player a wide range of skills and items that can all interact with each other in interesting ways, while trying to minimize incompatible combinations. This also ties back into the idea of curiosity: the player is not only driven by trying to explore the world, but also by trying to explore the various *ways of exploring* this world, in the form of countless different playstyles.
-This is also tied into itemization, where item drops are specific to certain creatures/species and so that in turn motivates the player to explore various areas of the map to kill those creatures to be able to obtain their items which in turn can be used in crafting to enable new build combinations. 🔄 
-At the same time the various creatures have different strengths and weaknesses, so the player might need to swap builds in preparation for fighting in different areas.
-For instance creatures in cold areas might be more vulnerable to fire builds, while creatures in magma biomes might be more vulnerable to cold builds.
-Item drops will also be creature-dependent. This creates a potential gameplay scenario where for instance you might need to go kill some fiery creatures to get fire items, and then those items will allow you to explore some icy area better and vice-versa. Again incentivizing exploration and curiosity.
-So overall there's a nice feedback loop  within this design where all the parts synergize to incentivise exploration and curiosity, both in the area of mechanics and in the area of actual world exploration.
+The planet is hostile to Seekers. Their **Alignment** drains whenever they're away from a capsule or the tether network, and once it runs out they start taking damage that grows the longer they stay out. Tether nodes extend that safety outward, so the expedition literally grows from one shelter to the next, and portable tents give a place to rest out in the field.
+
+Death costs what's in your backpack. Everything stored in capsules, along with your skills, passives, weapons, and discovered recipes, carries over.
+
+## Combat and builds
+
+Combat is fast and fluid. Attacking is meant to flow with movement rather than interrupt it, and skills are meant to synergize with very few incompatible combinations. The goal is countless distinct playstyles, so players explore the different *ways of exploring* the world as much as the world itself.
+
+Creatures drop specific materials, so a recipe sends you to particular parts of the planet, and what you craft there opens up others. Fire and ice builds, stealth and backstabs, critical-hit chains, and deployed devices all pull a build in different directions.
+
+## Permutations: where it's heading
+
+The long-term direction pushes the loop toward open-ended recursion:
+
+- **Learn what you meet.** Every creature's abilities, and eventually its forms, become learnable. The game already copies a few: the spider's shot and the bat's dive are player skills.
+- **The planet adapts to you.** Creatures evolve in response to your playstyle, and their new forms become learnable in turn.
+- **Materials remember.** How you defeat something changes what it leaves behind, and with it what you can craft.
+- **The world changes.** The caves themselves shift and harden as the planet reacts to the Seeker.
+
+These are directions rather than shipped features. The pages that follow describe where each one stands.
