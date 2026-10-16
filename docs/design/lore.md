@@ -71,4 +71,6 @@ These questions are left open on purpose. Any game, story, campaign, or artwork 
 - When does structure support life, and when does it become a cage?
 - What do the planet's inhabitants know that Theorem doesn't?
 
+None of this is required. The lore is an open invitation, not a rulebook, so take from it whatever you like and leave the rest. You don't have to explore these questions or make anything resembling a metroidvania. Build a racing game across the icy surface, a cozy farming sim in the warm caves, a puzzle game about the Codex, or something no one has thought of yet. Borrow a single idea, such as the frozen planet, Theorem, or the 12-based tuning, and build something completely different on top of it.
+
 To build your own work in this universe, see [Open Brand](open-brand.md).
