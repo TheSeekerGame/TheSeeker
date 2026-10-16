@@ -47,7 +47,7 @@ The deepest layer of The Seeker is inspired by the idea that mathematics could b
 Everything is tuned around one fundamental number, **12**:
 
 - Standard animations run at 12 frames per second.
-- Music is built on a 48 Hz reference, two octaves above the animation rate, using a tuning of pure mathematical ratios.
+- Music is built on a 48 Hz fundamental, two octaves above the animation rate. Every pitch is 48 Hz times a ratio whose denominator is a power of two, so every note belongs to the fundamental's harmonic series. See [Music and Tuning](../authoring/music.md).
 - The rhythm is 90 BPM, the same fundamental several octaves lower.
 - Tiles are 6×6 pixels, and the player is 12 pixels tall.
 

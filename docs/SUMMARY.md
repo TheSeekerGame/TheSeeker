@@ -22,3 +22,4 @@
         - [Script Format Reference](authoring/script-reference.md)
     - [Animations](authoring/animations.md)
         - [Animation Format Reference](authoring/animation-reference.md)
+    - [Music and Tuning](authoring/music.md)

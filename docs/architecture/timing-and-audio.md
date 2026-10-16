@@ -20,7 +20,7 @@ The game uses Bevy 0.19.1 with a custom CPAL output mixer. Bevy registers and lo
 
 ## Define musical relationships once
 
-The musical grid (`engine/src/audio/transport.rs`) defines these relationships:
+The musical grid (`engine/src/audio/transport.rs`) defines these relationships. Every rate is 48 Hz times a power of two, the same rule that defines valid pitches ([Music and Tuning](../authoring/music.md)):
 
 | Quantity | Frequency | Ticks | Sample frames at 48 kHz |
 | --- | ---: | ---: | ---: |

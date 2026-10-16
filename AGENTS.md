@@ -180,7 +180,7 @@ The single high-level design document is [actors.md](docs/architecture/actors.md
 
 ### Asset registration and animation authoring
 
-Authoring guides and format references live in `docs/authoring/`: `assets.md`, `scripts.md`, `script-reference.md`, `animations.md`, and `animation-reference.md`. Keep examples consistent with both asset parsing and runtime behavior.
+Authoring guides and format references live in `docs/authoring/`: `assets.md`, `scripts.md`, `script-reference.md`, `animations.md`, `animation-reference.md`, and `music.md` (the 48 Hz tuning rule, with the `SeekerTuning48hz.tun` keyboard mapping beside it). Keep examples consistent with both asset parsing and runtime behavior.
 
 - `game/src/assets.rs` recursively scans `assets/animations/` for `.anim.toml` files. An `[asset]` block declares `key` or `keys` and an `image` path relative to `assets/`. Registration creates the animation key plus `.image` and `.atlas` keys.
 - Sprite-sheet PNG filenames encode atlas layout: `Name__r1c15__90x90.png` means 1 row, 15 columns, and 90×90-pixel cells. This defines atlas capacity, not the played frame range. `engine/src/assets/animation.rs` implements the parser.
@@ -282,7 +282,7 @@ All project documentation is GitHub-flavored Markdown under `docs/`. It renders 
 | [docs/architecture/actors.md](docs/architecture/actors.md) | The single enemy/player behavior design document |
 | [docs/architecture/timing-and-audio.md](docs/architecture/timing-and-audio.md) | The single timing, audio, animation-cadence, and presentation design document |
 | [docs/architecture/level-generation.md](docs/architecture/level-generation.md) | The single level-generation design, authoring, and tool document |
-| `docs/authoring/` | Asset guidelines and the script and animation format references |
+| `docs/authoring/` | Asset guidelines, the script and animation format references, and the music tuning rule and file |
 
 - Every change updates the documents it affects in the same change, design pages included (see [Working rules](#working-rules)).
 - Extend the existing document for a subsystem; do not add overlapping specs, progress notes, or hand-off documents.
