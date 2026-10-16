@@ -33,7 +33,7 @@ The first build compiles Bevy and takes a while; later builds are incremental. T
 - Preserve gameplay tuning, movement units, timing, collision behavior, and asset bindings unless changing them is the point of your change. A refactor must not quietly rebalance the game.
 - Keep generic facilities in `engine/` and game rules, enemies, abilities, and combat policy in `game/`.
 - Match the style of the surrounding code. Do not run `cargo fmt`, and turn off format-on-save for this repository: the codebase is not formatted with rustfmt, so it would rewrite unrelated code.
-- Update the documentation that describes what you changed, including the [AGENTS.md](AGENTS.md) source map when you add, move, or remove files under `game/` or `engine/`.
+- Update the documentation in the same pull request: anything in `README.md`, `CONTRIBUTING.md`, `AGENTS.md`, or `docs/` that your change makes inaccurate or outdated, including the [AGENTS.md](AGENTS.md) source map when you add, move, or remove files under `game/` or `engine/`.
 - Follow the [asset guidelines](docs/authoring/assets.md) for new art and audio.
 
 ## Verify

@@ -14,7 +14,7 @@ Use this file for project constraints and navigation. Source code and authored a
 - Resolve routine implementation choices from the code and the user's instructions. Ask when a missing design decision materially changes the requested behavior; continue independent work while clarifying.
 - Preserve unrelated working files. Investigate both sides of subsystem contracts: producer and consumer, collision memberships and filters, requested and committed playback, reserved and consumed inventory.
 - Keep this guide's source map and invariants accurate when adding, removing, moving, or significantly changing files under `game/` or `engine/`. Update the relevant subsystem entry; add a specific entry for a new responsibility or important entry point. Do not grow an exhaustive list of every helper and content module.
-- Keep `docs/` accurate when a change alters behavior a page describes. See [Documentation](#documentation) for where each kind of document belongs.
+- **Update the documentation after every change.** Before finishing, check `README.md`, `CONTRIBUTING.md`, this file, and every page under `docs/` for anything the change made inaccurate, incomplete, or outdated, and fix it in the same change. A change is not done while any document still describes the previous behavior or design. See [Documentation](#documentation) for where each kind of document belongs.
 
 ## Build and verification
 
@@ -174,6 +174,7 @@ The single high-level design document is [actors.md](docs/architecture/actors.md
 - `PlayerGfx::base_offset` owns the resting sprite anchor. Releasing an execution restores that anchor only when the execution still owns presentation; temporary action offsets do not become the resting offset.
 - Temporary melee hitboxes and overrides belong to their execution. Launched projectiles and deployed objects have independent lifetimes. Preserve each actor's hit-stop, freeze, knockback, and facing rules.
 - Instant uses do not occupy the foreground slot. Animated deployment reserves backpack stock at activation, validates placement again at the release cue, consumes once on release, and refunds a pending reservation on interruption. The deployment runtime is available for content bindings; current instant items do not automatically gain deployment animations.
+- Apart from the starting kit (weapon attack and Tether Node) and crafted deployable items, every player ability is copied from a creature and presents that creature's animation. Add a new ability by designing the creature that uses it, then binding the player's copy to the creature's mechanic and artwork. The current build still unlocks Dash, Whirl, Stealth, Dash Strike, and Flicker Strike through the experience-based Adaptation system in `game/src/game/player/progression.rs`; that system is being removed, so do not extend it.
 - Copied actions may have different motion, timing, targeting, damage, and presentation. Player down-dash uses the shared bat lunge with its own parameters and the `anim.player.DownwardDash` binding. Inspect the bound image when identifying artwork; filenames and weapon-related names alone do not establish its contents.
 - Resolved actor/action definitions pin their dependencies for an execution. Catalog publication validates edits and retains the last valid catalog on failure. Runtime adoption boundaries and on-disk file watching are separate concerns; verify asset delivery when diagnosing reload behavior.
 
@@ -283,6 +284,7 @@ All project documentation is GitHub-flavored Markdown under `docs/`. It renders 
 | [docs/architecture/level-generation.md](docs/architecture/level-generation.md) | The single level-generation design, authoring, and tool document |
 | `docs/authoring/` | Asset guidelines and the script and animation format references |
 
+- Every change updates the documents it affects in the same change, design pages included (see [Working rules](#working-rules)).
 - Extend the existing document for a subsystem; do not add overlapping specs, progress notes, or hand-off documents.
 - Add each new page to `docs/SUMMARY.md`. Link between pages with relative `.md` links and refer to source files by repository path in backticks. Relative links that leave `docs/` break in the built site, so link root files through their GitHub URL.
 - Check formats against their Rust types before treating a documented example as a runtime contract, and update the page when they differ.

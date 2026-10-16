@@ -7,7 +7,7 @@ Movement should feel precise, responsive, and expressive, in the spirit of Hollo
 - **Variable jump height.** Release the jump button early for a short hop; hold it for a full jump.
 - **Coyote time.** You can still jump for a moment after running off a ledge.
 - **Wall slides and wall jumps.** Slide down walls and kick off them. Touching a wall restores your jump, so you can climb shafts by bouncing between walls.
-- **Dash.** An early Adaptation unlock that bursts you past danger. Dash Strike dives straight down through enemies.
+- **Dash.** Bursts you past danger. Like every ability outside the starting kit, it's copied from a creature that uses it. Dash Strike dives straight down through enemies.
 - **Extra jumps.** The Rabbit's Foot passive adds a double jump.
 - **Capsule lifts.** Jump inside a capsule and drop through its hatch to ride the lift down.
 

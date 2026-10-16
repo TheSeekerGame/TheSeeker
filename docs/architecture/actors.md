@@ -20,7 +20,7 @@ Engine code provides playback, collision, and the 96 Hz simulation clock. Game c
 
 An action receives its owner, targeting information, damage attribution, motion parameters, and presentation binding. Its execution should not depend on whether input or AI selected it.
 
-Spider shots and player Spit share projectile execution. Bat dives and player downward dash share lunge execution. Their speed, direction, release timing, cancellation, damage, and artwork can differ through typed definitions. Copying an enemy ability means reusing the mechanic while allowing player-specific tuning.
+Spider shots and player Spit share projectile execution. Bat dives and player downward dash share lunge execution. Their speed, direction, release timing, cancellation, damage, and artwork can differ through typed definitions. Copying an enemy ability means reusing the mechanic while allowing player-specific tuning. Apart from the starting kit and crafted deployable items, every player ability is copied from a creature: design the creature that uses it first, then bind the player's copy to the creature's mechanic and the creature's animation.
 
 Compose repeated behavior, such as Buzzer's projectile burst, through action parameters. Keep distinct algorithms explicit instead of building a general-purpose gameplay scripting language.
 

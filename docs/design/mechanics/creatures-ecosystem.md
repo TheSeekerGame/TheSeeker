@@ -14,7 +14,9 @@ The planet's caves are full of life that grows stranger with depth. Creatures sh
 | **Void** | A dark pursuer that appears only when the planet is at its most hostile. |
 | **Tentacles** | Trap creatures that strike from hiding (in development). |
 
-Which creatures appear depends on depth and biome, and every population needs room to live: ground creatures need floor, flyers need open air. Defeated creatures leave materials behind, such as bat wings, and many recipes depend on them, so building toward a skill or passive means hunting in the right part of the planet.
+Which creatures appear depends on depth and biome, and every population needs room to live: ground creatures need floor, flyers need open air. Defeated creatures leave materials behind, such as bat wings, and many recipes depend on them, so building toward a device or passive means hunting in the right part of the planet.
+
+Creatures are also where the Seeker's abilities come from. Apart from the starting kit and crafted devices, every ability is copied from a creature that uses it, and plays that creature's animation. A new player ability starts life as a new creature. See [Active Skills](active-skills.md).
 
 The caves aren't only hostile. Other travelers live down there too: the Vagrant and their yak, the Collector, the Monk, and the Exiled.
 
@@ -38,4 +40,4 @@ The original design organizes life around ecological roles, giving behavior a re
 
 Beyond that core sit creatures like bats that attack anything nearby, and trap creatures that wait motionless until something comes close.
 
-The bigger direction is **adaptation**. Creatures should evolve in response to how the Seeker plays. Lean on fire, and the planet may answer with thicker hides, or with creatures that spit water to put it out. Those new forms become learnable in turn, and how a creature is defeated changes what it leaves behind: a bat frozen solid or blown apart should drop something different from one cut down normally. The planet and the Seeker end up shaping each other, round after round.
+The bigger direction is **adaptation**. Creatures should evolve in response to how the Seeker plays. Lean on fire, and the planet may answer with thicker hides, or with creatures that spit water to put it out. The Seeker can then copy those new abilities in turn, and how a creature is defeated changes what it leaves behind: a bat frozen solid or blown apart should drop something different from one cut down normally. The planet and the Seeker end up shaping each other, round after round.
