@@ -1,16 +1,21 @@
 [asset]
 key = "anim.objects.Tether"
-image = "animations/objects/Tether__r1c5__48x48.png"
+image = "animations/objects/Tether__r1c24__48x48.png"
+
+# Frames 1-8 plant the node: the stake strikes, roots creep out, the spine rises
+# and the cage opens around the core. Frames 9-23 breathe once every 1.25 seconds,
+# the period of the network's heartbeat.
+[playback]
+start = 1
+end = 23
+loop_start = 9
+ticks_per_frame = 8
+mode = "loop"
 
 [settings]
 time_base = "Relative"
 tick_quant = "8"
 ticks_per_frame = 8
 frame_min = 1
-frame_max = 5
+frame_max = 23
 frame_start = 1
-
-[[script]]
-run_at_frame = 5
-action = "SetFrameNext"
-frame_index = 5

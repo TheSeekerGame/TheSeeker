@@ -42,10 +42,14 @@ pub(crate) enum CapsuleRecipeId {
     FlamingHeart,
     Permutator,
     PrimeSygil,
+    ShadowCloak,
+    Prism,
+    PulseEcho,
+    ProtectiveSpirit,
 }
 
 impl CapsuleRecipeId {
-    pub const ALL: [Self; 16] = [
+    pub const ALL: [Self; 20] = [
         Self::BowBundle,
         Self::Arrows,
         Self::TetherNode,
@@ -62,6 +66,10 @@ impl CapsuleRecipeId {
         Self::FlamingHeart,
         Self::Permutator,
         Self::PrimeSygil,
+        Self::ShadowCloak,
+        Self::Prism,
+        Self::PulseEcho,
+        Self::ProtectiveSpirit,
     ];
 }
 
@@ -137,7 +145,7 @@ macro_rules! ingredients {
     };
 }
 
-pub(crate) const CAPSULE_RECIPES: [CapsuleRecipe; 16] = [
+pub(crate) const CAPSULE_RECIPES: [CapsuleRecipe; 20] = [
     CapsuleRecipe {
         id: CapsuleRecipeId::BowBundle,
         title: "Bow + 100 Arrows",
@@ -293,6 +301,39 @@ pub(crate) const CAPSULE_RECIPES: [CapsuleRecipe; 16] = [
         icon_path: "items/passives/PrimeSygil.png",
         output: PlayerItemGrant::Passive(Passive::PrimeSygil),
         ingredients: ingredients!((BatWing, 4), (IceShard, 2), (Ore3, 1)),
+    },
+    // The deep creatures' materials each lead to one passive; no other recipe needs them.
+    CapsuleRecipe {
+        id: CapsuleRecipeId::ShadowCloak,
+        title: "Shadow Cloak",
+        description: "Strikes keep you hidden",
+        icon_path: "items/passives/ShadowCloak.png",
+        output: PlayerItemGrant::Passive(Passive::ShadowCloak),
+        ingredients: ingredients!((Ink, 4), (MossFragment, 2), (Ore2, 1)),
+    },
+    CapsuleRecipe {
+        id: CapsuleRecipeId::Prism,
+        title: "Prism",
+        description: "Projectiles split in three",
+        icon_path: "items/passives/Prism.png",
+        output: PlayerItemGrant::Passive(Passive::Prism),
+        ingredients: ingredients!((AcidGland, 2), (IceShard, 2), (Ore3, 1)),
+    },
+    CapsuleRecipe {
+        id: CapsuleRecipeId::PulseEcho,
+        title: "Pulse Echo",
+        description: "Melee sends out pulses",
+        icon_path: "items/passives/PulseEcho.png",
+        output: PlayerItemGrant::Passive(Passive::PulseEcho),
+        ingredients: ingredients!((TentacleTip, 2), (BatWing, 2), (Ore2, 1)),
+    },
+    CapsuleRecipe {
+        id: CapsuleRecipeId::ProtectiveSpirit,
+        title: "Protective Spirit",
+        description: "Caps the damage of any hit",
+        icon_path: "items/passives/ProtectiveSpirit.png",
+        output: PlayerItemGrant::Passive(Passive::ProtectiveSpirit),
+        ingredients: ingredients!((NullPearl, 1), (IceShard, 2), (Ore3, 2)),
     },
 ];
 
@@ -513,6 +554,53 @@ mod tests {
         assert_eq!(materials.backpack_count(CraftMaterial::Tether), 2);
         assert_eq!(materials.storage_count(CraftMaterial::Tether), 0);
         assert_eq!(essence.get(), 0);
+    }
+
+    const DEEP_CREATURE_MATERIALS: [(CraftMaterial, CapsuleRecipeId, Passive); 4] = [
+        (CraftMaterial::Ink, CapsuleRecipeId::ShadowCloak, Passive::ShadowCloak),
+        (CraftMaterial::AcidGland, CapsuleRecipeId::Prism, Passive::Prism),
+        (CraftMaterial::TentacleTip, CapsuleRecipeId::PulseEcho, Passive::PulseEcho),
+        (CraftMaterial::NullPearl, CapsuleRecipeId::ProtectiveSpirit, Passive::ProtectiveSpirit),
+    ];
+
+    #[test]
+    fn each_deep_creature_material_leads_only_to_its_own_passive() {
+        for (material, id, _) in DEEP_CREATURE_MATERIALS {
+            let users: Vec<_> = CAPSULE_RECIPES
+                .iter()
+                .filter(|recipe| recipe.ingredients.iter().any(|ingredient| ingredient.material == material))
+                .map(|recipe| recipe.id)
+                .collect();
+            assert_eq!(users, [id], "{material:?} stays out of earlier recipes");
+        }
+    }
+
+    #[test]
+    fn deep_creature_passives_are_researched_from_their_materials_and_crafted_once() {
+        for (_, id, passive) in DEEP_CREATURE_MATERIALS {
+            let definition = recipe(id);
+            let mut materials = MaterialInventory::empty();
+            add_materials(&mut materials, definition.ingredients);
+            let mut knowledge = CraftingKnowledge::default();
+            let mut essence = Essence::default();
+            let _ = essence.grant(CAPSULE_ACTION_ESSENCE_COST);
+            assert_eq!(research_recipes(&mut knowledge, &materials, &mut essence), CapsuleActionResult::Completed);
+            assert!(knowledge.is_discovered(id));
+
+            let mut skills = SkillInventory::default();
+            let mut passives = Passives::default();
+            let mut weapons = WeaponInventory::default();
+            assert_eq!(
+                craft_recipe(id, &knowledge, &mut materials, &mut skills, &mut passives, &mut weapons),
+                CapsuleActionResult::Completed
+            );
+            assert!(definition.output.is_owned(&passives, &weapons), "{passive:?} is granted");
+            add_materials(&mut materials, definition.ingredients);
+            assert_eq!(
+                craft_recipe(id, &knowledge, &mut materials, &mut skills, &mut passives, &mut weapons),
+                CapsuleActionResult::AlreadyOwned
+            );
+        }
     }
 
     #[test]

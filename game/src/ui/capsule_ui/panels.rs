@@ -3,7 +3,7 @@ use super::*;
 use crate::ui::pixel_canvas::{rect, text_width, Art, Canvas, Raster};
 use crate::ui::pixel_panel::{
     draw_frame, draw_key_hints, draw_tabs, draw_well, well_at, Accent, BAD, DISABLED,
-    EMPTY_WELL, GOOD, MUTED, TEXT, UNAVAILABLE_ICON, WELL,
+    EMPTY_WELL, GOOD, MUTED, STRIDE, TEXT, UNAVAILABLE_ICON, WELL,
 };
 
 // Layout in art pixels. Text positions name the top of the capital letters.
@@ -12,7 +12,10 @@ pub(super) const MARGIN: i32 = 6;
 pub(super) const RIGHT: i32 = WIDTH - MARGIN;
 pub(super) const INGREDIENT_ICON: i32 = 13;
 pub(super) const INGREDIENT_GAP: i32 = 3;
-const TERMINAL_HEIGHT: i32 = 132;
+const TERMINAL_GRID_TOP: i32 = 18;
+/// The rule between the terminal's entry grid and the selected entry's detail.
+const TERMINAL_DETAIL: i32 = TERMINAL_GRID_TOP + TERMINAL_ROWS as i32 * STRIDE + 1;
+const TERMINAL_HEIGHT: i32 = TERMINAL_DETAIL + 65;
 const STORAGE_HEIGHT: i32 = 108;
 
 const AMBER: Accent = Accent { bright: Color::srgb(0.96, 0.61, 0.12), dim: Color::srgb(0.42, 0.25, 0.07) };
@@ -46,9 +49,10 @@ pub(super) fn draw_panel(station: Station, state: &CapsuleUiState, ledger: &Ledg
     canvas.finish()
 }
 
-/// Tabs and essence, a three-row entry grid, the selected entry's detail, and key hints.
+/// Tabs and essence, the entry grid, the selected entry's detail, and key hints.
 fn draw_terminal(canvas: &mut Canvas, state: &CapsuleUiState, ledger: &LedgerItem) {
-    draw_frame(canvas, IVec2::new(WIDTH, TERMINAL_HEIGHT), AMBER, &[14, 67, 117]);
+    let detail = TERMINAL_DETAIL;
+    draw_frame(canvas, IVec2::new(WIDTH, TERMINAL_HEIGHT), AMBER, &[14, detail, detail + 50]);
     let tabs_focused = state.terminal_focus == TerminalFocus::Tabs;
     draw_tabs(canvas, IVec2::new(MARGIN, 4), &["SHOP", "CRAFT"], state.terminal_tab as usize, tabs_focused, AMBER);
     let balance = ledger.essence.get().to_string();
@@ -61,7 +65,7 @@ fn draw_terminal(canvas: &mut Canvas, state: &CapsuleUiState, ledger: &LedgerIte
     let focused = state.terminal_focus == TerminalFocus::Items;
     for slot in 0..TERMINAL_PAGE {
         let index = page + slot;
-        let well = well_rect(slot, 18);
+        let well = well_rect(slot, TERMINAL_GRID_TOP);
         let selected = (index == state.terminal_selection).then_some(if focused { TEXT } else { AMBER.dim });
         draw_well(canvas, well, selected);
         let Some(entry) = entries.get(index).copied() else {
@@ -76,26 +80,26 @@ fn draw_terminal(canvas: &mut Canvas, state: &CapsuleUiState, ledger: &LedgerIte
     }
 
     let Some(entry) = entries.get(state.terminal_selection).copied() else {
-        draw_key_hints(canvas, 121, (MARGIN, RIGHT), None, "EXIT", AMBER);
+        draw_key_hints(canvas, detail + 54, (MARGIN, RIGHT), None, "EXIT", AMBER);
         return;
     };
-    canvas.text(IVec2::new(MARGIN, 71), &entry.title().to_ascii_uppercase(), AMBER.bright);
+    canvas.text(IVec2::new(MARGIN, detail + 4), &entry.title().to_ascii_uppercase(), AMBER.bright);
     let (message, color) = match state.feedback {
         Some(Ok(message)) => (message, GOOD),
         Some(Err(message)) => (message, BAD),
         None => (entry.description(), MUTED),
     };
-    canvas.paragraph(IVec2::new(MARGIN, 81), RIGHT - MARGIN, 10, 2, message, color);
+    canvas.paragraph(IVec2::new(MARGIN, detail + 14), RIGHT - MARGIN, 10, 2, message, color);
     match entry {
-        TerminalEntry::Recipe(id) => draw_ingredients(canvas, id, ledger.materials, 102),
-        TerminalEntry::ShopTether => draw_essence_cost(canvas, ledger.essence, 102, None),
+        TerminalEntry::Recipe(id) => draw_ingredients(canvas, id, ledger.materials, detail + 35),
+        TerminalEntry::ShopTether => draw_essence_cost(canvas, ledger.essence, detail + 35, None),
         TerminalEntry::Research => {
             let discoveries = discoverable_recipes(ledger.knowledge, ledger.materials).len();
-            draw_essence_cost(canvas, ledger.essence, 102, Some(discoveries));
+            draw_essence_cost(canvas, ledger.essence, detail + 35, Some(discoveries));
         },
     }
     let ready = entry.availability(ledger) == Availability::Ready;
-    draw_key_hints(canvas, 121, (MARGIN, RIGHT), Some((entry.action().0, ready)), "EXIT", AMBER);
+    draw_key_hints(canvas, detail + 54, (MARGIN, RIGHT), Some((entry.action().0, ready)), "EXIT", AMBER);
 }
 
 /// Ingredient icons with owned/required counts; owned counts show at most 99 so three fit one row.
@@ -193,7 +197,7 @@ fn draw_entry_icon(canvas: &mut Canvas, entry: TerminalEntry, area: IRect, avail
 pub(super) fn selection_area(station: Station, state: &CapsuleUiState) -> Option<IRect> {
     let well = match station {
         Station::Terminal if state.terminal_focus == TerminalFocus::Tabs => terminal_tab_area(state.terminal_tab),
-        Station::Terminal => well_rect(state.terminal_selection % TERMINAL_PAGE, 18),
+        Station::Terminal => well_rect(state.terminal_selection % TERMINAL_PAGE, TERMINAL_GRID_TOP),
         Station::Storage => {
             let top = if state.storage_pane == StoragePane::Backpack { 14 } else { 54 };
             well_rect(state.storage_selection % STORAGE_PAGE, top)

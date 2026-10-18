@@ -13,6 +13,9 @@ const TUNDRA_RADIUS_TILES: f32 = 60.0;
 const TUNDRA_INNER_FRACTION: f32 = 0.5;
 const ORE_ENTITY_EXCLUSION_RADIUS_PX: f32 = 36.0;
 const ORE_VERTICAL_OFFSET_PX: i32 = -1;
+/// Depth between neighboring entities: far above f32 resolution near [`ENTITY_Z`], and small
+/// enough that ten thousand entities span less than [`ENTITY_Z`]'s own distance from zero.
+const ENTITY_DEPTH_STEP: f32 = 1.0e-13;
 
 #[derive(Clone)]
 pub(super) struct DecorationPlacement {
@@ -89,7 +92,26 @@ pub(super) fn place_level(
     entities.extend(generate_ore_placements(level, &libraries.ores.tundra, &OreCategory::TUNDRA, Some(&tundra_allowed)));
     decorations.retain(|placement| !tile_is_optional_spike(level, placement.tile_x, placement.tile_y));
     entities.retain(|placement| !tile_is_optional_spike(level, placement.tile_x, placement.tile_y));
+    layer_entities(&mut entities, images);
     LevelPlacements { biomes, ice_allowed, decorations, entities }
+}
+
+/// Gives every entity its own depth: sprites sharing a depth have no stable draw order, so
+/// overlapping ones would trade places from frame to frame. Taller sprites stand behind shorter
+/// ones, then each entity's incoming offset (an ore cluster's slot order) and placement order
+/// break ties. All entities stay in one band just behind [`ENTITY_Z`].
+fn layer_entities(entities: &mut [EntityPlacement], images: &Assets<Image>) {
+    let heights: Vec<u32> = entities.iter().map(|placement| images.get(&placement.handle).map_or(0, Image::height)).collect();
+    let mut back_to_front: Vec<usize> = (0..entities.len()).collect();
+    back_to_front.sort_by(|&a, &b| {
+        heights[b].cmp(&heights[a])
+            .then(entities[a].z_offset.total_cmp(&entities[b].z_offset))
+            .then(a.cmp(&b))
+    });
+    let frontmost = back_to_front.len().saturating_sub(1) as f32;
+    for (depth, index) in back_to_front.into_iter().enumerate() {
+        entities[index].z_offset = (depth as f32 - frontmost) * ENTITY_DEPTH_STEP;
+    }
 }
 
 /// Exterior sky above an isolated chunk's first rock surface is not a content habitat. This mask
@@ -718,5 +740,27 @@ mod tests {
         let base = LevelBiomeMask { width: 2, height: 1, cells: vec![BiomeKind::Ice, BiomeKind::Tundra], tundra_inner: vec![] };
         let mask = build_tundra_mask_from_geysers(&level, &[], Some(&base));
         assert_eq!(mask.tundra_inner, [false, true]);
+    }
+
+    #[test]
+    fn overlapping_entities_get_distinct_depths_with_taller_sprites_behind() {
+        let mut images = Assets::<Image>::default();
+        let mut placement = |height: u32, z_offset: f32| EntityPlacement {
+            handle: images.add(surface::image(UVec2::new(60, height))),
+            tile_x: 10, tile_y: 10, flip_x: false, flip_y: false,
+            kind: "test".into(), chunk: IVec2::ZERO, offset_px: IVec2::ZERO, z_offset,
+            harvest: None, ore: None,
+        };
+        // A rock, a taller totem on the same tile, another rock, and a two-slot ore cluster.
+        let mut entities = vec![placement(48, 0.0), placement(70, 0.0), placement(48, 0.0), placement(12, 1.0e-9), placement(12, 0.0)];
+        layer_entities(&mut entities, &images);
+        let depth = |index: usize| ENTITY_Z + entities[index].z_offset;
+
+        assert!(depth(1) < depth(0) && depth(0) < depth(2), "the totem stands behind both rocks, which keep placement order");
+        assert!(depth(2) < depth(4) && depth(4) < depth(3), "ore stands in front, keeping its cluster's slot order");
+        let mut depths: Vec<f32> = (0..entities.len()).map(depth).collect();
+        depths.sort_by(f32::total_cmp);
+        assert!(depths.windows(2).all(|pair| pair[0] < pair[1]), "every entity has its own depth: {depths:?}");
+        assert!(depths.iter().all(|&z| z <= ENTITY_Z && z > 2.0 * ENTITY_Z), "entities stay just behind ENTITY_Z: {depths:?}");
     }
 }

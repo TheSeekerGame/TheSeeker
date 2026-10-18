@@ -126,6 +126,11 @@ impl TentacleState {
     fn tip(&self) -> Vec2 {
         self.joints[TENTACLE_SEGMENTS]
     }
+
+    /// The tip in world space, for a tentacle rooted at `transform`.
+    pub(super) fn tip_position(&self, transform: &Transform) -> Vec2 {
+        transform.transform_point(self.tip().extend(0.0)).truncate()
+    }
 }
 
 const TENTACLE_SEGMENTS: usize = 12;

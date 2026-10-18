@@ -68,6 +68,11 @@ pub(crate) struct HarvestOreDefinition {
 #[derive(Component, Debug, Clone, Copy)]
 struct HarvestStretch(ScaleRecovery);
 
+/// Whether the interact action would gather something now: a harvestable resource, such as a
+/// plant, ore or tether node, or a corpse's loot.
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct GatherableInReach(pub(crate) bool);
+
 impl HarvestableResource {
     fn new(material: CraftMaterial, drop_count: u32) -> Self {
         Self {
@@ -110,6 +115,7 @@ pub struct HarvestableMaterialsPlugin;
 
 impl Plugin for HarvestableMaterialsPlugin {
     fn build(&self, app: &mut App) {
+        app.init_resource::<GatherableInReach>();
         app.add_systems(
             GameTickUpdate,
             animate_harvest_stretch
@@ -117,11 +123,34 @@ impl Plugin for HarvestableMaterialsPlugin {
         );
         app.add_systems(
             GameTickUpdate,
-            harvest_nearby_resources
+            (harvest_nearby_resources, update_gatherable_in_reach)
+                .chain()
                 .after(PlayerStateSet::Behavior)
                 .run_if(in_state(AppState::InGame)),
         );
     }
+}
+
+fn in_harvest_range(resource: Vec2, player: Vec2) -> Option<f32> {
+    let dist_sq = resource.distance_squared(player);
+    (dist_sq <= HARVEST_RANGE * HARVEST_RANGE).then_some(dist_sq)
+}
+
+fn update_gatherable_in_reach(
+    player_q: Query<&GlobalTransform, With<Player>>,
+    harvest_candidates: Query<&GlobalTransform, With<HarvestableResource>>,
+    corpse_candidates: Query<&CorpseLoot, Or<(With<Decay>, With<OpiTombstone>)>>,
+    visual_positions: Query<&GlobalTransform>,
+    mut reach: ResMut<GatherableInReach>,
+) {
+    let in_reach = player_q.single().is_ok_and(|player| {
+        let player_pos = player.translation().truncate();
+        harvest_candidates.iter().any(|transform| in_harvest_range(transform.translation().truncate(), player_pos).is_some())
+            || corpse_candidates.iter().any(|corpse_loot| {
+                corpse_loot_distance_squared(corpse_loot, player_pos, &visual_positions).is_some()
+            })
+    });
+    reach.set_if_neq(GatherableInReach(in_reach));
 }
 
 fn parse_count_suffix(name: &str, needle: &str) -> Option<u32> {
@@ -285,15 +314,8 @@ fn harvest_nearby_resources(
     let Some((target_entity, target_is_tether)) = harvest_candidates
         .iter()
         .filter_map(|(entity, transform, is_tether)| {
-            let dist_sq = transform
-                .translation()
-                .truncate()
-                .distance_squared(player_pos);
-            if dist_sq <= HARVEST_RANGE * HARVEST_RANGE {
-                Some((entity, dist_sq, is_tether))
-            } else {
-                None
-            }
+            in_harvest_range(transform.translation().truncate(), player_pos)
+                .map(|dist_sq| (entity, dist_sq, is_tether))
         })
         .min_by(|(_, a_distance, a_is_tether), (_, b_distance, b_is_tether)| {
             compare_harvest_candidates(

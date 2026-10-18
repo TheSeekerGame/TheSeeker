@@ -35,7 +35,7 @@ Linux also needs `pkg-config libx11-dev libasound2-dev libudev-dev libwayland-de
 | `game/` | The game binary (`theseeker_game`): game rules, player, enemies, world generation, UI, and rendering |
 | `engine/` | The `theseeker_engine` library: generic timing, audio, playback, assets, collision, and effects |
 | `assets/` | Everything the game loads: animations, audio, levels, actors, items, shaders, and UI art |
-| `tools/` | Python tools that generate levels, backgrounds, and effect artwork, with their source art |
+| `tools/` | Python tools that generate levels, backgrounds, sprites, item and UI icons, and effect artwork, with their source art |
 | `docs/` | Design, architecture, and authoring documentation |
 
 The root `Cargo.toml` defines a single package containing both the library and the binary, so run Cargo commands from the repository root.

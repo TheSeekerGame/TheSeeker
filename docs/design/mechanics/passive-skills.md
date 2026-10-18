@@ -4,7 +4,7 @@ Passives are always on. Each one changes your stats or the rules of combat under
 
 ## How passives work today
 
-- **Crafted at capsules.** Passives come from capsule recipes, so the materials you collect decide which ones you can make. Seven are craftable so far; the rest are implemented and still being worked into progression.
+- **Crafted at capsules.** Passives come from capsule recipes, so the materials you collect decide which ones you can make. Eleven are craftable so far; the rest are implemented and still being worked into progression. Each deep creature's material leads to one passive: squid ink to Shadow Cloak, buzzer acid glands to Prism, tentacle tips to Pulse Echo, and the Void's null pearl to Protective Spirit, the safety net that only the most reckless Seekers, who drive the planet to its peak, can earn.
 - **Rolled values.** Many passives roll a strength within a range when you get them. Upgrading improves the roll, and its description always shows the current value.
 - **Collected, then equipped.** Unlocked passives wait in your inventory until you equip them, so you can swap builds back at a capsule.
 

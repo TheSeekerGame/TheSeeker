@@ -31,7 +31,9 @@ use panels::draw_panel;
 const HOTSPOT_RADIUS: f32 = 7.0;
 const PRIORITY_INTERACTION_RADIUS: f32 = 22.0;
 const COLUMNS: usize = 6;
-const TERMINAL_PAGE: usize = 3 * COLUMNS;
+/// Rows of terminal entries; every crafting entry stays visible on one page.
+const TERMINAL_ROWS: usize = 4;
+const TERMINAL_PAGE: usize = TERMINAL_ROWS * COLUMNS;
 const STORAGE_PAGE: usize = COLUMNS;
 
 pub(crate) struct CapsuleUiPlugin;

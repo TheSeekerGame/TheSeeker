@@ -89,10 +89,10 @@ def logical_pair(allowed, variant, style):
     rng = np.random.default_rng(731 + variant * 193 + BIOME_SEEDS[style.biome])
     planned = openings.plan(allowed, style.libraries, openings.FILL[style.biome], DEPTHS, rng)
     grids = []
-    for opening, exemplar in zip(planned, style.exemplars):
+    for opening, exemplar, depth in zip(planned, style.exemplars, DEPTHS):
         # The covered area's edge is a plain wall, as the artist leaves it.
         grid = synthesis.synthesize(synthesis.Context(~opening), exemplar, rng)
-        grid[~allowed] = 0
+        grid[~openings.covered(allowed, depth)] = 0
         grids.append(grid)
     return grids
 

@@ -5,6 +5,7 @@
 - No outlines
 - Focus on good readability and color harmony
 - Player should ideally be the only yellow'y asset in game to make it very visible
+- Seeker technology is dark, minimalist sci-fi that fuses the technical with the organic: mostly black, with plenty of black organic detail and a pale core of light. The tether node is the example, a metal stake wrapped by a parasitic vine that roots into the rock
 - All assets drawn fully lit and then darkness added as a post processing shader
 - Multi-layered and parallaxed background and foregrounds
 - Focus on auto-tiling, to save time designing levels

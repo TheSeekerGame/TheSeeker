@@ -1,6 +1,6 @@
 # Active Skills
 
-Active skills are everything you trigger yourself: weapon strikes, dashes, spins, deployed devices, and consumables. They sit on the skill toolbar, four slots by default (the Battery Pack passive adds a fifth), and are bound to their own keys or gamepad buttons.
+Active skills are everything you trigger yourself: weapon strikes, dashes, spins, deployed devices, and consumables. They sit on the skill toolbar, four slots by default (the Battery Pack passive adds a fifth), and are bound to their own keys or gamepad buttons. When a skill first fills a slot, a tiny keycap above its icon shows that slot's key until you press it.
 
 ## Weapons
 

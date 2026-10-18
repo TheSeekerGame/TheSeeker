@@ -4,7 +4,8 @@ The artist cuts openings in horizontal strata, packs them with three-tile walls 
 neighbours, and lines the far openings up behind the middle ones so light reaches through.
 Every opening is one of the artist's own, taken from the exemplars and flipped for variety.
 Strata live in view space, where the camera moves; each plane samples them through its
-parallax depth, so the planes' openings line up wherever the camera stands.
+parallax depth, so the planes' openings line up wherever the camera stands. Each plane
+covers the map the same way: the area a camera inside the map can see through it.
 """
 from __future__ import annotations
 
@@ -27,6 +28,9 @@ FAR_FOLLOW = 2
 ROAMING = 0.15
 PLACEMENT_TRIES = 60
 PLACEMENT_FAILURES = 300
+# Half the widest gameplay view in tiles: about 70,000 six-pixel-tile game pixels
+# (`game/src/camera/scale.rs`) reach about 34 tiles from the centre at 21:9.
+VIEW_HALF = 40
 
 
 def opening_mask(values, known):
@@ -68,12 +72,31 @@ def strata(shape, rng):
     return band
 
 
-def resample(mask, scale):
-    """Cell q of the result reads cell c + scale (q - c) of `mask`, about the shared centre."""
+def resample(mask, scale, outside=None):
+    """Cell q of the result reads cell c + scale (q - c) of `mask`, about the shared centre.
+
+    A cell reading beyond `mask` takes its nearest edge cell, or `outside` when given.
+    """
     height, width = mask.shape
-    y = np.clip(np.round(height / 2 + scale * (np.arange(height) + .5 - height / 2) - .5).astype(int), 0, height - 1)
-    x = np.clip(np.round(width / 2 + scale * (np.arange(width) + .5 - width / 2) - .5).astype(int), 0, width - 1)
-    return mask[np.ix_(y, x)]
+    y = np.round(height / 2 + scale * (np.arange(height) + .5 - height / 2) - .5).astype(int)
+    x = np.round(width / 2 + scale * (np.arange(width) + .5 - width / 2) - .5).astype(int)
+    result = mask[np.ix_(np.clip(y, 0, height - 1), np.clip(x, 0, width - 1))]
+    if outside is not None:
+        inside = ((y >= 0) & (y < height))[:, None] & ((x >= 0) & (x < width))[None, :]
+        result = np.where(inside, result, outside)
+    return result
+
+
+def covered(allowed, depth):
+    """The cells of a plane at parallax `depth` that a camera inside `allowed` can see.
+
+    A camera at view position v shows the plane's cell c + (v - c) / depth at the screen's
+    centre, so the plane holds the map drawn `depth` times nearer the centre. The rest of the
+    screen shows the plane's cells beside that one, so a point of the map up to half a view
+    away needs plane cells up to that distance times (1 - 1 / depth) farther out.
+    """
+    margin = int(np.ceil(VIEW_HALF * (1 - 1 / depth)))
+    return ndimage.maximum_filter(resample(allowed, depth, outside=False), size=2 * margin + 1)
 
 
 def pack(allowed, band, library, rng, fill):
@@ -132,10 +155,10 @@ def place(stamp, centres, width, blocked, band, inside=0.55):
 
 
 def plan(allowed, libraries, fill, depths, rng):
-    """Opening masks for a middle/far pair covering `allowed`."""
+    """Opening masks for a middle/far pair, each within the plane's view of `allowed`."""
     (middle_library, far_library), (middle_fill, far_fill), (middle_depth, far_depth) = libraries, fill, depths
     band = strata(allowed.shape, rng)
-    middle = pack(allowed, resample(band, middle_depth), middle_library, rng, middle_fill)
+    middle = pack(covered(allowed, middle_depth), resample(band, middle_depth), middle_library, rng, middle_fill)
     behind = ndimage.binary_dilation(resample(middle, 1 / middle_depth), np.ones((2 * FAR_FOLLOW + 1,) * 2))
-    far = pack(allowed, resample(behind, far_depth), far_library, rng, far_fill)
+    far = pack(covered(allowed, far_depth), resample(behind, far_depth), far_library, rng, far_fill)
     return middle, far

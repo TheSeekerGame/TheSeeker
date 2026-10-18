@@ -57,7 +57,7 @@ pub(crate) enum UiInputSet { Menu, Inventory, Panels, Pause, Suppress }
 pub(crate) struct GameplayHud;
 
 /// UI scales with the gameplay pixel size.
-fn sync_ui_scale(pixel_scale: Option<Res<GameplayPixelScale>>, mut ui_scale: ResMut<UiScale>) {
+pub(crate) fn sync_ui_scale(pixel_scale: Option<Res<GameplayPixelScale>>, mut ui_scale: ResMut<UiScale>) {
     let scale = pixel_scale.map_or(1.0, |scale| scale.ui_scale_factor());
     if (ui_scale.0 - scale).abs() > f32::EPSILON {
         ui_scale.0 = scale;

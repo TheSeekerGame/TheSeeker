@@ -144,23 +144,24 @@ fn load_drop_assets(mut commands: Commands, asset_server: Res<AssetServer>) {
     });
 }
 
+/// The material an enemy archetype drops, if any.
 pub(crate) fn enemy_drop_material(
     arch_id: &str,
 ) -> Option<CraftMaterial> {
-    if arch_id.starts_with("bat_") {
-        Some(CraftMaterial::BatWing)
-    } else if arch_id == "spider_small" || arch_id == "spider_big" {
-        Some(CraftMaterial::IceShard)
-    } else if arch_id == "spider_small_tundra"
-        || arch_id == "spider_big_tundra"
-    {
-        Some(CraftMaterial::MossFragment)
-    } else if arch_id == "opi" {
-        Some(CraftMaterial::PlantFiber)
-    } else {
-        None
+    match arch_id {
+        id if id.starts_with("bat_") => Some(CraftMaterial::BatWing),
+        "spider_small" | "spider_big" => Some(CraftMaterial::IceShard),
+        "spider_small_tundra" | "spider_big_tundra" => Some(CraftMaterial::MossFragment),
+        "opi" => Some(CraftMaterial::PlantFiber),
+        "squid" => Some(CraftMaterial::Ink),
+        "buzzer" => Some(CraftMaterial::AcidGland),
+        "void" => Some(CraftMaterial::NullPearl),
+        _ => None,
     }
 }
+
+/// Tentacles are procedural bodies without an archetype.
+pub(crate) const TENTACLE_DROP_MATERIAL: CraftMaterial = CraftMaterial::TentacleTip;
 
 fn build_launch_velocity(
     _origin: Vec2,

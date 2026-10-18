@@ -20,7 +20,7 @@ Each RON registry starts with a comment describing what belongs in it. When you 
 
 ## Source files
 
-Source artwork that the game does not load lives under `tools/`, next to the scripts that turn it into game assets: `tools/source_art/` for sprites and effects and `tools/backgrounds/source/` for background exemplars and LDtk definitions.
+Source artwork that the game does not load lives under `tools/`, next to the scripts that turn it into game assets: `tools/source_art/` for sprites and effects and `tools/backgrounds/source/` for background exemplars and LDtk definitions. Some art has no source file because a script places every pixel, such as the Tether Node (`tools/generate_tether_art.py`), creature loot (`tools/generate_creature_loot.py`), and the toolbar's key hints (`tools/generate_key_hints.py`). Change those by editing the script and running it, not by painting over its output; each script also takes `--preview DIR` for enlarged views.
 
 ## Audio
 

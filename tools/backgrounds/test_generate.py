@@ -44,6 +44,28 @@ class BackgroundTests(unittest.TestCase):
             self.assertFalse(mask[surface_row].any())
             self.assertTrue(mask[deep_row].all())
 
+    def test_planes_cover_every_view_of_the_map(self):
+        # Rooms far from the map's centre, where parallax shifts the planes most.
+        allowed = np.zeros((700, 900), bool)
+        allowed[60:200, 40:860] = allowed[200:660, 640:820] = allowed[420:640, 30:220] = True
+        rng = np.random.default_rng(11)
+        cells = np.argwhere(allowed)
+        centre = np.array(allowed.shape) / 2
+        for depth in bg.DEPTHS:
+            plane = openings.covered(allowed, depth)
+            cameras = cells[rng.integers(len(cells), size=6000)]
+            # Screen offsets within a 16:9 view of about 70,000 game pixels.
+            offsets = rng.integers([-17, -30], [18, 31], size=(6000, 2))
+            seen = cameras + offsets
+            inside = (seen >= 0).all(axis=1) & (seen < allowed.shape).all(axis=1)
+            cameras, offsets, seen = cameras[inside], offsets[inside], seen[inside]
+            on_map = allowed[seen[:, 0], seen[:, 1]]
+            # The screen's centre shows the plane's cell nearer the map's centre.
+            middle = np.round(centre + (cameras + .5 - centre) / depth - .5).astype(int)
+            shown = middle + offsets
+            self.assertTrue(plane[shown[on_map, 0], shown[on_map, 1]].all(),
+                            "wherever the camera stands, the map it shows has the plane behind it")
+
     def test_gaussian_regions_match_whole_image_with_transparency(self):
         raw = np.random.default_rng(719).integers(0, 256, (231, 207, 4), dtype=np.uint8)
         for radius in [3, 5]:
@@ -71,9 +93,9 @@ class BackgroundTests(unittest.TestCase):
         allowed = np.zeros((300, 260), bool)
         allowed[:200, :] = allowed[:, :100] = True
         planes = openings.plan(allowed, style.libraries, openings.FILL["ice"], bg.DEPTHS, np.random.default_rng(5))
-        usable = ndimage.binary_erosion(allowed, np.ones((2 * openings.MARGIN + 1,) * 2), border_value=0)
         spacing = np.ones((2 * openings.GAP + 1,) * 2, bool)
-        for plane, library in zip(planes, style.libraries):
+        for plane, library, depth in zip(planes, style.libraries, bg.DEPTHS):
+            usable = ndimage.binary_erosion(openings.covered(allowed, depth), np.ones((2 * openings.MARGIN + 1,) * 2), border_value=0)
             self.assertTrue(plane.any())
             self.assertFalse((plane & ~usable).any(), "openings keep clear of the covered area's edge")
             artist = {shape_key(stamp[::fy, ::fx]) for stamp in library for fy in (1, -1) for fx in (1, -1)}

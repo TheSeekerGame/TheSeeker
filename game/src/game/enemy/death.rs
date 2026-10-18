@@ -74,6 +74,11 @@ impl DeathPolicy {
         )
     }
 
+    /// Whether the body stays behind, holding its loot for gathering.
+    pub(super) fn leaves_corpse(&self) -> bool {
+        self.mode != EnemyDeathMode::Despawn
+    }
+
     fn fall_collider_half_extents(&self) -> Option<Vec2> {
         self.fall_collider_half_extents
     }

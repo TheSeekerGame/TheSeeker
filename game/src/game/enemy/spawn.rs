@@ -124,6 +124,7 @@ pub(super) struct EnemySpawnCatalog {
 #[derive(Default)]
 struct DirectorSlot {
     actor: Option<Entity>,
+    family: Option<EnemyFamily>,
     candidate_id: Option<u32>,
     cooldown_ticks: u32,
     generation: u32,
@@ -774,10 +775,12 @@ pub(super) fn run_enemy_spawn_director(
             chunk_distance(region_key, initial_player_region) <= ACTIVE_CHUNK_RADIUS;
         let slots = prepare_region_for_spawn(&mut runtime, region_key, target,
             initial_region, immunity == PlanetImmunityLevel::MAX);
+        let region_families = runtime.regions[&region_key].slots.iter()
+            .filter(|slot| slot.actor.is_some()).filter_map(|slot| slot.family).collect::<Vec<_>>();
         let context = SpawnContext {
             catalog: &catalog, compiled: &compiled, collision: &collision, actors: &actors,
-            leased_candidates: &runtime.leased_candidates, level_seed: level_seed.0,
-            player_position, camera_position, view_half_size,
+            leased_candidates: &runtime.leased_candidates, region_families: &region_families,
+            level_seed: level_seed.0, player_position, camera_position, view_half_size,
         };
         let Some((slot_index, selection)) = select_ready_spawn(&context, &runtime, region_key, slots) else { continue; };
         let entity = spawn_selection(&mut commands, selection, depth, level_seed.0);
@@ -790,6 +793,7 @@ pub(super) fn run_enemy_spawn_director(
         let region = runtime.regions.get_mut(&region_key).expect("region exists");
         let slot = &mut region.slots[slot_index];
         slot.actor = Some(entity);
+        slot.family = Some(selection.family);
         slot.candidate_id = Some(selection.candidate.id);
         slot.generation = slot.generation.wrapping_add(1);
     }
@@ -905,6 +909,7 @@ fn release_slot(
         leased_candidates.remove(&candidate_id);
     }
     slot.actor = None;
+    slot.family = None;
     slot.cooldown_ticks = cooldown_ticks;
 }
 
@@ -966,7 +971,7 @@ fn target_population(immunity: u8, depth: u32) -> usize {
     ordinary + usize::from(immunity == PlanetImmunityLevel::MAX)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 enum EnemyFamily {
     BatSmall, BatMedium, BatBig, BatHuge, SpiderSmall, SpiderLarge,
     Buzzer, Squid, Opi, Void,
@@ -990,22 +995,31 @@ struct WeightedFamily {
     weight: u32,
     min_depth: u32,
     tundra_only: bool,
+    /// Most living members one region holds at once; low caps spread a family out.
+    region_cap: usize,
+    /// Percentage of regions that host the family at all. Below 100, members gather in the
+    /// regions chosen as nests instead of appearing everywhere.
+    nest_percent: u32,
 }
 
-// Weights describe families, independently of how many air or ground sites exist.
+const UNCAPPED: usize = usize::MAX;
+const NEST_SALT: u32 = 0x4E45_5354;
+
+// Weights describe families, independently of how many air or ground sites exist. Opi stay
+// sparse, buzzers spread evenly across deep regions, and squids gather in nest regions.
 const ROSTER: &[WeightedFamily] = &[
-    WeightedFamily { family: EnemyFamily::BatSmall, weight: 25, min_depth: 0, tundra_only: false },
-    WeightedFamily { family: EnemyFamily::BatMedium, weight: 20, min_depth: 1, tundra_only: false },
-    WeightedFamily { family: EnemyFamily::BatBig, weight: 20, min_depth: 3, tundra_only: false },
-    WeightedFamily { family: EnemyFamily::BatHuge, weight: 15, min_depth: 5, tundra_only: false },
-    WeightedFamily { family: EnemyFamily::SpiderSmall, weight: 45, min_depth: 0, tundra_only: false },
-    WeightedFamily { family: EnemyFamily::SpiderLarge, weight: 30, min_depth: 2, tundra_only: false },
-    WeightedFamily { family: EnemyFamily::Buzzer, weight: 24, min_depth: DEEP_ENEMY_DEPTH, tundra_only: true },
-    WeightedFamily { family: EnemyFamily::Squid, weight: 24, min_depth: DEEP_ENEMY_DEPTH, tundra_only: false },
-    WeightedFamily { family: EnemyFamily::Opi, weight: 18, min_depth: DEEP_ENEMY_DEPTH, tundra_only: true },
+    WeightedFamily { family: EnemyFamily::BatSmall, weight: 25, min_depth: 0, tundra_only: false, region_cap: UNCAPPED, nest_percent: 100 },
+    WeightedFamily { family: EnemyFamily::BatMedium, weight: 20, min_depth: 1, tundra_only: false, region_cap: UNCAPPED, nest_percent: 100 },
+    WeightedFamily { family: EnemyFamily::BatBig, weight: 20, min_depth: 3, tundra_only: false, region_cap: UNCAPPED, nest_percent: 100 },
+    WeightedFamily { family: EnemyFamily::BatHuge, weight: 15, min_depth: 5, tundra_only: false, region_cap: UNCAPPED, nest_percent: 100 },
+    WeightedFamily { family: EnemyFamily::SpiderSmall, weight: 45, min_depth: 0, tundra_only: false, region_cap: UNCAPPED, nest_percent: 100 },
+    WeightedFamily { family: EnemyFamily::SpiderLarge, weight: 30, min_depth: 2, tundra_only: false, region_cap: UNCAPPED, nest_percent: 100 },
+    WeightedFamily { family: EnemyFamily::Buzzer, weight: 24, min_depth: DEEP_ENEMY_DEPTH, tundra_only: true, region_cap: 2, nest_percent: 100 },
+    WeightedFamily { family: EnemyFamily::Squid, weight: 120, min_depth: DEEP_ENEMY_DEPTH, tundra_only: false, region_cap: 4, nest_percent: 35 },
+    WeightedFamily { family: EnemyFamily::Opi, weight: 8, min_depth: DEEP_ENEMY_DEPTH, tundra_only: true, region_cap: 1, nest_percent: 100 },
 ];
 const VOID_ROSTER: &[WeightedFamily] = &[
-    WeightedFamily { family: EnemyFamily::Void, weight: 1, min_depth: 0, tundra_only: false },
+    WeightedFamily { family: EnemyFamily::Void, weight: 1, min_depth: 0, tundra_only: false, region_cap: UNCAPPED, nest_percent: 100 },
 ];
 
 fn roster(depth: u32, escalation: bool) -> impl Iterator<Item = WeightedFamily> {
@@ -1027,6 +1041,8 @@ struct SpawnContext<'a> {
     collision: &'a TileCollisionWorld,
     actors: &'a ActorCatalog,
     leased_candidates: &'a HashSet<u32>,
+    /// Families of the region's living director-owned actors.
+    region_families: &'a [EnemyFamily],
     level_seed: u32,
     player_position: Vec2,
     camera_position: Vec2,
@@ -1058,6 +1074,7 @@ fn select_spawn(
     let region = context.catalog.regions.get(&region_key)?;
     let salt = (slot_index as u32).wrapping_mul(0x9E37_79B9).wrapping_add(generation);
     let available = roster(region.depth, slot_index == VOID_SLOT)
+        .filter(|entry| family_fits_region(context, region_key, *entry))
         .filter(|entry| region.candidates.iter().any(|candidate| {
             spawn_candidate(context, *entry, *candidate, region.depth, distance_exempt).is_some()
         })).collect::<Vec<_>>();
@@ -1070,6 +1087,18 @@ fn select_spawn(
         spawn_candidate(context, entry, *candidate, region.depth, distance_exempt)
     }).min_by_key(|selection| position_hash(context.level_seed, selection.candidate.tile.x,
         selection.candidate.tile.y, salt ^ selection.candidate.id))
+}
+
+/// A family joins a region only while under its cap, and only where the region is one of its nests.
+fn family_fits_region(context: &SpawnContext, region_key: IVec2, entry: WeightedFamily) -> bool {
+    let living = context.region_families.iter().filter(|&&family| family == entry.family).count();
+    living < entry.region_cap
+        && (entry.nest_percent >= 100 || region_is_nest(context.level_seed, region_key, entry.family, entry.nest_percent))
+}
+
+fn region_is_nest(seed: u32, region_key: IVec2, family: EnemyFamily, nest_percent: u32) -> bool {
+    let salt = NEST_SALT ^ (family as u32).wrapping_mul(0x9E37_79B9);
+    position_hash(seed, region_key.x, region_key.y, salt) % 100 < u64::from(nest_percent)
 }
 
 fn spawn_candidate(
@@ -1651,7 +1680,7 @@ mod tests {
     fn test_context<'a>(catalog: &'a EnemySpawnCatalog, compiled: &'a CompiledLevel,
         collision: &'a TileCollisionWorld, actors: &'a ActorCatalog, leases: &'a HashSet<u32>, seed: u32,
     ) -> SpawnContext<'a> {
-        SpawnContext { catalog, compiled, collision, actors, leased_candidates: leases, level_seed: seed,
+        SpawnContext { catalog, compiled, collision, actors, leased_candidates: leases, region_families: &[], level_seed: seed,
             player_position: Vec2::new(-2000.0, 0.0), camera_position: Vec2::ZERO, view_half_size: Vec2::splat(10.0) }
     }
 
@@ -1708,6 +1737,32 @@ mod tests {
             let entry = *ROSTER.iter().find(|entry| entry.family == family).unwrap();
             assert!(spawn_candidate(&context, entry, candidate, 6, true).is_none());
         }
+    }
+
+    #[test]
+    fn opi_stay_sparse_buzzers_spread_and_squids_gather_in_nests() {
+        let actors = actor_catalog();
+        let leases = HashSet::new();
+        let (catalog, compiled, collision) = selection_catalog(4, BiomeKind::Tundra, 6);
+        let families_for = |region_families: &[EnemyFamily], seed: u32| {
+            let context = SpawnContext { region_families, ..test_context(&catalog, &compiled, &collision, &actors, &leases, seed) };
+            (0..64).filter_map(|slot| select_spawn(&context, IVec2::ZERO, 1, slot, true)).map(|selection| selection.family).collect::<HashSet<_>>()
+        };
+        let squid = *ROSTER.iter().find(|entry| entry.family == EnemyFamily::Squid).unwrap();
+        let (mut nests, mut squid_seeds) = (0, 0);
+        for seed in 0..200 {
+            let open = families_for(&[], seed);
+            assert!(!families_for(&[EnemyFamily::Opi], seed).contains(&EnemyFamily::Opi), "one Opi per region");
+            assert!(families_for(&[EnemyFamily::Buzzer], seed).contains(&EnemyFamily::Buzzer) || !open.contains(&EnemyFamily::Buzzer));
+            assert!(!families_for(&[EnemyFamily::Buzzer; 2], seed).contains(&EnemyFamily::Buzzer), "two buzzers per region");
+            assert!(!families_for(&[EnemyFamily::Squid; 4], seed).contains(&EnemyFamily::Squid), "four squids per nest");
+            let nest = region_is_nest(seed, IVec2::ZERO, EnemyFamily::Squid, squid.nest_percent);
+            assert_eq!(open.contains(&EnemyFamily::Squid), nest, "squids appear only in nest regions");
+            nests += usize::from(nest);
+            squid_seeds += usize::from(open.contains(&EnemyFamily::Squid));
+        }
+        assert!((40..100).contains(&nests), "about a third of regions are squid nests: {nests}");
+        assert_eq!(squid_seeds, nests);
     }
 
     #[test]

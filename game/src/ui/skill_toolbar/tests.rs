@@ -5,7 +5,7 @@ use super::*;
 use crate::ui::pixel_canvas::tests::{load_art, save_snapshot, snapshot_directory};
 
 fn slot(icon: &'static str) -> Slot {
-    Slot { icon, pressed: false, gain: 1.0, shade: 0, energy: false, stock: None }
+    Slot { icon, pressed: false, gain: 1.0, shade: 0, energy: false, stock: None, key_hint: false }
 }
 
 fn toolbar(slots: usize, skills: Vec<Slot>) -> Toolbar {
@@ -19,7 +19,7 @@ fn pixel(raster: Raster, at: IVec2) -> Srgba {
 #[test]
 fn toolbar_systems_have_compatible_parameters() {
     let mut schedule = Schedule::default();
-    schedule.add_systems((spawn_toolbar, advance_toolbar_icons, present_toolbar, queue_level_up_captions, present_captions));
+    schedule.add_systems((spawn_toolbar, advance_toolbar_icons, advance_key_hints, present_toolbar, queue_level_up_captions, present_captions));
     schedule.initialize(&mut World::new()).expect("toolbar systems initialize");
 }
 
@@ -85,8 +85,44 @@ fn cooldowns_shade_from_the_bottom_and_missing_energy_from_the_top() {
 
 #[test]
 fn stock_labels_sit_where_the_toolbar_always_placed_them() {
-    let node = stock_label_node(0, UVec2::new(72, FRAME_HEIGHT as u32), 5.0);
+    let node = stock_label_node(0, UVec2::new(72, FRAME_HEIGHT as u32), 0, 5.0);
     assert_eq!((node.right, node.bottom), (px(259.0), px(47.0)));
+    let raised = stock_label_node(0, UVec2::new(72, (FRAME_HEIGHT + KEY_HINT_RISE) as u32), KEY_HINT_RISE, 5.0);
+    assert_eq!((raised.right, raised.bottom), (node.right, node.bottom), "key hints do not move the counts");
+}
+
+#[test]
+fn key_hints_show_on_filled_slots_until_their_key_is_pressed() {
+    let mut hints = KeyHints::default();
+    hints.advance(2, |_| false);
+    assert!(hints.shown(0) && hints.shown(1));
+
+    hints.advance(2, |action| action == PlayerAction::Skill3);
+    assert!(hints.shown(2), "pressing an empty slot's key before it fills teaches nothing");
+
+    hints.advance(2, |action| action == PlayerAction::Skill2);
+    assert!(hints.shown(0) && !hints.shown(1));
+    hints.advance(1, |_| false);
+    hints.advance(2, |_| false);
+    assert!(!hints.shown(1), "a learned key stays learned when its slot empties and fills again");
+}
+
+#[test]
+fn key_hints_rise_above_the_frame_without_moving_it() {
+    let white = Image::new_fill(
+        Extent3d { width: 12, height: 12, depth_or_array_layers: 1 },
+        TextureDimension::D2,
+        &[255; 4],
+        TextureFormat::Rgba8UnormSrgb,
+        RenderAssetUsages::default(),
+    );
+    let art = Art::from_iter([("icon", &white)]);
+    let plain = draw_toolbar(&toolbar(4, vec![slot("icon")]), &art);
+    let hinted = draw_toolbar(&toolbar(4, vec![Slot { key_hint: true, ..slot("icon") }]), &art);
+    assert_eq!(hinted.size, plain.size + UVec2::Y * KEY_HINT_RISE as u32);
+    let icon_bottom = FIRST_SLOT + IVec2::Y * (ICON - 1);
+    assert_eq!(pixel(plain, icon_bottom), Srgba::WHITE);
+    assert_eq!(pixel(hinted, icon_bottom + IVec2::Y * KEY_HINT_RISE), Srgba::WHITE);
 }
 
 #[test]
@@ -119,7 +155,7 @@ fn toolbar_snapshots() {
     let Some(directory) = snapshot_directory() else { return };
     let skills = [SkillId::Attack, SkillId::Whirl, SkillId::Dash, SkillId::RedBerry, SkillId::TetherNode];
     let icons = skills.map(|skill| skill.icon_path_with_melee_weapon(PlayerMeleeWeapon::Sword));
-    let paths = [frame_path(4), frame_path(5), FONT_IMAGE_PATH].into_iter().chain(icons);
+    let paths = [frame_path(4), frame_path(5), FONT_IMAGE_PATH, KEY_HINTS_PATH].into_iter().chain(icons);
     let art: Vec<_> = paths.map(load_art).collect();
     let art = Art::from_iter(art.iter().map(|(path, image)| (*path, image)));
     let slots = vec![
@@ -133,6 +169,9 @@ fn toolbar_snapshots() {
     let low = Toolbar { health: 0.18, alignment: 0.08, elapsed_secs: 0.17, frame_pulse: 1.0, ..toolbar(4, slots) };
     save_snapshot(&directory, "toolbar-five-slots", draw_toolbar(&full, &art));
     save_snapshot(&directory, "toolbar-low-alignment", draw_toolbar(&low, &art));
+    let starting = vec![Slot { key_hint: true, ..slot(icons[0]) }, Slot { key_hint: true, stock: Some(5), ..slot(icons[4]) }];
+    save_snapshot(&directory, "toolbar-key-hints", draw_toolbar(&toolbar(4, starting), &art));
+    save_snapshot(&directory, "pickup-prompt", draw_prompt("PICK UP", TEXT, &art));
     let unlocked = ["ADAPTATION INCREASED".to_owned(), "NEW ABILITY UNLOCKED: WHIRLING STRIKE".to_owned()];
     let adapted = ["ADAPTATION INCREASED".to_owned()];
     save_snapshot(&directory, "captions", draw_captions(&[(&unlocked[..], 1.0), (&adapted[..], 0.5)], &art));

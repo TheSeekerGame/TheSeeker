@@ -386,9 +386,11 @@ pub fn cleanup_action_slot<T: Component<Mutability = bevy::ecs::component::Mutab
     let dead = world.get::<crate::game::gentstate::Dead>(context.entity).is_some();
     let released = world.get_mut::<theseeker_engine::script::ScriptPlayer<SpriteAnimation>>(gfx)
         .is_some_and(|mut player| if dead { player.revoke_presentation(action.id) } else { player.release_presentation(action.id) });
-    if released {
-        if let Some(mut offset) = world.get_mut::<theseeker_engine::gent::TransformGfxFromGent>(gfx) { offset.offset = None; }
-    }
+    if !released { return; }
+    // Releasing presentation restores the body's resting sprite anchor, including when death
+    // discards an action mid-execution; dropping the anchor would sink the death clip.
+    let resting = world.get::<super::ActorDefinition>(context.entity).map(|definition| definition.0.body.gfx_offset);
+    if let Some(mut binding) = world.get_mut::<theseeker_engine::gent::TransformGfxFromGent>(gfx) { binding.offset = resting; }
 }
 
 pub(crate) fn next_execution_id() -> u64 {

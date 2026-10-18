@@ -2,12 +2,14 @@
 //! redrawn every frame.
 //!
 //! The toolbar frame holds the equipped skills with their cooldowns and stock, and shows health
-//! and Alignment through the bar windows cut into its art.
+//! and Alignment through the bar windows cut into its art. Until its key is first pressed, a filled
+//! slot shows that key on a tiny keycap above its icon.
 use std::collections::HashSet;
 use std::f32::consts::TAU;
 
 use bevy::ecs::query::QueryData;
 use bevy::ecs::system::SystemParam;
+use leafwing_input_manager::prelude::ActionState;
 
 use super::pixel_canvas::{gain, lift, rect, text_width, Art, ArtLibrary, Canvas, Raster};
 use super::pixel_font::FONT_IMAGE_PATH;
@@ -20,13 +22,15 @@ use crate::game::player::passives::PassiveEvent;
 use crate::game::player::progression::{AdaptationLevelUpEvent, UnlockedSkillPresentationState};
 use crate::game::player::skills::channeled::ChanneledSkill;
 use crate::game::player::skills::cooldowns::Cooldowns;
+use crate::game::player::skills::registry::SLOT_INPUTS;
 use crate::game::player::skills::tether_node::TetherConnectionStatus;
 use crate::game::player::skills::types::{flicker_strike_metadata, whirl_metadata, SkillId};
 use crate::game::player::weapon::{PlayerAmmo, PlayerMeleeWeapon, WeaponInventory};
 use crate::game::player::{
-    Alignment, FlickerAbility, MaterialInventory, Passive, Passives, Player, PlayerStateSet, SkillInventory,
-    WhirlAbility,
+    Alignment, FlickerAbility, MaterialInventory, Passive, Passives, Player, PlayerAction, PlayerStateSet,
+    SkillInventory, WhirlAbility,
 };
+use crate::levelgen::harvestable_materials::GatherableInReach;
 use crate::prelude::*;
 
 const TOOLBAR_Z_INDEX: i32 = 27;
@@ -38,6 +42,11 @@ pub(super) const FRAME_HEIGHT: i32 = 30 - FRAME_TOP;
 /// Where the first slot icon and the bar windows sit in the cropped frame.
 const FIRST_SLOT: IVec2 = IVec2::new(9, 9 - FRAME_TOP);
 const SLOT_STRIDE: i32 = 14;
+/// One tiny keycap per slot, in slot order, on this sheet.
+const KEY_HINTS_PATH: &str = "ui/game/SkillKeyHints.png";
+const KEY_HINT: i32 = 8;
+/// Keycaps rest on the frame above their icons and rise this far above it.
+const KEY_HINT_RISE: i32 = KEY_HINT - FIRST_SLOT.y;
 const HEALTH_BAR: IVec2 = IVec2::new(9, 23 - FRAME_TOP);
 const ALIGNMENT_BAR: IVec2 = IVec2::new(9, 26 - FRAME_TOP);
 
@@ -73,13 +82,14 @@ pub struct SkillToolbarPlugin;
 impl Plugin for SkillToolbarPlugin {
     fn build(&self, app: &mut App) {
         app.init_resource::<ToolbarIcons>()
+            .init_resource::<KeyHints>()
             .init_resource::<StationPrompt>()
             .init_resource::<Captions>()
             .add_systems(Startup, load_toolbar_art)
             .add_systems(OnEnter(AppState::InGame), (reset_toolbar_presentation, spawn_toolbar).chain())
             .add_systems(
                 GameTickUpdate,
-                advance_toolbar_icons.after(PlayerStateSet::Behavior).run_if(in_state(AppState::InGame)),
+                (advance_toolbar_icons, advance_key_hints).after(PlayerStateSet::Behavior).run_if(in_state(AppState::InGame)),
             )
             .add_systems(
                 Update,
@@ -108,7 +118,7 @@ fn load_toolbar_art(mut library: ResMut<ArtLibrary>, server: Res<AssetServer>) {
     let skills = SkillInventory::DEBUG_UNLOCK_ORDER.into_iter();
     let icons = skills.flat_map(|skill| PlayerMeleeWeapon::ALL.map(|weapon| skill.icon_path_with_melee_weapon(weapon)));
     let frames = [SkillInventory::MAX_EQUIPPED, SkillInventory::MAX_EQUIPPED + 1].map(frame_path);
-    library.load(&server, icons.chain(frames).chain([FONT_IMAGE_PATH]));
+    library.load(&server, icons.chain(frames).chain([FONT_IMAGE_PATH, KEY_HINTS_PATH]));
 }
 
 /// A slot's stock count, set in smooth text because pixel digits would cover the icon.
@@ -189,6 +199,26 @@ impl IconState {
 pub(crate) fn unlock_gain(remaining_ticks: u32) -> f32 {
     let remaining = remaining_ticks as f32 / UnlockedSkillPresentationState::FLASH_TICKS as f32;
     1.0 + (UNLOCK_FLASH_GAIN - 1.0) * remaining.sqrt()
+}
+
+/// Which slots' keys the player has used. A filled slot shows its key until then; the hints are
+/// never reset, so they stay learned across deaths and new expeditions.
+#[derive(Resource, Default, Debug, Clone, PartialEq)]
+struct KeyHints {
+    learned: [bool; SLOT_INPUTS.len()],
+}
+
+impl KeyHints {
+    /// Learns the key of every filled slot whose key was just pressed.
+    fn advance(&mut self, filled: usize, pressed: impl Fn(PlayerAction) -> bool) {
+        for input in SLOT_INPUTS.iter().take(filled) {
+            self.learned[input.index] |= pressed(input.action);
+        }
+    }
+
+    fn shown(&self, slot: usize) -> bool {
+        self.learned.get(slot).is_some_and(|learned| !learned)
+    }
 }
 
 #[derive(Resource, Default)]
@@ -285,10 +315,19 @@ fn advance_toolbar_icons(
     }
 }
 
+fn advance_key_hints(
+    player: Query<(&SkillInventory, &ActionState<PlayerAction>), With<Player>>,
+    mut hints: ResMut<KeyHints>,
+) {
+    let Ok((skills, actions)) = player.single() else { return };
+    hints.advance(skills.equipped.len(), |action| actions.just_pressed(&action));
+}
+
 /// Everything besides the player that the toolbar shows.
 #[derive(SystemParam)]
 struct ToolbarSources<'w> {
     icons: Res<'w, ToolbarIcons>,
+    hints: Res<'w, KeyHints>,
     cooldowns: Res<'w, Cooldowns>,
     melee: Res<'w, PlayerMeleeWeapon>,
     unlocks: Res<'w, UnlockedSkillPresentationState>,
@@ -307,6 +346,8 @@ struct Slot {
     energy: bool,
     /// Shown by the slot's text label.
     stock: Option<u32>,
+    /// Whether the slot's key hint shows above the icon.
+    key_hint: bool,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -329,7 +370,7 @@ fn present_toolbar(
     grid: UiPixelGrid,
 ) {
     let (Ok(player), Ok((image, mut node))) = (player.single(), toolbar.single_mut()) else { return };
-    let skills = player.skills.equipped.iter().map(|&skill| {
+    let skills = player.skills.equipped.iter().enumerate().map(|(index, &skill)| {
         let state = sources.icons.states.get(&skill).copied().unwrap_or_default();
         let flash = sources.unlocks.entry(skill).map(|entry| unlock_gain(entry.remaining_ticks));
         Slot {
@@ -339,6 +380,7 @@ fn present_toolbar(
             shade: (player.recharge(skill, &sources.cooldowns) * ICON as f32).ceil() as i32,
             energy: matches!(skill, SkillId::Whirl | SkillId::FlickerStrike),
             stock: player.stock(skill),
+            key_hint: sources.hints.shown(index),
         }
     });
     let toolbar = Toolbar {
@@ -356,7 +398,7 @@ fn present_toolbar(
         let stock = toolbar.skills.get(label.0).filter(|_| label.0 < toolbar.slots).and_then(|slot| slot.stock);
         let hidden = Node { display: Display::None, position_type: PositionType::Absolute, ..default() };
         let (count, placement) = stock.map_or((String::new(), hidden), |stock| {
-            (MaterialInventory::display_count(stock), stock_label_node(label.0, raster.size, unit))
+            (MaterialInventory::display_count(stock), stock_label_node(label.0, raster.size, toolbar.rise(), unit))
         });
         if text.0 != count {
             text.0 = count;
@@ -366,9 +408,9 @@ fn present_toolbar(
     raster.publish(&mut images, &image.image);
 }
 
-/// Pins a slot's count just inside its icon's bottom-right corner.
-fn stock_label_node(slot: usize, toolbar: UVec2, unit: f32) -> Node {
-    let icon_end = FIRST_SLOT + IVec2::new(SLOT_STRIDE * slot as i32 + ICON, ICON);
+/// Pins a slot's count just inside its icon's bottom-right corner; `rise` is the space above the frame.
+fn stock_label_node(slot: usize, toolbar: UVec2, rise: i32, unit: f32) -> Node {
+    let icon_end = FIRST_SLOT + IVec2::new(SLOT_STRIDE * slot as i32 + ICON, ICON + rise);
     let inset = (toolbar.as_ivec2() - icon_end).as_vec2() * unit;
     Node {
         position_type: PositionType::Absolute,
@@ -378,21 +420,43 @@ fn stock_label_node(slot: usize, toolbar: UVec2, unit: f32) -> Node {
     }
 }
 
+impl Toolbar {
+    fn shown_slots(&self) -> impl Iterator<Item = &Slot> {
+        self.skills.iter().take(self.slots)
+    }
+
+    /// Space above the frame for key hints, while any shows.
+    fn rise(&self) -> i32 {
+        if self.shown_slots().any(|slot| slot.key_hint) { KEY_HINT_RISE } else { 0 }
+    }
+}
+
 fn draw_toolbar(toolbar: &Toolbar, art: &Art) -> Raster {
     let slots = toolbar.slots as i32;
     let bar_width = slots * SLOT_STRIDE - 2;
-    let mut canvas = Canvas::new(UVec2::new((slots * SLOT_STRIDE + 16) as u32, FRAME_HEIGHT as u32), art);
-    draw_bar(&mut canvas, HEALTH_BAR, IVec2::new(bar_width, 2), toolbar.health, (HEALTH_TRACK, HEALTH_FILL));
+    let top = IVec2::Y * toolbar.rise();
+    let mut canvas = Canvas::new(UVec2::new((slots * SLOT_STRIDE + 16) as u32, (FRAME_HEIGHT + top.y) as u32), art);
+    draw_bar(&mut canvas, HEALTH_BAR + top, IVec2::new(bar_width, 2), toolbar.health, (HEALTH_TRACK, HEALTH_FILL));
     let alignment = alignment_colors(toolbar.alignment, toolbar.elapsed_secs);
-    draw_bar(&mut canvas, ALIGNMENT_BAR, IVec2::new(bar_width, 1), toolbar.alignment, alignment);
+    draw_bar(&mut canvas, ALIGNMENT_BAR + top, IVec2::new(bar_width, 1), toolbar.alignment, alignment);
     let frame = frame_path(toolbar.slots);
     let pulse = ALIGNMENT_PULSE_LINEAR_GRAY * toolbar.frame_pulse;
     let size = UVec2::new((slots * SLOT_STRIDE + 16) as u32, 30);
-    canvas.sprite(frame, URect::from_corners(UVec2::Y * FRAME_TOP as u32, size), IVec2::ZERO, |texel| lift(texel, pulse));
-    for (index, slot) in toolbar.skills.iter().take(toolbar.slots).enumerate() {
-        draw_slot(&mut canvas, FIRST_SLOT + IVec2::X * SLOT_STRIDE * index as i32, slot);
+    canvas.sprite(frame, URect::from_corners(UVec2::Y * FRAME_TOP as u32, size), top, |texel| lift(texel, pulse));
+    for (index, slot) in toolbar.shown_slots().enumerate() {
+        let at = FIRST_SLOT + top + IVec2::X * SLOT_STRIDE * index as i32;
+        draw_slot(&mut canvas, at, slot);
+        if slot.key_hint {
+            draw_key_hint(&mut canvas, at, index);
+        }
     }
     canvas.finish()
+}
+
+/// The slot's keycap, centered on the frame just above its icon at `icon`.
+fn draw_key_hint(canvas: &mut Canvas, icon: IVec2, slot: usize) {
+    let source = URect::new(KEY_HINT as u32 * slot as u32, 0, KEY_HINT as u32 * (slot as u32 + 1), KEY_HINT as u32);
+    canvas.sprite(KEY_HINTS_PATH, source, icon + IVec2::new((ICON - KEY_HINT) / 2, -KEY_HINT), |texel| texel);
 }
 
 fn draw_bar(canvas: &mut Canvas, at: IVec2, size: IVec2, fraction: f32, (track, fill): (Color, Color)) {
@@ -435,16 +499,19 @@ fn mix(from: Color, to: Color, amount: f32) -> Color {
 #[derive(Resource, Default)]
 pub(crate) struct StationPrompt(pub(crate) Option<(&'static str, Color)>);
 
-/// What the interact key does nearby: use a capsule station or enter a shelter.
+/// What the interact key does nearby: use a capsule station, enter a shelter, or gather something.
 #[derive(SystemParam)]
 struct InteractPrompt<'w> {
     station: Res<'w, StationPrompt>,
     shelter: Res<'w, InteractionFocus>,
+    gatherable: Res<'w, GatherableInReach>,
 }
 
 impl InteractPrompt<'_> {
     fn label(&self) -> Option<(&'static str, Color)> {
-        self.station.0.or_else(|| self.shelter.has_target().then_some(("ENTER", TEXT)))
+        self.station.0
+            .or_else(|| self.shelter.has_target().then_some(("ENTER", TEXT)))
+            .or_else(|| self.gatherable.0.then_some(("PICK UP", TEXT)))
     }
 }
 

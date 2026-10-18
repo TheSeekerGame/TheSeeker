@@ -8,13 +8,13 @@ The planet's caves are full of life that grows stranger with depth. Creatures sh
 | --- | --- |
 | **Spiders** | The most common ground hunters, small and large, in three tiers of strength, with darker tundra variants deeper down. Small spiders leap and bite; large ones keep their distance and shoot. |
 | **Bats** | Four sizes, from small to huge, that patrol the air and dive at the Seeker. |
-| **Buzzers** | Deep-tundra flyers that fire bursts of projectiles. |
-| **Opi** | Deep-tundra ambushers that sit still until something comes close. |
-| **Squid** | Hopping creatures of the deep caves. |
+| **Buzzers** | Deep-tundra flyers that fire bursts of projectiles, spread evenly through the deep caves. |
+| **Opi** | Rare deep-tundra ambushers that sit still until something comes close. |
+| **Squid** | Hopping creatures of the deep caves that gather in nests, several to a cave. |
 | **Void** | A dark pursuer that appears only when the planet is at its most hostile. |
 | **Tentacles** | Trap creatures that strike from hiding (in development). |
 
-Which creatures appear depends on depth and biome, and every population needs room to live: ground creatures need floor, flyers need open air. Defeated creatures leave materials behind, such as bat wings, and many recipes depend on them, so building toward a device or passive means hunting in the right part of the planet.
+Which creatures appear depends on depth and biome, and every population needs room to live: ground creatures need floor, flyers need open air. Defeated creatures leave materials behind: bats their wings, ice spiders ice shards, tundra spiders moss, Opi plant fiber, squid ink, buzzers the acid glands that brew their orbs, tentacles their tips, and the Void a null pearl. Most bodies stay where they fall and are gathered from; squid, tentacles, and the Void leave nothing to gather, so their material scatters where they die. Many recipes depend on these materials, so building toward a device or passive means hunting in the right part of the planet. Each deep creature's material leads to one passive of its own and nothing earlier, so the first recipes never send a Seeker into the deep caves (see [Passive Skills](passive-skills.md)).
 
 Creatures are also where the Seeker's abilities come from. Apart from the starting kit and crafted devices, every ability is copied from a creature that uses it, and plays that creature's animation. A new player ability starts life as a new creature. See [Active Skills](active-skills.md).
 

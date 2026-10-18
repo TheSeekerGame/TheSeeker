@@ -5,7 +5,7 @@ use std::cmp::Ordering;
 use crate::game::combat::effects::DamageFlash;
 use crate::game::player::spawns::item_drops::{
     enemy_drop_material, spawn_material_drop_burst, DropAssetHandles,
-    DropLaunchMode, ENEMY_CORPSE_LOOT_PROBABILITY,
+    DropLaunchMode, ENEMY_CORPSE_LOOT_PROBABILITY, TENTACLE_DROP_MATERIAL,
 };
 use crate::game::player::states::{transition_action, Gathering};
 use crate::game::player::{
@@ -24,8 +24,9 @@ use theseeker_engine::physics::{
 };
 use theseeker_engine::time::GameTickUpdate;
 
+use super::death::DeathPolicy;
 use super::flying_motor::BatDeath;
-use super::{Decay, Enemy, EnemyStateSet, OpiTombstone};
+use super::{Decay, Enemy, EnemyStateSet, OpiTombstone, TentacleState};
 
 const CORPSE_LOOT_HITS_REQUIRED: u32 = 3;
 const CORPSE_GATHER_RANGE: f32 = 22.0;
@@ -97,29 +98,41 @@ pub(crate) fn activate_corpse_loot(
     corpse_loot
 }
 
+/// Rolls a dying enemy's material. A body that stays behind holds it for gathering;
+/// one that leaves no corpse, or a tentacle, scatters it where it died.
 fn attach_corpse_loot_on_death(
     mut commands: Commands,
     enemy_q: Query<
         (
             Entity,
             &Gent,
+            &Transform,
             Option<&crate::game::actors::ActorDefinition>,
+            Option<&DeathPolicy>,
+            Option<&TentacleState>,
         ),
         (With<Enemy>, Added<crate::game::gentstate::Dead>),
     >,
+    drop_assets: Option<Res<DropAssetHandles>>,
 ) {
     let mut rng = rand::rng();
 
-    for (entity, gent, actor) in enemy_q.iter() {
-        let Some(arch_id) = actor.map(|actor| actor.archetype.id.as_str()) else {
-            continue;
+    for (entity, gent, transform, actor, policy, tentacle) in enemy_q.iter() {
+        let material = match (tentacle, actor) {
+            (Some(_), _) => Some(TENTACLE_DROP_MATERIAL),
+            (None, Some(actor)) => enemy_drop_material(actor.archetype.id.as_str()),
+            (None, None) => None,
         };
-
-        let Some(material) = enemy_drop_material(arch_id) else {
+        let Some(material) = material else {
             continue;
         };
 
         if rng.random::<f32>() > ENEMY_CORPSE_LOOT_PROBABILITY {
+            continue;
+        }
+
+        if let Some(position) = scatter_position(transform, policy, tentacle) {
+            scatter_loot(&mut commands, drop_assets.as_deref(), material, position);
             continue;
         }
 
@@ -131,6 +144,35 @@ fn attach_corpse_loot_on_death(
             particle_entity: None,
         });
     }
+}
+
+/// Where a dying enemy's loot scatters, or `None` when its corpse holds the loot for gathering.
+fn scatter_position(transform: &Transform, policy: Option<&DeathPolicy>, tentacle: Option<&TentacleState>) -> Option<Vec2> {
+    match (tentacle, policy) {
+        (Some(tentacle), _) => Some(tentacle.tip_position(transform)),
+        (None, Some(policy)) if !policy.leaves_corpse() => Some(transform.translation.truncate()),
+        _ => None,
+    }
+}
+
+fn scatter_loot(
+    commands: &mut Commands,
+    drop_assets: Option<&DropAssetHandles>,
+    material: CraftMaterial,
+    position: Vec2,
+) {
+    let Some(drop_assets) = drop_assets else {
+        return;
+    };
+    spawn_material_drop_burst(
+        commands,
+        drop_assets,
+        material,
+        1,
+        position,
+        DropLaunchMode::Random,
+        CORPSE_DROP_PICKUP_DELAY_TICKS,
+    );
 }
 
 fn activate_decay_corpse_loot(
@@ -369,4 +411,41 @@ fn release_corpse_loot(
         commands.entity(particle_entity).despawn();
     }
     commands.entity(corpse_entity).remove::<CorpseLoot>();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::game::actors::definition::EnemyDeathSetup;
+
+    fn policy(mode: &str) -> DeathPolicy {
+        let setup: EnemyDeathSetup = toml::from_str(&format!("mode = \"{mode}\"")).expect("death setup");
+        DeathPolicy::from_setup(Some(&setup))
+    }
+
+    #[test]
+    fn bodies_that_vanish_scatter_their_loot_where_they_died() {
+        let transform = Transform::from_xyz(40.0, -12.0, 0.0);
+        assert_eq!(scatter_position(&transform, Some(&policy("despawn")), None), Some(Vec2::new(40.0, -12.0)));
+        for mode in ["decay", "death_fall", "tombstone"] {
+            assert_eq!(scatter_position(&transform, Some(&policy(mode)), None), None, "a {mode} corpse holds its loot");
+        }
+    }
+
+    #[test]
+    fn every_creature_that_drops_loot_names_a_real_archetype() {
+        let archetypes = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("assets/enemies/archetypes");
+        for (id, material) in [
+            ("squid", CraftMaterial::Ink),
+            ("buzzer", CraftMaterial::AcidGland),
+            ("void", CraftMaterial::NullPearl),
+            ("opi", CraftMaterial::PlantFiber),
+            ("spider_small", CraftMaterial::IceShard),
+            ("spider_big_tundra", CraftMaterial::MossFragment),
+            ("bat_huge", CraftMaterial::BatWing),
+        ] {
+            assert_eq!(enemy_drop_material(id), Some(material));
+            assert!(archetypes.join(format!("{id}.arch.toml")).exists(), "{id} has no archetype");
+        }
+    }
 }

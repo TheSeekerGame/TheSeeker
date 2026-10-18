@@ -105,6 +105,29 @@ fn void_pursues_the_player_and_contact_damage_rearms_after_its_cooldown() {
 }
 
 #[test]
+fn dying_mid_action_keeps_the_resting_sprite_anchor() {
+    use theseeker_engine::{animation::PlaybackId, gent::TransformGfxFromGent};
+
+    let (mut world, entities) = actor_world();
+    let spider = *entities.iter().find(|&&entity| {
+        world.get::<ActorController>(entity).unwrap().definition.archetype.id == "spider_small"
+    }).unwrap();
+    let resting = world.get::<actors::ActorDefinition>(spider).unwrap().0.body.gfx_offset;
+    assert!(resting.y > 0.0, "the small spider's sprite rests above its body origin");
+    let gfx = world.get::<Gent>(spider).unwrap().e_gfx;
+    let attack = world.get::<ActorController>(spider).unwrap().definition.actions["Attack"].clone();
+    let action = actors::action::ActiveAction::new(attack, PlaybackId(1));
+    world.get_mut::<ScriptPlayer<SpriteAnimation>>(gfx).unwrap().acquire_presentation(action.id);
+    world.entity_mut(spider).insert(ActorAction(Some(action), actors::action::ActionEffects::default()));
+
+    // Death strips the action slot while the attack still owns the sprite.
+    world.entity_mut(spider).insert(Dead::default()).remove::<ActorAction>();
+    world.flush();
+
+    assert_eq!(world.get::<TransformGfxFromGent>(gfx).unwrap().offset, Some(resting));
+}
+
+#[test]
 fn optional_actor_cleanup_tolerates_an_earlier_queued_hierarchy_despawn() {
     let mut app = App::new();
     app.set_error_handler(bevy::ecs::error::panic);
