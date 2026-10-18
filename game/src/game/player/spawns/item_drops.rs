@@ -22,8 +22,13 @@ pub struct ItemDropsPlugin;
 #[derive(SystemSet, Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ItemDropSet;
 
+/// A dropped material entered the player's backpack.
+#[derive(Message, Debug, Clone, Copy)]
+pub(crate) struct ItemPickedUp;
+
 impl Plugin for ItemDropsPlugin {
     fn build(&self, app: &mut App) {
+        app.add_message::<ItemPickedUp>();
         app.add_systems(Startup, load_drop_assets);
         app.add_systems(
             GameTickUpdate,
@@ -454,6 +459,7 @@ fn attract_and_collect_items(
         &mut LinearVelocity,
     )>,
     item_query: Query<(Entity, &DroppedItem)>,
+    mut pickups: MessageWriter<ItemPickedUp>,
 ) {
     let Ok((player_transform, mut material_inventory)) = player_q.single_mut()
     else {
@@ -484,6 +490,7 @@ fn attract_and_collect_items(
             collect_item_cube(
                 &mut commands,
                 &mut material_inventory,
+                &mut pickups,
                 &item_query,
                 cube_entity,
                 cube.gfx_entity,
@@ -533,6 +540,7 @@ fn attract_and_collect_items(
 fn collect_item_cube(
     commands: &mut Commands,
     material_inventory: &mut MaterialInventory,
+    pickups: &mut MessageWriter<ItemPickedUp>,
     item_query: &Query<(Entity, &DroppedItem)>,
     cube_entity: Entity,
     cube_gfx_entity: Entity,
@@ -546,6 +554,7 @@ fn collect_item_cube(
     };
 
     material_inventory.add_to_backpack(dropped_item.material, 1);
+    pickups.write(ItemPickedUp);
     commands.entity(item_entity).despawn();
 }
 
@@ -594,4 +603,47 @@ fn item_pickup_stretch_bundle() -> (SpriteScale, SpriteStretch) {
             sprite_height: 8.0,
         },
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use bevy::ecs::system::RunSystemOnce;
+
+    use super::*;
+
+    #[test]
+    fn a_collected_drop_fills_the_backpack_and_reports_the_pickup() {
+        let mut world = World::new();
+        world.init_resource::<BackpackAnchor>();
+        world.init_resource::<Messages<ItemPickedUp>>();
+        let player = world
+            .spawn((Player, GlobalTransform::default(), MaterialInventory::empty()))
+            .id();
+        let gfx_entity = world.spawn_empty().id();
+        let cube = ItemCube {
+            grounded: true,
+            pickup_delay_ticks: 0,
+            attraction_vel: Vec2::ZERO,
+            squish_applied: false,
+            locked_attraction: false,
+            attraction_ticks: 0,
+            bounce_count: 0,
+            gfx_entity,
+        };
+        let cube_entity = world
+            .spawn((cube, GlobalTransform::default(), LinearVelocity(Vec2::ZERO)))
+            .id();
+        world.spawn(DroppedItem {
+            material: CraftMaterial::BatWing,
+            cube_entity,
+            oscillation_phase: 0.0,
+        });
+
+        world.run_system_once(attract_and_collect_items).unwrap();
+
+        let materials = world.get::<MaterialInventory>(player).unwrap();
+        assert_eq!(materials.backpack_count(CraftMaterial::BatWing), 1);
+        assert_eq!(world.resource::<Messages<ItemPickedUp>>().len(), 1);
+        assert!(world.get_entity(cube_entity).is_err());
+    }
 }

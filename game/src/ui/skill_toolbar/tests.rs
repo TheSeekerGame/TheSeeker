@@ -19,7 +19,8 @@ fn pixel(raster: Raster, at: IVec2) -> Srgba {
 #[test]
 fn toolbar_systems_have_compatible_parameters() {
     let mut schedule = Schedule::default();
-    schedule.add_systems((spawn_toolbar, advance_toolbar_icons, advance_key_hints, present_toolbar, queue_level_up_captions, present_captions));
+    schedule.add_systems((spawn_toolbar, advance_toolbar_icons, advance_key_hints, present_toolbar, reset_toolbar_presentation));
+    schedule.add_systems((age_captions, queue_level_up_captions, queue_alignment_warnings, queue_inventory_hint, present_captions));
     schedule.initialize(&mut World::new()).expect("toolbar systems initialize");
 }
 
@@ -141,12 +142,51 @@ fn low_alignment_pulses_toward_the_warning_color() {
 
 #[test]
 fn captions_wait_hold_and_fade() {
-    let at = |age| Caption { lines: Vec::new(), age }.opacity();
-    let near = |age, expected: f32| (at(age).unwrap() - expected).abs() < 1e-4;
-    assert_eq!(at(0.0), None);
-    assert!(near(CAPTION_DELAY_SECS + CAPTION_HOLD_SECS / 2.0, 1.0));
-    assert!(near(CAPTION_DELAY_SECS + (CAPTION_HOLD_SECS + CAPTION_TOTAL_SECS) / 2.0, 0.5));
-    assert!(near(CAPTION_DELAY_SECS + CAPTION_TOTAL_SECS, 0.0));
+    for hold_secs in [CAPTION_HOLD_SECS, NOTICE_HOLD_SECS] {
+        let at = |age| Caption { lines: Vec::new(), hold_secs, age };
+        let near = |age, expected: f32| (at(age).opacity().unwrap() - expected).abs() < 1e-4;
+        let faded = CAPTION_DELAY_SECS + hold_secs + CAPTION_FADE_SECS;
+        assert_eq!(at(0.0).opacity(), None);
+        assert!(near(CAPTION_DELAY_SECS + hold_secs / 2.0, 1.0));
+        assert!(near(CAPTION_DELAY_SECS + hold_secs + CAPTION_FADE_SECS / 2.0, 0.5));
+        assert!(near(faded, 0.0));
+        assert!(!at(faded - 0.01).expired() && at(faded).expired());
+    }
+}
+
+/// Alignment fractions in order, and the warning each one raises.
+fn warnings_along(fractions: &[f32]) -> Vec<Option<AlignmentWarning>> {
+    let mut warnings = AlignmentWarnings::default();
+    fractions.iter().map(|&fraction| warnings.advance(fraction)).collect()
+}
+
+#[test]
+fn alignment_warns_once_as_it_falls_low_and_again_as_it_runs_out() {
+    let (low, critical) = (Some(AlignmentWarning::Low), Some(AlignmentWarning::Critical));
+    let draining = [1.0, 0.5, ALIGNMENT_LOW_THRESHOLD + 0.01, ALIGNMENT_LOW_THRESHOLD, 0.1, 0.01, 0.0, 0.0];
+    assert_eq!(warnings_along(&draining), [None, None, None, low, None, None, critical, None]);
+    assert_eq!(warnings_along(&[0.9, 0.0, 0.1]), [None, critical, None], "running out at once raises only the critical warning");
+}
+
+#[test]
+fn alignment_warnings_repeat_only_after_alignment_recovers() {
+    let (low, critical) = (Some(AlignmentWarning::Low), Some(AlignmentWarning::Critical));
+    let hovering = [0.19, 0.21, 0.19, ALIGNMENT_WARNING_REARM, 0.19, 0.0, 0.05, 0.0];
+    assert_eq!(warnings_along(&hovering), [low, None, None, None, None, critical, None, None]);
+    let recovered = [0.19, 0.0, ALIGNMENT_WARNING_REARM + 0.01, 0.19, 0.0];
+    assert_eq!(warnings_along(&recovered), [low, critical, None, low, critical]);
+}
+
+#[test]
+fn the_inventory_key_is_told_at_the_first_pickup_only() {
+    let mut hint = InventoryHint::default();
+    assert!(!hint.advance(false, false));
+    assert!(hint.advance(true, false));
+    assert!(!hint.advance(true, false), "later pickups say nothing");
+
+    let mut opened_first = InventoryHint::default();
+    assert!(!opened_first.advance(false, true));
+    assert!(!opened_first.advance(true, false), "a player who opened the inventory already knows its key");
 }
 
 /// Writes representative toolbars and captions as PNG files when `SEEKER_UI_SNAPSHOTS` names a directory.
@@ -175,4 +215,8 @@ fn toolbar_snapshots() {
     let unlocked = ["ADAPTATION INCREASED".to_owned(), "NEW ABILITY UNLOCKED: WHIRLING STRIKE".to_owned()];
     let adapted = ["ADAPTATION INCREASED".to_owned()];
     save_snapshot(&directory, "captions", draw_captions(&[(&unlocked[..], 1.0), (&adapted[..], 0.5)], &art));
+    let owned = |lines: &[&str]| lines.iter().map(|line| (*line).to_owned()).collect::<Vec<_>>();
+    let (low, critical) = (owned(AlignmentWarning::Low.lines()), owned(AlignmentWarning::Critical.lines()));
+    save_snapshot(&directory, "captions-alignment", draw_captions(&[(&low[..], 1.0), (&critical[..], 1.0)], &art));
+    save_snapshot(&directory, "captions-inventory-hint", draw_captions(&[(&owned(&INVENTORY_HINT)[..], 1.0)], &art));
 }

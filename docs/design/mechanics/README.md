@@ -21,9 +21,9 @@ Each page separates what the game does today from where it is heading.
 
 There is no quest log. The planet's pull draws the Seeker downward, and curiosity does the rest. Hidden rooms sit behind breakable walls, and familiar ground can change while you're away.
 
-The planet is hostile to Seekers. Their **Alignment** drains whenever they're away from a capsule or the tether network, and once it runs out they start taking damage that grows the longer they stay out. Tether nodes, black stakes that root into the rock and spread the Seeker's influence like a parasite, extend that safety outward, so the expedition literally grows from one shelter to the next, and portable tents give a place to rest out in the field.
+The planet is hostile to Seekers. Their **Alignment** drains whenever they're away from a capsule or the tether network, and once it runs out they start taking damage that grows the longer they stay out. Tether nodes, black stakes that root into the rock and spread the Seeker's influence like a parasite, extend that safety outward, so the expedition literally grows from one shelter to the next, and portable tents give a place to rest out in the field. A warning tells the Seeker to escape the fog when Alignment runs low, and another when it runs out and starts to hurt.
 
-Death costs what's in your backpack. Everything stored in capsules, along with your skills, passives, weapons, and discovered recipes, carries over.
+Everything picked up goes into the backpack, and the first pickup names the key that opens the inventory. Death costs what's in your backpack. Everything stored in capsules, along with your skills, passives, weapons, and discovered recipes, carries over.
 
 ## Combat and builds
 

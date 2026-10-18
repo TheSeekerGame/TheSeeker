@@ -1,9 +1,10 @@
-//! The skill toolbar, the interact prompt above it, and level-up captions: pixel canvases
-//! redrawn every frame.
+//! The skill toolbar, the interact prompt above it, and the captions across the top of the
+//! screen: pixel canvases redrawn every frame.
 //!
 //! The toolbar frame holds the equipped skills with their cooldowns and stock, and shows health
 //! and Alignment through the bar windows cut into its art. Until its key is first pressed, a filled
-//! slot shows that key on a tiny keycap above its icon.
+//! slot shows that key on a tiny keycap above its icon. Captions announce level-ups, warn as
+//! Alignment runs low and runs out, and name the inventory key at the first pickup.
 use std::collections::HashSet;
 use std::f32::consts::TAU;
 
@@ -11,6 +12,7 @@ use bevy::ecs::query::QueryData;
 use bevy::ecs::system::SystemParam;
 use leafwing_input_manager::prelude::ActionState;
 
+use super::inventory::InventoryState;
 use super::pixel_canvas::{gain, lift, rect, text_width, Art, ArtLibrary, Canvas, Raster};
 use super::pixel_font::FONT_IMAGE_PATH;
 use super::pixel_panel::{draw_prompt, show_raster, UiPixelGrid, PANEL_Z_INDEX, TEXT};
@@ -25,11 +27,13 @@ use crate::game::player::skills::cooldowns::Cooldowns;
 use crate::game::player::skills::registry::SLOT_INPUTS;
 use crate::game::player::skills::tether_node::TetherConnectionStatus;
 use crate::game::player::skills::types::{flicker_strike_metadata, whirl_metadata, SkillId};
+use crate::game::player::spawns::item_drops::ItemPickedUp;
 use crate::game::player::weapon::{PlayerAmmo, PlayerMeleeWeapon, WeaponInventory};
 use crate::game::player::{
     Alignment, FlickerAbility, MaterialInventory, Passive, Passives, Player, PlayerAction, PlayerStateSet,
     SkillInventory, WhirlAbility,
 };
+use crate::game::world_objects::CapsuleOccupant;
 use crate::levelgen::harvestable_materials::GatherableInReach;
 use crate::prelude::*;
 
@@ -56,7 +60,10 @@ const ALIGNMENT_TRACK: Color = Color::srgb(0.176, 0.153, 0.227);
 const ALIGNMENT_FILL: Color = Color::srgb(0.247, 0.314, 0.431);
 const ALIGNMENT_WARNING: Color = Color::srgb(0.50, 0.62, 0.80);
 const ALIGNMENT_DEPLETED: Color = Color::srgb(0.38, 0.47, 0.62);
+/// At or below this the Alignment bar pulses and the low warning shows.
 const ALIGNMENT_LOW_THRESHOLD: f32 = 0.2;
+/// Alignment warnings show again only after Alignment recovers above this.
+const ALIGNMENT_WARNING_REARM: f32 = 0.5;
 const ALIGNMENT_LOW_PULSE_HZ: f32 = 1.5;
 const ALIGNMENT_DEPLETED_PULSE_HZ: f32 = 0.75;
 
@@ -74,8 +81,11 @@ const CAPTION_COLOR: Color = Color::srgb(0.88, 0.94, 1.0);
 const CAPTION_LIMIT: usize = 3;
 const CAPTION_DELAY_SECS: f32 = 0.24;
 const CAPTION_HOLD_SECS: f32 = 0.95;
-const CAPTION_TOTAL_SECS: f32 = 1.6;
+/// Warnings and hints hold long enough to read their instructions.
+const NOTICE_HOLD_SECS: f32 = 3.0;
+const CAPTION_FADE_SECS: f32 = 0.65;
 const CAPTION_TOP: u32 = 4;
+const INVENTORY_HINT: [&str; 2] = ["ITEM PICKED UP", "PRESS M TO OPEN INVENTORY"];
 
 pub struct SkillToolbarPlugin;
 
@@ -85,6 +95,8 @@ impl Plugin for SkillToolbarPlugin {
             .init_resource::<KeyHints>()
             .init_resource::<StationPrompt>()
             .init_resource::<Captions>()
+            .init_resource::<AlignmentWarnings>()
+            .init_resource::<InventoryHint>()
             .add_systems(Startup, load_toolbar_art)
             .add_systems(OnEnter(AppState::InGame), (reset_toolbar_presentation, spawn_toolbar).chain())
             .add_systems(
@@ -93,16 +105,26 @@ impl Plugin for SkillToolbarPlugin {
             )
             .add_systems(
                 Update,
-                (present_toolbar, present_prompt, (queue_level_up_captions, present_captions).chain())
+                (
+                    present_toolbar,
+                    present_prompt,
+                    (age_captions, queue_level_up_captions, queue_alignment_warnings, queue_inventory_hint, present_captions).chain(),
+                )
                     .after(super::sync_ui_scale)
                     .run_if(in_state(AppState::InGame)),
             );
     }
 }
 
-fn reset_toolbar_presentation(mut icons: ResMut<ToolbarIcons>, mut captions: ResMut<Captions>, mut prompt: ResMut<StationPrompt>) {
+fn reset_toolbar_presentation(
+    mut icons: ResMut<ToolbarIcons>,
+    mut captions: ResMut<Captions>,
+    mut warnings: ResMut<AlignmentWarnings>,
+    mut prompt: ResMut<StationPrompt>,
+) {
     *icons = default();
     *captions = default();
+    *warnings = default();
     *prompt = default();
 }
 
@@ -548,9 +570,11 @@ fn present_prompt(
     });
 }
 
-/// A level-up announcement; `age` counts from when it was queued.
+/// An announcement across the top of the screen; `age` counts from when it was queued.
 struct Caption {
     lines: Vec<String>,
+    /// How long it stays fully visible before fading.
+    hold_secs: f32,
     age: f32,
 }
 
@@ -558,28 +582,129 @@ impl Caption {
     /// Fully visible after a short delay, then fading out; `None` before it appears.
     fn opacity(&self) -> Option<f32> {
         let shown = self.age - CAPTION_DELAY_SECS;
-        (shown >= 0.0).then(|| (1.0 - (shown - CAPTION_HOLD_SECS).max(0.0) / (CAPTION_TOTAL_SECS - CAPTION_HOLD_SECS)).max(0.0))
+        (shown >= 0.0).then(|| (1.0 - (shown - self.hold_secs).max(0.0) / CAPTION_FADE_SECS).max(0.0))
+    }
+
+    fn expired(&self) -> bool {
+        self.age >= CAPTION_DELAY_SECS + self.hold_secs + CAPTION_FADE_SECS
     }
 }
 
 #[derive(Resource, Default)]
 struct Captions(Vec<Caption>);
 
-fn queue_level_up_captions(
-    mut events: MessageReader<AdaptationLevelUpEvent>,
-    mut captions: ResMut<Captions>,
-    time: Res<Time<Real>>,
-) {
+impl Captions {
+    fn push(&mut self, lines: impl IntoIterator<Item = impl Into<String>>, hold_secs: f32) {
+        if self.0.len() < CAPTION_LIMIT {
+            self.0.push(Caption { lines: lines.into_iter().map(Into::into).collect(), hold_secs, age: 0.0 });
+        }
+    }
+}
+
+fn age_captions(mut captions: ResMut<Captions>, time: Res<Time<Real>>) {
     for caption in &mut captions.0 {
         caption.age += time.delta_secs();
     }
-    captions.0.retain(|caption| caption.age < CAPTION_DELAY_SECS + CAPTION_TOTAL_SECS);
+    captions.0.retain(|caption| !caption.expired());
+}
+
+fn queue_level_up_captions(mut events: MessageReader<AdaptationLevelUpEvent>, mut captions: ResMut<Captions>) {
     for event in events.read() {
         let unlocked = event.unlocked_skill.map(|skill| format!("NEW ABILITY UNLOCKED: {}", skill.name().to_uppercase()));
-        let lines = std::iter::once("ADAPTATION INCREASED".to_owned()).chain(unlocked).collect();
-        if captions.0.len() < CAPTION_LIMIT {
-            captions.0.push(Caption { lines, age: 0.0 });
+        captions.push(std::iter::once("ADAPTATION INCREASED".to_owned()).chain(unlocked), CAPTION_HOLD_SECS);
+    }
+}
+
+/// Warnings and hints wait while the HUD is hidden, as it is during the landing cinematic.
+fn hud_shown(toolbar: &Query<&Visibility, With<ToolbarFrame>>) -> bool {
+    toolbar.single().is_ok_and(|visibility| *visibility != Visibility::Hidden)
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum AlignmentWarning {
+    Low,
+    Critical,
+}
+
+impl AlignmentWarning {
+    fn lines(self) -> &'static [&'static str] {
+        match self {
+            Self::Low => &["ALIGNMENT LOW", "ESCAPE THE FOG TO RECHARGE"],
+            Self::Critical => &["ALIGNMENT CRITICAL", "THE FOG IS HURTING YOU", "REACH A CAPSULE OR A TETHER NODE"],
         }
+    }
+}
+
+/// The Alignment warnings shown since Alignment last recovered above
+/// [`ALIGNMENT_WARNING_REARM`]. Each shows once as Alignment falls past its level, so lingering
+/// near a level never repeats it.
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq)]
+struct AlignmentWarnings {
+    low: bool,
+    critical: bool,
+}
+
+impl AlignmentWarnings {
+    /// The warning that Alignment at `fraction` raises, if it has not shown yet.
+    fn advance(&mut self, fraction: f32) -> Option<AlignmentWarning> {
+        if fraction > ALIGNMENT_WARNING_REARM {
+            *self = Self::default();
+        }
+        if fraction <= 0.0 && !self.critical {
+            // Running out supersedes the low warning, which would only repeat it.
+            *self = Self { low: true, critical: true };
+            return Some(AlignmentWarning::Critical);
+        }
+        if fraction <= ALIGNMENT_LOW_THRESHOLD && !self.low {
+            self.low = true;
+            return Some(AlignmentWarning::Low);
+        }
+        None
+    }
+}
+
+/// Warns out in the fog only: a sheltered player is recharging.
+fn queue_alignment_warnings(
+    player: Query<(&Alignment, Has<CapsuleOccupant>), With<Player>>,
+    toolbar: Query<&Visibility, With<ToolbarFrame>>,
+    mut warnings: ResMut<AlignmentWarnings>,
+    mut captions: ResMut<Captions>,
+) {
+    let Ok((alignment, sheltered)) = player.single() else { return };
+    if sheltered || !hud_shown(&toolbar) {
+        return;
+    }
+    if let Some(warning) = warnings.advance(alignment.factor()) {
+        captions.push(warning.lines().iter().copied(), NOTICE_HOLD_SECS);
+    }
+}
+
+/// Whether the player knows the inventory key: told at their first pickup, or learned by opening
+/// the inventory first. Never reset, so it is told once across deaths and new expeditions.
+#[derive(Resource, Default, Debug, Clone, Copy, PartialEq)]
+struct InventoryHint {
+    learned: bool,
+}
+
+impl InventoryHint {
+    /// Whether to tell the player the key now.
+    fn advance(&mut self, picked_up: bool, inventory_open: bool) -> bool {
+        let tell = picked_up && !inventory_open && !self.learned;
+        self.learned |= picked_up || inventory_open;
+        tell
+    }
+}
+
+fn queue_inventory_hint(
+    mut pickups: MessageReader<ItemPickedUp>,
+    inventory: Res<InventoryState>,
+    toolbar: Query<&Visibility, With<ToolbarFrame>>,
+    mut hint: ResMut<InventoryHint>,
+    mut captions: ResMut<Captions>,
+) {
+    let picked_up = pickups.read().count() > 0;
+    if hud_shown(&toolbar) && hint.advance(picked_up, inventory.is_open()) {
+        captions.push(INVENTORY_HINT, NOTICE_HOLD_SECS);
     }
 }
 
@@ -601,7 +726,7 @@ fn present_captions(
         Some((node, raster))
     });
     show_raster(&mut commands, &mut images, shown.single_mut().ok(), content, |image, node| {
-        (Name::new("LevelUpCaptions"), CaptionStack, image, node, ZIndex(CAPTION_Z_INDEX), StateDespawnMarker)
+        (Name::new("Captions"), CaptionStack, image, node, ZIndex(CAPTION_Z_INDEX), StateDespawnMarker)
     });
 }
 
