@@ -116,7 +116,7 @@ version = "0.21"
 default-features = false
 features = ["asset", "mouse", "keyboard", "gamepad"]
 
-# Pin Tracy dependencies to match Tracy 0.11.1 (Homebrew version)
+# Pin Tracy dependencies to match the Tracy 0.11.1 profiler
 [dependencies.tracy-client]
 version = "=0.18.0"
 
