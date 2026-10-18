@@ -48,7 +48,7 @@ The root `Cargo.toml` defines a single package containing both the library and t
 
 ## Contributing
 
-Contributions of every kind are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), which covers setup, verification, and pull requests.
+Contributions of every kind are welcome. Start with [CONTRIBUTING.md](CONTRIBUTING.md), which covers setup, verification, and pull requests. AI agents working on the project should read [AGENTS.md](AGENTS.md) first.
 
 ## License
 
