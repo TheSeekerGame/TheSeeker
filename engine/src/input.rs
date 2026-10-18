@@ -176,7 +176,7 @@ impl<A: Actionlike + TypePath + bevy::reflect::GetTypeRegistration> Plugin
     }
 }
 
-/// [`SystemSet`]s for the [`crate::systems`] used by this crate
+/// [`SystemSet`]s for the input systems used by this crate
 ///
 /// `Reset` must occur before `Update`
 #[derive(SystemSet, Clone, Hash, Debug, PartialEq, Eq)]

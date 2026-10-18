@@ -27,10 +27,13 @@ pub struct LdtkRule {
     /// Size of the pattern grid (e.g., 3 for 3x3, 5 for 5x5).
     pub size: u8,
     /// Flat array of pattern values, row-major from top-left.
-    /// For size=3: [0,1,2,3,4,5,6,7,8] maps to:
-    ///   [0][1][2]
-    ///   [3][4][5]  (4 is center)
-    ///   [6][7][8]
+    /// For size 3, indices `0..=8` map to:
+    ///
+    /// ```text
+    /// [0][1][2]
+    /// [3][4][5]  (4 is center)
+    /// [6][7][8]
+    /// ```
     pub pattern: Vec<i32>,
     /// Tile IDs to use when matched (can have multiple variants for random selection).
     pub tile_ids: Vec<Vec<u32>>,
@@ -527,7 +530,7 @@ impl WallFallbackTiles {
 
 /// Discover fallback tiles from LDtk rules by finding catchall rules (size=1).
 ///
-/// Catchall rules have a single-cell pattern [N] where N is the wall type.
+/// Catchall rules have a single-cell pattern `[N]` where N is the wall type.
 /// These are the most permissive rules and serve as fallbacks for interior cells.
 pub fn discover_fallback_tiles(layer: &LdtkAutoLayer) -> WallFallbackTiles {
     let mut fallbacks = WallFallbackTiles::default();

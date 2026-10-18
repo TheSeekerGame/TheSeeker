@@ -334,7 +334,7 @@ pub struct StoredColliderFrame {
 
 #[derive(Resource, Default)]
 pub struct SpriteShapeMap {
-    /// Each frame's shape for no flip, flipped x, flipped y, and both; see [`Self::shape`].
+    /// Each frame's shape for no flip, flipped x, flipped y, and both, indexed by `flip_x + 2 * flip_y`.
     pub shapes: Vec<[Collider; 4]>,
     pub map: HashMap<AssetId<Image>, Vec<usize>>,
 }
