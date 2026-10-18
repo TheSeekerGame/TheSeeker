@@ -37,6 +37,6 @@ Preferred attribution for project-owned assets:
 ```text
 Includes or adapts assets from The Seeker by The Seeker contributors, licensed CC BY 4.0:
 https://creativecommons.org/licenses/by/4.0/
-Original project: https://github.com/TheSeekerGame/TheSeeker
+Original project: https://github.com/TheSeekerGame/the-seeker
 Changes were made where applicable.
 ```

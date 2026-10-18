@@ -14,9 +14,9 @@ The brand isn't owned by a company, or even by us. Its code, art, audio, and lor
 | Lore and design | [Game Design](README.md) | CC BY 4.0 |
 | Technical documentation | The rest of `docs/` | MIT or Apache-2.0 |
 
-Take any of it, remix it, fork it, and sell what you make, commercially too. The only thing CC BY asks is that you credit The Seeker. [LICENSE.md](https://github.com/TheSeekerGame/TheSeeker/blob/main/LICENSE.md) has an attribution line you can copy.
+Take any of it, remix it, fork it, and sell what you make, commercially too. The only thing CC BY asks is that you credit The Seeker. [LICENSE.md](https://github.com/TheSeekerGame/the-seeker/blob/main/LICENSE.md) has an attribution line you can copy.
 
-You don't need to know how to code, and your version doesn't have to be a 2D pixel-art game. Give the source, assets, and lore to an AI agent and ask for whatever you have in mind: a 3D world, a card game, an animated short, a figure to 3D-print. The repository is already set up for agents ([AGENTS.md](https://github.com/TheSeekerGame/TheSeeker/blob/main/AGENTS.md) maps the code). Coming soon is a `SKILL.md` that teaches any agent the vision, art style, and atmosphere in one go, along with the code that connects the game to the collectibles.
+You don't need to know how to code, and your version doesn't have to be a 2D pixel-art game. Give the source, assets, and lore to an AI agent and ask for whatever you have in mind: a 3D world, a card game, an animated short, a figure to 3D-print. The repository is already set up for agents ([AGENTS.md](https://github.com/TheSeekerGame/the-seeker/blob/main/AGENTS.md) maps the code). Coming soon is a `SKILL.md` that teaches any agent the vision, art style, and atmosphere in one go, along with the code that connects the game to the collectibles.
 
 ## Why open source
 
@@ -61,7 +61,7 @@ Collectibles are art and membership in the community. They aren't an investment 
 
 ## Build on it
 
-1. Clone the [repository](https://github.com/TheSeekerGame/TheSeeker), or point your AI agent at it.
+1. Clone the [repository](https://github.com/TheSeekerGame/the-seeker), or point your AI agent at it.
 2. Get a feel for the world from the [design vision](README.md), the [lore](lore.md), and the [art direction](art-direction.md).
 3. Make something, in any medium. Credit The Seeker and share it.
 

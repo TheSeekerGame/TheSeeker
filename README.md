@@ -10,7 +10,7 @@ You need the latest stable [Rust](https://rustup.rs/) and [Git LFS](https://git-
 
 ```sh
 git lfs install
-git clone https://github.com/TheSeekerGame/TheSeeker.git
+git clone https://github.com/TheSeekerGame/the-seeker.git
 cd TheSeeker
 cargo run
 ```

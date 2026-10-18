@@ -6,5 +6,5 @@ src = "."
 title = "The Seeker Documentation"
 
 [output.html]
-git-repository-url = "https://github.com/TheSeekerGame/TheSeeker"
-edit-url-template = "https://github.com/TheSeekerGame/TheSeeker/edit/main/docs/{path}"
+git-repository-url = "https://github.com/TheSeekerGame/the-seeker"
+edit-url-template = "https://github.com/TheSeekerGame/the-seeker/edit/main/docs/{path}"

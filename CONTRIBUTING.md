@@ -14,7 +14,7 @@ Thank you for helping. Code, art, audio, level plans, documentation, bug reports
 3. Clone and run the game from the repository root:
 
    ```sh
-   git clone https://github.com/TheSeekerGame/TheSeeker.git
+   git clone https://github.com/TheSeekerGame/the-seeker.git
    cd TheSeeker
    cargo run
    ```
@@ -62,7 +62,7 @@ Maintainers review and merge pull requests. Mark a draft as ready for review whe
 
 ## Report bugs and ideas
 
-Open a [GitHub issue](https://github.com/TheSeekerGame/TheSeeker/issues). For bugs, include your operating system, the steps that reproduce the problem, and any error output from the terminal.
+Open a [GitHub issue](https://github.com/TheSeekerGame/the-seeker/issues). For bugs, include your operating system, the steps that reproduce the problem, and any error output from the terminal.
 
 ## Licensing
 

@@ -12,9 +12,9 @@ The source code and authored assets define current behavior. Design pages record
 
 Project-wide guides live in the repository root:
 
-- [README.md](https://github.com/TheSeekerGame/TheSeeker/blob/main/README.md): what the game is and how to build and run it.
-- [CONTRIBUTING.md](https://github.com/TheSeekerGame/TheSeeker/blob/main/CONTRIBUTING.md): how to set up, verify, and submit changes.
-- [AGENTS.md](https://github.com/TheSeekerGame/TheSeeker/blob/main/AGENTS.md): the source map and the runtime rules every change must preserve. It is written for AI coding agents and is equally useful to people.
+- [README.md](https://github.com/TheSeekerGame/the-seeker/blob/main/README.md): what the game is and how to build and run it.
+- [CONTRIBUTING.md](https://github.com/TheSeekerGame/the-seeker/blob/main/CONTRIBUTING.md): how to set up, verify, and submit changes.
+- [AGENTS.md](https://github.com/TheSeekerGame/the-seeker/blob/main/AGENTS.md): the source map and the runtime rules every change must preserve. It is written for AI coding agents and is equally useful to people.
 
 ## Build the site locally
 
