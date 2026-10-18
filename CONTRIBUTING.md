@@ -15,7 +15,7 @@ Thank you for helping. Code, art, audio, level plans, documentation, bug reports
 
    ```sh
    git clone https://github.com/TheSeekerGame/the-seeker.git
-   cd TheSeeker
+   cd the-seeker
    cargo run
    ```
 
