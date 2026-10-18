@@ -2,7 +2,7 @@
 
 The Seeker is a 2D metroidvania built with Rust and Bevy 0.19.1. The root `Cargo.toml` defines one package with the `theseeker_engine` library at `engine/src/lib.rs` and the `theseeker_game` binary at `game/src/main.rs`. Run Cargo commands from the repository root; `game/` and `engine/` do not have separate manifests.
 
-Use this file for project constraints and navigation. Source code and authored assets establish current behavior; the documents under `docs/` explain intent and architecture. Verify the relevant implementation before changing a subsystem. `CLAUDE.md` imports this file for Claude Code; [CONTRIBUTING.md](CONTRIBUTING.md) is the human-facing summary of the same workflow.
+Use this file for project constraints and navigation. Source code and authored assets establish current behavior; the documents under `docs/` explain intent and architecture. Verify the relevant implementation before changing a subsystem. [CONTRIBUTING.md](CONTRIBUTING.md) is the human-facing summary of the same workflow.
 
 ## Working rules
 
@@ -277,7 +277,7 @@ All project documentation is GitHub-flavored Markdown under `docs/`. It renders 
 | --- | --- |
 | `README.md` | Project introduction, build instructions, controls, and repository layout |
 | `CONTRIBUTING.md` | Contributor setup, verification, and pull-request workflow |
-| `AGENTS.md` (this file) | Source map, working rules, and runtime contracts; `CLAUDE.md` imports it |
+| `AGENTS.md` (this file) | Source map, working rules, and runtime contracts |
 | `docs/design/` | Game design vision: audience, art direction, lore, the open brand and its collectibles, intended mechanics. Intent, not current behavior |
 | [docs/architecture/actors.md](docs/architecture/actors.md) | The single enemy/player behavior design document |
 | [docs/architecture/timing-and-audio.md](docs/architecture/timing-and-audio.md) | The single timing, audio, animation-cadence, and presentation design document |

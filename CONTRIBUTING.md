@@ -58,7 +58,7 @@ Maintainers review and merge pull requests. Mark a draft as ready for review whe
 
 ## Working with AI agents
 
-[AGENTS.md](AGENTS.md) is the instruction file for AI coding agents; most agents read it automatically, and [CLAUDE.md](CLAUDE.md) points Claude Code to it. The same rules apply to generated changes: run the checks above, review the diff yourself, and state in the pull request what was verified and what was not.
+[AGENTS.md](AGENTS.md) is the instruction file for AI coding agents; most agents read it automatically, and any other agent should be pointed to it. The same rules apply to generated changes: run the checks above, review the diff yourself, and state in the pull request what was verified and what was not.
 
 ## Report bugs and ideas
 
