@@ -32,6 +32,7 @@ The Seeker asks questions more than it answers them:
 
 - **The pull of novelty.** What draws a Seeker onward, and does the pursuit of new experiences ever end? What would "enough" mean to someone who has already tasted everything ordinary?
 - **Expansion and simplicity.** One path leads toward more: more knowledge, abilities, power, and possibility. The other leads toward less: humility, service, and letting go. Both should feel genuinely appealing, and neither is presented as obviously right.
+- **Giving without a transaction.** When a work lets someone give, hold back, or let go, the act should be real. Nothing pays it back in secret: no currency, stat boost, discount, or virtue meter. Those who receive should enjoy what they get and live their own lives rather than exist to test the giver. A game can track what was given up, but it cannot see why.
 - **Recording versus experiencing.** Is recording something in the Codex the same as understanding it? Is understanding a creature the same as becoming it?
 - **Who benefits.** Who gains from the knowledge Theorem gathers, and at what cost?
 - **The planet's nature.** Is its richness a gift, a call, an accident, or something with no human analogue?
